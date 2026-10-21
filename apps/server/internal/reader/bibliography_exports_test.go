@@ -1,8 +1,10 @@
 package reader
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
@@ -10,6 +12,80 @@ import (
 	"testing"
 	"time"
 )
+
+func TestBibliographyExportRejectsTargetAliases(t *testing.T) {
+	for _, alias := range []string{"hardlink", "case"} {
+		t.Run(alias, func(t *testing.T) {
+			s, _, path := exportFixture(t)
+			original, err := s.Store.RegisterBibliographyExport(BibliographyExportRequest{Folder: "Project", IncludeChildren: true, Mode: "bibtex", Path: path})
+			if err != nil {
+				t.Fatal(err)
+			}
+			aliasPath := filepath.Join(filepath.Dir(path), "REFERENCES.bib")
+			if alias == "hardlink" {
+				aliasPath = filepath.Join(t.TempDir(), "linked.bib")
+				if err := os.Link(path, aliasPath); err != nil {
+					t.Fatal(err)
+				}
+			} else if _, err := os.Stat(aliasPath); os.IsNotExist(err) {
+				t.Skip("filesystem uses case-sensitive filenames")
+			} else if err != nil {
+				t.Fatal(err)
+			}
+			before, err := os.ReadFile(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			_, err = s.Store.RegisterBibliographyExport(BibliographyExportRequest{Folder: "Elsewhere", Mode: "bibtex", Path: aliasPath, Takeover: true})
+			if !errors.Is(err, errPaperConflict) {
+				t.Fatalf("target alias must conflict, got %v", err)
+			}
+			for _, target := range []string{path, aliasPath} {
+				after, err := os.ReadFile(target)
+				if err != nil || !bytes.Equal(before, after) {
+					t.Fatalf("conflict changed %s: %q, %v", target, after, err)
+				}
+			}
+			exports, err := s.Store.BibliographyExports()
+			if err != nil || len(exports) != 1 || exports[0] != original {
+				t.Fatalf("conflict changed configurations: %+v, %v", exports, err)
+			}
+			backups, err := filepath.Glob(aliasPath + ".reader-backup-*")
+			if err != nil || len(backups) != 0 {
+				t.Fatalf("conflict created backups: %v, %v", backups, err)
+			}
+		})
+	}
+}
+
+func TestBibliographyExportAllowsDistinctCaseSensitiveTargets(t *testing.T) {
+	s, _, path := exportFixture(t)
+	if _, err := s.Store.RegisterBibliographyExport(BibliographyExportRequest{Folder: "Project", IncludeChildren: true, Mode: "bibtex", Path: path}); err != nil {
+		t.Fatal(err)
+	}
+	other := filepath.Join(filepath.Dir(path), "REFERENCES.bib")
+	if _, err := os.Stat(other); !os.IsNotExist(err) {
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Skip("filesystem uses case-insensitive filenames")
+	}
+	before, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Store.RegisterBibliographyExport(BibliographyExportRequest{Folder: "Elsewhere", Mode: "bibtex", Path: other}); err != nil {
+		t.Fatal(err)
+	}
+	after, err := os.ReadFile(path)
+	if err != nil || !bytes.Equal(before, after) {
+		t.Fatalf("distinct target changed original: %q, %v", after, err)
+	}
+	exports, err := s.Store.BibliographyExports()
+	if err != nil || len(exports) != 2 {
+		t.Fatalf("distinct targets were not retained: %+v, %v", exports, err)
+	}
+}
 
 func exportFixture(t *testing.T) (*Server, string, string) {
 	t.Helper()

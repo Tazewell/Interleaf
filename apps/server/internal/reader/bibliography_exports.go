@@ -116,12 +116,31 @@ func (s *Store) RegisterBibliographyExport(v BibliographyExportRequest) (Bibliog
 		return BibliographyExport{}, err
 	}
 	defer root.Close()
-	var count int
-	if err = s.DB.QueryRow(`SELECT count(*) FROM bibliography_exports WHERE path=?`, v.Path).Scan(&count); err != nil {
+	name := filepath.Base(v.Path)
+	targetInfo, err := root.Lstat(name)
+	if err != nil && !os.IsNotExist(err) {
 		return BibliographyExport{}, err
 	}
-	if count > 0 {
-		return BibliographyExport{}, paperConflict("此文件已有自动导出配置，请先停止原配置")
+	exports, err := s.BibliographyExports()
+	if err != nil {
+		return BibliographyExport{}, err
+	}
+	for _, existing := range exports {
+		if existing.Path == v.Path {
+			return BibliographyExport{}, paperConflict("此文件已有自动导出配置，请先停止原配置")
+		}
+		if targetInfo == nil {
+			continue
+		}
+		ownedInfo, statErr := os.Lstat(existing.Path)
+		if statErr != nil && !os.IsNotExist(statErr) {
+			return BibliographyExport{}, statErr
+		}
+		// Compare filesystem identities, so case aliases and hard links cannot
+		// acquire a second owner. Case-sensitive files remain distinct.
+		if statErr == nil && os.SameFile(targetInfo, ownedInfo) {
+			return BibliographyExport{}, paperConflict("此文件已有自动导出配置，请先停止原配置")
+		}
 	}
 	parentInfo, err := root.Stat(".")
 	if err != nil {
@@ -140,7 +159,6 @@ func (s *Store) RegisterBibliographyExport(v BibliographyExportRequest) (Bibliog
 			root.Remove(marker)
 		}
 	}()
-	name := filepath.Base(v.Path)
 	bytes, err := exportFile(root, name)
 	fingerprint := "missing"
 	if err == nil {
