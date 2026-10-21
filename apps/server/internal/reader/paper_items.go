@@ -534,6 +534,9 @@ func (s *Store) MergePaperItems(id string, v PaperMerge) (PaperItem, error) {
 		}
 	}
 	for _, source := range sources {
+		if err = mergePaperBibliography(tx, p.ID, source.ID); err != nil {
+			return p, err
+		}
 		p.Metadata.FillFrom(source.Metadata)
 		p.Tags = append(p.Tags, source.Tags...)
 		p.Folders = append(p.Folders, source.Folders...)

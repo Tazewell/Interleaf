@@ -101,6 +101,7 @@ func decode(w http.ResponseWriter, r *http.Request, v any) bool {
 func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
 	s.registerPaperRoutes(mux)
+	s.registerPaperBibliographyRoutes(mux)
 	mux.HandleFunc("POST /api/diagnostics/events", s.recordDiagnostic)
 	mux.HandleFunc("GET /api/diagnostics/export", s.exportDiagnostics)
 	mux.HandleFunc("GET /api/health", func(w http.ResponseWriter, r *http.Request) { respond(w, 200, map[string]string{"status": "ok"}) })

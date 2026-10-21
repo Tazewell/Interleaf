@@ -200,6 +200,11 @@ func Parse(text string) (Database, error) {
 		}
 		if kind == "string" {
 			name := p.name()
+			for _, old := range db.Strings {
+				if old.Name == name {
+					return db, p.failure("字符串宏重复定义：" + name)
+				}
+			}
 			if !namePattern.MatchString(name) || !p.take('=') {
 				return db, p.failure("无效的字符串宏")
 			}
@@ -348,7 +353,11 @@ func (db Database) Value(entry Entry, name string) (string, error) {
 // Render writes preserved expressions and validates the resulting document.
 func Render(db Database) (string, error) {
 	var out strings.Builder
-	for _, f := range db.Strings {
+	ordered, err := db.orderedStrings()
+	if err != nil {
+		return "", err
+	}
+	for _, f := range ordered {
 		fmt.Fprintf(&out, "@string{%s = %s}\n", f.Name, f.Value)
 	}
 	for _, value := range db.Preambles {
@@ -369,4 +378,57 @@ func Render(db Database) (string, error) {
 		return "", err
 	}
 	return text, nil
+}
+
+// Classic BibTeX evaluates @string declarations in source order. Resolve our
+// accepted forward references by emitting dependencies first, without rewriting
+// any expression or TeX literal.
+func (db Database) orderedStrings() ([]Field, error) {
+	fields := map[string]Field{}
+	for _, f := range db.Strings {
+		fields[strings.ToLower(f.Name)] = f
+	}
+	state := map[string]int{}
+	out := []Field{}
+	var visit func(string) error
+	visit = func(name string) error {
+		if state[name] == 2 {
+			return nil
+		}
+		if state[name] == 1 {
+			return fmt.Errorf("字符串宏循环引用：%s", name)
+		}
+		f, exists := fields[name]
+		if !exists {
+			return nil
+		}
+		state[name] = 1
+		if _, err := db.resolve(f.Name, db.macros(), map[string]bool{}, false); err != nil {
+			return err
+		}
+		p := parser{src: f.Value}
+		for {
+			atom, err := p.atom()
+			if err != nil {
+				return err
+			}
+			if atom[0] != '{' && atom[0] != '"' {
+				if err = visit(strings.ToLower(atom)); err != nil {
+					return err
+				}
+			}
+			if !p.take('#') {
+				break
+			}
+		}
+		state[name] = 2
+		out = append(out, f)
+		return nil
+	}
+	for _, f := range db.Strings {
+		if err := visit(strings.ToLower(f.Name)); err != nil {
+			return nil, err
+		}
+	}
+	return out, nil
 }

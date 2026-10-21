@@ -108,3 +108,27 @@ func TestBibRejectsExponentialMacroExpansion(t *testing.T) {
 		t.Fatal("accepted unbounded macro expansion")
 	}
 }
+
+func TestBibRejectsAmbiguousMacroRedefinitions(t *testing.T) {
+	_, err := Parse(`@string{x={First}} @article{a,title=x} @string{x={Second}} @article{b,title=x}`)
+	if err == nil || !strings.Contains(err.Error(), "行") {
+		t.Fatalf("ambiguous macro definitions accepted: %v", err)
+	}
+}
+
+func TestBibRenderOrdersForwardMacroDependencies(t *testing.T) {
+	db, err := Parse(`@string{whole=prefix # { Journal}} @string{prefix={Testing}} @article{k,title=whole}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	text, err := Render(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Index(text, "@string{prefix") > strings.Index(text, "@string{whole") {
+		t.Fatal("forward macro references cannot compile with BibTeX: " + text)
+	}
+	if !strings.Contains(text, `whole = prefix # { Journal}`) {
+		t.Fatal(text)
+	}
+}
