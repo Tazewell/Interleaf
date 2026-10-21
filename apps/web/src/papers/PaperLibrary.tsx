@@ -136,6 +136,7 @@ import { BibliographyImportDialog } from "./BibliographyImportDialog";
 import { BibliographyExportDialog } from "./BibliographyExportDialog";
 import { SmartCategoryDialog } from "./SmartCategoryDialog";
 import { copyCitations, exportCitations } from "./CitationMenu";
+import { libraryPapers } from "./projection";
 import { PAPER_DRAG_TYPE } from "./PaperSidebar";
 import { JournalRankBadges } from "./JournalRankBadges";
 import {
@@ -330,7 +331,8 @@ export function PaperLibrary({
       )
         return;
       const state = usePaperUI.getState();
-      const all = useReaderStore.getState().documents;
+      const library = useReaderStore.getState();
+      const all = libraryPapers(library.paperItems, library.documents);
       const targets = state.picking
         ? all.filter((d) => state.picked.has(d.id))
         : all.filter((d) => d.id === state.selectedId);

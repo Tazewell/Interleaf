@@ -3,12 +3,15 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { api } from "@reader/api";
-import type { Document, Processing } from "@reader/core";
+import type { Document, PaperItem, Processing } from "@reader/core";
 import { useReaderStore } from "../store";
 import { PaperLibrary } from "./PaperLibrary";
 import { PaperSidebar } from "./PaperSidebar";
 import { usePaperUI } from "./state";
 import { paper } from "./fixtures";
+import { libraryPapers } from "./projection";
+import { copyText } from "../chat/clipboard";
+vi.mock("../chat/clipboard", () => ({ copyText: vi.fn(async () => true) }));
 import { exportAnnotatedPDFWithToast } from "../annotated-pdf-export";
 vi.mock("../annotated-pdf-export", () => ({
   exportAnnotatedPDFWithToast: vi.fn(async () => 1),
@@ -33,6 +36,9 @@ vi.mock("@reader/api", () => ({
     changeLibraryFolder: vi.fn(async () => ({ changed: 1 })),
     mergePapers: vi.fn(async () => ({})),
     bibliographyExports: vi.fn(async () => []),
+    ensureCitationKeys: vi.fn(
+      async () => useReaderStore.getState().paperItems || [],
+    ),
     relateDocuments: vi.fn(async () => ({})),
     unrelateDocuments: vi.fn(async () => ({})),
     process: vi.fn(async () => ({})),
@@ -59,8 +65,15 @@ const docs: Document[] = [
 let root: Root, host: HTMLDivElement;
 const open = vi.fn();
 let jobs = new Map<string, Processing>();
-function Harness({ navOpen = true }: { navOpen?: boolean } = {}) {
-  const documents = useReaderStore((s) => s.documents);
+function Harness({
+  navOpen = true,
+  referenceItems = false,
+}: { navOpen?: boolean; referenceItems?: boolean } = {}) {
+  const rawDocuments = useReaderStore((s) => s.documents);
+  const paperItems = useReaderStore((s) => s.paperItems);
+  const documents = referenceItems
+    ? libraryPapers(paperItems, rawDocuments)
+    : rawDocuments;
   return (
     <>
       {navOpen && (
@@ -1501,3 +1514,78 @@ it("moves the final metadata boundary even before the title has a saved width", 
     rects.mockRestore();
   }
 });
+
+it.each([false, true])(
+  "copies metadata-only papers through the citation shortcut (mixed selection: %s)",
+  async (mixed) => {
+    const items: PaperItem[] = [
+      {
+        id: "empty",
+        title: "Metadata only citation",
+        author: "Author",
+        metadata: {},
+        tags: [],
+        folders: [],
+        favorite: false,
+        createdAt: "2026-10-22",
+        citationKey: "emptyKey",
+        primaryDocumentId: "",
+        attachments: [],
+      },
+      {
+        id: "attached",
+        title: "Attached citation",
+        author: "Author",
+        metadata: {},
+        tags: [],
+        folders: [],
+        favorite: false,
+        createdAt: "2026-10-22",
+        citationKey: "attachedKey",
+        primaryDocumentId: "a",
+        attachments: [
+          {
+            documentId: "a",
+            title: "File",
+            type: "pdf",
+            size: 1,
+            role: "original",
+          },
+        ],
+      },
+    ];
+    await act(async () => {
+      root.render(<Harness referenceItems />);
+      useReaderStore.setState({
+        paperItems: items,
+        libraryPreferences: {
+          mode: "papers",
+          papers: { citationStyle: "ris" },
+        },
+      });
+      usePaperUI.setState({
+        selectedId: "paper:empty",
+        picking: mixed,
+        picked: new Set(mixed ? ["paper:empty", "a"] : []),
+      });
+    });
+    await act(async () =>
+      window.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: "C",
+          shiftKey: true,
+          ctrlKey: !mixed,
+          metaKey: mixed,
+          bubbles: true,
+          cancelable: true,
+        }),
+      ),
+    );
+    expect(copyText).toHaveBeenCalledTimes(1);
+    const text = vi.mocked(copyText).mock.calls[0][0];
+    expect(text).toContain("TI  - Metadata only citation");
+    expect(text).toContain("ID  - emptyKey");
+    expect(text.includes("TI  - Attached citation")).toBe(mixed);
+    expect((text.match(/TY  - /g) || []).length).toBe(mixed ? 2 : 1);
+  },
+);
