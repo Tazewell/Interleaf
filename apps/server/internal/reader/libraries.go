@@ -171,6 +171,10 @@ func tagSuffix(tag, name string) (string, bool) {
 }
 
 func (s *Store) changeLabels(library, column, from, to string) (int, error) {
+	if library == "papers" && column == "folders" {
+		s.bibliographyExportMu.Lock()
+		defer s.bibliographyExportMu.Unlock()
+	}
 	nested := column == "folders"
 	tx, err := s.DB.Begin()
 	if err != nil {
@@ -222,6 +226,11 @@ func (s *Store) changeLabels(library, column, from, to string) (int, error) {
 	rows.Close()
 	for _, c := range changes {
 		if _, err = tx.Exec("UPDATE "+table+" SET "+column+"=? WHERE id=?", c.tags, c.id); err != nil {
+			return 0, err
+		}
+	}
+	if library == "papers" && column == "folders" {
+		if err = s.renameBibliographyExportFolders(tx, from, to); err != nil {
 			return 0, err
 		}
 	}

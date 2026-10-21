@@ -34,6 +34,7 @@ import {
 } from "./proxy-settings";
 import { startUpdateService } from "./update-service";
 import { devIsolation } from "./dev-isolation";
+import { configureBibliographyExport } from "./bibliography-export";
 import { startDiagnosticService } from "./diagnostic-service";
 import { serverSpawnDiagnostics } from "./server-spawn-diagnostics";
 import { discoverEndNote } from "./endnote-discovery";
@@ -52,6 +53,7 @@ let diagnostics: ReturnType<typeof startDiagnosticService> | undefined;
 let child: ChildProcess | undefined;
 let serverURL = "";
 let serverToken = "";
+let bibliographyExportCapability = "";
 let window: BrowserWindow | undefined;
 let quitting = false;
 let closing = false;
@@ -81,6 +83,8 @@ const commandLineHost = () => ({
 async function startServer() {
   const childEnv = proxySettings.activeEnvironment;
   serverToken = randomBytes(32).toString("hex");
+  bibliographyExportCapability = randomBytes(32).toString("hex");
+  diagnostics?.logs.secrets.push(bibliographyExportCapability);
   diagnostics?.logs.secrets.push(serverToken);
   diagnostics?.record("server.start_requested");
   const binary = serverBinary();
@@ -108,6 +112,7 @@ async function startServer() {
       env: {
         ...childEnv,
         READER_TOKEN: serverToken,
+        READER_EXPORT_CAPABILITY: bibliographyExportCapability,
         PATH: pathValue,
         READER_NODE: process.execPath,
         READER_AGENT: app.isPackaged
@@ -766,6 +771,51 @@ app
           return path ? [path] : [];
         });
         await importPaths(paths, library, true, folder);
+      },
+    );
+    ipcMain.handle(
+      "reader:configure-bibliography-export",
+      async (event, options: unknown) => {
+        if (
+          event.sender !== window?.webContents ||
+          event.senderFrame !== window.webContents.mainFrame
+        )
+          throw new Error("Invalid sender");
+        return configureBibliographyExport(options, {
+          choose: async (defaultPath) => {
+            const result = await dialog.showSaveDialog(window!, {
+              defaultPath,
+              filters: [{ name: "BibTeX / BibLaTeX", extensions: ["bib"] }],
+            });
+            return result.canceled ? null : result.filePath || null;
+          },
+          confirmTakeover: async (path) => {
+            const result = await dialog.showMessageBox(window!, {
+              type: "question",
+              message: "备份并接管此参考文献文件？",
+              detail: `${path}\nReader 将先保留备份，再持续更新此文件。外部修改后会停止覆盖。`,
+              buttons: ["取消", "备份并接管"],
+              defaultId: 0,
+              cancelId: 0,
+            });
+            return result.response === 1;
+          },
+          register: async (target) => {
+            const response = await fetch(`${serverURL}/api/papers/exports`, {
+              method: "POST",
+              headers: {
+                Authorization: `Bearer ${serverToken}`,
+                "Content-Type": "application/json",
+                "X-Reader-Export-Capability": bibliographyExportCapability,
+              },
+              body: JSON.stringify(target),
+            });
+            const result = (await response.json()) as { error?: string };
+            if (!response.ok)
+              throw new Error(result.error || "无法配置自动导出");
+            return result;
+          },
+        });
       },
     );
     await window.loadURL(`${url}/#token=${serverToken}`);

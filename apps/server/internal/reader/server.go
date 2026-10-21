@@ -30,6 +30,7 @@ import (
 )
 
 type Server struct {
+	exportCapability       string
 	chatReservations       map[string]bool
 	chatMu                 sync.Mutex
 	chatRuns               map[string]*chatRun
@@ -102,6 +103,7 @@ func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
 	s.registerPaperRoutes(mux)
 	s.registerPaperBibliographyRoutes(mux)
+	s.registerBibliographyExportRoutes(mux)
 	mux.HandleFunc("POST /api/diagnostics/events", s.recordDiagnostic)
 	mux.HandleFunc("GET /api/diagnostics/export", s.exportDiagnostics)
 	mux.HandleFunc("GET /api/health", func(w http.ResponseWriter, r *http.Request) { respond(w, 200, map[string]string{"status": "ok"}) })

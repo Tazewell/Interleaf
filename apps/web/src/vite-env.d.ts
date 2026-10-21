@@ -3,6 +3,11 @@
 interface Window {
   readerDesktop?: {
     platform: string;
+    configureBibliographyExport?: (options: {
+      folder: string;
+      includeChildren: boolean;
+      mode: "bibtex" | "biblatex";
+    }) => Promise<unknown | null>;
     exportDiagnostics?: () => Promise<boolean>;
     recordDiagnostic?: (
       event: import("../../../packages/reader-core/src/diagnostics").DiagnosticEvent,

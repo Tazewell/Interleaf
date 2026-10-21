@@ -69,9 +69,10 @@ type Message struct {
 	CreatedAt       string            `json:"createdAt"`
 }
 type Store struct {
-	processingWriteMu sync.Mutex
-	DB                *sql.DB
-	Root              string
+	bibliographyExportMu sync.Mutex
+	processingWriteMu    sync.Mutex
+	DB                   *sql.DB
+	Root                 string
 }
 
 func OpenStore(root string) (*Store, error) {
@@ -138,6 +139,10 @@ func OpenStore(root string) (*Store, error) {
 		return nil, err
 	}
 	if err = store.migratePaperBibliography(); err != nil {
+		db.Close()
+		return nil, err
+	}
+	if err = store.migrateBibliographyExports(); err != nil {
 		db.Close()
 		return nil, err
 	}

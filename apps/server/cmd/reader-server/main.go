@@ -86,6 +86,8 @@ func main() {
 	}
 	recorder.Secrets = append(recorder.Secrets, token)
 	server := reader.NewServer(store, token, *web)
+	server.SetBibliographyExportCapability(os.Getenv("READER_EXPORT_CAPABILITY"))
+	_ = os.Unsetenv("READER_EXPORT_CAPABILITY")
 	server.SetDiagnostics(recorder)
 	defer server.Close()
 	if !*connector {
@@ -106,6 +108,8 @@ func main() {
 	defer cancelRun()
 	stopProcessing := server.StartProcessing(runContext)
 	defer stopProcessing()
+	stopBibliographyExports := server.StartBibliographyExports(runContext)
+	defer stopBibliographyExports()
 	httpServer := &http.Server{BaseContext: func(net.Listener) context.Context { return runContext }, Handler: server.Handler(), ReadHeaderTimeout: 10 * time.Second, IdleTimeout: 60 * time.Second}
 	removeDiscovery, discoveryErr := reader.WriteDiscovery(root, reader.Discovery{URL: "http://" + listener.Addr().String(), Token: token, PID: os.Getpid(), Version: readerVersion})
 	if discoveryErr != nil {
