@@ -226,17 +226,17 @@ func TestPaperBibActualTeXCompilation(t *testing.T) {
 		}
 	}
 	s := testServer(t)
-	p := paperBibImport(t, s, `@string{venue=prefix # { of Testing}} @string{prefix={Journal}} @article{Garcia2025,title={A {GPU} Study with {\LaTeX}},author={Garc{\'i}a, Ana and {World Health Organization}},journal=venue,year=2025,volume=1,pages={1--10},custom={Untouched}}`, []map[string]any{{"index": 0, "action": "create"}})
+	p := paperBibImport(t, s, `@string{venue=prefix # { of Testing}} @string{prefix={Journal}} @article{Garcia2025,title={A {GPU} Study with {\LaTeX}},author={Garc{\'i}a, Ana and {World Health Organization}},journal=venue,year=2025,volume=1,pages={1--10},custom={Untouched}} @thesis{Masters2025,title={A Masters Thesis},author={Doe, Jane},type={mathesis},institution={Test University},date={2025-05-17}}`, []map[string]any{{"index": 0, "action": "create"}, {"index": 1, "action": "create"}})
 	for _, mode := range []string{"bibtex", "biblatex"} {
 		t.Run(mode, func(t *testing.T) {
 			dir := t.TempDir()
-			text := paperBibExport(t, s, []string{p[0].ID}, mode)
+			text := paperBibExport(t, s, []string{p[0].ID, p[1].ID}, mode)
 			if err := os.WriteFile(filepath.Join(dir, "library.bib"), []byte(text), 0600); err != nil {
 				t.Fatal(err)
 			}
 			tex := `\documentclass{article}
 \begin{document}
-\nocite{Garcia2025}
+\nocite{Garcia2025,Masters2025}
 \bibliographystyle{plain}
 \bibliography{library}
 \end{document}`
@@ -245,7 +245,7 @@ func TestPaperBibActualTeXCompilation(t *testing.T) {
 \usepackage[backend=biber,style=numeric]{biblatex}
 \addbibresource{library.bib}
 \begin{document}
-\nocite{Garcia2025}
+\nocite{Garcia2025,Masters2025}
 \printbibliography
 \end{document}`
 			}
@@ -312,5 +312,142 @@ func TestPaperBibStableSnapshotsAndPlainDate(t *testing.T) {
 	text = paperBibExport(t, s, []string{p.ID}, "biblatex")
 	if !strings.Contains(text, `date = {2025-05-17}`) {
 		t.Fatal(text)
+	}
+}
+
+func TestPaperBibReimportRefreshesDerivedAuthor(t *testing.T) {
+	s := testServer(t)
+	p := paperBibImport(t, s, `@article{k,title={T},author={Old, Alice},doi={10.1234/reimport},custom={Keep {Nested}}}`, []map[string]any{{"index": 0, "action": "create"}})[0]
+	updated := paperBibImport(t, s, `@article{k,title={T},author={New, Bob},doi={10.1234/reimport}}`, []map[string]any{{"index": 0, "action": "merge", "paperId": p.ID}})[0]
+	if updated.Author != "Bob New" || len(updated.Metadata.Creators) != 1 || updated.Metadata.Creators[0].Family != "New" {
+		t.Fatalf("author and creators diverged: %#v", updated)
+	}
+	out := paperBibExport(t, s, []string{p.ID}, "bibtex")
+	if !strings.Contains(out, `author = {New, Bob}`) || !strings.Contains(out, `custom = {Keep {Nested}}`) {
+		t.Fatal(out)
+	}
+	paperCall(t, s, "PATCH", "/api/papers/"+p.ID, `{"author":"Manual Author"}`, 200)
+	paperBibImport(t, s, `@article{k,title={T},author={Latest, Carol}}`, []map[string]any{{"index": 0, "action": "merge", "paperId": p.ID}})
+	if out := paperBibExport(t, s, []string{p.ID}, "bibtex"); !strings.Contains(out, `author = {Manual Author}`) {
+		t.Fatal(out)
+	}
+}
+
+func TestPaperBibThesisAndReportModeConversion(t *testing.T) {
+	for _, tc := range []struct{ name, source, mode, kind, institution, thesisType string }{
+		{"masters-to-bibtex", `@string{uni={University}} @thesis{k,title={T},author={Doe, Jane},type={mathesis},institution=uni,date={2025-05-17},custom={Keep}}`, "bibtex", "mastersthesis", "school", "mathesis"},
+		{"phd-to-bibtex", `@thesis{k,title={T},type={phdthesis},institution={University},date={2025-05-17}}`, "bibtex", "phdthesis", "school", "phdthesis"},
+		{"masters-to-biblatex", `@mastersthesis{k,title={T},school={University},year=2025}`, "biblatex", "thesis", "institution", "mathesis"},
+		{"phd-to-biblatex", `@phdthesis{k,title={T},school={University},year=2025}`, "biblatex", "thesis", "institution", "phdthesis"},
+		{"report-to-bibtex", `@report{k,title={T},institution={University},date={2025-05-17}}`, "bibtex", "techreport", "institution", ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			s := testServer(t)
+			p := paperBibImport(t, s, tc.source, []map[string]any{{"index": 0, "action": "create"}})[0]
+			text := paperBibExport(t, s, []string{p.ID}, tc.mode)
+			db, err := bibliography.Parse(text)
+			if err != nil {
+				t.Fatal(err)
+			}
+			e := db.Entries[0]
+			if e.Type != tc.kind {
+				t.Errorf("kind = %q, want %q: %s", e.Type, tc.kind, text)
+			}
+			if value, err := db.Value(e, tc.institution); err != nil || value != "University" {
+				t.Errorf("institution = %q: %v; %s", value, err, text)
+			}
+			if tc.mode == "biblatex" {
+				if value, _ := db.Value(e, "type"); value != tc.thesisType {
+					t.Errorf("thesis type = %q, want %q: %s", value, tc.thesisType, text)
+				}
+			}
+			if strings.Contains(tc.source, "2025-05-17") {
+				for name, want := range map[string]string{"year": "2025", "month": "May", "day": "17"} {
+					if value, err := db.Value(e, name); err != nil || value != want {
+						t.Errorf("%s = %q, want %q: %v; %s", name, value, want, err, text)
+					}
+				}
+			}
+			if strings.Contains(tc.source, "institution=uni") && (!strings.Contains(text, "school = uni") || !strings.Contains(text, "custom = {Keep}")) {
+				t.Error(text)
+			}
+		})
+	}
+}
+
+func TestPaperBibEprintArchiveIdentity(t *testing.T) {
+	for _, tc := range []struct{ name, fields, want string }{
+		{"pubmed", `eprinttype={pubmed},eprint={12345678}`, ""},
+		{"ssrn", `archiveprefix={SSRN},eprint={1234567}`, ""},
+		{"unspecified", `eprint={12345678}`, ""},
+		{"arxiv", `eprinttype={arxiv},eprint={2505.12345}`, "2505.12345"},
+		{"arxiv-prefix", `archiveprefix={arXiv},eprint={math/0301234}`, "math/0301234"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			s := testServer(t)
+			p := paperBibImport(t, s, `@article{k,title={T},`+tc.fields+`}`, []map[string]any{{"index": 0, "action": "create"}})[0]
+			if p.Metadata.ArXiv != tc.want {
+				t.Errorf("arxiv = %q, want %q", p.Metadata.ArXiv, tc.want)
+			}
+			out := paperBibExport(t, s, []string{p.ID}, "biblatex")
+			db, err := bibliography.Parse(out)
+			if err != nil {
+				t.Fatal(err)
+			}
+			value, err := db.Value(db.Entries[0], "eprint")
+			if err != nil || value == "" {
+				t.Fatalf("lost eprint: %s %v", out, err)
+			}
+			if tc.name == "pubmed" && (!strings.Contains(out, `eprinttype = {pubmed}`) || !strings.Contains(out, `eprint = {12345678}`)) {
+				t.Fatal(out)
+			}
+		})
+	}
+}
+
+func TestPaperBibDuplicateOriginalKeysWithExplicitRenames(t *testing.T) {
+	s := testServer(t)
+	p := paperBibImport(t, s, `@article{same,title={First}} @article{same,title={Second}}`, []map[string]any{{"index": 0, "action": "create", "citationKey": "first"}, {"index": 1, "action": "create", "citationKey": "second"}})
+	if len(p) != 2 || p[0].CitationKey != "first" || p[1].CitationKey != "second" {
+		t.Fatal(p)
+	}
+	before := len(paperList(t, s))
+	paperBibCall(t, s, "import", map[string]any{"text": `@book{dup,title={First}} @book{dup,title={Second}} @article{child,title={Child},crossref={dup}}`, "decisions": []map[string]any{{"index": 0, "action": "create", "citationKey": "parent1"}, {"index": 1, "action": "create", "citationKey": "parent2"}, {"index": 2, "action": "create"}}}, 409)
+	if len(paperList(t, s)) != before {
+		t.Fatal("ambiguous crossref committed partial changes")
+	}
+}
+
+func TestPaperBibBuiltinMonthScopeCannotChangeOtherImports(t *testing.T) {
+	s := testServer(t)
+	a := paperBibImport(t, s, `@article{a,title={A},month=jan}`, []map[string]any{{"index": 0, "action": "create"}})[0]
+	paperBibCall(t, s, "import", map[string]any{"text": `@string{jan={November}} @article{b,title={B},month=jan}`, "decisions": []map[string]any{{"index": 0, "action": "create"}}}, 400)
+	if len(paperList(t, s)) != 1 {
+		t.Fatal("redefined built-in month committed")
+	}
+	b := paperBibImport(t, s, `@string{jan={January}} @article{b,title={B},month=jan}`, []map[string]any{{"index": 0, "action": "create"}})[0]
+	text := paperBibExport(t, s, []string{a.ID, b.ID}, "bibtex")
+	db, err := bibliography.Parse(text)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, e := range db.Entries {
+		if value, err := db.Value(e, "month"); err != nil || value != "January" {
+			t.Fatalf("month changed for %s: %q %v", e.Key, value, err)
+		}
+	}
+}
+
+func TestPaperBibManualArxivKeepsArchiveOnReimport(t *testing.T) {
+	s := testServer(t)
+	id := paperCreate(t, s, "Arxiv metadata")
+	paperCall(t, s, "PATCH", "/api/papers/"+id, `{"metadata":{"arxiv":"2505.12345"}}`, 200)
+	for _, mode := range []string{"bibtex", "biblatex"} {
+		text := paperBibExport(t, s, []string{id}, mode)
+		other := testServer(t)
+		p := paperBibImport(t, other, text, []map[string]any{{"index": 0, "action": "create"}})[0]
+		if p.Metadata.ArXiv != "2505.12345" {
+			t.Errorf("arxiv lost in %s: %q; %s", mode, p.Metadata.ArXiv, text)
+		}
 	}
 }

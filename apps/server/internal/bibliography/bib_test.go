@@ -132,3 +132,28 @@ func TestBibRenderOrdersForwardMacroDependencies(t *testing.T) {
 		t.Fatal(text)
 	}
 }
+
+func TestBibRejectsBuiltinMonthShadowing(t *testing.T) {
+	for _, src := range []string{`@string{jan={November}} @article{b,title={B},month=jan}`, `@string{jan=alias} @string{alias={November}} @article{b,title={B},month=jan}`} {
+		if _, err := Parse(src); err == nil || !strings.Contains(err.Error(), "行") {
+			t.Errorf("month redefinition accepted or missing location: %v", err)
+		}
+	}
+	for _, src := range []string{`@string{jan={January}} @article{b,title={B},month=jan}`, `@string{jan=prefix # {uary}} @string{prefix={Jan}} @article{b,title={B},month=jan}`} {
+		db, err := Parse(src)
+		if err != nil {
+			t.Fatal(err)
+		}
+		out, err := Render(db)
+		if err != nil {
+			t.Fatal(err)
+		}
+		copy, err := Parse(out)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if value, err := copy.Value(copy.Entries[0], "month"); err != nil || value != "January" {
+			t.Fatalf("month=%q %v", value, err)
+		}
+	}
+}

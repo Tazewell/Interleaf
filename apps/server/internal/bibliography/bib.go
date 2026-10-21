@@ -138,6 +138,7 @@ func (p *parser) expression() (string, error) {
 func Parse(text string) (Database, error) {
 	db := Database{Entries: []Entry{}}
 	p := parser{src: strings.TrimPrefix(text, "\ufeff")}
+	macroPositions := map[string]int{}
 	if len(text) > 8<<20 {
 		return db, p.failure("参考文献文件超过 8 MiB")
 	}
@@ -199,6 +200,7 @@ func Parse(text string) (Database, error) {
 			continue
 		}
 		if kind == "string" {
+			position := p.pos
 			name := p.name()
 			for _, old := range db.Strings {
 				if old.Name == name {
@@ -213,6 +215,7 @@ func Parse(text string) (Database, error) {
 				return db, err
 			}
 			db.Strings = append(db.Strings, Field{name, value})
+			macroPositions[name] = position
 			p.take(',')
 			if !p.take(close) {
 				return db, p.failure("字符串宏缺少结束括号")
@@ -260,8 +263,15 @@ func Parse(text string) (Database, error) {
 	// Reject cycles even when the offending macro is not used by an entry.
 	macros := db.macros()
 	for _, f := range db.Strings {
-		if _, err := db.resolve(f.Name, macros, map[string]bool{}, true); err != nil {
+		value, err := db.resolve(f.Name, macros, map[string]bool{}, true)
+		if err != nil {
 			return db, p.failure(err.Error())
+		}
+		for _, month := range months {
+			if f.Name == strings.ToLower(month[:3]) && !strings.EqualFold(strings.TrimSpace(value), month) {
+				location := parser{src: p.src, pos: macroPositions[f.Name]}
+				return db, location.failure("不能更改内置月份宏的含义：" + f.Name)
+			}
 		}
 	}
 	return db, nil

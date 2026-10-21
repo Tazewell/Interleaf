@@ -208,7 +208,7 @@ func (s *Store) ImportBibliography(v PaperBibliographyImport) ([]PaperItem, erro
 	plans := []bibImportPlan{}
 	targets := map[string]bool{}
 	newKeys := map[string]bool{}
-	originals := map[string]string{}
+	originals := map[string][]string{}
 	for index, e := range db.Entries {
 		d := decisions[index]
 		if d.Action == "skip" {
@@ -294,10 +294,7 @@ func (s *Store) ImportBibliography(v PaperBibliographyImport) ([]PaperItem, erro
 			return nil, err
 		}
 		original := strings.ToLower(e.Key)
-		if originals[original] != "" {
-			return nil, paperConflict("导入原始引用键重复，crossref 含义不明确，请跳过重复项")
-		}
-		originals[original] = plan.paper.ID
+		originals[original] = append(originals[original], plan.paper.ID)
 		plans = append(plans, plan)
 	}
 	// Resolve crossrefs to identities so future key changes cannot break them.
@@ -306,7 +303,14 @@ func (s *Store) ImportBibliography(v PaperBibliographyImport) ([]PaperItem, erro
 		if plan.parent == "" {
 			continue
 		}
-		parentID := originals[strings.ToLower(plan.parent)]
+		parents := originals[strings.ToLower(plan.parent)]
+		if len(parents) > 1 {
+			return nil, paperConflict("crossref 引用的原始键重复，请跳过重复项或先修改 crossref：" + plan.parent)
+		}
+		parentID := ""
+		if len(parents) == 1 {
+			parentID = parents[0]
+		}
 		if parentID == "" && plan.record.ParentID != "" {
 			parent, err := readPaper(tx, plan.record.ParentID)
 			if err != nil || parent.DeletedAt != "" {

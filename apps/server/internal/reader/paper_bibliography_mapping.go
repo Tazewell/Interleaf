@@ -135,6 +135,15 @@ func bibMapped(db bibliography.Database, e bibliography.Entry) (PaperItem, error
 		p.Metadata.Sources["creators"] = "bibtex"
 	}
 	for _, f := range bibMetadataFields {
+		if f.Meta == "arxiv" {
+			archive, _ := db.Value(e, "eprinttype")
+			if archive == "" {
+				archive, _ = db.Value(e, "archiveprefix")
+			}
+			if !strings.EqualFold(strings.TrimSpace(archive), "arxiv") {
+				continue
+			}
+		}
 		value, _ := db.Value(e, f.Bib)
 		if value != "" {
 			*p.Metadata.textField(f.Meta) = value
@@ -159,10 +168,12 @@ func bibFill(p *PaperItem, in PaperItem) {
 		p.Title = in.Title
 		p.Metadata.Sources["title"] = "bibtex"
 	}
-	if p.Author == "" {
-		p.Author = in.Author
-	}
 	if p.Metadata.Sources["creators"] != "manual" && len(in.Metadata.Creators) > 0 {
+		// Refresh the summary only while it still follows the old creators.
+		// A separately edited author remains authoritative during reimport.
+		if p.Author == CreatorNames(p.Metadata.Creators) {
+			p.Author = in.Author
+		}
 		p.Metadata.Creators = in.Metadata.Creators
 		p.Metadata.Sources["creators"] = "bibtex"
 	}
@@ -241,10 +252,19 @@ func bibEntry(p PaperItem, record paperBibRecord, hasRaw bool, mode string) bibl
 		case "techreport":
 			e.Type = "report"
 		case "phdthesis", "mastersthesis":
-			bibSet(&e, "type", bibLiteral(e.Type))
+			if bibGet(e, "type") == "" {
+				kind := e.Type
+				if kind == "mastersthesis" {
+					kind = "mathesis"
+				}
+				bibSet(&e, "type", bibLiteral(kind))
+			}
 			e.Type = "thesis"
 		case "conference":
 			e.Type = "inproceedings"
+		}
+		if e.Type == "thesis" && bibGet(e, "institution") == "" && bibGet(e, "school") != "" {
+			bibSet(&e, "institution", bibGet(e, "school"))
 		}
 	}
 	if mode == "bibtex" {
@@ -253,8 +273,15 @@ func bibEntry(p PaperItem, record paperBibRecord, hasRaw bool, mode string) bibl
 			e.Type = "techreport"
 		case "thesis":
 			e.Type = "phdthesis"
+			kind, _ := record.Context.Value(e, "type")
+			if strings.EqualFold(kind, "mathesis") || strings.EqualFold(kind, "mastersthesis") {
+				e.Type = "mastersthesis"
+			}
 		case "online":
 			e.Type = "misc"
+		}
+		if (e.Type == "mastersthesis" || e.Type == "phdthesis") && bibGet(e, "school") == "" && bibGet(e, "institution") != "" {
+			bibSet(&e, "school", bibGet(e, "institution"))
 		}
 	}
 	if !hasRaw || p.Title != base.Title {
@@ -274,6 +301,10 @@ func bibEntry(p PaperItem, record paperBibRecord, hasRaw bool, mode string) bibl
 				v = bibLiteral(*value)
 			}
 			bibSet(&e, f.Bib, v)
+			if f.Meta == "arxiv" && *value != "" {
+				bibSet(&e, "eprinttype", "{arxiv}")
+				bibSet(&e, "archiveprefix", "")
+			}
 		}
 	}
 	venue := "journal"
@@ -331,6 +362,19 @@ func bibEntry(p PaperItem, record paperBibRecord, hasRaw bool, mode string) bibl
 			year = year[:4]
 		}
 		bibSet(&e, "year", bibLiteral(year))
+	}
+	// Classic styles ignore date; supply its components even for an untouched
+	// imported expression, while retaining explicit year/month/day expressions.
+	if mode == "bibtex" && bibGet(e, "date") != "" {
+		parts := strings.Split(p.Metadata.Date, "-")
+		if len(parts) > 1 && bibGet(e, "month") == "" {
+			if month, err := strconv.Atoi(parts[1]); err == nil && month >= 1 && month <= 12 {
+				bibSet(&e, "month", bibLiteral(bibMonthNames[month-1]))
+			}
+		}
+		if len(parts) > 2 && bibGet(e, "day") == "" {
+			bibSet(&e, "day", bibLiteral(parts[2]))
+		}
 	}
 	return e
 }
