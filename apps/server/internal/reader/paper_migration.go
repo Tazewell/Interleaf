@@ -19,15 +19,8 @@ func (s *Store) migratePaperItems() error {
 	if exists != 0 {
 		return nil
 	}
-	snapshot := filepath.Join(s.Root, "reader.pre-paper-items.sqlite")
-	if info, err := os.Stat(snapshot); os.IsNotExist(err) {
-		if _, err = s.DB.Exec(`VACUUM INTO ?`, snapshot); err != nil {
-			return fmt.Errorf("文献迁移快照: %w", err)
-		}
-	} else if err != nil {
+	if err := s.snapshotBeforePaperMigration(); err != nil {
 		return err
-	} else if !info.Mode().IsRegular() {
-		return fmt.Errorf("文献迁移快照不是普通文件")
 	}
 	tx, err := s.DB.Begin()
 	if err != nil {
@@ -56,7 +49,7 @@ func (s *Store) migratePaperItems() error {
  UPDATE paper_items SET deleted_at=new.deleted_at,primary_document_id=CASE WHEN primary_document_id='' THEN new.id ELSE primary_document_id END WHERE new.library='papers' AND id=(SELECT paper_id FROM paper_attachments WHERE document_id=new.id);
  INSERT INTO paper_items(id,title,author,metadata,tags,folders,favorite,created_at,deleted_at,primary_document_id) SELECT 'paper_'||new.id||'_'||lower(hex(randomblob(8))),new.title,new.author,new.metadata,new.tags,new.folders,new.favorite,new.created_at,new.deleted_at,new.id WHERE new.library='papers' AND NOT EXISTS(SELECT 1 FROM paper_attachments WHERE document_id=new.id);
  INSERT INTO paper_attachments(document_id,paper_id) SELECT new.id,id FROM paper_items WHERE primary_document_id=new.id AND new.library='papers' AND NOT EXISTS(SELECT 1 FROM paper_attachments WHERE document_id=new.id);
- UPDATE paper_items SET title=new.title,author=new.author,metadata=new.metadata,tags=new.tags,folders=new.folders,favorite=new.favorite WHERE new.library='papers' AND EXISTS(SELECT 1 FROM paper_detached_documents WHERE document_id=new.id) AND id=(SELECT paper_id FROM paper_attachments WHERE document_id=new.id);
+ UPDATE documents SET title=p.title,author=p.author,metadata=p.metadata,tags=p.tags,folders=p.folders,favorite=p.favorite FROM paper_items p WHERE new.library='papers' AND documents.id=new.id AND p.id=(SELECT paper_id FROM paper_attachments WHERE document_id=new.id);
  DELETE FROM paper_detached_documents WHERE document_id=new.id AND new.library='papers';
  END;
  CREATE TRIGGER paper_attachment_removed AFTER DELETE ON paper_attachments BEGIN
@@ -85,4 +78,53 @@ func (s *Store) migratePaperItems() error {
 func syncPaperAttachments(tx *sql.Tx, paperID string) error {
 	_, err := tx.Exec(`UPDATE documents SET title=p.title,author=p.author,metadata=p.metadata,tags=p.tags,folders=p.folders,favorite=p.favorite FROM paper_items p WHERE p.id=? AND documents.id IN(SELECT document_id FROM paper_attachments WHERE paper_id=p.id)`, paperID)
 	return err
+}
+
+// Never overwrite an earlier recovery point, including one from a failed
+// attempt. A retry must capture the database as it is immediately before this
+// attempt, since the old app may have written more reader data in the meantime.
+func (s *Store) snapshotBeforePaperMigration() error {
+	path := filepath.Join(s.Root, "reader.pre-paper-items.sqlite")
+	if _, err := os.Lstat(path); err == nil {
+		if err = validatePaperSnapshot(path); err != nil {
+			return err
+		}
+		path = filepath.Join(s.Root, "reader.pre-paper-items."+id()+".sqlite")
+	} else if !os.IsNotExist(err) {
+		return err
+	}
+	if _, err := s.DB.Exec(`VACUUM INTO ?`, path); err != nil {
+		return fmt.Errorf("文献迁移快照: %w", err)
+	}
+	if err := os.Chmod(path, 0600); err != nil {
+		return err
+	}
+	return validatePaperSnapshot(path)
+}
+func validatePaperSnapshot(path string) error {
+	info, err := os.Lstat(path)
+	if err != nil {
+		return err
+	}
+	if !info.Mode().IsRegular() || info.Size() == 0 {
+		return fmt.Errorf("文献迁移快照必须是非空普通 SQLite 文件: %s", path)
+	}
+	backup, err := sql.Open("sqlite", path+"?mode=ro")
+	if err != nil {
+		return fmt.Errorf("无法打开文献迁移快照: %w", err)
+	}
+	defer backup.Close()
+	var integrity string
+	if err = backup.QueryRow(`PRAGMA integrity_check`).Scan(&integrity); err != nil {
+		return fmt.Errorf("文献迁移快照完整性检查失败: %w", err)
+	}
+	if integrity != "ok" {
+		return fmt.Errorf("文献迁移快照已损坏: %s", integrity)
+	}
+	// A valid but empty/unrelated SQLite database is not a Reader recovery point.
+	rows, err := backup.Query(`SELECT d.id,d.type,d.title,d.progress,a.body,m.body,n.body FROM documents d LEFT JOIN annotations a ON a.document_id=d.id LEFT JOIN messages m ON m.document_id=d.id LEFT JOIN document_notes n ON n.document_id=d.id LIMIT 0`)
+	if err != nil {
+		return fmt.Errorf("文献迁移快照缺少阅读数据表: %w", err)
+	}
+	return rows.Close()
 }

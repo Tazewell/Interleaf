@@ -1,10 +1,13 @@
 package reader
 
 import (
+	"bytes"
 	"context"
+	"database/sql"
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"sync"
 	"testing"
@@ -543,4 +546,195 @@ func TestPaperMigrationFailureRollsBackSchemaAndReaderData(t *testing.T) {
 		t.Fatal(items, err)
 	}
 	s.DB.Close()
+}
+
+func assertPaperAuthority(t *testing.T, s *Server, want PaperItem, documentIDs ...string) {
+	t.Helper()
+	got, err := s.Store.PaperItem(want.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got.Attachments, want.Attachments = nil, nil
+	got.PrimaryDocumentID, want.PrimaryDocumentID = "", ""
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("paper authority overwritten:\n got %+v\nwant %+v", got, want)
+	}
+	for _, id := range documentIDs {
+		d, err := s.Store.Document(id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if d.Title != want.Title || d.Author != want.Author || !reflect.DeepEqual(d.Metadata, want.Metadata) || !reflect.DeepEqual(d.Tags, want.Tags) || !reflect.DeepEqual(d.Folders, want.Folders) || d.Favorite != want.Favorite || d.CitationKey != want.CitationKey || d.PaperID != want.ID {
+			t.Fatalf("attachment %s did not receive authority: %+v", id, d)
+		}
+	}
+}
+func TestPaperReturnDetachedAttachmentKeepsCuratedAuthority(t *testing.T) {
+	s := testServer(t)
+	paperSeed(t, s.Store, "one")
+	paperSeed(t, s.Store, "two")
+	paperCall(t, s, "POST", "/api/documents/one/merge", `{"from":["two"]}`, 200)
+	d, err := s.Store.Document("one")
+	if err != nil {
+		t.Fatal(err)
+	}
+	paperCall(t, s, "PATCH", "/api/documents/two", `{"library":"books"}`, 200)
+	paperCall(t, s, "PATCH", "/api/papers/"+d.PaperID, `{"title":"New curated title","author":"Curated author","metadata":{"date":"2026","venue":"Curated venue","doi":"10.1234/curated","remark":"Keep this note"},"tags":["curated"],"folders":["Project/Curated"],"favorite":true,"citationKey":"Curated2026"}`, 200)
+	want, err := s.Store.PaperItem(d.PaperID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	paperCall(t, s, "PATCH", "/api/documents/two", `{"library":"papers"}`, 200)
+	assertPaperAuthority(t, s, want, "one", "two")
+	// Returning and explicitly editing in one request must apply just those edits
+	// on top of the current paper, not resurrect the detached metadata snapshot.
+	paperCall(t, s, "PATCH", "/api/documents/two", `{"library":"books"}`, 200)
+	paperCall(t, s, "PATCH", "/api/papers/"+want.ID, `{"metadata":{"venue":"More recent venue"}}`, 200)
+	paperCall(t, s, "PATCH", "/api/documents/two", `{"library":"papers","title":"Explicit title","author":"Explicit author","metadata":{"remark":"Explicit note"},"tags":["explicit"],"folders":["Project/Explicit"],"favorite":false}`, 200)
+	want.Title = "Explicit title"
+	want.Author = "Explicit author"
+	want.Metadata.Venue = "More recent venue"
+	want.Metadata.Remark = "Explicit note"
+	want.Tags = []string{"explicit"}
+	want.Folders = []string{"Project/Explicit"}
+	want.Favorite = false
+	assertPaperAuthority(t, s, want, "one", "two")
+}
+func TestPaperAttachPreviouslyDetachedBookKeepsTargetAuthority(t *testing.T) {
+	s := testServer(t)
+	paperSeed(t, s.Store, "old")
+	paperCall(t, s, "PATCH", "/api/documents/old", `{"library":"books"}`, 200)
+	p := paperCreate(t, s, "Target authority")
+	paperCall(t, s, "PATCH", "/api/papers/"+p, `{"author":"Target author","metadata":{"date":"2025","venue":"Target venue","doi":"10.1234/target","remark":"Target note"},"tags":["target"],"folders":["Project/Target"],"favorite":true,"citationKey":"Target2025"}`, 200)
+	want, err := s.Store.PaperItem(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	paperCall(t, s, "PUT", "/api/papers/"+p+"/attachments/old", `{"role":"translation","primary":true}`, 200)
+	assertPaperAuthority(t, s, want, "old")
+}
+
+func removePaperSchema(t *testing.T, s *Store) {
+	t.Helper()
+	rows, err := s.DB.Query(`SELECT name FROM sqlite_master WHERE type='trigger' AND name LIKE 'paper_%'`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	names := []string{}
+	for rows.Next() {
+		var name string
+		if err = rows.Scan(&name); err != nil {
+			t.Fatal(err)
+		}
+		names = append(names, name)
+	}
+	if err = rows.Err(); err != nil {
+		t.Fatal(err)
+	}
+	rows.Close()
+	for _, name := range names {
+		if _, err = s.DB.Exec(`DROP TRIGGER ` + name); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, table := range []string{"paper_detached_documents", "paper_attachments", "paper_redirects", "paper_citation_keys", "paper_items"} {
+		if _, err = s.DB.Exec(`DROP TABLE ` + table); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+func TestPaperSnapshotRejectsCorruptEmptyAndSymlink(t *testing.T) {
+	for _, kind := range []string{"corrupt", "empty", "symlink", "unrelated"} {
+		t.Run(kind, func(t *testing.T) {
+			s := testServer(t)
+			removePaperSchema(t, s.Store)
+			paperSeed(t, s.Store, "keep")
+			path := filepath.Join(s.Store.Root, "reader.pre-paper-items.sqlite")
+			if err := os.Remove(path); err != nil {
+				t.Fatal(err)
+			}
+			switch kind {
+			case "corrupt":
+				if err := os.WriteFile(path, []byte("not a SQLite backup"), 0600); err != nil {
+					t.Fatal(err)
+				}
+			case "empty":
+				if err := os.WriteFile(path, nil, 0600); err != nil {
+					t.Fatal(err)
+				}
+			case "unrelated":
+				unrelated, err := sql.Open("sqlite", path)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if _, err = unrelated.Exec(`CREATE TABLE unrelated(id TEXT)`); err != nil {
+					t.Fatal(err)
+				}
+				if err = unrelated.Close(); err != nil {
+					t.Fatal(err)
+				}
+			case "symlink":
+				if err := os.Symlink(filepath.Join(s.Store.Root, "reader.sqlite"), path); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if err := s.Store.migratePaperItems(); err == nil {
+				t.Fatal("accepted unsafe snapshot", kind)
+			}
+			var n int
+			if err := s.Store.DB.QueryRow(`SELECT count(*) FROM sqlite_master WHERE name='paper_items'`).Scan(&n); err != nil || n != 0 {
+				t.Fatal("migration mutated schema", n, err)
+			}
+			if err := s.Store.DB.QueryRow(`SELECT count(*) FROM documents WHERE id='keep'`).Scan(&n); err != nil || n != 1 {
+				t.Fatal("migration lost original data", n, err)
+			}
+		})
+	}
+}
+func TestPaperSnapshotRetryCapturesNewReaderData(t *testing.T) {
+	s := testServer(t)
+	removePaperSchema(t, s.Store)
+	paperSeed(t, s.Store, "before")
+	path := filepath.Join(s.Store.Root, "reader.pre-paper-items.sqlite")
+	if err := os.Remove(path); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Store.DB.Exec(`CREATE INDEX paper_items_key ON documents(title)`); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Store.migratePaperItems(); err == nil {
+		t.Fatal("expected failed migration")
+	}
+	old, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	paperSeed(t, s.Store, "after")
+	if _, err = s.Store.DB.Exec(`INSERT INTO document_notes VALUES('after','new reader note','2026');DROP INDEX paper_items_key`); err != nil {
+		t.Fatal(err)
+	}
+	if err = s.Store.migratePaperItems(); err != nil {
+		t.Fatal(err)
+	}
+	retained, err := os.ReadFile(path)
+	if err != nil || !bytes.Equal(old, retained) {
+		t.Fatal("overwrote previous snapshot", err)
+	}
+	snapshots, err := filepath.Glob(filepath.Join(s.Store.Root, "reader.pre-paper-items.*.sqlite"))
+	if err != nil || len(snapshots) != 1 {
+		t.Fatal("missing fresh retry snapshot", snapshots, err)
+	}
+	backup, err := sql.Open("sqlite", snapshots[0]+"?mode=ro")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer backup.Close()
+	var note string
+	if err = backup.QueryRow(`SELECT body FROM document_notes WHERE document_id='after'`).Scan(&note); err != nil || note != "new reader note" {
+		t.Fatal("retry snapshot missing new reader data", note, err)
+	}
+	var n int
+	if err = backup.QueryRow(`SELECT count(*) FROM documents`).Scan(&n); err != nil || n != 2 {
+		t.Fatal("retry snapshot wrong documents", n, err)
+	}
 }

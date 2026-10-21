@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"crypto/subtle"
+	"database/sql"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -585,6 +586,22 @@ func (s *Server) updateDocument(w http.ResponseWriter, r *http.Request) {
 	if !decode(w, r, &v) {
 		return
 	}
+	// A returning attachment may have an obsolete metadata projection. Build any
+	// explicit metadata patch on the owning paper before restoring the relation.
+	if v.Library != nil && *v.Library == "papers" && d.Library != "papers" {
+		var owner string
+		if lookupErr := s.Store.DB.QueryRow(`SELECT paper_id FROM paper_detached_documents WHERE document_id=?`, d.ID).Scan(&owner); lookupErr == nil {
+			paper, readErr := s.Store.PaperItem(owner)
+			if readErr != nil {
+				fail(w, 500, "无法读取文献信息")
+				return
+			}
+			d.Metadata = paper.Metadata
+		} else if !errors.Is(lookupErr, sql.ErrNoRows) {
+			fail(w, 500, "无法读取附件归属")
+			return
+		}
+	}
 	var title, author, category, tags, folders, library, metadata, status any
 	if v.Title != nil {
 		title, err = metadataText(v.Title, 300, false)
@@ -703,7 +720,25 @@ func (s *Server) updateDocument(w http.ResponseWriter, r *http.Request) {
 	if v.Progress != nil {
 		progress = string(v.Progress)
 	}
-	_, err = s.Store.DB.Exec("UPDATE documents SET title=COALESCE(?,title),author=COALESCE(?,author),favorite=COALESCE(?,favorite),progress=COALESCE(?,progress),percentage=COALESCE(?,percentage),last_opened_at=COALESCE(?,last_opened_at),category=COALESCE(?,category),tags=COALESCE(?,tags),folders=COALESCE(?,folders),library=COALESCE(?,library),metadata=COALESCE(?,metadata),reading_status=COALESCE(?,reading_status),category_source=CASE WHEN ? IS NOT NULL THEN 'manual' ELSE category_source END,classification_status=CASE WHEN ? IS NOT NULL THEN 'done' ELSE classification_status END,classification_error=CASE WHEN ? IS NOT NULL THEN '' ELSE classification_error END WHERE id=?", title, author, v.Favorite, progress, v.Percentage, openedAt, category, tags, folders, library, metadata, status, category, category, category, d.ID)
+	tx, err := s.Store.DB.Begin()
+	if err != nil {
+		fail(w, 500, "保存失败")
+		return
+	}
+	defer tx.Rollback()
+	_, err = tx.Exec("UPDATE documents SET title=COALESCE(?,title),author=COALESCE(?,author),favorite=COALESCE(?,favorite),progress=COALESCE(?,progress),percentage=COALESCE(?,percentage),last_opened_at=COALESCE(?,last_opened_at),category=COALESCE(?,category),tags=COALESCE(?,tags),folders=COALESCE(?,folders),library=COALESCE(?,library),metadata=COALESCE(?,metadata),reading_status=COALESCE(?,reading_status),category_source=CASE WHEN ? IS NOT NULL THEN 'manual' ELSE category_source END,classification_status=CASE WHEN ? IS NOT NULL THEN 'done' ELSE classification_status END,classification_error=CASE WHEN ? IS NOT NULL THEN '' ELSE classification_error END WHERE id=?", title, author, v.Favorite, progress, v.Percentage, openedAt, category, tags, folders, library, metadata, status, category, category, category, d.ID)
+	// The library trigger restores the authority's projection. Reapply only the
+	// fields explicitly edited in this same request, within the same transaction.
+	if err == nil && v.Library != nil && *v.Library == "papers" {
+		var manualMetadata any
+		if v.Metadata != nil || v.Title != nil {
+			manualMetadata = metadata
+		}
+		_, err = tx.Exec(`UPDATE paper_items SET title=COALESCE(?,title),author=COALESCE(?,author),favorite=COALESCE(?,favorite),tags=COALESCE(?,tags),folders=COALESCE(?,folders),metadata=COALESCE(?,metadata) WHERE id=(SELECT paper_id FROM paper_attachments WHERE document_id=?)`, title, author, v.Favorite, tags, folders, manualMetadata, d.ID)
+	}
+	if err == nil {
+		err = tx.Commit()
+	}
 	if err != nil {
 		fail(w, 500, "保存失败")
 		return
