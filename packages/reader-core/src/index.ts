@@ -1,3 +1,4 @@
+export type { PaperAttachmentRole, PaperAttachment, PaperItem } from "./papers";
 export { zoomCommand } from "./zoom-shortcut";
 export {
   READER_SCHEME,
@@ -235,6 +236,8 @@ export interface TagBoard {
   match: "all" | "any";
 }
 export interface Document {
+  paperId?: string;
+  citationKey?: string;
   category: DocumentCategory;
   categorySource: "default" | "ai" | "manual";
   classificationStatus: "idle" | "pending" | "running" | "failed" | "done";

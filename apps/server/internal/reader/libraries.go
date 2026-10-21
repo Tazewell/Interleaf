@@ -177,7 +177,13 @@ func (s *Store) changeLabels(library, column, from, to string) (int, error) {
 		return 0, err
 	}
 	defer tx.Rollback()
-	rows, err := tx.Query("SELECT id,"+column+" FROM documents WHERE library=?", library)
+	table := "documents"
+	query := "SELECT id," + column + " FROM documents WHERE library=?"
+	args := []any{library}
+	if library == "papers" {
+		table, query, args = "paper_items", "SELECT id,"+column+" FROM paper_items", nil
+	}
+	rows, err := tx.Query(query, args...)
 	if err != nil {
 		return 0, err
 	}
@@ -215,7 +221,7 @@ func (s *Store) changeLabels(library, column, from, to string) (int, error) {
 	}
 	rows.Close()
 	for _, c := range changes {
-		if _, err = tx.Exec("UPDATE documents SET "+column+"=? WHERE id=?", c.tags, c.id); err != nil {
+		if _, err = tx.Exec("UPDATE "+table+" SET "+column+"=? WHERE id=?", c.tags, c.id); err != nil {
 			return 0, err
 		}
 	}

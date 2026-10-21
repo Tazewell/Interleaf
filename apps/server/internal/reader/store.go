@@ -11,6 +11,8 @@ import (
 )
 
 type Document struct {
+	PaperID              string   `json:"paperId,omitempty"`
+	CitationKey          string   `json:"citationKey,omitempty"`
 	Category             string   `json:"category"`
 	CategorySource       string   `json:"categorySource"`
 	ClassificationStatus string   `json:"classificationStatus"`
@@ -131,6 +133,10 @@ func OpenStore(root string) (*Store, error) {
 		db.Close()
 		return nil, err
 	}
+	if err = store.migratePaperItems(); err != nil {
+		db.Close()
+		return nil, err
+	}
 	if err = store.compactMarks(); err != nil {
 		db.Close()
 		return nil, err
@@ -149,14 +155,14 @@ const documentColumns = `id,type,title,author,size,created_at,last_opened_at,fav
 	`(SELECT count(*) FROM annotations a WHERE a.document_id=documents.id AND json_extract(a.body,'$.kind')='note'),` +
 	`(SELECT count(*) FROM annotations a WHERE a.document_id=documents.id AND json_extract(a.body,'$.kind') IN ('highlight','underline')),` +
 	`(SELECT count(*) FROM annotations a WHERE a.document_id=documents.id AND json_extract(a.body,'$.kind')='question' AND COALESCE(json_extract(a.body,'$.answerId'),'')='' AND NOT COALESCE(json_extract(a.body,'$.resolved'),0)),` +
-	`(SELECT json_group_array(CASE WHEN r.a=documents.id THEN r.b ELSE r.a END) FROM document_relations r WHERE r.a=documents.id OR r.b=documents.id)`
+	`(SELECT json_group_array(CASE WHEN r.a=documents.id THEN r.b ELSE r.a END) FROM document_relations r WHERE r.a=documents.id OR r.b=documents.id),` + `COALESCE((SELECT paper_id FROM paper_attachments WHERE document_id=documents.id),''),COALESCE((SELECT citation_key FROM paper_items p JOIN paper_attachments a ON a.paper_id=p.id WHERE a.document_id=documents.id),'')`
 
 type rowScanner interface{ Scan(...any) error }
 
 func scanDocument(row rowScanner) (Document, error) {
 	var d Document
 	var progress, tags, folders, metadata, related string
-	err := row.Scan(&d.ID, &d.Type, &d.Title, &d.Author, &d.Size, &d.CreatedAt, &d.LastOpenedAt, &d.Favorite, &progress, &d.Percentage, &d.Category, &d.CategorySource, &d.ClassificationStatus, &d.ClassificationError, &tags, &folders, &d.Library, &d.DeletedAt, &metadata, &d.ReadingStatus, &d.NoteCount, &d.HighlightCount, &d.OpenQuestionCount, &related)
+	err := row.Scan(&d.ID, &d.Type, &d.Title, &d.Author, &d.Size, &d.CreatedAt, &d.LastOpenedAt, &d.Favorite, &progress, &d.Percentage, &d.Category, &d.CategorySource, &d.ClassificationStatus, &d.ClassificationError, &tags, &folders, &d.Library, &d.DeletedAt, &metadata, &d.ReadingStatus, &d.NoteCount, &d.HighlightCount, &d.OpenQuestionCount, &related, &d.PaperID, &d.CitationKey)
 	if err == nil {
 		err = json.Unmarshal([]byte(tags), &d.Tags)
 	}

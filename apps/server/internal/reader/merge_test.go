@@ -72,8 +72,8 @@ func TestMergeKeepsZoteroImportedVersion(t *testing.T) {
 			if d.ID != imported.DocumentID || d.Metadata.DOI != "10.1000/example" || d.Metadata.Publisher != "Publisher" || strings.Join(d.Tags, ",") != "research,extra" || strings.Join(d.Folders, ",") != "AI/Security" {
 				t.Fatalf("merged document: %+v", d)
 			}
-			if d.HighlightCount != 1 || len(result.Trashed) != 1 || result.Trashed[0] != duplicate {
-				t.Fatalf("merge lost annotations or did not trash duplicate: %+v", result)
+			if d.HighlightCount != 1 || len(result.Trashed) != 0 {
+				t.Fatalf("merge lost annotations or trashed an attachment: %+v", result)
 			}
 			var annotationAfter string
 			if err := s.Store.DB.QueryRow(`SELECT body FROM annotations WHERE document_id=?`, d.ID).Scan(&annotationAfter); err != nil {
@@ -83,11 +83,12 @@ func TestMergeKeepsZoteroImportedVersion(t *testing.T) {
 				t.Fatal("merge changed the kept version's annotation")
 			}
 			trash := listTrash(t, s, "papers")
-			if len(trash) != 1 || trash[0].ID != duplicate {
-				t.Fatalf("duplicate not in trash: %+v", trash)
+			if len(trash) != 0 {
+				t.Fatalf("merge must keep both attachments active: %+v", trash)
 			}
 			note := request(t, s, "GET", "/api/documents/"+d.ID+"/note", nil).Body.String()
-			if !strings.Contains(note, "我的笔记") || !strings.Contains(note, "duplicate note") {
+			duplicateNote := request(t, s, "GET", "/api/documents/"+duplicate+"/note", nil).Body.String()
+			if !strings.Contains(note, "我的笔记") || strings.Contains(note, "duplicate note") || !strings.Contains(duplicateNote, "duplicate note") {
 				t.Fatal(note)
 			}
 		})
@@ -124,26 +125,31 @@ func TestMergeFoldsDuplicatesIntoTheChosenVersion(t *testing.T) {
 	var result mergeResult
 	_ = json.Unmarshal(w.Body.Bytes(), &result)
 	d := result.Document
-	if strings.Join(d.Tags, ",") != "ML,NLP" || strings.Join(d.Folders, ",") != "Reading,Survey" || !d.Favorite || d.ReadingStatus != "done" {
+	if strings.Join(d.Tags, ",") != "ML,NLP" || strings.Join(d.Folders, ",") != "Reading,Survey" || !d.Favorite || d.ReadingStatus != "unread" {
 		t.Fatalf("merged: %+v", d)
 	}
 	m := d.Metadata
 	if m.Venue != "NeurIPS" || m.Sources["venue"] != "manual" || m.DOI != "10.1000/xyz" || d.Author != "Ashish Vaswani" {
 		t.Fatalf("metadata: %+v author=%q", m, d.Author)
 	}
-	if len(result.Trashed) != 1 || result.Trashed[0] != ids[1] {
+	if len(result.Trashed) != 0 {
 		t.Fatalf("trashed: %v", result.Trashed)
 	}
 	note := request(t, s, "GET", "/api/documents/"+ids[0]+"/note", nil).Body.String()
-	if !strings.Contains(note, `main note\n\n---\n\npreprint note`) {
+	duplicateNote := request(t, s, "GET", "/api/documents/"+ids[1]+"/note", nil).Body.String()
+	if !strings.Contains(note, "main note") || strings.Contains(note, "preprint note") || !strings.Contains(duplicateNote, "preprint note") {
 		t.Fatal(note)
 	}
-	// The duplicate keeps its own annotations in the trash.
+	// Both active attachments keep their own annotations, notes and reading status.
 	var count int
 	s.Store.DB.QueryRow("SELECT count(*) FROM annotations WHERE document_id=?", ids[1]).Scan(&count)
 	trash := listTrash(t, s, "papers")
-	if count != 1 || len(trash) != 1 || trash[0].ID != ids[1] {
+	if count != 1 || len(trash) != 0 {
 		t.Fatalf("duplicate data: annotations=%d trash=%+v", count, trash)
+	}
+	duplicate, err := s.Store.Document(ids[1])
+	if err != nil || duplicate.ReadingStatus != "done" || duplicate.DeletedAt != "" || duplicate.PaperID != d.PaperID {
+		t.Fatalf("attachment state: %+v %v", duplicate, err)
 	}
 }
 

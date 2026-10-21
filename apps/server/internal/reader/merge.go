@@ -86,6 +86,29 @@ func (s *Server) mergeDocuments(w http.ResponseWriter, r *http.Request) {
 		others = append(others, d)
 	}
 
+	if master.Library == "papers" {
+		paperIDs := []string{}
+		seenPapers := map[string]bool{master.PaperID: true}
+		for _, other := range others {
+			if !seenPapers[other.PaperID] {
+				paperIDs = append(paperIDs, other.PaperID)
+				seenPapers[other.PaperID] = true
+			}
+		}
+		if len(paperIDs) > 0 {
+			if _, err = s.Store.MergePaperItems(master.PaperID, PaperMerge{IDs: paperIDs}); err != nil {
+				paperError(w, err)
+				return
+			}
+		}
+		master, err = s.Store.Document(master.ID)
+		if err != nil {
+			paperError(w, err)
+			return
+		}
+		respond(w, 200, mergeResult{Document: master, Trashed: []string{}})
+		return
+	}
 	beforeMeta, _ := json.Marshal(master.Metadata)
 	beforeTags, _ := json.Marshal(master.Tags)
 	tags := append([]string{}, master.Tags...)
