@@ -20,6 +20,7 @@ vi.mock("@reader/api", () => ({
     restorePaper: vi.fn(),
     restoreDocument: vi.fn(),
     bibliographyExports: vi.fn(async () => []),
+    mergePapers: vi.fn(async () => ({})),
     annotations: vi.fn(async () => [
       {
         id: "annotation-2",
@@ -180,4 +181,46 @@ it("shows field conflicts and requires a retained key and citation impact confir
   expect(document.body.textContent).toContain("oldKey");
   expect(document.body.textContent).toContain("LaTeX");
   expect(button("合并")?.disabled).toBe(true);
+});
+
+it("includes translated title and language conflict choices in the atomic merge patch", async () => {
+  const group = [
+    paper({
+      id: "first",
+      paperId: "first-item",
+      title: "Same title",
+      metadata: { translatedTitle: "译名一", language: "en" },
+    }),
+    paper({
+      id: "second",
+      paperId: "second-item",
+      title: "Same title",
+      metadata: { translatedTitle: "译名二", language: "zh" },
+    }),
+  ];
+  await act(async () =>
+    root.render(<MergeDialog group={group} onClose={() => {}} />),
+  );
+  const choose = async (label: string, value: string) => {
+    const trigger = button(label);
+    expect(trigger).toBeTruthy();
+    await act(async () => trigger!.click());
+    const option = [
+      ...document.querySelectorAll<HTMLElement>('[role="option"]'),
+    ].find((o) => o.textContent === value);
+    expect(option).toBeTruthy();
+    await act(async () => {
+      option!.dispatchEvent(new MouseEvent("pointerdown", { bubbles: true }));
+      option!.click();
+    });
+  };
+  await choose("保留译名", "译名二");
+  await choose("保留语言", "zh");
+  await act(async () => button("合并")!.click());
+  expect(api.mergePapers).toHaveBeenCalledExactlyOnceWith("first-item", {
+    ids: ["second-item"],
+    confirmCitationChange: false,
+    patch: { metadata: { translatedTitle: "译名二", language: "zh" } },
+  });
+  expect(api.updatePaper).not.toHaveBeenCalled();
 });

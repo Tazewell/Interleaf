@@ -53,8 +53,9 @@ const sizeLabel = (bytes: number) =>
     ? `${(bytes / (1 << 20)).toFixed(1)} MB`
     : `${Math.max(1, Math.round(bytes / 1024))} KB`;
 
-const labels: Record<string, string> = {
+const labels: Record<PaperMetadataField | "title" | "author", string> = {
   title: "标题",
+  translatedTitle: "译名",
   author: "作者显示名",
   creators: "作者",
   date: "日期",
@@ -72,6 +73,7 @@ const labels: Record<string, string> = {
   affiliation: "单位",
   shortTitle: "短标题",
   remark: "备注",
+  language: "语言",
 };
 const fieldValue = (d: Document, k: string): unknown =>
   k === "title"
@@ -111,7 +113,7 @@ export function MergeDialog({
       alive = false;
     };
   }, [group]);
-  const conflicts = Object.keys(labels).filter(
+  const conflicts = (Object.keys(labels) as (keyof typeof labels)[]).filter(
     (k) =>
       new Set(
         group
