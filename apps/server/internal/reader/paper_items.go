@@ -460,9 +460,18 @@ func (s *Server) paperTrash(w http.ResponseWriter, r *http.Request) {
 }
 
 type PaperMerge struct {
-	IDs                   []string `json:"ids"`
-	CitationKey           string   `json:"citationKey"`
-	ConfirmCitationChange bool     `json:"confirmCitationChange"`
+	IDs                   []string         `json:"ids"`
+	CitationKey           string           `json:"citationKey"`
+	ConfirmCitationChange bool             `json:"confirmCitationChange"`
+	Patch                 *PaperMergePatch `json:"patch,omitempty"`
+}
+
+// Explicit conflict selections share the merge transaction. Citation keys and
+// attachment membership cannot be changed through this metadata-only patch.
+type PaperMergePatch struct {
+	Title    *string                    `json:"title"`
+	Author   *string                    `json:"author"`
+	Metadata map[string]json.RawMessage `json:"metadata"`
 }
 
 func (s *Server) mergePaper(w http.ResponseWriter, r *http.Request) {
@@ -573,6 +582,11 @@ func (s *Store) MergePaperItems(id string, v PaperMerge) (PaperItem, error) {
 		p.Author = CreatorNames(p.Metadata.Creators)
 	}
 	p.CitationKey = chosen
+	if v.Patch != nil {
+		if err = applyPaperPatch(tx, &p, PaperPatch{Title: v.Patch.Title, Author: v.Patch.Author, Metadata: v.Patch.Metadata}); err != nil {
+			return p, err
+		}
+	}
 	if p.PrimaryDocumentID == "" {
 		if err = tx.QueryRow(`SELECT COALESCE(min(document_id),'') FROM paper_attachments WHERE paper_id=?`, p.ID).Scan(&p.PrimaryDocumentID); err != nil {
 			return p, err

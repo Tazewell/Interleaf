@@ -382,6 +382,37 @@ func TestPaperMergeConfirmedKeysKeepsReadingData(t *testing.T) {
 	paperCall(t, s, "PATCH", "/api/papers/"+c, `{"citationKey":"`+key+`"}`, 409)
 }
 
+func TestPaperMergeSelectedFieldsAtomic(t *testing.T) {
+	for _, invalid := range []bool{false, true} {
+		t.Run(map[bool]string{false: "selected fields", true: "invalid fields rollback"}[invalid], func(t *testing.T) {
+			s := testServer(t)
+			paperSeed(t, s.Store, "left")
+			paperSeed(t, s.Store, "right")
+			list := paperList(t, s)
+			a, b := list[0]["id"].(string), list[1]["id"].(string)
+			keys := paperKeys(t, s, a, b)
+			beforeA := paperCall(t, s, "GET", "/api/papers/"+a, "", 200)
+			beforeB := paperCall(t, s, "GET", "/api/papers/"+b, "", 200)
+			patch := `{"title":"Selected title","metadata":{"venue":"Selected venue"}}`
+			status := 200
+			if invalid {
+				patch = `{"metadata":{"itemType":"invalid-type"}}`
+				status = 400
+			}
+			result := paperCall(t, s, "POST", "/api/papers/"+a+"/merge", `{"ids":["`+b+`"],"citationKey":"`+keys[0]["citationKey"].(string)+`","confirmCitationChange":true,"patch":`+patch+`}`, status)
+			if invalid {
+				afterA := paperCall(t, s, "GET", "/api/papers/"+a, "", 200)
+				afterB := paperCall(t, s, "GET", "/api/papers/"+b, "", 200)
+				if !reflect.DeepEqual(beforeA, afterA) || !reflect.DeepEqual(beforeB, afterB) {
+					t.Fatal("failed merge mutated fields, attachments or keys", afterA, afterB)
+				}
+			} else if result["title"] != "Selected title" || result["metadata"].(map[string]any)["venue"] != "Selected venue" || len(result["attachments"].([]any)) != 2 {
+				t.Fatal(result)
+			}
+		})
+	}
+}
+
 func TestPaperLegacyPurgeReimportCanCreateNewItem(t *testing.T) {
 	s := testServer(t)
 	paperSeed(t, s.Store, "same")
