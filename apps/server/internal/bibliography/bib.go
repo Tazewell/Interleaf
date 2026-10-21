@@ -275,9 +275,18 @@ func (db Database) macros() map[string]string {
 	return m
 }
 func (db Database) resolve(expression string, macros map[string]string, visiting map[string]bool, allowUnknown bool) (string, error) {
+	budget := 16384
+	return db.resolveBounded(expression, macros, visiting, allowUnknown, &budget)
+}
+
+func (db Database) resolveBounded(expression string, macros map[string]string, visiting map[string]bool, allowUnknown bool, budget *int) (string, error) {
 	p := parser{src: expression}
 	var result strings.Builder
 	for {
+		*budget--
+		if *budget < 0 {
+			return "", fmt.Errorf("字符串宏展开次数过多")
+		}
 		part, err := p.atom()
 		if err != nil {
 			return "", err
@@ -304,7 +313,7 @@ func (db Database) resolve(expression string, macros map[string]string, visiting
 					return "", fmt.Errorf("字符串宏嵌套过深")
 				}
 				visiting[name] = true
-				value, err = db.resolve(expr, macros, visiting, allowUnknown)
+				value, err = db.resolveBounded(expr, macros, visiting, allowUnknown, budget)
 				delete(visiting, name)
 				if err != nil {
 					return "", err

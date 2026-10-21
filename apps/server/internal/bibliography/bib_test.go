@@ -1,6 +1,7 @@
 package bibliography
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 )
@@ -93,5 +94,17 @@ func TestBibUndefinedMacroIsAnExplicitError(t *testing.T) {
 	}
 	if _, err = db.Value(db.Entries[0], "title"); err == nil {
 		t.Fatal("undefined macro silently discarded")
+	}
+}
+
+func TestBibRejectsExponentialMacroExpansion(t *testing.T) {
+	// A tiny input must not cause hundreds of thousands of recursive expansions.
+	var text strings.Builder
+	text.WriteString("@string{a0={x}}\n")
+	for i := 1; i <= 12; i++ {
+		fmt.Fprintf(&text, "@string{a%d=a%d # a%d # a%d}\n", i, i-1, i-1, i-1)
+	}
+	if _, err := Parse(text.String()); err == nil {
+		t.Fatal("accepted unbounded macro expansion")
 	}
 }
