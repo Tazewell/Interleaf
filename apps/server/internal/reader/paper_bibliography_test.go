@@ -451,3 +451,75 @@ func TestPaperBibManualArxivKeepsArchiveOnReimport(t *testing.T) {
 		}
 	}
 }
+
+func TestPaperBibArchiveMergeReplacesDerivedArxiv(t *testing.T) {
+	s := testServer(t)
+	p := paperBibImport(t, s, `@article{k,title={T},eprinttype={arxiv},eprint={2505.12345}}`, []map[string]any{{"index": 0, "action": "create"}})[0]
+	p = paperBibImport(t, s, `@string{pmid={1234}} @article{k,title={T},eprinttype={pubmed},eprint=pmid # {5678}}`, []map[string]any{{"index": 0, "action": "merge", "paperId": p.ID}})[0]
+	if p.Metadata.ArXiv != "" {
+		t.Errorf("stale derived ArXiv = %q", p.Metadata.ArXiv)
+	}
+	for _, mode := range []string{"bibtex", "biblatex"} {
+		text := paperBibExport(t, s, []string{p.ID}, mode)
+		if !strings.Contains(text, `eprinttype = {pubmed}`) || !strings.Contains(text, `eprint = pmid # {5678}`) {
+			t.Errorf("%s overwrote raw PubMed: %s", mode, text)
+		}
+		other := testServer(t)
+		reimported := paperBibImport(t, other, text, []map[string]any{{"index": 0, "action": "create"}})[0]
+		if reimported.Metadata.ArXiv != "" {
+			t.Errorf("%s reimport became arxiv: %q", mode, reimported.Metadata.ArXiv)
+		}
+	}
+}
+
+func TestPaperBibArchiveMergeWithoutEprintPreservesArxiv(t *testing.T) {
+	s := testServer(t)
+	p := paperBibImport(t, s, `@article{k,title={T},eprinttype={arxiv},eprint={2505.12345}}`, []map[string]any{{"index": 0, "action": "create"}})[0]
+	p = paperBibImport(t, s, `@article{k,title={Updated},doi={10.1234/extra}}`, []map[string]any{{"index": 0, "action": "merge", "paperId": p.ID}})[0]
+	if p.Metadata.ArXiv != "2505.12345" {
+		t.Fatal(p)
+	}
+	for _, mode := range []string{"bibtex", "biblatex"} {
+		text := paperBibExport(t, s, []string{p.ID}, mode)
+		if !strings.Contains(text, `eprinttype = {arxiv}`) || !strings.Contains(text, `eprint = {2505.12345}`) {
+			t.Fatal(text)
+		}
+	}
+}
+
+func TestPaperBibArchiveMergeManualConflictIsAtomic(t *testing.T) {
+	s := testServer(t)
+	p := paperBibImport(t, s, `@article{k,title={T},eprinttype={arxiv},eprint={2505.12345}}`, []map[string]any{{"index": 0, "action": "create"}})[0]
+	paperCall(t, s, "PATCH", "/api/papers/"+p.ID, `{"metadata":{"arxiv":"2505.99999"}}`, 200)
+	paperBibCall(t, s, "import", map[string]any{"text": `@article{new,title={New}} @article{k,title={Changed},eprinttype={pubmed},eprint={12345678}}`, "decisions": []map[string]any{{"index": 0, "action": "create"}, {"index": 1, "action": "merge", "paperId": p.ID}}}, 409)
+	papers := paperList(t, s)
+	if len(papers) != 1 {
+		t.Fatal("manual identity conflict partially committed", papers)
+	}
+	stored, err := s.Store.PaperItem(p.ID)
+	if err != nil || stored.Title != "T" || stored.Metadata.ArXiv != "2505.99999" || stored.Metadata.Sources["arxiv"] != "manual" {
+		t.Fatalf("manual state changed: %+v %v", stored, err)
+	}
+	for _, mode := range []string{"bibtex", "biblatex"} {
+		text := paperBibExport(t, s, []string{p.ID}, mode)
+		if !strings.Contains(text, `eprinttype = {arxiv}`) || !strings.Contains(text, `eprint = {2505.99999}`) {
+			t.Fatal(text)
+		}
+	}
+}
+
+func TestPaperBibManualArxivCannotSilentlyReplaceRawPubmed(t *testing.T) {
+	s := testServer(t)
+	p := paperBibImport(t, s, `@article{k,title={T},eprinttype={pubmed},eprint={12345678}}`, []map[string]any{{"index": 0, "action": "create"}})[0]
+	paperCall(t, s, "PATCH", "/api/papers/"+p.ID, `{"metadata":{"arxiv":"2505.99999"}}`, 200)
+	for _, mode := range []string{"bibtex", "biblatex"} {
+		paperBibCall(t, s, "export", map[string]any{"ids": []string{p.ID}, "mode": mode}, 409)
+	}
+	paperCall(t, s, "PATCH", "/api/papers/"+p.ID, `{"metadata":{"arxiv":""}}`, 200)
+	for _, mode := range []string{"bibtex", "biblatex"} {
+		text := paperBibExport(t, s, []string{p.ID}, mode)
+		if !strings.Contains(text, `eprinttype = {pubmed}`) || !strings.Contains(text, `eprint = {12345678}`) {
+			t.Fatal(text)
+		}
+	}
+}

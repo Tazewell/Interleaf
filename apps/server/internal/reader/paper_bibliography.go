@@ -289,6 +289,9 @@ func (s *Store) ImportBibliography(v PaperBibliographyImport) ([]PaperItem, erro
 		}
 		plan.paper.CitationKey = chosen
 		bibFill(&plan.paper, incoming)
+		if err = bibValidateEprint(plan.paper, plan.record); err != nil {
+			return nil, err
+		}
 		plan.parent, err = plan.record.Context.Value(plan.record.Entry, "crossref")
 		if err != nil {
 			return nil, err

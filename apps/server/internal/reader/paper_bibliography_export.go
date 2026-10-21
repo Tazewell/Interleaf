@@ -155,6 +155,11 @@ func (s *Store) Bibliography(ids []string, mode string) (string, error) {
 	}
 	db := bibliography.Database{Entries: []bibliography.Entry{}}
 	for _, item := range items {
+		if item.raw {
+			if err := bibValidateEprint(item.paper, item.record); err != nil {
+				return "", err
+			}
+		}
 		combined, err := bibCombineContexts(db, item.record.Context)
 		if err != nil {
 			return "", err

@@ -141,6 +141,11 @@ func bibMapped(db bibliography.Database, e bibliography.Entry) (PaperItem, error
 				archive, _ = db.Value(e, "archiveprefix")
 			}
 			if !strings.EqualFold(strings.TrimSpace(archive), "arxiv") {
+				if eprint, _ := db.Value(e, "eprint"); eprint != "" {
+					// A supplied non-arXiv eprint explicitly replaces the old
+					// imported identity, rather than merely omitting a field.
+					p.Metadata.Sources["arxiv"] = "bibtex"
+				}
 				continue
 			}
 		}
@@ -182,11 +187,27 @@ func bibFill(p *PaperItem, in PaperItem) {
 			continue
 		}
 		field, source := p.Metadata.textField(key), in.Metadata.textField(key)
-		if field != nil && source != nil && *source != "" {
+		if field != nil && source != nil && (*source != "" || key == "arxiv" && in.Metadata.Sources[key] == "bibtex") {
 			*field = *source
 			p.Metadata.Sources[key] = "bibtex"
 		}
 	}
+}
+
+// One eprint slot cannot express a different raw archive and an edited arXiv
+// identifier. Keep both stored values and require explicit user resolution.
+func bibValidateEprint(p PaperItem, record paperBibRecord) error {
+	if p.Metadata.ArXiv == "" || record.Baseline.Metadata.ArXiv != "" {
+		return nil
+	}
+	eprint, err := record.Context.Value(record.Entry, "eprint")
+	if err != nil {
+		return err
+	}
+	if eprint != "" {
+		return paperConflict("arXiv 标识符与原始非 arXiv eprint 冲突，请先明确保留哪一种标识符")
+	}
+	return nil
 }
 
 // Plain metadata edits must be escaped as text. Imported TeX is retained in the
