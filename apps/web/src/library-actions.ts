@@ -1,6 +1,12 @@
 import { api } from "@reader/api";
 import { toast } from "sonner";
-import { forgetLibraryDocuments, refreshLibrary, refreshTrash } from "./store";
+import {
+  forgetLibraryDocuments,
+  refreshLibrary,
+  refreshTrash,
+  useReaderStore,
+} from "./store";
+import { libraryPapers } from "./papers/projection";
 
 export function toggleDocumentSelection(
   selected: Set<string>,
@@ -30,7 +36,22 @@ export async function removeLibraryDocuments(ids: string[]) {
     failed: string[] = [];
   for (const id of new Set(ids)) {
     try {
-      await api.trashDocument(id);
+      const state = useReaderStore.getState();
+      const doc = libraryPapers(state.paperItems, state.documents).find(
+        (d) => d.id === id,
+      );
+      if (doc?.paperId) {
+        const trashed = await api.trashPaper(doc.paperId);
+        useReaderStore.setState({
+          paperItems:
+            state.paperItems?.filter((p) => p.id !== doc.paperId) ?? null,
+          trash: [
+            ...state.trash.filter((d) => d.paperId !== doc.paperId),
+            { ...doc, deletedAt: trashed.deletedAt },
+          ],
+        });
+        forgetLibraryDocuments(doc.attachments?.map((a) => a.documentId) || []);
+      } else await api.trashDocument(id);
       deleted.push(id);
       forgetLibraryDocuments([id]);
     } catch {
@@ -45,7 +66,9 @@ export async function restoreLibraryDocuments(ids: string[]) {
   let restored = 0;
   for (const id of new Set(ids)) {
     try {
-      await api.restoreDocument(id);
+      const doc = useReaderStore.getState().trash.find((d) => d.id === id);
+      if (doc?.paperId) await api.restorePaper(doc.paperId);
+      else await api.restoreDocument(id);
       restored++;
     } catch (e) {
       toast.error((e as Error).message);

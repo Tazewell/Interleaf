@@ -2,6 +2,7 @@ import { create } from "zustand";
 import {
   defaultTheme,
   type Document,
+  type PaperItem,
   type ReaderTheme,
   type AIConfig,
   type LibraryMode,
@@ -9,8 +10,11 @@ import {
   type ReaderLinkTarget,
 } from "@reader/core";
 import { api } from "@reader/api";
+import { projectPapers } from "./papers/projection";
 export const useReaderStore = create<{
   documents: Document[];
+  paperItems: PaperItem[] | null;
+  paperTrash: PaperItem[];
   active: Document | null;
   theme: ReaderTheme;
   aiConfig?: AIConfig;
@@ -29,6 +33,8 @@ export const useReaderStore = create<{
   setTheme: (patch: Partial<ReaderTheme>) => void;
 }>((set) => ({
   documents: [],
+  paperItems: null,
+  paperTrash: [],
   active: null,
   theme: defaultTheme,
   aiModelSaving: false,
@@ -41,7 +47,9 @@ export const useReaderStore = create<{
   setAIConfig: (aiConfig) => set({ aiConfig }),
   setAIModelSaving: (aiModelSaving) => set({ aiModelSaving }),
   setDocuments: (documents) => set({ documents }),
-  open: (active) => set({ active }),
+  open: (active) => {
+    if (!active?.metadataOnly) set({ active });
+  },
   setTheme: (patch) =>
     set((state) => ({ theme: { ...state.theme, ...patch } })),
 }));
@@ -54,9 +62,30 @@ export function forgetLibraryDocuments(ids: string[]) {
 }
 export async function refreshLibrary() {
   const revision = ++libraryRevision;
-  const documents = await api.documents();
+  const [documents, paperItems] = await Promise.all([
+    api.documents(),
+    api.papers(),
+  ]);
   if (revision === libraryRevision)
-    useReaderStore.getState().setDocuments(documents);
+    useReaderStore.setState({ documents, paperItems });
+}
+/** Keep newly allocated keys visible immediately, before the next library poll. */
+export async function ensurePaperCitationKeys(ids: string[]) {
+  const items = await api.ensureCitationKeys(ids);
+  ++libraryRevision;
+  const keys = new Map(items.map((item) => [item.id, item.citationKey]));
+  useReaderStore.setState((state) => ({
+    paperItems:
+      state.paperItems?.map((item) =>
+        keys.has(item.id) ? { ...item, citationKey: keys.get(item.id)! } : item,
+      ) ?? null,
+    documents: state.documents.map((doc) =>
+      doc.paperId && keys.has(doc.paperId)
+        ? { ...doc, citationKey: keys.get(doc.paperId)! }
+        : doc,
+    ),
+  }));
+  return items;
 }
 export async function refreshAIConfig() {
   const before = useReaderStore.getState().aiConfig;
@@ -96,8 +125,15 @@ let trashRevision = 0;
 export async function refreshTrash() {
   const revision = ++trashRevision;
   const state = useReaderStore.getState();
-  const trash = await api.trash(libraryMode(state.libraryPreferences));
-  if (revision === trashRevision) useReaderStore.getState().setTrash(trash);
+  const mode = libraryMode(state.libraryPreferences);
+  const [documents, paperTrash] = await Promise.all([
+    api.trash(mode),
+    mode === "papers" ? api.papers(true) : Promise.resolve([]),
+  ]);
+  const trash =
+    mode === "papers" ? projectPapers(paperTrash, documents) : documents;
+  if (revision === trashRevision)
+    useReaderStore.setState({ trash, paperTrash });
 }
 /** Open the document a reader:// link points to, in its own library. */
 export async function openLinkTarget(target: ReaderLinkTarget) {

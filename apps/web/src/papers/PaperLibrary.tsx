@@ -132,6 +132,8 @@ import { PaperMenuItems, type PaperMenuActions } from "./PaperMenu";
 import { CategoryDialog } from "./CategoryDialog";
 import { CitationDialog } from "./CitationDialog";
 import { MergeDialog } from "./MergeDialog";
+import { BibliographyImportDialog } from "./BibliographyImportDialog";
+import { BibliographyExportDialog } from "./BibliographyExportDialog";
 import { SmartCategoryDialog } from "./SmartCategoryDialog";
 import { copyCitations, exportCitations } from "./CitationMenu";
 import { PAPER_DRAG_TYPE } from "./PaperSidebar";
@@ -163,11 +165,17 @@ export function PaperLibrary({
   trash,
   jobs,
   loading,
-  openDocument,
+  openDocument: openFile,
   moveToBooks,
   navOpen,
   onToggleNav,
 }: PaperLibraryProps) {
+  const openDocument = (doc: Document) => {
+    if (!doc.metadataOnly)
+      openFile(
+        useReaderStore.getState().documents.find((d) => d.id === doc.id) || doc,
+      );
+  };
   const prefs = useReaderStore((s) => s.libraryPreferences.papers) || {};
   const sort: PaperSort = prefs.sort || "opened";
   const reverse = !!prefs.sortReverse;
@@ -209,6 +217,8 @@ export function PaperLibrary({
     ],
   );
   const [merging, setMerging] = useState<Document[] | null>(null);
+  const [bibImport, setBibImport] = useState(false);
+  const [bibExport, setBibExport] = useState(false);
   const [tagging, setTagging] = useState<string[] | null>(null);
   const [journalRankConfig, setJournalRankConfig] =
     useState<JournalRankConfig | null>(null);
@@ -253,7 +263,7 @@ export function PaperLibrary({
   const pickedById = new Map(pickedDocs.map((doc) => [doc.id, doc]));
   const pickedPDFs = [...picked]
     .map((id) => pickedById.get(id))
-    .filter((doc): doc is Document => doc?.type === "pdf");
+    .filter((doc): doc is Document => doc?.type === "pdf" && !doc.metadataOnly);
   const [exportingPDFs, setExportingPDFs] = useState(false);
   const pdfExportRunning = useRef(false);
   const exportPickedPDFs = async () => {
@@ -645,6 +655,20 @@ export function PaperLibrary({
         </div>
         {view !== "trash" && (
           <div className="flex items-center gap-2">
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => setBibImport(true)}
+            >
+              导入 .bib
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => setBibExport(true)}
+            >
+              参考文献…
+            </Button>
             <div className="search-field paper-search">
               <Search className="size-4" />
               <Input
@@ -1085,6 +1109,16 @@ export function PaperLibrary({
             ui.setTagFilter({ ...tagFilter, tags: [] });
             ui.select(doc.id);
           }}
+        />
+      )}
+      {bibImport && (
+        <BibliographyImportDialog onClose={() => setBibImport(false)} />
+      )}
+      {bibExport && (
+        <BibliographyExportDialog
+          folder={category}
+          documents={documents}
+          onClose={() => setBibExport(false)}
         />
       )}
       {tagging && (

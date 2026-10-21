@@ -1,4 +1,13 @@
-export type { PaperAttachmentRole, PaperAttachment, PaperItem } from "./papers";
+export type {
+  PaperAttachmentRole,
+  PaperAttachment,
+  PaperItem,
+  PaperPatch,
+  BibliographyMode,
+  BibliographyExport,
+  BibliographyPreview,
+  BibliographyDecision,
+} from "./papers";
 export { zoomCommand } from "./zoom-shortcut";
 export {
   READER_SCHEME,
@@ -95,7 +104,7 @@ export interface Creator {
   family?: string;
   name?: string;
 }
-export type MetadataSource = "file" | "lookup" | "manual";
+export type MetadataSource = "file" | "lookup" | "manual" | "bibtex";
 export interface PaperMetadata {
   itemType?: PaperItemType;
   translatedTitle?: string;
@@ -207,7 +216,8 @@ export interface PaperLibraryPreferences {
   detailWidth?: number;
   /** Look up metadata from the DOI or arXiv ID printed in imported PDFs. */
   autoLookup?: boolean;
-  citationStyle?: "gb7714" | "apa" | "bibtex" | "ris" | "csl-json";
+  citationStyle?: "gb7714" | "apa" | "bibtex" | "biblatex" | "ris" | "csl-json";
+  bibliographyModes?: Record<string, import("./papers").BibliographyMode>;
   citationOrder?: "author" | "year" | "custom";
 }
 export interface SmartCategory {
@@ -236,6 +246,9 @@ export interface TagBoard {
   match: "all" | "any";
 }
 export interface Document {
+  /** Library projection only; never pass attachmentless rows to file APIs. */
+  metadataOnly?: boolean;
+  attachments?: import("./papers").PaperAttachment[];
   paperId?: string;
   citationKey?: string;
   category: DocumentCategory;

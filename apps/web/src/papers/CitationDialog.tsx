@@ -68,14 +68,15 @@ export function CitationDialog({
     orderForCitation(docs, prefs.citationOrder || "author"),
   );
   const [preview, setPreview] = useState("");
+  const [error, setError] = useState("");
   const [dragging, setDragging] = useState(-1);
   useEffect(() => {
     let alive = true;
+    setPreview("");
+    setError("");
     void formatCitations(items, style)
       .then((text) => alive && setPreview(text))
-      .catch(
-        (e) => alive && setPreview(`无法生成引用：${(e as Error).message}`),
-      );
+      .catch((e) => alive && setError(`无法生成引用：${(e as Error).message}`));
     return () => {
       alive = false;
     };
@@ -212,6 +213,11 @@ export function CitationDialog({
           className="citation-preview"
           value={preview}
         />
+        {error && (
+          <p role="alert" className="text-sm text-destructive">
+            {error}
+          </p>
+        )}
         <div className="flex justify-end gap-2">
           <Button
             variant="outline"

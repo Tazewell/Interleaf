@@ -4,6 +4,7 @@ import { openLinkTarget, useReaderStore } from "./store";
 import { paper } from "./papers/fixtures";
 vi.mock("@reader/api", () => ({
   api: {
+    papers: vi.fn(async () => []),
     documents: vi.fn(async () => []),
     saveLibraryPreferences: vi.fn(async (value) => value),
   },

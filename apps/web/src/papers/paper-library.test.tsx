@@ -23,6 +23,7 @@ vi.mock("@reader/api", () => ({
       available: [],
     })),
     update: vi.fn(async () => ({})),
+    papers: vi.fn(async () => []),
     documents: vi.fn(async () => []),
     trash: vi.fn(async () => []),
     trashDocument: vi.fn(),
@@ -30,7 +31,8 @@ vi.mock("@reader/api", () => ({
     saveLibraryPreferences: vi.fn(async (value) => value),
     changeLibraryTag: vi.fn(async () => ({ changed: 1 })),
     changeLibraryFolder: vi.fn(async () => ({ changed: 1 })),
-    mergeDocuments: vi.fn(async () => ({ trashed: [] })),
+    mergePapers: vi.fn(async () => ({})),
+    bibliographyExports: vi.fn(async () => []),
     relateDocuments: vi.fn(async () => ({})),
     unrelateDocuments: vi.fn(async () => ({})),
     process: vi.fn(async () => ({})),
@@ -101,6 +103,7 @@ beforeEach(async () => {
   );
   useReaderStore.setState({
     documents: docs,
+    paperItems: null,
     libraryPreferences: { mode: "papers", papers: { sort: "title" } },
   });
   usePaperUI.setState({
@@ -132,7 +135,8 @@ const navButton = (label: string) =>
   )!;
 const button = (label: string) =>
   [...host.querySelectorAll<HTMLButtonElement>("button")].find(
-    (b) => b.textContent?.trim() === label || b.getAttribute("aria-label") === label,
+    (b) =>
+      b.textContent?.trim() === label || b.getAttribute("aria-label") === label,
   )!;
 
 it("shows details on click and saves an edited field as manual metadata", async () => {
@@ -328,7 +332,14 @@ it("merges duplicates into the version with the reading work", async () => {
     (b) => b.textContent === "合并",
   )!;
   await act(async () => confirm.click());
-  expect(api.mergeDocuments).toHaveBeenCalledExactlyOnceWith("c", ["a"]);
+  expect(api.mergePapers).toHaveBeenCalledExactlyOnceWith("c", {
+    ids: ["a"],
+    confirmCitationChange: false,
+    patch: {
+      title: "Attention is all you need (preprint)",
+      metadata: { doi: "10.1/X" },
+    },
+  });
 });
 
 it("toggles a colored category with its number key", async () => {

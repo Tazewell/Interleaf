@@ -10,6 +10,7 @@ vi.mock("@reader/api", () => ({
   api: {
     trashDocument: vi.fn(),
     restoreDocument: vi.fn(),
+    papers: vi.fn(async () => []),
     documents: vi.fn(),
     trash: vi.fn(),
   },

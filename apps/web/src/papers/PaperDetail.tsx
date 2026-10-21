@@ -44,6 +44,7 @@ import {
   DropdownMenuTrigger,
 } from "@reader/ui/components/dropdown-menu";
 import { useReaderStore } from "../store";
+import { libraryPapers } from "./projection";
 import {
   lookupPaper,
   openLink,
@@ -77,6 +78,8 @@ import { usePaperUI } from "./state";
 import { PaperMenuItems, type PaperMenuActions } from "./PaperMenu";
 import { CitationMenuItems } from "./CitationMenu";
 import { RelatedPapers } from "./RelatedPapers";
+import { PaperAttachments } from "./PaperAttachments";
+import { PaperCitationKey } from "./PaperCitationKey";
 
 const fieldLabels: Partial<Record<PaperMetadataField, string>> = {
   date: "日期",
@@ -121,7 +124,6 @@ function Field({
   };
   const props = {
     // Remount when the saved value changes so the field shows it.
-    key: `${doc.id}:${value}`,
     defaultValue: value,
     "aria-label": fieldLabels[name],
     placeholder: placeholders[name] || "—",
@@ -141,7 +143,11 @@ function Field({
       }
     },
   };
-  return multiline ? <Textarea rows={1} {...props} /> : <Input {...props} />;
+  return multiline ? (
+    <Textarea key={`${doc.id}:${value}`} rows={1} {...props} />
+  ) : (
+    <Input key={`${doc.id}:${value}`} {...props} />
+  );
 }
 
 export function PaperDetail({
@@ -151,7 +157,9 @@ export function PaperDetail({
   doc: Document;
   actions: PaperMenuActions;
 }) {
-  const all = useReaderStore((s) => s.documents);
+  const raw = useReaderStore((s) => s.documents);
+  const paperItems = useReaderStore((s) => s.paperItems);
+  const all = libraryPapers(paperItems, raw);
   const prefs = useReaderStore((s) => s.libraryPreferences.papers) || {};
   const categories = paperCategories(
     prefs,
@@ -164,6 +172,8 @@ export function PaperDetail({
   const [snapshotOpen, setSnapshotOpen] = useState(false);
   useEffect(() => {
     let active = true;
+    setSnapshotAvailable(false);
+    if (doc.metadataOnly) return;
     void api
       .snapshotStatus(doc.id)
       .then((result) => {
@@ -175,7 +185,7 @@ export function PaperDetail({
     return () => {
       active = false;
     };
-  }, [doc.id]);
+  }, [doc.id, doc.metadataOnly]);
   const m = doc.metadata;
   const link = paperLink(m);
   const percent = Math.round(doc.percentage * 100);
@@ -217,7 +227,11 @@ export function PaperDetail({
             }
           }}
         />
-        <Button className="paper-detail-open" onClick={() => actions.open(doc)}>
+        <Button
+          className="paper-detail-open"
+          disabled={doc.metadataOnly}
+          onClick={() => actions.open(doc)}
+        >
           <BookOpen />
           {percent > 1 ? `继续阅读 · ${percent}%` : "开始阅读"}
         </Button>
@@ -311,7 +325,7 @@ export function PaperDetail({
             size="xs"
             variant="ghost"
             className="ml-auto"
-            disabled={lookingUp}
+            disabled={lookingUp || doc.metadataOnly}
             title="按 DOI、arXiv 编号或标题查找"
             onClick={() => {
               setLookingUp(true);
@@ -426,7 +440,9 @@ export function PaperDetail({
             </>
           ) : null}
         </section>
-        <RelatedPapers doc={doc} />
+        <PaperAttachments doc={doc} open={actions.open} />
+        <PaperCitationKey doc={doc} />
+        {!doc.metadataOnly && <RelatedPapers doc={doc} />}
       </div>
     </aside>
   );

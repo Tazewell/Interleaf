@@ -64,11 +64,13 @@ import { TagBoards } from "./TagBoards";
 import { LibraryDocuments } from "./LibraryDocuments";
 import { filterDocuments, initialFilters } from "./library";
 import { GuideHost } from "./guide/GuideHost";
+import { libraryPapers } from "./papers/projection";
 const currentMode = () =>
   libraryMode(useReaderStore.getState().libraryPreferences);
 export function App() {
   const {
     documents: allDocuments,
+    paperItems,
     active,
     theme,
     setTheme,
@@ -78,7 +80,9 @@ export function App() {
   } = useReaderStore();
   const mode = libraryMode(libraryPreferences);
   const papers = mode === "papers";
-  const documents = allDocuments.filter((d) => d.library === mode);
+  const documents = papers
+    ? libraryPapers(paperItems, allDocuments)
+    : allDocuments.filter((d) => d.library === mode);
   const resolvedTheme = useResolvedTheme(theme);
   const { jobs, error: processingError } = useProcessing();
   useUpdateProgress();
@@ -337,6 +341,8 @@ export function App() {
     }
   };
   const openDocument = (doc: Document) => {
+    if (doc.metadataOnly) return;
+    doc = allDocuments.find((d) => d.id === doc.id) || doc;
     setEditingLibrary(false);
     open(doc);
     void api.update(doc.id, {}).catch((e) => toast.error(e.message));

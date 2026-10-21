@@ -38,9 +38,17 @@ export function TrashView({ documents }: { documents: Document[] }) {
     if (!purging) return;
     setBusy(true);
     try {
-      if (purging.length === documents.length && purging.length > 1)
+      if (
+        mode !== "papers" &&
+        purging.length === documents.length &&
+        purging.length > 1
+      )
         await api.emptyTrash(mode);
-      else for (const d of purging) await api.removeDocument(d.id);
+      else
+        for (const d of purging) {
+          if (d.paperId) await api.removePaper(d.paperId);
+          else await api.removeDocument(d.id);
+        }
       toast.success(`已彻底删除 ${purging.length} 份`);
       setPurging(null);
     } catch (e) {

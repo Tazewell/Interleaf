@@ -6,7 +6,12 @@ import { api } from "@reader/api";
 import type { Document } from "@reader/core";
 import { DocumentEditor } from "./DocumentManagement";
 vi.mock("@reader/api", () => ({
-  api: { update: vi.fn(), documents: vi.fn(), classify: vi.fn() },
+  api: {
+    update: vi.fn(),
+    papers: vi.fn(async () => []),
+    documents: vi.fn(),
+    classify: vi.fn(),
+  },
 }));
 vi.mock("sonner", () => ({ toast: { error: vi.fn() } }));
 let root: Root;

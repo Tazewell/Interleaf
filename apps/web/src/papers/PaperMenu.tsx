@@ -34,6 +34,7 @@ import {
   DropdownMenuSubTrigger,
 } from "@reader/ui/components/dropdown-menu";
 import { useReaderStore } from "../store";
+import { libraryPapers } from "./projection";
 import {
   addToCategory,
   removeFromCategory,
@@ -104,7 +105,9 @@ export function PaperMenuItems({
   inPanel?: boolean;
 }) {
   const K = kits[kind];
-  const all = useReaderStore((s) => s.documents);
+  const raw = useReaderStore((s) => s.documents);
+  const paperItems = useReaderStore((s) => s.paperItems);
+  const all = libraryPapers(paperItems, raw);
   const prefs = useReaderStore((s) => s.libraryPreferences.papers) || {};
   const categories = paperCategories(
     prefs,
@@ -123,7 +126,10 @@ export function PaperMenuItems({
       {!inPanel && (
         <>
           {one && (
-            <K.Item onClick={() => actions.open(one)}>
+            <K.Item
+              disabled={one.metadataOnly}
+              onClick={() => actions.open(one)}
+            >
               <BookOpen />
               打开阅读
             </K.Item>
@@ -202,7 +208,9 @@ export function PaperMenuItems({
         </K.SubContent>
       </K.Sub>
       <K.Sub>
-        <K.SubTrigger>阅读状态</K.SubTrigger>
+        <K.SubTrigger disabled={docs.some((d) => d.metadataOnly)}>
+          阅读状态
+        </K.SubTrigger>
         <K.SubContent>
           <K.RadioGroup
             value={status}
@@ -224,6 +232,7 @@ export function PaperMenuItems({
         <>
           <K.Separator />
           <K.Item
+            disabled={one.metadataOnly}
             onClick={() =>
               void copyText(readerLink({ id: one.id }), "已复制阅读链接")
             }
@@ -238,22 +247,22 @@ export function PaperMenuItems({
             </K.Item>
           )}
           {window.readerDesktop?.showDocumentFile && (
-            <K.Item onClick={() => revealFile(one)}>
+            <K.Item disabled={one.metadataOnly} onClick={() => revealFile(one)}>
               <FolderOpen />
               {window.readerDesktop.platform === "darwin"
                 ? "在访达中显示"
                 : "在文件夹中显示"}
             </K.Item>
           )}
-          {one.type === "pdf" && (
+          {one.type === "pdf" && !one.metadataOnly && (
             <K.Item onClick={() => void exportAnnotatedPDFWithToast(one)}>
               <FileDown />
               导出带批注的 PDF
             </K.Item>
           )}
-          <K.Item onClick={() => actions.move(one)}>
+          <K.Item disabled={one.metadataOnly} onClick={() => actions.move(one)}>
             <ArrowRightLeft />
-            移到图书库
+            {one.paperId ? "将默认附件移到图书库" : "移到图书库"}
           </K.Item>
         </>
       )}

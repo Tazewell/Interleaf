@@ -12,6 +12,7 @@ vi.mock("@reader/api", () => ({
     trashDocument: vi.fn(),
     restoreDocument: vi.fn(),
     trash: vi.fn(async () => []),
+    papers: vi.fn(async () => []),
     documents: vi.fn(async () => []),
     processingUsage: vi.fn(),
     chatUsage: vi.fn(),

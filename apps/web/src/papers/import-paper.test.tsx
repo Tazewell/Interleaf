@@ -12,7 +12,11 @@ import { paper } from "./fixtures";
 vi.mock("@reader/api", async (importOriginal) => ({
   RequestError: (await importOriginal<typeof import("@reader/api")>())
     .RequestError,
-  api: { resolveDocument: vi.fn(), documents: vi.fn(async () => []) },
+  api: {
+    resolveDocument: vi.fn(),
+    papers: vi.fn(async () => []),
+    documents: vi.fn(async () => []),
+  },
 }));
 vi.mock("sonner", () => ({
   toast: { success: vi.fn(), error: vi.fn(), info: vi.fn() },
@@ -40,11 +44,13 @@ beforeEach(async () => {
   );
 });
 it("uses the current paper category for file and reference imports", async () => {
-  useReaderStore.setState({
-    documents: [paper({ folders: ["Security/Web"] })],
-    libraryPreferences: { papers: { categories: ["Security/Web"] } },
+  await act(async () => {
+    useReaderStore.setState({
+      documents: [paper({ folders: ["Security/Web"] })],
+      libraryPreferences: { papers: { categories: ["Security/Web"] } },
+    });
+    usePaperUI.getState().setView("folder:Security/Web");
   });
-  usePaperUI.getState().setView("folder:Security/Web");
   await act(async () =>
     root.render(
       <ImportPaperDialog

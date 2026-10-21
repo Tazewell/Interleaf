@@ -7,7 +7,18 @@ import { useReaderStore } from "../store";
 import { CitationDialog } from "./CitationDialog";
 import { paper } from "./fixtures";
 vi.mock("@reader/api", () => ({
-  api: { saveLibraryPreferences: vi.fn(async (value) => value) },
+  api: {
+    saveLibraryPreferences: vi.fn(async (value) => value),
+    exportBibliography: vi.fn(async (ids: string[]) => ({
+      text: ids
+        .map((id) =>
+          id === "a"
+            ? "@article{adams2022apple, title={Apple paper}}"
+            : "@misc{zhou2020zebra, title={Zebra paper}}",
+        )
+        .join("\n\n"),
+    })),
+  },
 }));
 vi.mock("../chat/clipboard", () => ({ copyText: vi.fn(async () => true) }));
 vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
@@ -78,7 +89,10 @@ it("switches to GB/T 7714 and sends incomplete papers to the editor", async () =
       .find((b) => b.textContent === "GB/T 7714")!
       .click(),
   );
-  await vi.waitFor(() => expect(preview()).toMatch(/^\[1\] ADAMS A/));
+  await vi.waitFor(async () => {
+    await act(async () => {});
+    expect(preview()).toMatch(/^\[1\] ADAMS A/);
+  });
   expect(document.body.textContent).toContain("缺出处");
   await act(async () => button("去补").click());
   expect(edit).toHaveBeenCalledExactlyOnceWith(docs[0]);

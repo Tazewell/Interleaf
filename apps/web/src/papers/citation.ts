@@ -1,4 +1,6 @@
 import type { Creator, Document } from "@reader/core";
+import { api } from "@reader/api";
+import { ensurePaperCitationKeys } from "../store";
 import { creatorName, paperCreators, paperLink, paperYear } from "./format";
 
 /**
@@ -6,7 +8,8 @@ import { creatorName, paperCreators, paperLink, paperYear } from "./format";
  * GB/T 7714 and APA use CSL (citation-js); BibTeX and RIS are written here
  * because the citation-js writers drop non-Latin titles and venues.
  */
-export type CitationStyle = "gb7714" | "apa" | "bibtex" | "ris" | "csl-json";
+export type CitationStyle =
+  "gb7714" | "apa" | "bibtex" | "biblatex" | "ris" | "csl-json";
 export type CitationOrder = "author" | "year" | "custom";
 
 export const citationStyles: Record<
@@ -16,6 +19,11 @@ export const citationStyles: Record<
   gb7714: { label: "GB/T 7714", extension: "txt", mime: "text/plain" },
   apa: { label: "APA", extension: "txt", mime: "text/plain" },
   bibtex: { label: "BibTeX", extension: "bib", mime: "application/x-bibtex" },
+  biblatex: {
+    label: "BibLaTeX",
+    extension: "bib",
+    mime: "application/x-bibtex",
+  },
   ris: {
     label: "RIS",
     extension: "ris",
@@ -70,6 +78,7 @@ function latin(text: string) {
 
 /** "vaswani2017attention": first author, year and first meaningful title word. */
 export function citationKey(doc: Document) {
+  if (doc.citationKey) return doc.citationKey;
   const creators = paperCreators(doc);
   const author = latin(familyOf(creators[0] || {})) || "ref";
   const word =
@@ -84,6 +93,7 @@ export function citationKey(doc: Document) {
 
 /** Keys for a batch; repeated keys get a, b, c… suffixes. */
 export function citationKeys(docs: Document[]) {
+  if (docs.every((d) => d.citationKey)) return docs.map((d) => d.citationKey!);
   const keys = docs.map(citationKey);
   const counts = new Map<string, number>();
   for (const key of keys) counts.set(key, (counts.get(key) || 0) + 1);
@@ -273,6 +283,7 @@ export function ris(docs: Document[]) {
     .map((doc) => {
       const m = doc.metadata;
       const lines: [string, string][] = [["TY", risTypes[citationType(doc)]]];
+      lines.push(["ID", citationKey(doc)]);
       lines.push(["TI", doc.title]);
       for (const c of paperCreators(doc))
         lines.push([
@@ -309,12 +320,28 @@ export function ris(docs: Document[]) {
 
 export async function formatCitations(docs: Document[], style: CitationStyle) {
   if (!docs.length) return "";
+  if (docs.some((d) => d.paperId)) {
+    const keyed = await ensurePaperCitationKeys(
+      docs.map((d) => d.paperId || d.id),
+    );
+    docs = docs.map((d) => ({
+      ...d,
+      citationKey:
+        keyed.find((p) => p.id === (d.paperId || d.id))?.citationKey ||
+        d.citationKey,
+    }));
+  }
+  if (style === "bibtex" || style === "biblatex")
+    return (
+      await api.exportBibliography(
+        docs.map((d) => d.paperId || d.id),
+        style,
+      )
+    ).text;
   switch (style) {
     case "gb7714":
     case "apa":
       return bibliography(docs, style);
-    case "bibtex":
-      return bibtex(docs);
     case "ris":
       return ris(docs);
     case "csl-json": {

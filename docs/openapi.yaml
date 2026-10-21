@@ -4,6 +4,808 @@
   "security": [{ "session": [] }],
   "paths":
     {
+      "/api/papers":
+        {
+          "get":
+            {
+              "summary": "List independent paper items including metadata-only records",
+              "responses":
+                {
+                  "200":
+                    {
+                      "description": "Success",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                {
+                                  "type": "array",
+                                  "items":
+                                    {
+                                      "$ref": "#/components/schemas/PaperItem",
+                                    },
+                                },
+                            },
+                        },
+                    },
+                  "400": { "description": "Invalid input" },
+                  "401":
+                    { "description": "Local session authentication required" },
+                  "404": { "description": "Not found" },
+                  "409":
+                    {
+                      "description": "Conflict; resolve explicitly before retrying",
+                    },
+                },
+              "parameters":
+                [
+                  {
+                    "name": "trash",
+                    "in": "query",
+                    "schema": { "type": "boolean" },
+                  },
+                ],
+            },
+          "post":
+            {
+              "summary": "Create a metadata-only paper item",
+              "responses":
+                {
+                  "201":
+                    {
+                      "description": "Success",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                { "$ref": "#/components/schemas/PaperItem" },
+                            },
+                        },
+                    },
+                  "400": { "description": "Invalid input" },
+                  "401":
+                    { "description": "Local session authentication required" },
+                  "404": { "description": "Not found" },
+                  "409":
+                    {
+                      "description": "Conflict; resolve explicitly before retrying",
+                    },
+                },
+              "requestBody":
+                {
+                  "required": true,
+                  "content":
+                    {
+                      "application/json":
+                        {
+                          "schema":
+                            { "$ref": "#/components/schemas/PaperPatch" },
+                        },
+                    },
+                },
+            },
+        },
+      "/api/papers/{id}":
+        {
+          "parameters":
+            [
+              {
+                "name": "id",
+                "in": "path",
+                "required": true,
+                "schema": { "type": "string" },
+              },
+            ],
+          "get":
+            {
+              "summary": "Read item; old merged IDs resolve to retained item",
+              "responses":
+                {
+                  "200":
+                    {
+                      "description": "Success",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                { "$ref": "#/components/schemas/PaperItem" },
+                            },
+                        },
+                    },
+                  "400": { "description": "Invalid input" },
+                  "401":
+                    { "description": "Local session authentication required" },
+                  "404": { "description": "Not found" },
+                  "409":
+                    {
+                      "description": "Conflict; resolve explicitly before retrying",
+                    },
+                },
+            },
+          "patch":
+            {
+              "summary": "Update item metadata and persistent citation key",
+              "responses":
+                {
+                  "200":
+                    {
+                      "description": "Success",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                { "$ref": "#/components/schemas/PaperItem" },
+                            },
+                        },
+                    },
+                  "400": { "description": "Invalid input" },
+                  "401":
+                    { "description": "Local session authentication required" },
+                  "404": { "description": "Not found" },
+                  "409":
+                    {
+                      "description": "Conflict; resolve explicitly before retrying",
+                    },
+                },
+              "requestBody":
+                {
+                  "required": true,
+                  "content":
+                    {
+                      "application/json":
+                        {
+                          "schema":
+                            { "$ref": "#/components/schemas/PaperPatch" },
+                        },
+                    },
+                },
+            },
+          "delete":
+            {
+              "summary": "Permanently remove item and files through file cleanup; attached active items must be trashed first",
+              "responses":
+                {
+                  "204": { "description": "Success" },
+                  "400": { "description": "Invalid input" },
+                  "401":
+                    { "description": "Local session authentication required" },
+                  "404": { "description": "Not found" },
+                  "409":
+                    {
+                      "description": "Conflict; resolve explicitly before retrying",
+                    },
+                },
+            },
+        },
+      "/api/papers/{id}/attachments/{documentId}":
+        {
+          "parameters":
+            [
+              {
+                "name": "id",
+                "in": "path",
+                "required": true,
+                "schema": { "type": "string" },
+              },
+              {
+                "name": "documentId",
+                "in": "path",
+                "required": true,
+                "schema": { "type": "string" },
+              },
+            ],
+          "put":
+            {
+              "summary": "Attach or update role/default of an existing readable file",
+              "responses":
+                {
+                  "200":
+                    {
+                      "description": "Success",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                { "$ref": "#/components/schemas/PaperItem" },
+                            },
+                        },
+                    },
+                  "400": { "description": "Invalid input" },
+                  "401":
+                    { "description": "Local session authentication required" },
+                  "404": { "description": "Not found" },
+                  "409":
+                    {
+                      "description": "Conflict; resolve explicitly before retrying",
+                    },
+                },
+              "requestBody":
+                {
+                  "required": true,
+                  "content":
+                    {
+                      "application/json":
+                        {
+                          "schema":
+                            {
+                              "type": "object",
+                              "properties":
+                                {
+                                  "role":
+                                    {
+                                      "type": "string",
+                                      "enum":
+                                        [
+                                          "original",
+                                          "translation",
+                                          "supplement",
+                                          "other",
+                                        ],
+                                    },
+                                  "primary": { "type": "boolean" },
+                                },
+                              "required": ["role"],
+                            },
+                        },
+                    },
+                },
+            },
+          "delete":
+            {
+              "summary": "Detach file to books, preserving file and all reading data",
+              "responses":
+                {
+                  "200":
+                    {
+                      "description": "Success",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                { "$ref": "#/components/schemas/PaperItem" },
+                            },
+                        },
+                    },
+                  "400": { "description": "Invalid input" },
+                  "401":
+                    { "description": "Local session authentication required" },
+                  "404": { "description": "Not found" },
+                  "409":
+                    {
+                      "description": "Conflict; resolve explicitly before retrying",
+                    },
+                },
+            },
+        },
+      "/api/papers/{id}/merge":
+        {
+          "parameters":
+            [
+              {
+                "name": "id",
+                "in": "path",
+                "required": true,
+                "schema": { "type": "string" },
+              },
+            ],
+          "post":
+            {
+              "summary": "Atomically merge items, explicit field choices and key selection; preserve every file and reading record",
+              "responses":
+                {
+                  "200":
+                    {
+                      "description": "Success",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                { "$ref": "#/components/schemas/PaperItem" },
+                            },
+                        },
+                    },
+                  "400": { "description": "Invalid input" },
+                  "401":
+                    { "description": "Local session authentication required" },
+                  "404": { "description": "Not found" },
+                  "409":
+                    {
+                      "description": "Conflict; resolve explicitly before retrying",
+                    },
+                },
+              "requestBody":
+                {
+                  "required": true,
+                  "content":
+                    {
+                      "application/json":
+                        {
+                          "schema":
+                            { "$ref": "#/components/schemas/PaperMerge" },
+                        },
+                    },
+                },
+            },
+        },
+      "/api/papers/citation-keys":
+        {
+          "post":
+            {
+              "summary": "Allocate persistent globally unique keys transactionally",
+              "responses":
+                {
+                  "200":
+                    {
+                      "description": "Success",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                {
+                                  "type": "array",
+                                  "items":
+                                    {
+                                      "$ref": "#/components/schemas/PaperItem",
+                                    },
+                                },
+                            },
+                        },
+                    },
+                  "400": { "description": "Invalid input" },
+                  "401":
+                    { "description": "Local session authentication required" },
+                  "404": { "description": "Not found" },
+                  "409":
+                    {
+                      "description": "Conflict; resolve explicitly before retrying",
+                    },
+                },
+              "requestBody":
+                {
+                  "required": true,
+                  "content":
+                    {
+                      "application/json":
+                        {
+                          "schema":
+                            {
+                              "type": "object",
+                              "properties":
+                                {
+                                  "ids":
+                                    {
+                                      "type": "array",
+                                      "items": { "type": "string" },
+                                    },
+                                },
+                              "required": ["ids"],
+                            },
+                        },
+                    },
+                },
+            },
+        },
+      "/api/papers/bibliography/preview":
+        {
+          "post":
+            {
+              "summary": "Parse BibTeX without writing; report matches, keys and warnings",
+              "responses":
+                {
+                  "200":
+                    {
+                      "description": "Success",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                {
+                                  "$ref": "#/components/schemas/BibliographyPreview",
+                                },
+                            },
+                        },
+                    },
+                  "400": { "description": "Invalid input" },
+                  "401":
+                    { "description": "Local session authentication required" },
+                  "404": { "description": "Not found" },
+                  "409":
+                    {
+                      "description": "Conflict; resolve explicitly before retrying",
+                    },
+                },
+              "requestBody":
+                {
+                  "required": true,
+                  "content":
+                    {
+                      "application/json":
+                        {
+                          "schema":
+                            {
+                              "type": "object",
+                              "properties": { "text": { "type": "string" } },
+                              "required": ["text"],
+                            },
+                        },
+                    },
+                },
+            },
+        },
+      "/api/papers/bibliography/import":
+        {
+          "post":
+            {
+              "summary": "Import with one explicit decision per entry, preserving manual fields",
+              "responses":
+                {
+                  "200":
+                    {
+                      "description": "Success",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                {
+                                  "type": "array",
+                                  "items":
+                                    {
+                                      "$ref": "#/components/schemas/PaperItem",
+                                    },
+                                },
+                            },
+                        },
+                    },
+                  "400": { "description": "Invalid input" },
+                  "401":
+                    { "description": "Local session authentication required" },
+                  "404": { "description": "Not found" },
+                  "409":
+                    {
+                      "description": "Conflict; resolve explicitly before retrying",
+                    },
+                },
+              "requestBody":
+                {
+                  "required": true,
+                  "content":
+                    {
+                      "application/json":
+                        {
+                          "schema":
+                            {
+                              "type": "object",
+                              "properties":
+                                {
+                                  "text": { "type": "string" },
+                                  "decisions":
+                                    {
+                                      "type": "array",
+                                      "items":
+                                        {
+                                          "$ref": "#/components/schemas/BibliographyDecision",
+                                        },
+                                    },
+                                  "confirmCitationChange":
+                                    { "type": "boolean" },
+                                },
+                              "required": ["text", "decisions"],
+                            },
+                        },
+                    },
+                },
+            },
+        },
+      "/api/papers/bibliography/export":
+        {
+          "post":
+            {
+              "summary": "Serialize BibTeX or BibLaTeX using stored keys and required crossref dependencies",
+              "responses":
+                {
+                  "200":
+                    {
+                      "description": "Success",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                {
+                                  "type": "object",
+                                  "properties":
+                                    { "text": { "type": "string" } },
+                                  "required": ["text"],
+                                },
+                            },
+                        },
+                    },
+                  "400": { "description": "Invalid input" },
+                  "401":
+                    { "description": "Local session authentication required" },
+                  "404": { "description": "Not found" },
+                  "409":
+                    {
+                      "description": "Conflict; resolve explicitly before retrying",
+                    },
+                },
+              "requestBody":
+                {
+                  "required": true,
+                  "content":
+                    {
+                      "application/json":
+                        {
+                          "schema":
+                            {
+                              "type": "object",
+                              "properties":
+                                {
+                                  "ids":
+                                    {
+                                      "type": "array",
+                                      "items": { "type": "string" },
+                                    },
+                                  "mode":
+                                    {
+                                      "type": "string",
+                                      "enum": ["bibtex", "biblatex"],
+                                    },
+                                },
+                              "required": ["ids", "mode"],
+                            },
+                        },
+                    },
+                },
+            },
+        },
+      "/api/papers/exports":
+        {
+          "get":
+            {
+              "summary": "List local managed bibliography targets and last result",
+              "responses":
+                {
+                  "200":
+                    {
+                      "description": "Success",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                {
+                                  "type": "array",
+                                  "items":
+                                    {
+                                      "$ref": "#/components/schemas/BibliographyExport",
+                                    },
+                                },
+                            },
+                        },
+                    },
+                  "400": { "description": "Invalid input" },
+                  "401":
+                    { "description": "Local session authentication required" },
+                  "404": { "description": "Not found" },
+                  "409":
+                    {
+                      "description": "Conflict; resolve explicitly before retrying",
+                    },
+                },
+            },
+          "post":
+            {
+              "summary": "Desktop main only: register a user-selected path; existing files require explicit backup takeover",
+              "responses":
+                {
+                  "201":
+                    {
+                      "description": "Success",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                {
+                                  "$ref": "#/components/schemas/BibliographyExport",
+                                },
+                            },
+                        },
+                    },
+                  "400": { "description": "Invalid input" },
+                  "401":
+                    { "description": "Local session authentication required" },
+                  "404": { "description": "Not found" },
+                  "409":
+                    {
+                      "description": "Conflict; resolve explicitly before retrying",
+                    },
+                },
+              "requestBody":
+                {
+                  "required": true,
+                  "content":
+                    {
+                      "application/json":
+                        {
+                          "schema":
+                            {
+                              "$ref": "#/components/schemas/BibliographyExportRequest",
+                            },
+                        },
+                    },
+                },
+              "parameters":
+                [
+                  {
+                    "name": "X-Reader-Export-Capability",
+                    "in": "header",
+                    "required": true,
+                    "schema": { "type": "string" },
+                    "description": "Desktop main-only capability; never exposed to renderer",
+                  },
+                ],
+            },
+        },
+      "/api/papers/exports/{id}":
+        {
+          "parameters":
+            [
+              {
+                "name": "id",
+                "in": "path",
+                "required": true,
+                "schema": { "type": "string" },
+              },
+            ],
+          "delete":
+            {
+              "summary": "Stop managing target; preserve last written file",
+              "responses":
+                {
+                  "204": { "description": "Success" },
+                  "400": { "description": "Invalid input" },
+                  "401":
+                    { "description": "Local session authentication required" },
+                  "404": { "description": "Not found" },
+                  "409":
+                    {
+                      "description": "Conflict; resolve explicitly before retrying",
+                    },
+                },
+            },
+        },
+      "/api/papers/exports/{id}/refresh":
+        {
+          "parameters":
+            [
+              {
+                "name": "id",
+                "in": "path",
+                "required": true,
+                "schema": { "type": "string" },
+              },
+            ],
+          "post":
+            {
+              "summary": "Refresh target atomically; retain previous file on failure",
+              "responses":
+                {
+                  "200":
+                    {
+                      "description": "Success",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                {
+                                  "$ref": "#/components/schemas/BibliographyExport",
+                                },
+                            },
+                        },
+                    },
+                  "400": { "description": "Invalid input" },
+                  "401":
+                    { "description": "Local session authentication required" },
+                  "404": { "description": "Not found" },
+                  "409":
+                    {
+                      "description": "Conflict; resolve explicitly before retrying",
+                    },
+                },
+            },
+        },
+      "/api/papers/{id}/trash":
+        {
+          "parameters":
+            [
+              {
+                "name": "id",
+                "in": "path",
+                "required": true,
+                "schema": { "type": "string" },
+              },
+            ],
+          "post":
+            {
+              "summary": "Trash item and its attachments together",
+              "responses":
+                {
+                  "200":
+                    {
+                      "description": "Success",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                { "$ref": "#/components/schemas/PaperItem" },
+                            },
+                        },
+                    },
+                  "400": { "description": "Invalid input" },
+                  "401":
+                    { "description": "Local session authentication required" },
+                  "404": { "description": "Not found" },
+                  "409":
+                    {
+                      "description": "Conflict; resolve explicitly before retrying",
+                    },
+                },
+            },
+        },
+      "/api/papers/{id}/restore":
+        {
+          "parameters":
+            [
+              {
+                "name": "id",
+                "in": "path",
+                "required": true,
+                "schema": { "type": "string" },
+              },
+            ],
+          "post":
+            {
+              "summary": "Restore item and its attachments together",
+              "responses":
+                {
+                  "200":
+                    {
+                      "description": "Success",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                { "$ref": "#/components/schemas/PaperItem" },
+                            },
+                        },
+                    },
+                  "400": { "description": "Invalid input" },
+                  "401":
+                    { "description": "Local session authentication required" },
+                  "404": { "description": "Not found" },
+                  "409":
+                    {
+                      "description": "Conflict; resolve explicitly before retrying",
+                    },
+                },
+            },
+        },
+
       "/api/documents/{id}/annotations/recover":
         {
           "post":
@@ -4835,6 +5637,183 @@
       "securitySchemes": { "session": { "type": "http", "scheme": "bearer" } },
       "schemas":
         {
+          "PaperAttachment":
+            {
+              "type": "object",
+              "properties":
+                {
+                  "documentId": { "type": "string" },
+                  "role":
+                    {
+                      "type": "string",
+                      "enum":
+                        ["original", "translation", "supplement", "other"],
+                    },
+                  "title": { "type": "string" },
+                  "type": { "type": "string", "enum": ["pdf", "epub"] },
+                  "size": { "type": "number" },
+                },
+              "required": ["documentId", "role", "title", "type", "size"],
+            },
+          "PaperItem":
+            {
+              "type": "object",
+              "properties":
+                {
+                  "id": { "type": "string" },
+                  "title": { "type": "string" },
+                  "author": { "type": "string" },
+                  "metadata": { "$ref": "#/components/schemas/PaperMetadata" },
+                  "tags": { "type": "array", "items": { "type": "string" } },
+                  "folders": { "type": "array", "items": { "type": "string" } },
+                  "favorite": { "type": "boolean" },
+                  "primaryDocumentId": { "type": "string" },
+                  "citationKey": { "type": "string" },
+                  "createdAt": { "type": "string" },
+                  "deletedAt": { "type": "string" },
+                  "attachments":
+                    {
+                      "type": "array",
+                      "items":
+                        { "$ref": "#/components/schemas/PaperAttachment" },
+                    },
+                },
+              "required":
+                [
+                  "id",
+                  "title",
+                  "author",
+                  "metadata",
+                  "tags",
+                  "folders",
+                  "favorite",
+                  "primaryDocumentId",
+                  "citationKey",
+                  "createdAt",
+                  "attachments",
+                ],
+            },
+          "PaperPatch":
+            {
+              "type": "object",
+              "properties":
+                {
+                  "title": { "type": "string" },
+                  "author": { "type": "string" },
+                  "metadata": { "$ref": "#/components/schemas/PaperMetadata" },
+                  "tags": { "type": "array", "items": { "type": "string" } },
+                  "folders": { "type": "array", "items": { "type": "string" } },
+                  "favorite": { "type": "boolean" },
+                  "primaryDocumentId": { "type": "string" },
+                  "citationKey": { "type": "string" },
+                },
+            },
+          "PaperMergePatch":
+            {
+              "type": "object",
+              "properties":
+                {
+                  "title": { "type": "string" },
+                  "author": { "type": "string" },
+                  "metadata": { "$ref": "#/components/schemas/PaperMetadata" },
+                },
+            },
+          "PaperMerge":
+            {
+              "type": "object",
+              "properties":
+                {
+                  "ids": { "type": "array", "items": { "type": "string" } },
+                  "citationKey": { "type": "string" },
+                  "confirmCitationChange": { "type": "boolean" },
+                  "patch": { "$ref": "#/components/schemas/PaperMergePatch" },
+                },
+              "required": ["ids"],
+            },
+          "BibliographyMode":
+            { "type": "string", "enum": ["bibtex", "biblatex"] },
+          "BibliographyPreview":
+            {
+              "type": "object",
+              "properties":
+                {
+                  "entries":
+                    {
+                      "type": "array",
+                      "items":
+                        {
+                          "type": "object",
+                          "properties":
+                            {
+                              "index": { "type": "integer" },
+                              "key": { "type": "string" },
+                              "title": { "type": "string" },
+                              "matchedId": { "type": "string" },
+                              "warnings":
+                                {
+                                  "type": "array",
+                                  "items": { "type": "string" },
+                                },
+                            },
+                          "required": ["index", "key", "title", "warnings"],
+                        },
+                    },
+                  "errors": { "type": "array", "items": { "type": "string" } },
+                },
+              "required": ["entries"],
+            },
+          "BibliographyDecision":
+            {
+              "type": "object",
+              "properties":
+                {
+                  "index": { "type": "integer" },
+                  "action": { "enum": ["create", "merge", "skip"] },
+                  "paperId": { "type": "string" },
+                  "citationKey": { "type": "string" },
+                },
+              "required": ["index", "action"],
+            },
+          "BibliographyExport":
+            {
+              "type": "object",
+              "properties":
+                {
+                  "id": { "type": "string" },
+                  "folder": { "type": "string" },
+                  "includeChildren": { "type": "boolean" },
+                  "mode": { "type": "string", "enum": ["bibtex", "biblatex"] },
+                  "path": { "type": "string" },
+                  "lastExportedAt": { "type": "string" },
+                  "error": { "type": "string" },
+                  "paused": { "type": "boolean" },
+                },
+              "required":
+                [
+                  "id",
+                  "folder",
+                  "includeChildren",
+                  "mode",
+                  "path",
+                  "lastExportedAt",
+                  "error",
+                  "paused",
+                ],
+            },
+          "BibliographyExportRequest":
+            {
+              "type": "object",
+              "properties":
+                {
+                  "folder": { "type": "string" },
+                  "includeChildren": { "type": "boolean" },
+                  "mode": { "type": "string", "enum": ["bibtex", "biblatex"] },
+                  "path": { "type": "string" },
+                  "takeover": { "type": "boolean" },
+                },
+              "required": ["folder", "includeChildren", "mode", "path"],
+            },
+
           "CodexHandoff":
             {
               "type": "object",
@@ -5295,6 +6274,8 @@
               "type": "object",
               "properties":
                 {
+                  "paperId": { "type": "string" },
+                  "citationKey": { "type": "string" },
                   "category": { "enum": ["book", "article", "paper"] },
                   "categorySource": { "enum": ["default", "ai", "manual"] },
                   "classificationStatus":
@@ -6409,7 +7390,7 @@
                       "type": "object",
                       "description": "Origin per field; lookups never replace manual values",
                       "additionalProperties":
-                        { "enum": ["file", "lookup", "manual"] },
+                        { "enum": ["file", "lookup", "manual", "bibtex"] },
                     },
                   "lookedUpAt": { "type": "string" },
                   "lookup":

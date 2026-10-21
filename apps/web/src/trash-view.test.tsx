@@ -10,8 +10,11 @@ vi.mock("@reader/api", () => ({
   api: {
     restoreDocument: vi.fn(),
     removeDocument: vi.fn(),
+    restorePaper: vi.fn(),
+    removePaper: vi.fn(),
     emptyTrash: vi.fn(),
     trash: vi.fn(async () => []),
+    papers: vi.fn(async () => []),
     documents: vi.fn(async () => []),
   },
 }));
@@ -19,6 +22,7 @@ vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 const trashed = (id: string, title: string) =>
   ({
     id,
+    paperId: `item-${id}`,
     title,
     author: "Ada",
     type: "pdf",
@@ -29,7 +33,10 @@ let root: Root, host: HTMLDivElement;
 beforeEach(async () => {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   vi.clearAllMocks();
-  useReaderStore.setState({ libraryPreferences: { mode: "papers" } });
+  useReaderStore.setState({
+    libraryPreferences: { mode: "papers" },
+    trash: [trashed("a", "Alpha"), trashed("b", "Beta")],
+  });
   host = document.createElement("div");
   document.body.append(host);
   root = createRoot(host);
@@ -50,20 +57,22 @@ const button = (label: string, scope: ParentNode = document) =>
   );
 it("restores one document from the trash", async () => {
   await act(async () => button("恢复")[1].click());
-  expect(api.restoreDocument).toHaveBeenCalledExactlyOnceWith("b");
-  expect(api.removeDocument).not.toHaveBeenCalled();
+  expect(api.restorePaper).toHaveBeenCalledExactlyOnceWith("item-b");
+  expect(api.removePaper).not.toHaveBeenCalled();
 });
 it("purges only after confirmation", async () => {
   await act(async () => button("彻底删除")[0].click());
-  expect(api.removeDocument).not.toHaveBeenCalled();
+  expect(api.removePaper).not.toHaveBeenCalled();
   const dialog = document.querySelector('[role="alertdialog"]')!;
   expect(dialog.textContent).toContain("彻底删除 1 份");
   await act(async () => button("彻底删除", dialog)[0].click());
-  expect(api.removeDocument).toHaveBeenCalledExactlyOnceWith("a");
+  expect(api.removePaper).toHaveBeenCalledExactlyOnceWith("item-a");
 });
-it("empties the current library's trash in one request", async () => {
+it("purges each paper item so metadata-only entries are included", async () => {
   await act(async () => button("清空回收站")[0].click());
   const dialog = document.querySelector('[role="alertdialog"]')!;
   await act(async () => button("彻底删除", dialog)[0].click());
-  expect(api.emptyTrash).toHaveBeenCalledExactlyOnceWith("papers");
+  expect(api.removePaper).toHaveBeenNthCalledWith(1, "item-a");
+  expect(api.removePaper).toHaveBeenNthCalledWith(2, "item-b");
+  expect(api.emptyTrash).not.toHaveBeenCalled();
 });

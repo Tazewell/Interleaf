@@ -7,7 +7,7 @@ interface Window {
       folder: string;
       includeChildren: boolean;
       mode: "bibtex" | "biblatex";
-    }) => Promise<unknown | null>;
+    }) => Promise<import("@reader/core").BibliographyExport | null>;
     exportDiagnostics?: () => Promise<boolean>;
     recordDiagnostic?: (
       event: import("../../../packages/reader-core/src/diagnostics").DiagnosticEvent,

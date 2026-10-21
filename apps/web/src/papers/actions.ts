@@ -23,11 +23,14 @@ import {
   type PaperView,
 } from "./model";
 import { usePaperUI } from "./state";
+import { libraryPapers } from "./projection";
 
 type Patch = Parameters<typeof api.update>[1];
 
-const papers = () =>
-  useReaderStore.getState().documents.filter((d) => d.library === "papers");
+const papers = () => {
+  const s = useReaderStore.getState();
+  return libraryPapers(s.paperItems, s.documents);
+};
 const paperPrefs = () =>
   useReaderStore.getState().libraryPreferences.papers || {};
 
@@ -62,7 +65,32 @@ export async function patchPapers(changes: [Document, Patch][]) {
   let message = "";
   for (const [doc, patch] of changes) {
     try {
-      await api.update(doc.id, patch);
+      const {
+        readingStatus,
+        progress,
+        percentage,
+        library,
+        category,
+        ...itemPatch
+      } = patch;
+      if (doc.paperId && Object.keys(itemPatch).length)
+        await api.updatePaper(doc.paperId, itemPatch);
+      if (
+        !doc.paperId ||
+        readingStatus !== undefined ||
+        progress !== undefined ||
+        percentage !== undefined ||
+        library !== undefined ||
+        category !== undefined
+      ) {
+        if (doc.metadataOnly) throw new Error("此文献没有可阅读的附件");
+        await api.update(
+          doc.id,
+          doc.paperId
+            ? { readingStatus, progress, percentage, library, category }
+            : patch,
+        );
+      }
     } catch (e) {
       failed++;
       message = (e as Error).message;
@@ -235,6 +263,7 @@ export function openLink(url: string) {
 }
 
 export function revealFile(doc: Document, open = false) {
+  if (doc.metadataOnly) return;
   const desktop = window.readerDesktop;
   if (!desktop?.showDocumentFile) {
     toast.info("请在桌面版中打开文件");
@@ -304,6 +333,7 @@ export async function importReference(ref: string, target = "") {
 }
 
 export async function lookupPaper(doc: Document) {
+  if (doc.metadataOnly) return;
   try {
     await api.lookupMetadata(doc.id);
     await refreshLibrary().catch(() => {});

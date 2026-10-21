@@ -117,7 +117,7 @@ it("deduplicates citation keys", () => {
 it("writes RIS for reference managers", () => {
   const text = ris([attention, gpt3]);
   expect(text).toContain(
-    "TY  - CPAPER\nTI  - Attention is all you need\nAU  - Vaswani, Ashish",
+    "TY  - CPAPER\nID  - vaswani2017attention\nTI  - Attention is all you need\nAU  - Vaswani, Ashish",
   );
   expect(text).toContain("SP  - 6000\nEP  - 6010");
   expect(text).toContain("TY  - UNPB");

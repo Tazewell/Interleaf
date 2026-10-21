@@ -16,6 +16,13 @@ import type {
   ChatRun,
   DocumentChatSession,
   Document,
+  PaperItem,
+  PaperPatch,
+  PaperAttachmentRole,
+  BibliographyMode,
+  BibliographyExport,
+  BibliographyPreview,
+  BibliographyDecision,
   DocumentOverview,
   OverviewJob,
   TagBoard,
@@ -142,6 +149,95 @@ function annotationRequest<T>(path: string, init: RequestInit): Promise<T> {
 export type ZoteroScan = components["schemas"]["ZoteroScan"];
 export type ZoteroImportResult = components["schemas"]["ZoteroImportResult"];
 export const api = {
+  papers: (trash = false) =>
+    request<PaperItem[]>(`/api/papers${trash ? "?trash=true" : ""}`),
+  paper: (id: string) =>
+    request<PaperItem>(`/api/papers/${encodeURIComponent(id)}`),
+  createPaper: (patch: PaperPatch) =>
+    request<PaperItem>("/api/papers", {
+      method: "POST",
+      body: JSON.stringify(patch),
+    }),
+  updatePaper: (id: string, patch: PaperPatch) =>
+    request<PaperItem>(`/api/papers/${encodeURIComponent(id)}`, {
+      method: "PATCH",
+      body: JSON.stringify(patch),
+    }),
+  trashPaper: (id: string) =>
+    request<PaperItem>(`/api/papers/${encodeURIComponent(id)}/trash`, {
+      method: "POST",
+    }),
+  restorePaper: (id: string) =>
+    request<PaperItem>(`/api/papers/${encodeURIComponent(id)}/restore`, {
+      method: "POST",
+    }),
+  removePaper: (id: string) =>
+    request<void>(`/api/papers/${encodeURIComponent(id)}`, {
+      method: "DELETE",
+    }),
+  attachPaper: (
+    id: string,
+    documentId: string,
+    role: PaperAttachmentRole,
+    primary = false,
+  ) =>
+    request<PaperItem>(
+      `/api/papers/${encodeURIComponent(id)}/attachments/${encodeURIComponent(documentId)}`,
+      { method: "PUT", body: JSON.stringify({ role, primary }) },
+    ),
+  detachPaper: (id: string, documentId: string) =>
+    request<PaperItem>(
+      `/api/papers/${encodeURIComponent(id)}/attachments/${encodeURIComponent(documentId)}`,
+      { method: "DELETE" },
+    ),
+  mergePapers: (
+    id: string,
+    input: {
+      ids: string[];
+      citationKey?: string;
+      confirmCitationChange?: boolean;
+      patch?: Pick<PaperPatch, "title" | "author" | "metadata">;
+    },
+  ) =>
+    request<PaperItem>(`/api/papers/${encodeURIComponent(id)}/merge`, {
+      method: "POST",
+      body: JSON.stringify(input),
+    }),
+  ensureCitationKeys: (ids: string[]) =>
+    request<PaperItem[]>("/api/papers/citation-keys", {
+      method: "POST",
+      body: JSON.stringify({ ids }),
+    }),
+  previewBibliography: (text: string) =>
+    request<BibliographyPreview>("/api/papers/bibliography/preview", {
+      method: "POST",
+      body: JSON.stringify({ text }),
+    }),
+  importBibliography: (
+    text: string,
+    decisions: BibliographyDecision[],
+    confirmCitationChange = false,
+  ) =>
+    request<PaperItem[]>("/api/papers/bibliography/import", {
+      method: "POST",
+      body: JSON.stringify({ text, decisions, confirmCitationChange }),
+    }),
+  exportBibliography: (ids: string[], mode: BibliographyMode = "bibtex") =>
+    request<{ text: string }>("/api/papers/bibliography/export", {
+      method: "POST",
+      body: JSON.stringify({ ids, mode }),
+    }),
+  bibliographyExports: () =>
+    request<BibliographyExport[]>("/api/papers/exports"),
+  refreshBibliographyExport: (id: string) =>
+    request<BibliographyExport>(
+      `/api/papers/exports/${encodeURIComponent(id)}/refresh`,
+      { method: "POST" },
+    ),
+  removeBibliographyExport: (id: string) =>
+    request<void>(`/api/papers/exports/${encodeURIComponent(id)}`, {
+      method: "DELETE",
+    }),
   journalRankConfig: () =>
     request<JournalRankConfig>("/api/journal-ranks/config"),
   saveJournalRankConfig: (config: {
