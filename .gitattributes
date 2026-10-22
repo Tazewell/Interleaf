@@ -1,2 +1,3 @@
 patches/*.patch whitespace=-blank-at-eol
 patches/@pdf-lib__fontkit@1.1.1.patch text eol=lf whitespace=-blank-at-eol,-space-before-tab
+scripts/bilingual-pdf-acceptance/run.sh text eol=lf
