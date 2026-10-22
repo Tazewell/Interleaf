@@ -18,6 +18,8 @@ export const useReaderStore = create<{
   active: Document | null;
   theme: ReaderTheme;
   aiConfig?: NativeAIConfig;
+  /** Runtime-only invalidation for every consumer of persisted model checks. */
+  aiCatalogRevision: number;
   aiModelSaving: boolean;
   libraryPreferences: LibraryPreferences;
   trash: Document[];
@@ -27,6 +29,7 @@ export const useReaderStore = create<{
   setLinkTarget: (target: ReaderLinkTarget | null) => void;
   setLibraryPreferences: (preferences: LibraryPreferences) => void;
   setAIConfig: (config: NativeAIConfig) => void;
+  invalidateAICatalog: (snapshot: NativeAIConfig) => void;
   setAIModelSaving: (saving: boolean) => void;
   setDocuments: (documents: Document[]) => void;
   open: (active: Document | null) => void;
@@ -37,6 +40,7 @@ export const useReaderStore = create<{
   paperTrash: [],
   active: null,
   theme: defaultTheme,
+  aiCatalogRevision: 0,
   aiModelSaving: false,
   libraryPreferences: {},
   trash: [],
@@ -45,6 +49,13 @@ export const useReaderStore = create<{
   setLinkTarget: (linkTarget) => set({ linkTarget }),
   setLibraryPreferences: (libraryPreferences) => set({ libraryPreferences }),
   setAIConfig: (aiConfig) => set({ aiConfig }),
+  invalidateAICatalog: (snapshot) =>
+    set((state) =>
+      state.aiConfig?.connection.url === snapshot.connection.url &&
+      state.aiConfig.connection.protocol === snapshot.connection.protocol
+        ? { aiCatalogRevision: state.aiCatalogRevision + 1 }
+        : state,
+    ),
   setAIModelSaving: (aiModelSaving) => set({ aiModelSaving }),
   setDocuments: (documents) => set({ documents }),
   open: (active) => {

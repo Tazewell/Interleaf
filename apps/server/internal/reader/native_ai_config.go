@@ -209,12 +209,19 @@ func (s *Server) resolveNativeTask(ctx context.Context, config NativeAIConfig, r
 		return nativeTaskSnapshot{}, generationError(ErrorConfiguration, "AI 配置已改变，请重试")
 	}
 	models, catalogErr := s.apiAgentModels(ctx, nativeLegacyView(stored))
+	// The catalog has already excluded failed models from role recommendations.
+	// Do not rerun family ranking over its unfiltered entries.
+	recommended := func(role modelTask) string {
+		for _, model := range models {
+			if slices.Contains(model.RecommendedFor, string(role)) {
+				return model.ID
+			}
+		}
+		return ""
+	}
 	chat := config.Models[taskChat]
 	if chat == "" && catalogErr == nil {
-		chat = defaultTaskModel(taskChat, "api", models)
-		if chat == "" && len(models) > 0 {
-			chat = models[0].ID
-		}
+		chat = recommended(taskChat)
 	}
 	if chat == "" {
 		return nativeTaskSnapshot{}, generationError(ErrorConfiguration, "请填写问答模型")
@@ -224,7 +231,7 @@ func (s *Server) resolveNativeTask(ctx context.Context, config NativeAIConfig, r
 		switch role {
 		case taskTranslation:
 			if catalogErr == nil {
-				model = defaultTaskModel(taskTranslation, "api", models)
+				model = recommended(taskTranslation)
 			}
 			if model == "" {
 				model = chat

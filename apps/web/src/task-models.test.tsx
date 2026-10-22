@@ -5,6 +5,7 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { api } from "@reader/api";
 import type { NativeAIConfig } from "@reader/core";
 import { TaskModels, taskChoice } from "./TaskModels";
+import { ModelSelector } from "./ModelSelector";
 import { useReaderStore } from "./store";
 vi.mock("@reader/api", () => ({
   api: {
@@ -15,6 +16,7 @@ vi.mock("@reader/api", () => ({
   },
 }));
 vi.mock("sonner", () => ({ toast: { error: vi.fn() } }));
+vi.mock("./ProviderIdentity", () => ({ ProviderIcon: () => <span /> }));
 let root: Root, host: HTMLDivElement, config: NativeAIConfig;
 beforeEach(() => {
   vi.clearAllMocks();
@@ -173,4 +175,187 @@ it("disables fixed effort and shows a tunable role mapping", async () => {
       .disabled,
   ).toBe(false);
   expect(host.textContent).toContain("medium → high");
+});
+
+async function selectorOptions() {
+  const popover = host.querySelector(
+    '[aria-label="选择模型和 Effort"]',
+  ) as HTMLButtonElement;
+  if (!document.querySelector(".effort-panel"))
+    await act(async () => popover.click());
+  const select = document.querySelector(
+    '[aria-label="选择模型"]',
+  ) as HTMLButtonElement;
+  if (select.getAttribute("aria-expanded") !== "true")
+    await act(async () => select.click());
+  return (
+    Array.from(document.querySelectorAll('[role="listbox"]')).at(-1)
+      ?.textContent ?? ""
+  );
+}
+it.each([false, true])(
+  "refreshes another ModelSelector after an explicit check changes text=%s",
+  async (before) => {
+    let candidateText = before;
+    config.models.translation = "candidate";
+    useReaderStore.setState({ aiConfig: config });
+    vi.mocked(api.agentModels).mockImplementation(async () => [
+      {
+        id: "opus",
+        name: "Opus",
+        description: "",
+        isDefault: true,
+        capability: { text: true, vision: false, checkedAt: "initial" },
+      },
+      {
+        id: "candidate",
+        name: "Candidate",
+        description: "",
+        isDefault: false,
+        capability: {
+          text: candidateText,
+          vision: false,
+          checkedAt: candidateText ? "passed" : "failed",
+        },
+      },
+    ]);
+    vi.mocked(api.checkNativeAI).mockImplementation(async () => {
+      candidateText = !before;
+      return {
+        text: candidateText,
+        vision: false,
+        checkedAt: "new",
+        model: "candidate",
+        fingerprint: "connection-model",
+      };
+    });
+    await act(async () =>
+      root.render(
+        <>
+          <TaskModels disabled={false} />
+          <ModelSelector disabled={false} onSettings={() => {}} />
+        </>,
+      ),
+    );
+    expect((await selectorOptions()).includes("Candidate")).toBe(before);
+    await act(async () =>
+      Array.from(host.querySelectorAll("button"))
+        .find((button) => button.textContent === "检测翻译")!
+        .click(),
+    );
+    expect((await selectorOptions()).includes("Candidate")).toBe(!before);
+    expect(useReaderStore.getState().aiConfig).toBe(config);
+  },
+);
+
+it("does not refresh the new endpoint consumers when an old endpoint check completes", async () => {
+  let complete!: (value: Awaited<ReturnType<typeof api.checkNativeAI>>) => void;
+  config.models.translation = "candidate";
+  useReaderStore.setState({ aiConfig: config });
+  vi.mocked(api.checkNativeAI).mockReturnValue(
+    new Promise((resolve) => {
+      complete = resolve;
+    }),
+  );
+  vi.mocked(api.agentModels).mockImplementation(async () =>
+    useReaderStore.getState().aiConfig?.connection.url ===
+    "https://endpoint-b.test/v1"
+      ? [
+          {
+            id: "opus",
+            name: "B current model",
+            description: "",
+            isDefault: true,
+          },
+        ]
+      : [
+          {
+            id: "opus",
+            name: "A current model",
+            description: "",
+            isDefault: true,
+          },
+        ],
+  );
+  await act(async () =>
+    root.render(
+      <>
+        <TaskModels disabled={false} />
+        <ModelSelector disabled={false} onSettings={() => {}} />
+      </>,
+    ),
+  );
+  await act(async () =>
+    Array.from(host.querySelectorAll("button"))
+      .find((button) => button.textContent === "检测翻译")!
+      .click(),
+  );
+  config = {
+    ...config,
+    connection: { ...config.connection, url: "https://endpoint-b.test/v1" },
+  };
+  await act(async () => useReaderStore.getState().setAIConfig(config));
+  expect(await selectorOptions()).toContain("B current model");
+  const requests = vi.mocked(api.agentModels).mock.calls.length;
+  await act(async () =>
+    complete({
+      text: true,
+      vision: false,
+      checkedAt: "late",
+      model: "candidate",
+      fingerprint: "old-endpoint",
+    }),
+  );
+  expect(await selectorOptions()).toContain("B current model");
+  expect(await selectorOptions()).not.toContain("Candidate");
+  expect(api.agentModels).toHaveBeenCalledTimes(requests);
+});
+
+it("refreshes matching endpoint consumers when settings change during a check", async () => {
+  let complete!: (value: Awaited<ReturnType<typeof api.checkNativeAI>>) => void;
+  let text = false;
+  config.models.translation = "candidate";
+  useReaderStore.setState({ aiConfig: config });
+  vi.mocked(api.checkNativeAI).mockReturnValue(
+    new Promise((resolve) => {
+      complete = resolve;
+    }),
+  );
+  vi.mocked(api.agentModels).mockImplementation(async () => [
+    { id: "opus", name: "Opus", description: "", isDefault: true },
+    {
+      id: "candidate",
+      name: "Candidate",
+      description: "",
+      isDefault: false,
+      capability: { text, vision: false, checkedAt: "now" },
+    },
+  ]);
+  await act(async () =>
+    root.render(
+      <>
+        <TaskModels disabled={false} />
+        <ModelSelector disabled={false} onSettings={() => {}} />
+      </>,
+    ),
+  );
+  await act(async () =>
+    Array.from(host.querySelectorAll("button"))
+      .find((button) => button.textContent === "检测翻译")!
+      .click(),
+  );
+  config = { ...config, translationPrompt: "concurrent preference" };
+  await act(async () => useReaderStore.getState().setAIConfig(config));
+  expect(await selectorOptions()).not.toContain("Candidate");
+  text = true;
+  await act(async () =>
+    complete({
+      text: true,
+      vision: false,
+      checkedAt: "now",
+      model: "candidate",
+      fingerprint: "same-endpoint",
+    }),
+  );
+  expect(await selectorOptions()).toContain("Candidate");
 });

@@ -164,6 +164,99 @@ it("does not replace the new endpoint catalog with a late response", async () =>
   expect(signal.aborted).toBe(true);
   expect(host.querySelector(".model-trigger-name")?.textContent).toBe("Sonnet");
 });
+
+it("hides a completed previous endpoint catalog while the next catalog is pending or failed", async () => {
+  vi.mocked(api.agentModels).mockResolvedValueOnce([
+    {
+      ...models[0]!,
+      effortInfo: { mode: "fixed", note: "A-only metadata" },
+      capability: { text: true, vision: true, checkedAt: "A" },
+    },
+    models[1]!,
+  ]);
+  await render();
+  expect(host.querySelector(".model-trigger-name")?.textContent).toBe(
+    "Model A",
+  );
+  expect(host.querySelector(".model-trigger-effort")?.textContent).toBe(
+    "固定／自动",
+  );
+  let fail!: (error: Error) => void;
+  vi.mocked(api.agentModels).mockImplementation(
+    () =>
+      new Promise((_, reject) => {
+        fail = reject;
+      }),
+  );
+  config = {
+    ...config,
+    connection: { ...config.connection, url: "https://endpoint-b.test/v1" },
+  };
+  await act(async () => useReaderStore.getState().setAIConfig(config));
+  expect(host.querySelector(".model-trigger-name")?.textContent).toBe(
+    "model-a",
+  );
+  expect(host.querySelector(".model-trigger-effort")?.textContent).toBe(
+    "Medium",
+  );
+  await open();
+  const names = () =>
+    Array.from(document.querySelectorAll('[role="option"]')).map(
+      (item) => item.textContent,
+    );
+  expect(names()).not.toContain("Model B");
+  expect(names()).toContain("model-a");
+  await act(async () => fail(new Error("B catalog unavailable")));
+  expect(host.querySelector(".model-trigger-name")?.textContent).toBe(
+    "model-a",
+  );
+  expect(names()).not.toContain("Model B");
+  expect(document.querySelector(".effort-panel")?.textContent).not.toContain(
+    "A-only metadata",
+  );
+  expect(api.saveAIConfig).not.toHaveBeenCalled();
+});
+
+it("invalidates a connection save with identical public fields after key replacement", async () => {
+  config = { ...config, connection: { ...config.connection, hasKey: true } };
+  useReaderStore.setState({ aiConfig: config });
+  vi.mocked(api.agentModels).mockResolvedValueOnce([
+    { ...models[0]!, effortInfo: { mode: "fixed", note: "Old key metadata" } },
+    models[1]!,
+  ]);
+  await render();
+  expect(host.querySelector(".model-trigger-effort")?.textContent).toBe(
+    "固定／自动",
+  );
+  let complete!: (models: AgentModel[]) => void;
+  vi.mocked(api.agentModels).mockImplementation(
+    () =>
+      new Promise((resolve) => {
+        complete = resolve;
+      }),
+  );
+  const saved = JSON.parse(JSON.stringify(config)) as NativeAIConfig;
+  await act(async () => useReaderStore.getState().setAIConfig(saved));
+  expect(host.querySelector(".model-trigger-name")?.textContent).toBe(
+    "model-a",
+  );
+  expect(host.querySelector(".model-trigger-effort")?.textContent).toBe(
+    "Medium",
+  );
+  await open();
+  expect(
+    Array.from(document.querySelectorAll('[role="option"]')).map(
+      (item) => item.textContent,
+    ),
+  ).not.toContain("Model B");
+  await act(async () => complete([]));
+  expect(host.querySelector(".model-trigger-name")?.textContent).toBe(
+    "model-a",
+  );
+  expect(document.querySelector(".effort-panel")?.textContent).not.toContain(
+    "Old key metadata",
+  );
+});
 it("resolves aliases and preserves custom model IDs", () => {
   expect(selectedAgentModel(models, "fast")?.id).toBe("model-a");
   expect(selectedAgentModel(models, "custom-model")?.id).toBe("custom-model");

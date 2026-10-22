@@ -71,17 +71,19 @@ export function ModelSelector({
 }) {
   const {
     aiConfig: config,
+    aiCatalogRevision,
     setAIConfig,
     aiModelSaving: saving,
     setAIModelSaving,
   } = useReaderStore();
   const provider =
     config?.connection.url && !config.needsConfiguration ? "api" : "";
-  const revision = catalogRevision(config);
+  const revision = `${catalogRevision(config)}\n${aiCatalogRevision}`;
   const [catalog, setCatalog] = useState<{
-    provider: string;
+    revision: string;
+    config?: NativeAIConfig;
     models: AgentModel[];
-  }>({ provider: "", models: [] });
+  }>({ revision: "", models: [] });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [retry, setRetry] = useState(0);
@@ -101,7 +103,8 @@ export function ModelSelector({
       .then((models) => {
         if (!controller.signal.aborted)
           setCatalog({
-            provider,
+            revision,
+            config,
             models: models.map((model) => ({
               ...model,
               name: modelDisplayName(model.id, model.name),
@@ -116,7 +119,10 @@ export function ModelSelector({
       });
     return () => controller.abort();
   }, [provider, revision, retry, config]);
-  const models = catalog.provider === provider ? catalog.models : [];
+  const models =
+    catalog.revision === revision && catalog.config === config
+      ? catalog.models
+      : [];
   const configuredModel = config?.models.chat ?? "";
   const usable = usableModels(provider, models, "chat");
   const current = configuredModel

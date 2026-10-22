@@ -46,6 +46,8 @@ export function taskChoice(config: NativeAIConfig, role: AIModelRole) {
 export function TaskModels({ disabled }: { disabled: boolean }) {
   const {
     aiConfig: config,
+    aiCatalogRevision,
+    invalidateAICatalog,
     setAIConfig,
     aiModelSaving: saving,
     setAIModelSaving,
@@ -65,7 +67,7 @@ export function TaskModels({ disabled }: { disabled: boolean }) {
   >({});
   const [wait, setWait] = useState("15");
   const [retry, setRetry] = useState(0);
-  const revision = catalogRevision(config);
+  const revision = `${catalogRevision(config)}\n${aiCatalogRevision}`;
   useEffect(() => {
     setModelEdits({});
     setEffortEdits({});
@@ -151,6 +153,9 @@ export function TaskModels({ disabled }: { disabled: boolean }) {
       }
     } finally {
       setChecking(null);
+      // A check can persist text=false as well as success. Refresh all model
+      // consumers; a delayed result must not invalidate another connection.
+      invalidateAICatalog(snapshot);
     }
   };
   return (

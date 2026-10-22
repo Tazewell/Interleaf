@@ -389,3 +389,66 @@ func TestNativeAIConfigSoleTextBackupKeepsVerification(t *testing.T) {
 		t.Fatal("same-model legacy image observation lost", err)
 	}
 }
+
+func TestNativeAIConfigDefaultsExcludeFailedModels(t *testing.T) {
+	for _, tc := range []struct {
+		name         string
+		role         modelTask
+		failed, want string
+	}{
+		{"chat preferred family failed", taskChat, "model-pro", "model-flash"},
+		{"translation fast family failed", taskTranslation, "model-flash", "model-pro"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			endpoint := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.Write([]byte(`{"data":[{"id":"model-pro"},{"id":"model-flash"}]}`))
+			}))
+			defer endpoint.Close()
+			s := nativeTestServer(t)
+			config, err := s.saveNativeAIConfig(nativeUpdate(t, `{"version":2,"connection":{"protocol":"openai","url":"`+endpoint.URL+`","key":null}}`))
+			if err != nil {
+				t.Fatal(err)
+			}
+			stored, err := s.readNativeAIConfig()
+			if err != nil {
+				t.Fatal(err)
+			}
+			bridge := nativeLegacyView(stored)
+			stored.Capabilities[apiCapabilityKey(tc.failed)] = Capability{Text: false, CheckedAt: "failed", Fingerprint: configPrint(bridge, apiCapabilityKey(tc.failed))}
+			stored.Capabilities[apiCapabilityKey(tc.want)] = Capability{Text: true, CheckedAt: "passed", Fingerprint: configPrint(bridge, apiCapabilityKey(tc.want))}
+			if err := s.writeNativeAIConfig(stored); err != nil {
+				t.Fatal(err)
+			}
+			catalog, err := s.apiAgentModels(t.Context(), s.aiConfig())
+			if err != nil {
+				t.Fatal(err)
+			}
+			recommended := ""
+			for _, model := range catalog {
+				for _, role := range model.RecommendedFor {
+					if role == string(tc.role) {
+						recommended = model.ID
+					}
+				}
+			}
+			if recommended != tc.want {
+				t.Fatal("catalog recommendation", recommended, "want", tc.want)
+			}
+			snapshot, err := s.resolveNativeTask(t.Context(), config, tc.role)
+			if err != nil || snapshot.Model != tc.want {
+				t.Fatal("default snapshot disagrees with available recommendation", snapshot.Model, tc.want, err)
+			}
+			update := nativeUpdate(t, `{"version":2,"connection":{"protocol":"openai","url":"`+endpoint.URL+`"},"models":{"chat":"hand-entered","translation":"`+tc.failed+`"}}`)
+			manual, err := s.saveNativeAIConfig(update)
+			if err != nil {
+				t.Fatal(err)
+			}
+			for role, want := range map[modelTask]string{taskChat: "hand-entered", taskTranslation: tc.failed} {
+				snap, err := s.resolveNativeTask(t.Context(), manual, role)
+				if err != nil || snap.Model != want {
+					t.Fatal("explicit model was replaced", snap.Model, want, err)
+				}
+			}
+		})
+	}
+}
