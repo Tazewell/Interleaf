@@ -1466,3 +1466,128 @@ it("renders every repeated Latin and Chinese glyph across pages against the orig
   expect(ratios.length).toBeGreaterThan(50);
   expect(ratios.filter((r) => r.ratio < 0.8 || r.ratio > 1.2)).toEqual([]);
 }, 30000);
+it("protects a line-end Latin operand separately from its next-line equation and preserves both crops", async () => {
+  const f = await fixture(),
+    doc = await PDFDocument.create(),
+    font = await doc.embedFont(StandardFonts.TimesRoman),
+    p = doc.addPage([360, 220]);
+  const first = "The inline formula a",
+    second = "= b + c remains visible";
+  p.drawText(first, { x: 24, y: 164, size: 12, font });
+  p.drawText(second, { x: 24, y: 146, size: 12, font });
+  const bytes = await doc.save();
+  await writeFile(f.input, bytes);
+  await writeFile(
+    f.layout,
+    JSON.stringify({
+      schemaVersion: 1,
+      inputSHA256: createHash("sha256").update(bytes).digest("hex"),
+      pages: 1,
+      blocks: [
+        {
+          id: "body",
+          page: 1,
+          label: "text",
+          bounds: { x: 0.05, y: 0.2, width: 0.9, height: 0.4 },
+        },
+      ],
+    }),
+  );
+  const prepared = await prepareNativePDF(f),
+    para = prepared.pages[0].paragraphs[0];
+  expect(para.source).not.toMatch(/\ba\b/);
+  expect(para.formulas).toHaveLength(2);
+  expect(para.formulas[0].bounds.x).toBeCloseTo(
+    24 + font.widthOfTextAtSize("The inline formula ", 12),
+    3,
+  );
+  expect(para.formulas[0].bounds.width).toBeCloseTo(
+    font.widthOfTextAtSize("a", 12),
+    3,
+  );
+  expect(para.formulas[1].bounds.x).toBe(24);
+  expect(para.formulas[0].bounds.y).toBeLessThan(para.formulas[1].bounds.y);
+  const output = join(f.dir, "wrapped-equation.pdf"),
+    target = "跨行公式 {v0} {v1} 保持完整";
+  await renderNativePDF({
+    ...f,
+    prepared,
+    targets: { [para.id]: target },
+    output,
+    layout: "alternating",
+  });
+  const { font: targetFont } = await loadFont(await PDFDocument.create()),
+    fit = fitParagraph(para, target, targetFont),
+    tasks = [await openPDF(f.input), await openPDF(output)],
+    images: SKRSContext2D[] = [];
+  try {
+    const { createCanvas } = await import("@napi-rs/canvas"),
+      scale = 300 / 72;
+    for (let i = 0; i < 2; i++) {
+      const page = await (await tasks[i].promise).getPage(i ? 2 : 1),
+        canvas = createCanvas(1500, 917);
+      await page.render({
+        canvas: canvas as unknown as HTMLCanvasElement,
+        viewport: page.getViewport({ scale }),
+        background: "white",
+      }).promise;
+      images.push(canvas.getContext("2d"));
+    }
+    for (let i = 0; i < 2; i++) {
+      const original = para.formulas[i].bounds,
+        restored = fit.runs.filter((r) => r.kind === "formula")[i],
+        ink = (
+          context: SKRSContext2D,
+          b: { x: number; y: number; width: number; height: number },
+        ) =>
+          context
+            .getImageData(
+              Math.ceil(b.x * scale),
+              Math.ceil(b.y * scale),
+              Math.floor(b.width * scale) - 1,
+              Math.floor(b.height * scale) - 1,
+            )
+            .data.filter((v, n) => n % 4 === 0 && v < 128).length,
+        before = ink(images[0], original),
+        after = ink(images[1], restored);
+      expect(before).toBeGreaterThan(30);
+      expect(after / before).toBeGreaterThan(0.85);
+      expect(after / before).toBeLessThan(1.15);
+    }
+  } finally {
+    for (const t of tasks) await t.destroy();
+  }
+}, 30000);
+it.each([
+  { first: "The inline formula a b", x: 24 },
+  { first: "The inline formula a", x: 180 },
+])(
+  "rejects a wrapped operand with ambiguous candidates or a different column: $first / $x",
+  async ({ first, x }) => {
+    const f = await fixture(),
+      doc = await PDFDocument.create(),
+      font = await doc.embedFont(StandardFonts.TimesRoman),
+      p = doc.addPage([360, 220]);
+    p.drawText(first, { x: 24, y: 164, size: 12, font });
+    p.drawText("= b + c remains", { x, y: 146, size: 12, font });
+    const bytes = await doc.save();
+    await writeFile(f.input, bytes);
+    await writeFile(
+      f.layout,
+      JSON.stringify({
+        schemaVersion: 1,
+        inputSHA256: createHash("sha256").update(bytes).digest("hex"),
+        pages: 1,
+        blocks: [
+          {
+            id: "body",
+            page: 1,
+            label: "text",
+            bounds: { x: 0.05, y: 0.2, width: 0.9, height: 0.4 },
+          },
+        ],
+      }),
+    );
+    await expect(prepareNativePDF(f)).rejects.toThrow(/跨行公式.*无法唯一证明/);
+  },
+);

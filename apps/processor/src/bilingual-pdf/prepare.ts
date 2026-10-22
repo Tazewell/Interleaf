@@ -162,6 +162,10 @@ export async function prepareNativePDF({
         OPS,
       );
       const spans: SourceSpan[] = [];
+      const sourceGlyphs = new WeakMap<
+        SourceSpan,
+        () => ReturnType<typeof locateGlyphs>
+      >();
       for (const item of content.items) {
         if (!("str" in item) || !item.str.trim()) continue;
         const t = Util.transform(viewport.transform, item.transform);
@@ -208,12 +212,14 @@ export async function prepareNativePDF({
           ),
         ];
         if (!inlineRegions.length && (mathFont || !matches.length)) {
-          spans.push({
+          const span = {
             text: item.str,
             bounds,
             fontSize: size,
             math: mathFont,
-          });
+          };
+          spans.push(span);
+          sourceGlyphs.set(span, () => locateGlyphs(item, bounds, t[5]));
         } else {
           const glyphs = locateGlyphs(item, bounds, t[5]);
           let previousEnd = 0,
@@ -579,6 +585,97 @@ export async function prepareNativePDF({
               `第 ${number} 页公式跨文字项的操作数关联无法唯一证明`,
             );
           operand.math = true;
+        }
+        // A wrapped equation has two separate crops, never a rectangle spanning
+        // intervening prose. Associate only the previous line's isolated final
+        // operand with a relation at the start of the immediately following line.
+        for (let i = 1; i < owned.length; i++) {
+          const next = owned[i],
+            previous = owned[i - 1];
+          if (!next.math || !/^\s*[=≤≥≠±×÷]/u.test(next.text) || previous.math)
+            continue;
+          const step = next.bounds.y - previous.bounds.y,
+            em = Math.max(previous.fontSize, next.fontSize);
+          if (step < em * 0.6) continue; // Same-line association is handled above.
+          const suffix = /(?:^|\s)([A-Za-z])\s*$/.exec(previous.text);
+          if (!suffix) continue;
+          const fail = () => {
+            throw new Error(`第 ${number} 页跨行公式的操作数关联无法唯一证明`);
+          };
+          const sameLine = (a: SourceSpan, b: SourceSpan) =>
+              Math.abs(a.bounds.y - b.bounds.y) <
+              Math.max(a.fontSize, b.fontSize) * 0.5,
+            previousLine = owned.filter((s) => sameLine(s, previous)),
+            lineLeft = Math.min(...previousLine.map((s) => s.bounds.x));
+          if (
+            step > em * 1.8 ||
+            Math.abs(lineLeft - next.bounds.x) > em * 0.7 ||
+            owned.some(
+              (s) =>
+                s !== previous &&
+                sameLine(s, previous) &&
+                s.bounds.x + s.bounds.width >
+                  previous.bounds.x + previous.bounds.width + 0.01,
+            ) ||
+            owned.some(
+              (s) =>
+                s !== next &&
+                sameLine(s, next) &&
+                s.bounds.x < next.bounds.x - 0.01,
+            ) ||
+            blocks.some(
+              (b) =>
+                !translatable.has(b.label) &&
+                b.id !== next.formulaRegionId &&
+                b.bounds.y < next.bounds.y &&
+                b.bounds.y + b.bounds.height >
+                  previous.bounds.y + previous.bounds.height &&
+                b.bounds.x < block.bounds.x + block.bounds.width &&
+                b.bounds.x + b.bounds.width > block.bounds.x,
+            )
+          )
+            fail();
+          const index = previous.text.trimEnd().length - 1;
+          // More than one isolated Latin candidate at the line end is ambiguous.
+          if (/(?:^|\s)[A-Za-z]\s+$/.test(previous.text.slice(0, index)))
+            fail();
+          const locate = sourceGlyphs.get(previous);
+          if (!locate) fail();
+          const glyphs = locate!(),
+            tail = glyphs.filter((g) => g.start >= index && g.end <= index + 1);
+          if (
+            tail.length !== 1 ||
+            tail[0].start !== index ||
+            tail[0].end !== index + 1 ||
+            glyphs.some((g) => g.start < index && g.end > index)
+          )
+            fail();
+          const g = tail[0],
+            operand: SourceSpan = {
+              text: previous.text.slice(index),
+              fontSize: previous.fontSize,
+              math: true,
+              bounds: { ...previous.bounds, x: g.x, width: g.endX - g.x },
+            };
+          if (
+            operand.bounds.width <= 0 ||
+            spans.some(
+              (s) => s !== previous && overlap(s.bounds, operand.bounds) > 0.01,
+            )
+          )
+            fail();
+          if (!previous.text.slice(0, index).trim()) previous.math = true;
+          else {
+            previous.text = previous.text.slice(0, index);
+            previous.bounds = {
+              ...previous.bounds,
+              width: g.x - previous.bounds.x,
+            };
+            owned.splice(i, 0, operand);
+            spans.push(operand);
+            assigned.add(operand);
+            i++;
+          }
         }
         const protectedText = protectFormulas(owned);
         if (block.sourceAssetId) protectedText.originalSource = block.caption!;
