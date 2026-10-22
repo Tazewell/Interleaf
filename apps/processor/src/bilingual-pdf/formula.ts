@@ -8,6 +8,7 @@ export interface SourceSpan {
   bounds: NativePDFBounds;
   fontSize: number;
   math: boolean;
+  formulaRegionId?: string;
 }
 export function unionBounds(
   a: NativePDFBounds,

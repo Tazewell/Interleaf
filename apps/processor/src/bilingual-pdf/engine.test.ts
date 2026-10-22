@@ -1,4 +1,4 @@
-import { afterEach, expect, it } from "vitest";
+import { afterEach, expect, it, vi } from "vitest";
 import type { SKRSContext2D } from "@napi-rs/canvas";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -22,8 +22,488 @@ import { openPDF, loadFont } from "./runtime";
 
 const dirs: string[] = [];
 afterEach(async () => {
+  vi.restoreAllMocks();
   for (const d of dirs.splice(0)) await rm(d, { recursive: true, force: true });
 });
+it("uses per-position TJ/Tc/Tw/Tz geometry for a mixed item's formula crop and restored ink", async () => {
+  const f = await fixture(),
+    doc = await PDFDocument.create(),
+    font = await doc.embedFont(StandardFonts.Helvetica),
+    p = doc.addPage([300, 200]);
+  p.node.set(
+    PDFName.of("Resources"),
+    doc.context.obj({ Font: { F1: font.ref } }),
+  );
+  p.node.set(
+    PDFName.of("Contents"),
+    doc.context.register(
+      doc.context.flateStream(
+        "BT /F1 12 Tf 1 Tc 2 Tw 125 Tz 1 0 0 1 20 140 Tm [(Prefix a) -120 (=b) -50 ( suffix)] TJ ET",
+      ),
+    ),
+  );
+  const bytes = await doc.save();
+  await writeFile(f.input, bytes);
+  await writeFile(
+    f.layout,
+    JSON.stringify({
+      schemaVersion: 1,
+      inputSHA256: createHash("sha256").update(bytes).digest("hex"),
+      pages: 1,
+      blocks: [
+        {
+          id: "body",
+          page: 1,
+          label: "text",
+          bounds: { x: 0.02, y: 0.15, width: 0.96, height: 0.5 },
+        },
+      ],
+    }),
+  );
+  const prepared = await prepareNativePDF(f),
+    para = prepared.pages[0].paragraphs[0],
+    formula = para.formulas[0];
+  const expectedX = 20 + (font.widthOfTextAtSize("Prefix ", 12) + 7 + 2) * 1.25;
+  const expectedWidth = (font.widthOfTextAtSize("a=b", 12) + 2 + 1.44) * 1.25;
+  expect(para.formulas).toHaveLength(1);
+  expect(formula.bounds.x).toBeCloseTo(expectedX, 3);
+  expect(formula.bounds.width).toBeCloseTo(expectedWidth, 3);
+  const output = join(f.dir, "tj.pdf"),
+    target = "测试 {v0} 完成";
+  await renderNativePDF({
+    ...f,
+    prepared,
+    targets: { [para.id]: target },
+    output,
+    layout: "alternating",
+  });
+  const { font: targetFont } = await loadFont(await PDFDocument.create()),
+    run = fitParagraph(para, target, targetFont).runs.find(
+      (r) => r.kind === "formula",
+    )!;
+  const tasks = [await openPDF(f.input), await openPDF(output)],
+    ink = [];
+  try {
+    const { createCanvas } = await import("@napi-rs/canvas"),
+      scale = 300 / 72;
+    for (let i = 0; i < 2; i++) {
+      const page = await (await tasks[i].promise).getPage(i ? 2 : 1),
+        canvas = createCanvas(1250, 834);
+      await page.render({
+        canvas: canvas as unknown as HTMLCanvasElement,
+        viewport: page.getViewport({ scale }),
+        background: "white",
+      }).promise;
+      const b = i ? run : formula.bounds,
+        pixels = canvas
+          .getContext("2d")
+          .getImageData(
+            Math.ceil(b.x * scale),
+            Math.ceil(b.y * scale),
+            Math.floor(b.width * scale) - 1,
+            Math.floor(b.height * scale) - 1,
+          ).data;
+      ink.push(pixels.filter((v, n) => n % 4 !== 3 && v < 128).length);
+    }
+    expect(ink[0]).toBeGreaterThan(300);
+    expect(ink[1] / ink[0]).toBeGreaterThan(0.9);
+    expect(ink[1] / ink[0]).toBeLessThan(1.1);
+  } finally {
+    for (const t of tasks) await t.destroy();
+  }
+}, 30000);
+it("retains a mixed TextItem's nonuniform TJ offsets instead of distributing total width", async () => {
+  const f = await fixture(),
+    doc = await PDFDocument.create(),
+    font = await doc.embedFont(StandardFonts.Helvetica),
+    p = doc.addPage([300, 200]);
+  p.node.set(
+    PDFName.of("Resources"),
+    doc.context.obj({ Font: { F1: font.ref } }),
+  );
+  p.node.set(
+    PDFName.of("Contents"),
+    doc.context.register(
+      doc.context.flateStream(
+        "BT /F1 12 Tf 0 Tc 0 Tw 100 Tz 1 0 0 1 20 140 Tm [(Prefix a) -100 (=b) 80 ( suffix)] TJ ET",
+      ),
+    ),
+  );
+  const bytes = await doc.save();
+  await writeFile(f.input, bytes);
+  await writeFile(
+    f.layout,
+    JSON.stringify({
+      schemaVersion: 1,
+      inputSHA256: createHash("sha256").update(bytes).digest("hex"),
+      pages: 1,
+      blocks: [
+        {
+          id: "body",
+          page: 1,
+          label: "text",
+          bounds: { x: 0.02, y: 0.15, width: 0.96, height: 0.5 },
+        },
+      ],
+    }),
+  );
+  const prepared = await prepareNativePDF(f),
+    para = prepared.pages[0].paragraphs[0],
+    formula = para.formulas[0];
+  const expectedX = 20 + font.widthOfTextAtSize("Prefix ", 12);
+  const expectedWidth = font.widthOfTextAtSize("a=b", 12) + 1.2;
+  expect(para.formulas).toHaveLength(1);
+  expect(formula.bounds.x).toBeCloseTo(expectedX, 3);
+  expect(formula.bounds.width).toBeCloseTo(expectedWidth, 3);
+  const output = join(f.dir, "tj.pdf"),
+    target = "测试 {v0} 完成";
+  await renderNativePDF({
+    ...f,
+    prepared,
+    targets: { [para.id]: target },
+    output,
+    layout: "alternating",
+  });
+  const { font: targetFont } = await loadFont(await PDFDocument.create()),
+    run = fitParagraph(para, target, targetFont).runs.find(
+      (r) => r.kind === "formula",
+    )!;
+  const tasks = [await openPDF(f.input), await openPDF(output)],
+    ink = [];
+  try {
+    const { createCanvas } = await import("@napi-rs/canvas"),
+      scale = 300 / 72;
+    for (let i = 0; i < 2; i++) {
+      const page = await (await tasks[i].promise).getPage(i ? 2 : 1),
+        canvas = createCanvas(1250, 834);
+      await page.render({
+        canvas: canvas as unknown as HTMLCanvasElement,
+        viewport: page.getViewport({ scale }),
+        background: "white",
+      }).promise;
+      const b = i ? run : formula.bounds,
+        pixels = canvas
+          .getContext("2d")
+          .getImageData(
+            Math.ceil(b.x * scale),
+            Math.ceil(b.y * scale),
+            Math.floor(b.width * scale) - 1,
+            Math.floor(b.height * scale) - 1,
+          ).data;
+      ink.push(pixels.filter((v, n) => n % 4 !== 3 && v < 128).length);
+    }
+    expect(ink[0]).toBeGreaterThan(300);
+    expect(ink[1] / ink[0]).toBeGreaterThan(0.9);
+    expect(ink[1] / ink[0]).toBeLessThan(1.1);
+  } finally {
+    for (const t of tasks) await t.destroy();
+  }
+}, 30000);
+it("embeds and releases every decoded raster before advancing pages without flushing evolving font subsets", async () => {
+  const f = await fixture(),
+    doc = await PDFDocument.create(),
+    font = await doc.embedFont(StandardFonts.Helvetica),
+    blocks = [];
+  for (let page = 1; page <= 6; page++) {
+    doc
+      .addPage([360, 360])
+      .drawText("Body a=b", { x: 20, y: 300, size: 12, font });
+    blocks.push({
+      id: "b" + page,
+      page,
+      label: "text",
+      bounds: { x: 0.03, y: 0.1, width: 0.9, height: 0.3 },
+    });
+  }
+  const bytes = await doc.save();
+  await writeFile(f.input, bytes);
+  await writeFile(
+    f.layout,
+    JSON.stringify({
+      schemaVersion: 1,
+      inputSHA256: createHash("sha256").update(bytes).digest("hex"),
+      pages: 6,
+      blocks,
+    }),
+  );
+  const prepared = await prepareNativePDF(f),
+    images: object[] = [],
+    retained: number[] = [],
+    fontSubsets: number[] = [],
+    original = PDFDocument.prototype.embedPng;
+  let outputDoc: PDFDocument | undefined;
+  // Observe the actual pinned PDF-LIB decoder ownership; preserve every real call.
+  vi.spyOn(PDFDocument.prototype, "embedPng").mockImplementation(
+    async function (this: PDFDocument, ...args) {
+      outputDoc = this;
+      const image = await original.apply(this, args);
+      images.push(image);
+      return image;
+    },
+  );
+  const targets = Object.fromEntries(
+    prepared.pages.map((p, i) => [
+      p.paragraphs[0].id,
+      "字形" +
+        "一二三四五六"[i] +
+        " " +
+        p.paragraphs[0].formulas.map((f) => f.token).join(" "),
+    ]),
+  );
+  const output = join(f.dir, "bounded.pdf");
+  await renderNativePDF(
+    { ...f, prepared, targets, output, layout: "alternating" },
+    (event) => {
+      if (event.stage === "composing") {
+        retained.push(
+          images.reduce(
+            (sum, image) =>
+              sum +
+              ((image as { embedder?: { image?: { rgbChannel?: Uint8Array } } })
+                .embedder?.image?.rgbChannel?.byteLength ?? 0),
+            0,
+          ),
+        );
+        fontSubsets.push(
+          outputDoc!.context
+            .enumerateIndirectObjects()
+            .filter(([, o]) => o.toString().includes("/FontFile2")).length,
+        );
+      }
+    },
+  );
+  expect(retained).toHaveLength(6);
+  expect(Math.max(...retained)).toBe(0);
+  expect(fontSubsets).toEqual([0, 0, 0, 0, 0, 0]);
+  const task = await openPDF(output);
+  try {
+    const pdf = await task.promise;
+    for (let i = 0; i < 6; i++) {
+      const page = await pdf.getPage(i * 2 + 2);
+      expect(
+        (await page.getTextContent()).items
+          .map((t) => ("str" in t ? t.str : ""))
+          .join(""),
+      ).toContain("字形" + "一二三四五六"[i]);
+    }
+  } finally {
+    await task.destroy();
+  }
+}, 30000);
+it("extends a clipped inline detector to the full superscript glyph outer bounds", async () => {
+  const f = await fixture(),
+    doc = await PDFDocument.create(),
+    font = await doc.embedFont(StandardFonts.Helvetica),
+    p = doc.addPage([240, 200]);
+  p.drawText("We use", { x: 20, y: 140, size: 12, font });
+  p.drawText("x", { x: 80, y: 140, size: 12, font });
+  p.drawText("2", { x: 86, y: 148, size: 7, font });
+  p.drawText("here.", { x: 100, y: 140, size: 12, font });
+  const bytes = await doc.save();
+  await writeFile(f.input, bytes);
+  await writeFile(
+    f.layout,
+    JSON.stringify({
+      schemaVersion: 1,
+      inputSHA256: createHash("sha256").update(bytes).digest("hex"),
+      pages: 1,
+      blocks: [
+        {
+          id: "body",
+          page: 1,
+          label: "text",
+          bounds: { x: 0.03, y: 0.2, width: 0.9, height: 0.4 },
+        },
+        {
+          id: "math",
+          page: 1,
+          label: "inline_formula",
+          bounds: {
+            x: 79 / 240,
+            y: 48 / 200,
+            width: 15 / 240,
+            height: 20 / 200,
+          },
+        },
+      ],
+    }),
+  );
+  const prepared = await prepareNativePDF(f),
+    para = prepared.pages[0].paragraphs[0];
+  expect(para.formulas).toHaveLength(1);
+  expect(para.formulas[0].bounds.y).toBeLessThan(46.5);
+  expect(para.source).not.toContain("2");
+  const output = join(f.dir, "superscript.pdf");
+  await renderNativePDF({
+    ...f,
+    prepared,
+    targets: { [para.id]: "测试 {v0} 完成" },
+    output,
+    layout: "alternating",
+  });
+  const { font: targetFont } = await loadFont(await PDFDocument.create()),
+    run = fitParagraph(para, "测试 {v0} 完成", targetFont).runs.find(
+      (r) => r.kind === "formula",
+    )!;
+  const tasks = [await openPDF(f.input), await openPDF(output)],
+    ink = [];
+  try {
+    const { createCanvas } = await import("@napi-rs/canvas"),
+      scale = 300 / 72;
+    for (let i = 0; i < 2; i++) {
+      const page = await (await tasks[i].promise).getPage(i ? 2 : 1),
+        canvas = createCanvas(1000, 834);
+      await page.render({
+        canvas: canvas as unknown as HTMLCanvasElement,
+        viewport: page.getViewport({ scale }),
+        background: "white",
+      }).promise;
+      const b = i ? run : para.formulas[0].bounds,
+        pixels = canvas
+          .getContext("2d")
+          .getImageData(
+            Math.ceil(b.x * scale),
+            Math.ceil(b.y * scale),
+            Math.floor(b.width * scale) - 1,
+            Math.floor(6 * scale),
+          ).data;
+      ink.push(pixels.filter((v, n) => n % 4 !== 3 && v < 128).length);
+    }
+    expect(ink[0]).toBeGreaterThan(40);
+    expect(ink[1] / ink[0]).toBeGreaterThan(0.8);
+    expect(ink[1] / ink[0]).toBeLessThan(1.15);
+  } finally {
+    for (const t of tasks) await t.destroy();
+  }
+}, 30000);
+it("rejects an unowned inline formula partly intersecting a body erase rectangle", async () => {
+  const f = await fixture(),
+    doc = await PDFDocument.create(),
+    font = await doc.embedFont(StandardFonts.Helvetica),
+    p = doc.addPage([240, 200]);
+  p.drawText("Body", { x: 20, y: 140, size: 12, font });
+  p.drawText("a=b", { x: 110, y: 140, size: 12, font });
+  const bytes = await doc.save();
+  await writeFile(f.input, bytes);
+  await writeFile(
+    f.layout,
+    JSON.stringify({
+      schemaVersion: 1,
+      inputSHA256: createHash("sha256").update(bytes).digest("hex"),
+      pages: 1,
+      blocks: [
+        {
+          id: "body",
+          page: 1,
+          label: "text",
+          bounds: {
+            x: 15 / 240,
+            y: 40 / 200,
+            width: 103 / 240,
+            height: 40 / 200,
+          },
+        },
+        {
+          id: "unowned",
+          page: 1,
+          label: "inline_formula",
+          bounds: {
+            x: 109 / 240,
+            y: 48 / 200,
+            width: 30 / 240,
+            height: 25 / 200,
+          },
+        },
+      ],
+    }),
+  );
+  await expect(prepareNativePDF(f)).rejects.toThrow(/公式.*归属|公式.*重叠/);
+});
+it("rejects a large-TJ equation whose left operand was split into an ambiguous body TextItem", async () => {
+  const f = await fixture(),
+    doc = await PDFDocument.create(),
+    font = await doc.embedFont(StandardFonts.Helvetica),
+    p = doc.addPage([300, 200]);
+  p.node.set(
+    PDFName.of("Resources"),
+    doc.context.obj({ Font: { F1: font.ref } }),
+  );
+  p.node.set(
+    PDFName.of("Contents"),
+    doc.context.register(
+      doc.context.flateStream(
+        "BT /F1 12 Tf 1 Tc 2 Tw 125 Tz 1 0 0 1 20 140 Tm [(Prefix a) -800 (=b) -250 ( suffix)] TJ ET",
+      ),
+    ),
+  );
+  const bytes = await doc.save();
+  await writeFile(f.input, bytes);
+  await writeFile(
+    f.layout,
+    JSON.stringify({
+      schemaVersion: 1,
+      inputSHA256: createHash("sha256").update(bytes).digest("hex"),
+      pages: 1,
+      blocks: [
+        {
+          id: "body",
+          page: 1,
+          label: "text",
+          bounds: { x: 0.02, y: 0.15, width: 0.96, height: 0.5 },
+        },
+      ],
+    }),
+  );
+  await expect(prepareNativePDF(f)).rejects.toThrow(/公式.*文字项.*关联/);
+});
+it("groups a unique adjacent isolated Latin operand from a separate TextItem in the same body block", async () => {
+  const f = await fixture(),
+    doc = await PDFDocument.create(),
+    font = await doc.embedFont(StandardFonts.Helvetica),
+    p = doc.addPage([240, 200]);
+  p.drawText("We use", { x: 20, y: 140, size: 12, font });
+  p.drawText("a", {
+    x: 80,
+    y: 140,
+    size: 12,
+    font: await doc.embedFont(StandardFonts.Courier),
+  });
+  p.drawText("= b", { x: 88, y: 140, size: 12, font });
+  p.drawText("here.", { x: 115, y: 140, size: 12, font });
+  const bytes = await doc.save();
+  await writeFile(f.input, bytes);
+  await writeFile(
+    f.layout,
+    JSON.stringify({
+      schemaVersion: 1,
+      inputSHA256: createHash("sha256").update(bytes).digest("hex"),
+      pages: 1,
+      blocks: [
+        {
+          id: "body",
+          page: 1,
+          label: "text",
+          bounds: { x: 0.03, y: 0.2, width: 0.94, height: 0.4 },
+        },
+      ],
+    }),
+  );
+  const prepared = await prepareNativePDF(f),
+    para = prepared.pages[0].paragraphs[0];
+  expect(para.formulas).toHaveLength(1);
+  expect(para.formulas[0].bounds.x).toBeCloseTo(80, 3);
+  expect(para.formulas[0].bounds.width).toBeGreaterThan(20);
+  expect(para.source).not.toMatch(/\ba\b/);
+  expect(para.source).toContain("We use");
+  expect(para.source).toContain("here.");
+  await renderNativePDF({
+    ...f,
+    prepared,
+    targets: { [para.id]: "此处使用 {v0} 。" },
+    output: join(f.dir, "isolated.pdf"),
+    layout: "alternating",
+  });
+}, 30000);
 async function fixture(rotation = 0, unit = 1) {
   const dir = await mkdtemp(join(tmpdir(), "native-pdf-"));
   dirs.push(dir);

@@ -292,6 +292,10 @@ export async function renderNativePDF(
           const background = await result.embedPng(
             canvas.toBuffer("image/png"),
           );
+          // PDF-LIB retains decoded RGB until PDFImage.embed(), even after the
+          // Canvas is released. Embed only images here; flush() would repeatedly
+          // freeze/rebuild the still evolving font subset.
+          await background.embed();
           translated.drawImage(background, {
             x: offset,
             y: p.height - canvas.height / scale,
@@ -310,7 +314,9 @@ export async function renderNativePDF(
                 });
               else {
                 const crop = formulas.get(`${paragraph.id}:${run.text}`)!;
-                translated.drawImage(await result.embedPng(crop.bytes), {
+                const image = await result.embedPng(crop.bytes);
+                await image.embed();
+                translated.drawImage(image, {
                   x: offset + run.x,
                   y: p.height - run.y - run.height,
                   width: crop.width,

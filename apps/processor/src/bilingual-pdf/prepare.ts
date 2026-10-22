@@ -12,6 +12,7 @@ import {
   type SourceSpan,
 } from "./formula";
 import { locateCaption } from "./caption";
+import { createGlyphLocator } from "./glyph-geometry";
 
 interface Block {
   id: string;
@@ -154,26 +155,12 @@ export async function prepareNativePDF({
       const content = await page.getTextContent();
       const operators = await page.getOperatorList({ annotationMode: 0 });
       const { OPS } = await import("pdfjs-dist/legacy/build/pdf.mjs");
-      const fontWidths = new Map<string, Map<string, number>>();
-      let currentFont = "";
-      for (let i = 0; i < operators.fnArray.length; i++) {
-        if (operators.fnArray[i] === OPS.setFont)
-          currentFont = operators.argsArray[i][0];
-        if (operators.fnArray[i] !== OPS.showText || !currentFont) continue;
-        let widths = fontWidths.get(currentFont);
-        if (!widths) {
-          widths = new Map();
-          fontWidths.set(currentFont, widths);
-        }
-        for (const glyph of operators.argsArray[i][0])
-          if (
-            glyph &&
-            typeof glyph === "object" &&
-            typeof glyph.unicode === "string" &&
-            Number.isFinite(glyph.width)
-          )
-            widths.set(glyph.unicode, glyph.width);
-      }
+      const locateGlyphs = createGlyphLocator(
+        page,
+        operators,
+        viewport.transform,
+        OPS,
+      );
       const spans: SourceSpan[] = [];
       for (const item of content.items) {
         if (!("str" in item) || !item.str.trim()) continue;
@@ -208,10 +195,9 @@ export async function prepareNativePDF({
           (content.styles[item.fontName]?.fontFamily ?? "") +
           " " +
           (fontObject?.name ?? "");
-        const explicit = blocks.some(
+        const inlineRegions = blocks.filter(
           (b) =>
-            b.label === "inline_formula" &&
-            overlap(bounds, b.bounds) / (bounds.width * bounds.height) > 0.5,
+            b.label === "inline_formula" && overlap(bounds, b.bounds) > 0.01,
         );
         const mathFont =
           /math|symbol|cmmi|cmsy|cmex|msam|msbm/i.test(family) ||
@@ -221,57 +207,87 @@ export async function prepareNativePDF({
             /[A-Za-z0-9α-ωΑ-Ω]+(?:[._^][A-Za-z0-9α-ωΑ-Ω]+)*\s*[=≤≥≠±×÷+*/−]\s*[A-Za-z0-9α-ωΑ-Ω]+(?:[._^][A-Za-z0-9α-ωΑ-Ω]+)*(?:\s*[+*/−-]\s*[A-Za-z0-9α-ωΑ-Ω]+)*|\S*[=∑∫√∞≤≥≠±×÷∂∇∈∉∀∃α-ωΑ-Ω⁰-⁹₀-₉]\S*/gu,
           ),
         ];
-        if (explicit || mathFont || !matches.length) {
+        if (!inlineRegions.length && (mathFont || !matches.length)) {
           spans.push({
             text: item.str,
             bounds,
             fontSize: size,
-            math: explicit || mathFont,
+            math: mathFont,
           });
         } else {
-          // PDF.js may combine body + inline math into one TextItem. Use actual
-          // glyph advances from its operator list to split without proportional
-          // character guesses that could crop neighboring Latin text.
-          const widths = fontWidths.get(item.fontName);
-          const advance = (s: string) =>
-            [...s].reduce((sum, c) => {
-              const width = widths?.get(c);
-              if (width === undefined && !/\s/u.test(c))
-                throw new Error(`第 ${number} 页公式字形宽度不可确定`);
-              return sum + (width ?? widths?.get(" ") ?? 250);
-            }, 0);
-          const total = advance(item.str);
-          const split = (start: number, end: number, math: boolean) => {
-            if (end <= start) return;
-            const text = item.str.slice(start, end),
-              left = (advance(item.str.slice(0, start)) / total) * bounds.width;
-            spans.push({
-              text,
-              fontSize: size,
-              math,
-              bounds: {
-                ...bounds,
-                x: bounds.x + left,
-                width: (advance(text) / total) * bounds.width,
-              },
-            });
-          };
-          let cursor = 0;
-          for (const m of matches) {
-            split(cursor, m.index, false);
-            split(m.index, m.index + m[0].length, true);
-            cursor = m.index + m[0].length;
+          const glyphs = locateGlyphs(item, bounds, t[5]);
+          let previousEnd = 0,
+            current: SourceSpan | undefined;
+          for (const g of glyphs) {
+            if (
+              matches.some(
+                (m) =>
+                  (g.start < m.index && g.end > m.index) ||
+                  (g.start < m.index + m[0].length &&
+                    g.end > m.index + m[0].length),
+              )
+            )
+              throw new Error(`第 ${number} 页公式边缘跨越不可拆分字形`);
+            const glyphBounds = { ...bounds, x: g.x, width: g.endX - g.x };
+            if (glyphBounds.width <= 0)
+              throw new Error(`第 ${number} 页公式字形方向无法证明`);
+            const regions = inlineRegions.filter(
+              (r) => overlap(glyphBounds, r.bounds) > 0.01,
+            );
+            if (regions.length > 1)
+              throw new Error(`第 ${number} 页公式字形归属不唯一`);
+            const region = regions[0]?.id,
+              math =
+                mathFont ||
+                !!region ||
+                matches.some(
+                  (m) => g.start >= m.index && g.end <= m.index + m[0].length,
+                );
+            if (
+              current &&
+              current.math === math &&
+              current.formulaRegionId === region
+            ) {
+              current.text += item.str.slice(previousEnd, g.end);
+              current.bounds = unionBounds(current.bounds, glyphBounds);
+            } else {
+              current = {
+                text: item.str.slice(previousEnd, g.end),
+                bounds: glyphBounds,
+                fontSize: size,
+                math,
+                formulaRegionId: region,
+              };
+              spans.push(current);
+            }
+            previousEnd = g.end;
           }
-          split(cursor, item.str.length, false);
+          if (current) current.text += item.str.slice(previousEnd);
         }
       }
       for (const region of blocks.filter((b) => b.label === "inline_formula")) {
-        const members = spans.filter(
-          (s) =>
-            overlap(s.bounds, region.bounds) /
-              (s.bounds.width * s.bounds.height) >
-            0.5,
-        );
+        const members = spans.filter((s) => s.formulaRegionId === region.id);
+        for (const member of members)
+          region.bounds = unionBounds(region.bounds, member.bounds);
+        checkBounds(region.bounds, result.width, result.height);
+        if (
+          spans.some(
+            (s) =>
+              !members.includes(s) && overlap(s.bounds, region.bounds) > 0.01,
+          )
+        )
+          throw new Error(
+            `第 ${number} 页公式 ${region.id} 扩展与未拥有字形重叠`,
+          );
+        if (
+          blocks.some(
+            (b) =>
+              b.id !== region.id &&
+              b.label === "inline_formula" &&
+              overlap(b.bounds, region.bounds) > 0.01,
+          )
+        )
+          throw new Error(`第 ${number} 页公式区域重叠，归属不明确`);
         const text =
           readingSpans(members)
             .map((s) => s.text)
@@ -284,6 +300,7 @@ export async function prepareNativePDF({
             ? Math.max(...members.map((s) => s.fontSize))
             : region.bounds.height,
           math: true,
+          formulaRegionId: region.id,
         });
       }
       for (const asset of [...blocks]) {
@@ -391,6 +408,16 @@ export async function prepareNativePDF({
         );
         for (const other of blocks) {
           if (
+            other.label === "inline_formula" &&
+            overlap(block.bounds, other.bounds) > 0.01
+          ) {
+            if (!owned.some((s) => s.formulaRegionId === other.id))
+              throw new Error(
+                `第 ${number} 页公式 ${other.id} 与段落 ${block.id} 重叠且未完整归属`,
+              );
+            continue;
+          }
+          if (
             other.id === block.id ||
             other.id === block.sourceAssetId ||
             other.label === "inline_formula" ||
@@ -458,6 +485,15 @@ export async function prepareNativePDF({
         if (owned.some((s) => assigned.has(s)))
           throw new Error(`第 ${number} 页段落重复归属`);
         owned.forEach((s) => assigned.add(s));
+        for (const s of owned)
+          if (
+            s.formulaRegionId &&
+            overlap(s.bounds, block.bounds) <
+              s.bounds.width * s.bounds.height - 0.01
+          )
+            throw new Error(
+              `第 ${number} 页公式 ${s.formulaRegionId} 未完整归属段落`,
+            );
         for (const s of owned) {
           const b = s.bounds,
             a = block.bounds,
@@ -504,6 +540,45 @@ export async function prepareNativePDF({
             }
           }
           if (!changed) break;
+        }
+        // An isolated operand in a separate TextItem may join only its unique
+        // immediate same-line math neighbor inside this already verified block.
+        for (let i = 0; i < owned.length; i++) {
+          const operand = owned[i];
+          if (operand.math || !/^[A-Za-z]$/.test(operand.text.trim())) continue;
+          const neighbors = [owned[i - 1], owned[i + 1]].filter(
+            (n, j) =>
+              n?.math &&
+              !n.formulaRegionId &&
+              (j === 0
+                ? /[=≤≥≠±×÷]\s*$/u.test(n.text)
+                : /^\s*[=≤≥≠±×÷]/u.test(n.text)) &&
+              Math.abs(n.bounds.y - operand.bounds.y) <
+                Math.max(n.fontSize, operand.fontSize) * 0.5,
+          );
+          if (!neighbors.length) continue;
+          const neighbor = neighbors[0],
+            gap = Math.max(
+              operand.bounds.x - neighbor.bounds.x - neighbor.bounds.width,
+              neighbor.bounds.x - operand.bounds.x - operand.bounds.width,
+            ),
+            joined = unionBounds(operand.bounds, neighbor.bounds);
+          const blockers = spans.some(
+            (s) =>
+              s !== operand &&
+              s !== neighbor &&
+              overlap(s.bounds, joined) > 0.01,
+          );
+          if (
+            neighbors.length !== 1 ||
+            gap < -0.01 ||
+            gap > Math.max(operand.fontSize, neighbor.fontSize) * 0.7 ||
+            blockers
+          )
+            throw new Error(
+              `第 ${number} 页公式跨文字项的操作数关联无法唯一证明`,
+            );
+          operand.math = true;
         }
         const protectedText = protectFormulas(owned);
         if (block.sourceAssetId) protectedText.originalSource = block.caption!;
