@@ -3626,3 +3626,20 @@ textarea.paper-note-input {
 .paper-list-pane {
   padding: 10px 28px 40px;
 }
+
+/* Detail panel reads as a preview first: title, byline, abstract, then metadata. */
+.paper-detail-byline {
+  margin-top: -8px;
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: var(--muted-foreground);
+}
+textarea.paper-title-input {
+  font-size: 19px;
+}
+.paper-abstract {
+  margin-top: 2px;
+}
+.paper-abstract h3 {
+  font-size: 11px;
+}

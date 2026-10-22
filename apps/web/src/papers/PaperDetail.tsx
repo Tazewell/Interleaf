@@ -61,6 +61,7 @@ import {
   formatCreators,
   itemTypeLabels,
   paperCreators,
+  paperByline,
   paperLink,
   parseCreators,
   relativeTime,
@@ -217,6 +218,7 @@ export function PaperDetail({
             }
           }}
         />
+        <p className="paper-detail-byline">{paperByline(doc)}</p>
         <Button className="paper-detail-open" onClick={() => actions.open(doc)}>
           <BookOpen />
           {percent > 1 ? `继续阅读 · ${percent}%` : "开始阅读"}
@@ -282,6 +284,35 @@ export function PaperDetail({
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
+        <section className="paper-abstract">
+          <div className="flex items-center justify-between">
+            <h3>摘要</h3>
+            <Button
+              size="xs"
+              variant="ghost"
+              onClick={() => setEditingAbstract(!editingAbstract)}
+            >
+              {editingAbstract ? "完成" : m.abstract ? "编辑" : "添加"}
+            </Button>
+          </div>
+          {editingAbstract ? (
+            <Field doc={doc} name="abstract" multiline />
+          ) : m.abstract ? (
+            <>
+              <p data-open={abstractOpen}>{m.abstract}</p>
+              {m.abstract.length > 180 && (
+                <Button
+                  size="xs"
+                  variant="link"
+                  className="px-0"
+                  onClick={() => setAbstractOpen(!abstractOpen)}
+                >
+                  {abstractOpen ? "收起" : "展开全文"}
+                </Button>
+              )}
+            </>
+          ) : null}
+        </section>
         <dl className="paper-fields">
           <dt>备注</dt>
           <dd>
@@ -399,33 +430,6 @@ export function PaperDetail({
               .join(" · ")}
           </p>
         )}
-        <section className="paper-abstract">
-          <div className="flex items-center justify-between">
-            <h3>摘要</h3>
-            <Button
-              size="xs"
-              variant="ghost"
-              onClick={() => setEditingAbstract(!editingAbstract)}
-            >
-              {editingAbstract ? "完成" : m.abstract ? "编辑" : "添加"}
-            </Button>
-          </div>
-          {editingAbstract ? (
-            <Field doc={doc} name="abstract" multiline />
-          ) : m.abstract ? (
-            <>
-              <p data-open={abstractOpen}>{m.abstract}</p>
-              <Button
-                size="xs"
-                variant="link"
-                className="px-0"
-                onClick={() => setAbstractOpen(!abstractOpen)}
-              >
-                {abstractOpen ? "收起" : "展开全文"}
-              </Button>
-            </>
-          ) : null}
-        </section>
         <RelatedPapers doc={doc} />
       </div>
     </aside>
