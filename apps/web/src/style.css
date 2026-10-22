@@ -3574,3 +3574,55 @@ textarea.paper-note-input {
     transform: translateY(0);
   }
 }
+
+/* Flat library pane: the sidebar boundary replaces the floating card. */
+.library-main {
+  margin: 0;
+  border-left: 1px solid var(--border);
+  border-radius: 0;
+  box-shadow: none;
+}
+.library-sidebar.collapsed + .library-main {
+  margin-left: 0;
+}
+
+/* Paper header: title on its own row, tools underneath. */
+.paper-library .library-topbar.paper-topbar {
+  height: auto;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: flex-start;
+  gap: 12px;
+  padding: 20px 28px 14px;
+  border-bottom: 1px solid var(--border);
+}
+.paper-topbar-title {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+.paper-topbar-title .library-title {
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: -0.015em;
+}
+.paper-topbar-tools {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.paper-topbar-tools .paper-search {
+  flex: 1;
+  width: auto;
+  max-width: 420px;
+}
+.paper-topbar-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+.paper-list-pane {
+  padding: 10px 28px 40px;
+}

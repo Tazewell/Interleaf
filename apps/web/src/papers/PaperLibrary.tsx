@@ -589,8 +589,8 @@ export function PaperLibrary({
   );
   return (
     <main className="library-main paper-library" ref={mainRef}>
-      <header className="library-topbar">
-        <div className="flex min-w-0 items-center gap-3">
+      <header className="library-topbar paper-topbar">
+        <div className="paper-topbar-title">
           <Button
             size="icon-sm"
             variant="ghost"
@@ -645,7 +645,7 @@ export function PaperLibrary({
           )}
         </div>
         {view !== "trash" && (
-          <div className="flex items-center gap-2">
+          <div className="paper-topbar-tools">
             <div className="search-field paper-search">
               <Search className="size-4" />
               <Input
@@ -656,57 +656,59 @@ export function PaperLibrary({
                 onChange={(e) => ui.setQuery(e.target.value)}
               />
             </div>
-            <Select
-              value={sort}
-              onValueChange={(value) => {
-                if (value)
+            <div className="paper-topbar-controls">
+              <Select
+                value={sort}
+                onValueChange={(value) => {
+                  if (value)
+                    void savePaperPreferences((p) => ({
+                      ...p,
+                      sort: value as PaperSort,
+                      sortReverse: false,
+                    }));
+                }}
+              >
+                <SelectTrigger size="sm" aria-label="排序">
+                  <SelectValue>{sortLabels[sort]}</SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  {(Object.keys(sortLabels) as PaperSort[]).map((key) => (
+                    <SelectItem key={key} value={key}>
+                      {sortLabels[key]}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {table && <PaperColumns controls={columnControls} />}
+              <Tabs
+                value={prefs.layout || "list"}
+                onValueChange={(value) =>
                   void savePaperPreferences((p) => ({
                     ...p,
-                    sort: value as PaperSort,
-                    sortReverse: false,
-                  }));
-              }}
-            >
-              <SelectTrigger size="sm" aria-label="排序">
-                <SelectValue>{sortLabels[sort]}</SelectValue>
-              </SelectTrigger>
-              <SelectContent>
-                {(Object.keys(sortLabels) as PaperSort[]).map((key) => (
-                  <SelectItem key={key} value={key}>
-                    {sortLabels[key]}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            {table && <PaperColumns controls={columnControls} />}
-            <Tabs
-              value={prefs.layout || "list"}
-              onValueChange={(value) =>
-                void savePaperPreferences((p) => ({
-                  ...p,
-                  layout: value as "list" | "table",
-                }))
-              }
-            >
-              <TabsList aria-label="显示方式">
-                <TabsTrigger value="table" aria-label="表格" title="表格">
-                  <Table2 />
-                </TabsTrigger>
-                <TabsTrigger value="list" aria-label="列表" title="列表">
-                  <List />
-                </TabsTrigger>
-              </TabsList>
-            </Tabs>
-            <Button
-              size="sm"
-              variant={picking ? "secondary" : "outline"}
-              aria-pressed={picking}
-              disabled={!visible.length && !picking}
-              onClick={() => (picking ? ui.stopPicking() : ui.startPicking())}
-            >
-              {picking ? <Check /> : <CheckSquare />}
-              {picking ? "完成" : "批量"}
-            </Button>
+                    layout: value as "list" | "table",
+                  }))
+                }
+              >
+                <TabsList aria-label="显示方式">
+                  <TabsTrigger value="table" aria-label="表格" title="表格">
+                    <Table2 />
+                  </TabsTrigger>
+                  <TabsTrigger value="list" aria-label="列表" title="列表">
+                    <List />
+                  </TabsTrigger>
+                </TabsList>
+              </Tabs>
+              <Button
+                size="sm"
+                variant={picking ? "secondary" : "outline"}
+                aria-pressed={picking}
+                disabled={!visible.length && !picking}
+                onClick={() => (picking ? ui.stopPicking() : ui.startPicking())}
+              >
+                {picking ? <Check /> : <CheckSquare />}
+                {picking ? "完成" : "批量"}
+              </Button>
+            </div>
           </div>
         )}
       </header>
