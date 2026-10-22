@@ -43,6 +43,56 @@ func paperBibExport(t *testing.T, s *Server, ids []string, mode string) string {
 	return v.Text
 }
 
+func TestPaperBibTypeChangeMovesUneditedVenueExpression(t *testing.T) {
+	for _, tc := range []struct{ name, kind, field, itemType, wantKind string }{
+		{"conference to journal", "inproceedings", "booktitle", "journal", "article"},
+		{"chapter to journal", "incollection", "booktitle", "journal", "article"},
+		{"journal to conference", "article", "journal", "conference", "inproceedings"},
+		{"journal to chapter", "article", "journal", "chapter", "incollection"},
+		{"journaltitle to conference", "article", "journaltitle", "conference", "inproceedings"},
+		{"journaltitle to chapter", "article", "journaltitle", "chapter", "incollection"},
+	} {
+		for _, mode := range []string{"bibtex", "biblatex"} {
+			t.Run(tc.name+"/"+mode, func(t *testing.T) {
+				s := testServer(t)
+				const expression = `venue # { on {GPU} and {\LaTeX}}`
+				text := `@string{venue={Systems Review}} @` + tc.kind + `{TypeChange,title={A Study},author={Doe, Jane},year={2024},` + tc.field + `=` + expression + `,custom={Keep {\TeX} and {Case}}}`
+				p := paperBibImport(t, s, text, []map[string]any{{"index": 0, "action": "create"}})[0]
+				// Exporting without edits must retain the original expression too.
+				unedited := paperBibExport(t, s, []string{p.ID}, mode)
+				if !strings.Contains(unedited, " = "+expression) || !strings.Contains(unedited, `custom = {Keep {\TeX} and {Case}}`) {
+					t.Fatalf("unedited raw fields changed: %s", unedited)
+				}
+				paperCall(t, s, "PATCH", "/api/papers/"+p.ID, `{"metadata":{"itemType":"`+tc.itemType+`"}}`, 200)
+				out := paperBibExport(t, s, []string{p.ID}, mode)
+				db, err := bibliography.Parse(out)
+				if err != nil || len(db.Entries) != 1 {
+					t.Fatalf("parse export: %v: %s", err, out)
+				}
+				e := db.Entries[0]
+				wantField := "booktitle"
+				if tc.itemType == "journal" {
+					wantField = "journal"
+					if mode == "biblatex" {
+						wantField = "journaltitle"
+					}
+				}
+				if e.Type != tc.wantKind || bibGet(e, wantField) != expression {
+					t.Fatalf("type change lost venue destination or raw expression: %s", out)
+				}
+				for _, field := range []string{"journal", "journaltitle", "booktitle"} {
+					if field != wantField && bibGet(e, field) != "" {
+						t.Fatalf("stale venue field %s: %s", field, out)
+					}
+				}
+				if value, err := db.Value(e, wantField); err != nil || value != p.Metadata.Venue || bibGet(e, "custom") != `{Keep {\TeX} and {Case}}` {
+					t.Fatalf("venue macro or unknown field changed: %v: %s", err, out)
+				}
+			})
+		}
+	}
+}
+
 func TestPaperBibRoundTripSubsetAndRenamedParent(t *testing.T) {
 	s := testServer(t)
 	const src = `@string{conf="International " # {Conference}}

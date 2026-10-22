@@ -335,13 +335,27 @@ func bibEntry(p PaperItem, record paperBibRecord, hasRaw bool, mode string) bibl
 	if mode == "biblatex" && venue == "journal" {
 		venue = "journaltitle"
 	}
-	if !hasRaw || p.Metadata.Venue != base.Metadata.Venue {
+	baseBookVenue := base.Metadata.ItemType == "conference" || base.Metadata.ItemType == "chapter"
+	if !hasRaw || p.Metadata.Venue != base.Metadata.Venue || (venue == "booktitle") != baseBookVenue {
+		value := ""
+		if p.Metadata.Venue != "" {
+			value = bibLiteral(p.Metadata.Venue)
+			if hasRaw && p.Metadata.Venue == base.Metadata.Venue {
+				// Match bibMapped's precedence while moving the original TeX or
+				// macro expression to the field required by the corrected type.
+				for _, name := range []string{"journal", "journaltitle", "booktitle"} {
+					if raw := bibGet(e, name); raw != "" {
+						if resolved, _ := record.Context.Value(e, name); resolved != "" {
+							value = raw
+						}
+					}
+				}
+			}
+		}
 		for _, name := range []string{"journal", "journaltitle", "booktitle"} {
 			bibSet(&e, name, "")
 		}
-		if p.Metadata.Venue != "" {
-			bibSet(&e, venue, bibLiteral(p.Metadata.Venue))
-		}
+		bibSet(&e, venue, value)
 	} else if venue == "journaltitle" && bibGet(e, "journaltitle") == "" && bibGet(e, "journal") != "" {
 		bibSet(&e, "journaltitle", bibGet(e, "journal"))
 		bibSet(&e, "journal", "")
