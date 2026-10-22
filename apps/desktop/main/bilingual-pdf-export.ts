@@ -67,7 +67,11 @@ async function regularTarget(path: string) {
 export class BilingualPDFSaveService {
   private operations = new Map<
     string,
-    { abort: AbortController; download?: Promise<unknown> }
+    {
+      abort: AbortController;
+      initialReady?: Promise<unknown>;
+      download?: Promise<unknown>;
+    }
   >();
   private cancelled = new Map<string, number>();
   private stopped = false;
@@ -101,13 +105,16 @@ export class BilingualPDFSaveService {
     operation?.abort.abort();
     // Native pickers cannot be closed portably. Invalidate them immediately;
     // wait only for owned I/O, whose AbortSignal is under our control.
-    await operation?.download?.catch(() => {});
+    await Promise.allSettled([operation?.initialReady, operation?.download]);
   }
   async stop() {
     this.stopped = true;
     for (const operation of this.operations.values()) operation.abort.abort();
     await Promise.allSettled(
-      [...this.operations.values()].map((op) => op.download),
+      [...this.operations.values()].flatMap((op) => [
+        op.initialReady,
+        op.download,
+      ]),
     );
   }
   async save(
@@ -127,6 +134,7 @@ export class BilingualPDFSaveService {
       return { saved: false };
     const operation = {
       abort: new AbortController(),
+      initialReady: undefined as Promise<string> | undefined,
       download: undefined as Promise<unknown> | undefined,
     };
     this.operations.set(key, operation);
@@ -176,7 +184,8 @@ export class BilingualPDFSaveService {
       return output === pages ? "并排" : "交替";
     };
     try {
-      const mode = await ready();
+      operation.initialReady = ready();
+      const mode = await operation.initialReady;
       if (!active()) return { saved: false };
       const path = await this.host.choose(`双语导出-${mode}.pdf`);
       if (!path || !active()) return { saved: false };

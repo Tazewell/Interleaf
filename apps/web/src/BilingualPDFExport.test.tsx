@@ -376,3 +376,45 @@ it("keeps cancellation failure visible and retries DELETE before freeing the UI"
   expect(api.cancelBilingualPDF).toHaveBeenCalledTimes(2);
   expect(button("预检双语 PDF").disabled).toBe(false);
 });
+it("retries a failed query for the same job without creating or translating again", async () => {
+  vi.useFakeTimers();
+  try {
+    vi.mocked(api.startBilingualPDF).mockResolvedValueOnce({
+      id: "job",
+      status: "translating",
+      stage: "translating",
+      done: 1,
+      total: 3,
+    });
+    vi.mocked(api.bilingualPDF)
+      .mockRejectedValueOnce(new Error("连接中断"))
+      .mockResolvedValueOnce(ready);
+    await mount();
+    await click("预检双语 PDF");
+    await click("翻译并导出");
+    await act(async () => vi.advanceTimersByTimeAsync(750));
+    expect(host.textContent).toContain("连接中断");
+    expect(button("重试查询")).toBeDefined();
+    await click("重试查询");
+    expect(host.textContent).not.toContain("连接中断");
+    expect(button("保存双语 PDF").disabled).toBe(false);
+    expect(api.bilingualPDF).toHaveBeenNthCalledWith(
+      1,
+      "doc",
+      "job",
+      expect.any(AbortSignal),
+    );
+    expect(api.bilingualPDF).toHaveBeenNthCalledWith(
+      2,
+      "doc",
+      "job",
+      expect.any(AbortSignal),
+    );
+    await click("保存双语 PDF");
+    expect(host.textContent).toContain("已保存：双语.pdf");
+    expect(api.createBilingualPDF).toHaveBeenCalledOnce();
+    expect(api.startBilingualPDF).toHaveBeenCalledOnce();
+  } finally {
+    vi.useRealTimers();
+  }
+});

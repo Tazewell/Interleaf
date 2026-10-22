@@ -289,3 +289,46 @@ it("aborts an outstanding stream and joins temporary-file cleanup before stop re
   expect(await pending).toEqual({ saved: false });
   expect(await readdir(dir)).toEqual(["library"]);
 });
+it.each(["stop", "cancel"] as const)(
+  "%s joins initial ready I/O through response body cleanup",
+  async (action) => {
+    let settle!: () => void;
+    let bodyStarted!: () => void;
+    let signal: AbortSignal | undefined;
+    const started = new Promise<void>((resolve) => {
+      bodyStarted = resolve;
+    });
+    host.fetch = async (_url, init) => {
+      signal = init?.signal as AbortSignal;
+      return {
+        ok: true,
+        json: () => {
+          bodyStarted();
+          return new Promise((resolve) => {
+            settle = () =>
+              resolve({
+                status: "ready",
+                preflight: { pages: 2, outputPages: 2 },
+              });
+          });
+        },
+      } as Response;
+    };
+    const saving = service.save(event, request);
+    await started;
+    let joined = false;
+    const stopping = (
+      action === "stop" ? service.stop() : service.cancel(event, request)
+    ).then(() => {
+      joined = true;
+    });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(signal?.aborted).toBe(true);
+    const returnedBeforeCleanup = joined;
+    settle();
+    await stopping;
+    expect(await saving).toEqual({ saved: false });
+    expect(returnedBeforeCleanup).toBe(false);
+    expect(host.choose).not.toHaveBeenCalled();
+  },
+);

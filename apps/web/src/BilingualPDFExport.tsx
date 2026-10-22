@@ -17,6 +17,7 @@ type Session = {
   pending?: Promise<void>;
   cleanup?: Promise<void>;
   timer?: ReturnType<typeof setTimeout>;
+  querying?: boolean;
 };
 const newSession = (): Session => ({
   active: true,
@@ -51,6 +52,7 @@ function ExportArea({ document: doc }: { document: Document }) {
   const [job, setJob] = useState<BilingualPDFJob | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [queryFailed, setQueryFailed] = useState(false);
   const [keep, setKeep] = useState(false);
   const [attach, setAttach] = useState(false);
   const [saved, setSaved] = useState("");
@@ -96,6 +98,7 @@ function ExportArea({ document: doc }: { document: Document }) {
       session.current = newSession();
       setJob(null);
       setError("");
+      setQueryFailed(false);
       setKeep(false);
       setSaved("");
       setAttached(false);
@@ -125,18 +128,29 @@ function ExportArea({ document: doc }: { document: Document }) {
     };
   }, []);
 
+  const query = async (s: Session) => {
+    if (!alive(s) || s.querying || !s.jobId) return;
+    s.querying = true;
+    setQueryFailed(false);
+    setError("");
+    try {
+      update(s, await api.bilingualPDF(doc.id, s.jobId, s.controller.signal));
+    } catch (e) {
+      if (alive(s)) {
+        setError(message(e));
+        setQueryFailed(true);
+      }
+    } finally {
+      s.querying = false;
+    }
+  };
   const update = (s: Session, result: BilingualPDFJob) => {
     if (!alive(s)) return;
     s.jobId = result.id;
     setJob(result);
     if (["preparing", "translating", "running"].includes(result.status)) {
       s.timer = setTimeout(() => {
-        void api.bilingualPDF(doc.id, result.id, s.controller.signal).then(
-          (next) => update(s, next),
-          (e) => {
-            if (alive(s)) setError(message(e));
-          },
-        );
+        void query(s);
       }, 750);
     }
   };
@@ -381,6 +395,15 @@ function ExportArea({ document: doc }: { document: Document }) {
         </p>
       )}
       <div className="flex flex-wrap justify-end gap-2">
+        {queryFailed && (
+          <Button
+            variant="outline"
+            disabled={busy || !session.current.active}
+            onClick={() => void query(session.current)}
+          >
+            重试查询
+          </Button>
+        )}
         {(job || busy || !session.current.active) && (
           <Button variant="outline" onClick={() => void reset()}>
             {job &&
