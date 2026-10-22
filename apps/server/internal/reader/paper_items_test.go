@@ -413,6 +413,42 @@ func TestPaperMergeSelectedFieldsAtomic(t *testing.T) {
 	}
 }
 
+func TestPaperMergePreservesIndependentAuthorAndRefreshesDerivedSummary(t *testing.T) {
+	const doe = `[{"family":"Doe","given":"Jane"}]`
+	const roe = `[{"family":"Roe","given":"John"}]`
+	for _, tc := range []struct{ name, author, creators, sourceCreators, patch, wantAuthor, wantFamily string }{
+		{"independent author without author conflict", "Curated display author", doe, `[]`, `{"title":"Keep target title"}`, "Curated display author", "Doe"},
+		{"independent author while filling creators", "Curated display author", `[]`, roe, `{}`, "Curated display author", "Roe"},
+		{"empty author with existing creators", "", doe, `[]`, `{}`, "Jane Doe", "Doe"},
+		{"empty author and filled creators", "", `[]`, roe, `{}`, "John Roe", "Roe"},
+		{"derived author retains target creators", "Jane Doe", doe, roe, `{}`, "Jane Doe", "Doe"},
+		{"selected creators refresh derived author", "Jane Doe", doe, roe, `{"metadata":{"creators":` + roe + `}}`, "John Roe", "Roe"},
+		{"explicit author takes priority over creators", "Curated display author", doe, roe, `{"author":"Selected display author","metadata":{"creators":` + roe + `}}`, "Selected display author", "Roe"},
+		{"explicit empty author takes priority", "Curated display author", doe, roe, `{"author":"","metadata":{"creators":` + roe + `}}`, "", "Roe"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			s := testServer(t)
+			paperSeed(t, s.Store, "target-document")
+			target := paperList(t, s)[0]["id"].(string)
+			paperCall(t, s, "PATCH", "/api/papers/"+target, `{"author":"`+tc.author+`","metadata":{"creators":`+tc.creators+`}}`, 200)
+			source := paperCall(t, s, "POST", "/api/papers", `{"title":"Source","author":"","metadata":{"creators":`+tc.sourceCreators+`}}`, 201)["id"].(string)
+			paperCall(t, s, "POST", "/api/papers/"+target+"/merge", `{"ids":["`+source+`"],"patch":`+tc.patch+`}`, 200)
+			stored, err := s.Store.PaperItem(target)
+			if err != nil || stored.Author != tc.wantAuthor || len(stored.Metadata.Creators) != 1 || stored.Metadata.Creators[0].Family != tc.wantFamily {
+				t.Fatalf("merged author or creators changed: %+v, %v", stored, err)
+			}
+			attachment, err := s.Store.Document("target-document")
+			if err != nil || attachment.Author != tc.wantAuthor {
+				t.Fatalf("compatibility attachment author: %+v, %v", attachment, err)
+			}
+			got := paperCall(t, s, "GET", "/api/papers/"+source, "", 200)
+			if got["id"] != target || got["author"] != tc.wantAuthor {
+				t.Fatalf("merged alias: %+v", got)
+			}
+		})
+	}
+}
+
 func TestPaperLegacyPurgeReimportCanCreateNewItem(t *testing.T) {
 	s := testServer(t)
 	paperSeed(t, s.Store, "same")

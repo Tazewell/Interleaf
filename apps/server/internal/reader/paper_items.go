@@ -504,6 +504,7 @@ func (s *Store) MergePaperItems(id string, v PaperMerge) (PaperItem, error) {
 	if err != nil {
 		return p, err
 	}
+	refreshAuthor := p.Author == "" || p.Author == CreatorNames(p.Metadata.Creators)
 	sources := []PaperItem{}
 	seen := map[string]bool{p.ID: true}
 	keys := map[string]string{}
@@ -578,7 +579,7 @@ func (s *Store) MergePaperItems(id string, v PaperMerge) (PaperItem, error) {
 			return p, err
 		}
 	}
-	if len(p.Metadata.Creators) > 0 {
+	if refreshAuthor && len(p.Metadata.Creators) > 0 {
 		p.Author = CreatorNames(p.Metadata.Creators)
 	}
 	p.CitationKey = chosen
