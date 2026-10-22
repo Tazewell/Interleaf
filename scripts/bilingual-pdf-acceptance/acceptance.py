@@ -198,6 +198,10 @@ try:
             assert STATE["calls"] == calls, "preflight unexpectedly called the API"
             assert not prepared["noTextPages"], prepared
             assert any(p["formulas"] for page in prepared["pages"] for p in page["paragraphs"]), "inline formula was not exercised"
+            if name == "paper":
+                brace_paragraph = next(p for page in prepared["pages"] for p in page["paragraphs"] if "Literal {}" in p["originalSource"])
+                for literal in ["{}", "{name}", "{value}", '{"a":{"b":1}}', "open { close } extra {."]:
+                    assert literal in brace_paragraph["source"], ("source literal braces changed", literal, brace_paragraph)
             if name == "geometry":
                 for page in prepared["pages"]:
                     inline = next(p for p in page["paragraphs"] if "The inline formula" in p["originalSource"])
@@ -226,6 +230,11 @@ try:
             evidence.mkdir(exist_ok=True)
             for file in ["prepared.json", "targets.json", "layout.json"]:
                 shutil.copy2(work / file, evidence / file)
+            if name == "paper":
+                target = json.loads((work / "targets.json").read_text())[brace_paragraph["id"]]
+                for literal in ["{}", "{name}", "{value}", '{"a":{"b":1}}', "打开 { 关闭 } 未闭合 {。"]:
+                    assert literal in target, ("completed API target literal braces changed", literal, target)
+                results["checks"].append(f"{mode}: literal placeholders, nested JSON and unmatched braces survive real prepare/completed API/native CLI; searchable output checked by inspect.mjs")
             results["exports"].append({"name": name, "mode": mode, "file": str(output), "source": str(OUT / ("reader-synthetic-paper.pdf" if name == "paper" else "reader-geometry.pdf")), "evidence": str(evidence), "bytes": len(data), "sha256": hashlib.sha256(data).hexdigest(), "preflight": job["preflight"], "apiCalls": STATE["calls"] - calls, "native": native_result, "attachmentId": attached["id"]})
             (OUT / "result.json").write_text(json.dumps(results, ensure_ascii=False, indent=2))
             api("DELETE", path, expected=204)

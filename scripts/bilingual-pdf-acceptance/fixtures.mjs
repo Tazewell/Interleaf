@@ -71,7 +71,7 @@ paragraph(
 title(p, "1 Introduction", 70, 550);
 paragraph(
   p,
-  "A useful research library connects original papers with notes, translations and stable citation keys. Users configure their own translation API. The export process checks completed responses before building a document and reports pages that cannot fit the translated text.",
+  'A useful research library connects original papers with notes, translations and stable citation keys. Users configure their own translation API. The export process checks completed responses before building a document and reports pages that cannot fit the translated text. Literal {} {name} {value} {"a":{"b":1}} open { close } extra {.',
   70,
   526,
   472,
