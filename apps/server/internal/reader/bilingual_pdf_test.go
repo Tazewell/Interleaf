@@ -785,3 +785,56 @@ func TestBilingualPDFDoesNotReuseMathOrMarkdownSource(t *testing.T) {
 		}
 	}
 }
+
+func TestBilingualPDFLiteralAPIText(t *testing.T) {
+	for _, target := range []string{"* 内容均为合成示例。", "batch_size 参数", "x < y 时执行。", "示例代码 `x_y` 和 <span>文字</span>", "字面 **强调** 与 $x$"} {
+		t.Run(target, func(t *testing.T) {
+			s := bilingualFixture(t)
+			response, _ := json.Marshal([]map[string]string{{"id": "p1-b1", "target": target}})
+			srv := bilingualMockAPI(t, string(response), true, nil)
+			bilingualConfig(t, s, srv.URL+"/v1", "", "openai")
+			j := bilingualCreate(t, s, `{"layout":"alternating"}`)
+			bilingualPoll(t, s, j, "awaiting-confirmation")
+			if w := bilingualStart(t, s, j, true); w.Code != 202 {
+				t.Fatal(w.Code, w.Body.String())
+			}
+			bilingualPoll(t, s, j, "ready")
+			w := request(t, s, "GET", "/api/documents/doc/bilingual-pdf/"+j+"/file", nil)
+			if w.Code != 200 {
+				t.Fatal(w.Code, w.Body.String())
+			}
+			// The processor fixture receives the exact literal target, without HTML or Markdown interpretation.
+			var targets map[string]string
+			if json.Unmarshal(bytes.TrimPrefix(w.Body.Bytes(), []byte("%PDF-export\n")), &targets) != nil || targets["p1-b1"] != target {
+				t.Fatal("literal API text changed", w.Body.String())
+			}
+		})
+	}
+}
+func TestBilingualPDFStartRequiresExplicitFields(t *testing.T) {
+	s := bilingualFixture(t)
+	saved := TranslationBlock{BlockID: "p1-b1", SourceHash: translationHash("Hello world."), Status: "complete", Sentences: []TranslationSentence{{Source: "Hello world.", Target: "你好"}}}
+	if err := s.saveTranslation("doc", saved); err != nil {
+		t.Fatal(err)
+	}
+	j := bilingualCreate(t, s, `{"layout":"alternating","fromPage":1,"toPage":1}`)
+	bilingualPoll(t, s, j, "awaiting-confirmation")
+	for _, body := range []string{`{}`, `{"translateMissing":false}`, `{"keepOriginalPages":[]}`, `{"translateMissing":null,"keepOriginalPages":[]}`, `{"translateMissing":false,"keepOriginalPages":null}`, `{"translateMissing":null,"keepOriginalPages":null}`} {
+		w := request(t, s, "POST", "/api/documents/doc/bilingual-pdf/"+j+"/start", strings.NewReader(body))
+		if w.Code != 400 {
+			t.Fatalf("missing/null required fields started export: %s -> %d %s", body, w.Code, w.Body.String())
+		}
+	}
+	w := request(t, s, "POST", "/api/documents/doc/bilingual-pdf/"+j+"/start", strings.NewReader(`{"translateMissing":false,"keepOriginalPages":[]}`))
+	if w.Code != 202 {
+		t.Fatal(w.Code, w.Body.String())
+	}
+	bilingualPoll(t, s, j, "ready")
+}
+func TestBilingualPDFRejectsControlAndFencedEnvelope(t *testing.T) {
+	for _, answer := range []string{`[{"id":"p1-b1","target":"正文\u0000"}]`, "```json\n[{\"id\":\"p1-b1\",\"target\":\"正常\"}]\n```"} {
+		if _, err := validateBilingualTargets(answer, []nativeParagraph{{ID: "p1-b1"}}); err == nil {
+			t.Errorf("accepted illegal control/envelope: %q", answer)
+		}
+	}
+}

@@ -344,10 +344,18 @@ func (s *Server) bilingualPDFStatus(w http.ResponseWriter, r *http.Request) {
 	respond(w, 200, state)
 }
 func (s *Server) startBilingualPDF(w http.ResponseWriter, r *http.Request) {
-	var start bilingualStartRequest
-	if !decode(w, r, &start) {
+	var input struct {
+		TranslateMissing  *bool  `json:"translateMissing"`
+		KeepOriginalPages *[]int `json:"keepOriginalPages"`
+	}
+	if !decode(w, r, &input) {
 		return
 	}
+	if input.TranslateMissing == nil || input.KeepOriginalPages == nil {
+		fail(w, 400, "请明确指定是否翻译缺失段落及保留原文页列表")
+		return
+	}
+	start := bilingualStartRequest{TranslateMissing: *input.TranslateMissing, KeepOriginalPages: *input.KeepOriginalPages}
 	j := s.bilingualJob(r)
 	if j == nil {
 		fail(w, 404, "导出任务不存在或已过期")
