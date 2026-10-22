@@ -93,6 +93,10 @@ func TestRetranslationReparsesBeforeSendingNewTextAndAlgorithmImage(t *testing.T
 	fresh.Blocks = append(fresh.Blocks, algorithm)
 	calls := reparseFixture(t, fresh)
 	provider := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "GET" {
+			w.Write([]byte(`{"data":[]}`))
+			return
+		}
 		batch := readTranslationInput(t, r).Batch
 		if len(batch.Paragraphs) != 2 || batch.Paragraphs[0].Source != fresh.Blocks[0].Text {
 			t.Error("translation did not use newly parsed text", batch)

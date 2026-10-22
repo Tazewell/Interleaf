@@ -94,7 +94,7 @@ func TestGenerationFallbackPolicy(t *testing.T) {
 				}
 				return GenerateResult{Text: "backup", FinishReason: "stop"}, nil
 			})
-			g := &GenerationService{primary: "codex", connections: map[string]generationConnection{"codex": {Adapter: primary, VerifiedText: true}, "text-api": {Adapter: backup, VerifiedText: true}}}
+			g := &GenerationService{primary: "api", connections: map[string]generationConnection{"api": {Adapter: primary, VerifiedText: true}, "text-api": {Adapter: backup, VerifiedText: true}}}
 			result, err := g.generate(ctx, AIInput{}, false, mode != "background", func(e ProviderEvent) error {
 				if mode == "emit-failure" {
 					return errors.New("disconnected")
@@ -104,12 +104,7 @@ func TestGenerationFallbackPolicy(t *testing.T) {
 				}
 				return nil
 			})
-			want := mode == "before" || mode == "background"
-			if want {
-				if err != nil || backups != 1 || result.Text != "backup" {
-					t.Fatal(result, backups, err)
-				}
-			} else if err == nil || backups != 0 {
+			if err == nil || backups != 0 {
 				t.Fatal(result, backups, err)
 			}
 			if strings.Contains(visible, "partialbackup") {
@@ -118,67 +113,19 @@ func TestGenerationFallbackPolicy(t *testing.T) {
 		})
 	}
 }
-func TestAgentCancellationHandshake(t *testing.T) {
-	for _, p := range []string{"codex", "kimi"} {
-		for _, mode := range []string{"protocol-cancel", "ignore-cancel"} {
-			t.Run(p+"/"+mode, func(t *testing.T) {
-				ack := fakeAgent(t, p, mode)
-				s := testServer(t)
-				ctx, cancel := context.WithCancel(t.Context())
-				defer cancel()
-				text := ""
-				start := time.Now()
-				_, err := invokeCLI(ctx, s.Store.Root, p, "", AIInput{Prompt: "test"}, func(part string) { text += part; cancel() })
-				if !errors.Is(err, context.Canceled) || text != "你好" {
-					t.Fatalf("text=%q err=%v", text, err)
-				}
-				if _, err := os.Stat(ack); err != nil {
-					t.Fatal("missing protocol cancel", err)
-				}
-				if time.Since(start) > 2*time.Second {
-					t.Fatal("cancel exceeded grace period")
-				}
-				entries, err := os.ReadDir(filepath.Join(s.Store.Root, "ai-work"))
-				if err != nil || len(entries) != 0 {
-					t.Fatal("work directory leak", err)
-				}
-			})
-		}
-	}
-}
-func TestAgentTerminalAndIdentity(t *testing.T) {
-	for _, tc := range []struct {
-		p, mode string
-		ok      bool
-	}{{"claude", "late", true}, {"claude", "exit-error", false}, {"kimi", "identity", true}, {"kimi", "version", false}} {
-		t.Run(tc.p+"/"+tc.mode, func(t *testing.T) {
-			fakeAgent(t, tc.p, tc.mode)
-			s := testServer(t)
-			var text string
-			result, err := invokeCLI(t.Context(), s.Store.Root, tc.p, "", AIInput{Prompt: "test"}, func(p string) { text += p })
-			if tc.ok {
-				if err != nil || text != "你好，世界" || result != text {
-					t.Fatal(result, text, err)
-				}
-			} else if err == nil {
-				t.Fatal("expected failure")
-			}
-		})
-	}
-}
 
 func TestChatSaveFailureAndWriteFailure(t *testing.T) {
 	for _, mode := range []string{"save", "write", "flush"} {
 		t.Run(mode, func(t *testing.T) {
-			fakeAgent(t, "claude", "success")
 			s, _ := imageFixture(t)
+			nativeFakeAgent(t, s, "success")
 			if mode == "save" {
 				// SQLite trigger fails only assistant insertion; user record stays intact.
 				_, err := s.Store.DB.Exec(`CREATE TRIGGER reject_assistant BEFORE INSERT ON messages WHEN json_extract(NEW.body,'$.role')='assistant' BEGIN SELECT RAISE(FAIL,'test'); END`)
 				if err != nil {
 					t.Fatal(err)
 				}
-				res := request(t, s, "POST", "/api/documents/doc/chat", strings.NewReader(`{"provider":"claude","prompt":"test","context":""}`))
+				res := request(t, s, "POST", "/api/documents/doc/chat", strings.NewReader(`{"provider":"api","prompt":"test","context":""}`))
 				if strings.Count(res.Body.String(), "event: error") != 1 || strings.Contains(res.Body.String(), "event: done") {
 					t.Fatal(res.Body.String())
 				}
@@ -218,15 +165,10 @@ func (w *brokenWriter) FlushError() error { return errors.New("flush failed") }
 var _ http.ResponseWriter = (*brokenWriter)(nil)
 
 func TestHTTPDisconnectCancelsGeneration(t *testing.T) {
-	for _, provider := range []string{"codex", "claude", "kimi"} {
+	for _, provider := range []string{"api"} {
 		t.Run(provider, func(t *testing.T) {
-			fakeAgent(t, provider, "cancel")
 			s, _ := imageFixture(t)
-			c := AIConfig{Primary: provider, Models: map[string]string{}, Capabilities: map[string]Capability{}}
-			c.Capabilities[provider] = Capability{Text: true, Fingerprint: configPrint(c, provider)}
-			if err := s.writeAIConfig(c); err != nil {
-				t.Fatal(err)
-			}
+			nativeFakeAgent(t, s, "cancel")
 			server := httptest.NewServer(s.Handler())
 			defer server.Close()
 			ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
@@ -240,7 +182,7 @@ func TestHTTPDisconnectCancelsGeneration(t *testing.T) {
 			scan := bufio.NewScanner(res.Body)
 			saw := false
 			for scan.Scan() {
-				if scan.Text() == "event: delta" {
+				if scan.Text() == "event: draft" {
 					saw = true
 					break
 				}
@@ -279,9 +221,9 @@ func (w lostDoneWriter) Write(b []byte) (int, error) {
 	return w.ResponseRecorder.Write(b)
 }
 func TestDoneLossDoesNotRollbackSavedAnswer(t *testing.T) {
-	fakeAgent(t, "claude", "success")
 	s, _ := imageFixture(t)
-	req := httptest.NewRequest("POST", "http://127.0.0.1:17840/api/documents/doc/chat", strings.NewReader(`{"provider":"claude","prompt":"test","context":""}`))
+	nativeFakeAgent(t, s, "success")
+	req := httptest.NewRequest("POST", "http://127.0.0.1:17840/api/documents/doc/chat", strings.NewReader(`{"provider":"api","prompt":"test","context":""}`))
 	req.Header.Set("Authorization", "Bearer test-secret")
 	w := lostDoneWriter{httptest.NewRecorder()}
 	s.Handler().ServeHTTP(w, req)

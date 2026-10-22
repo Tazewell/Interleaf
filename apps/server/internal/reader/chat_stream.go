@@ -54,24 +54,7 @@ func (s *chatStreamWriter) send(event string, value any) error {
 	}
 	return err
 }
-func (s *Server) streamChat(ctx context.Context, cancel context.CancelFunc, w http.ResponseWriter, documentID string, config AIConfig, in AIInput) {
-	cache := &s.codexChat
-	documentCache := &s.documentCodex
-	if in.Chat != nil && in.Chat.SessionID != "" {
-		cache = &codexChatCache{}
-		documentCache = &documentCodexCache{}
-		defer cache.close()
-		defer documentCache.close()
-	}
-	if config.Primary != "codex" || len(in.images()) > 0 {
-		cache.reset()
-	}
-	committed := false
-	defer func() {
-		if !committed {
-			cache.finish(in.Chat, "", false)
-		}
-	}()
+func (s *Server) streamChat(ctx context.Context, cancel context.CancelFunc, w http.ResponseWriter, documentID string, service *GenerationService, in AIInput) {
 	// Bound a blocked network write by the request deadline and interrupt it on
 	// cancellation. Reset the deadline before this keep-alive connection is reused.
 	controller := http.NewResponseController(w)
@@ -122,7 +105,7 @@ func (s *Server) streamChat(ctx context.Context, cancel context.CancelFunc, w ht
 		return
 	}
 	contextWarning := ""
-	if in.Chat != nil && (len(in.images()) == 0 || config.Primary == "api") && (config.Primary == "codex" || config.Primary == "api") {
+	if in.Chat != nil {
 		d, docErr := s.Store.Document(documentID)
 		if docErr == nil {
 			if _, fileErr := os.Stat(s.Store.File(d)); fileErr == nil {
@@ -142,7 +125,7 @@ func (s *Server) streamChat(ctx context.Context, cancel context.CancelFunc, w ht
 						return
 					}
 				} else {
-					in.Chat.Agent = &documentAgent{sessionID: in.Chat.SessionID, codexCache: documentCache, server: s, corpus: corpus, ctx: ctx, ID: id(), activity: func(phase, tool, message string) error {
+					in.Chat.Agent = &documentAgent{sessionID: in.Chat.SessionID, server: s, corpus: corpus, ctx: ctx, ID: id(), activity: func(phase, tool, message string) error {
 						return out.send("activity", map[string]string{"phase": phase, "tool": tool, "message": message})
 					}}
 				}
@@ -151,14 +134,6 @@ func (s *Server) streamChat(ctx context.Context, cancel context.CancelFunc, w ht
 	}
 	if in.Chat != nil && in.Chat.Agent == nil {
 		in.Prompt = in.Chat.legacyPrompt() + readingLocationPrompt(in.Chat.ReadingLocation) + contextWarning
-	}
-	service := s.generationService(config)
-	if conn, ok := service.connections["codex"]; ok {
-		if adapter, ok := conn.Adapter.(codexChatAdapter); ok {
-			adapter.cache = cache
-			conn.Adapter = adapter
-			service.connections["codex"] = conn
-		}
 	}
 	if _, err := s.Store.DB.Exec("INSERT OR IGNORE INTO chat_usage_coverage(document_id,history_complete) VALUES(?,1)", documentID); err != nil {
 		finalErr = generationError(ErrorSave, "无法保存聊天统计")
@@ -207,11 +182,4 @@ func (s *Server) streamChat(ctx context.Context, cancel context.CancelFunc, w ht
 		return
 	}
 	finalErr = out.send("done", map[string]bool{"ok": true})
-	if finalErr == nil && result.Provider == "codex" {
-		savedID, saveErr := s.Store.lastChatMessageID(documentID)
-		if saveErr == nil {
-			cache.finish(in.Chat, savedID, true)
-			committed = true
-		}
-	}
 }

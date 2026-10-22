@@ -42,7 +42,7 @@ func overviewTestService(t *testing.T, calls *int, failAt *int) *GenerationServi
 		}
 		return GenerateResult{Text: text, FinishReason: "stop"}, nil
 	})
-	return &GenerationService{primary: "codex", connections: map[string]generationConnection{"codex": {Adapter: adapter, VerifiedText: true, Incremental: true}}}
+	return &GenerationService{primary: "api", connections: map[string]generationConnection{"api": {Adapter: adapter, VerifiedText: true, Incremental: true}}}
 }
 func TestOverviewGeneratePersistAndReuse(t *testing.T) {
 	s, a := originalDocumentFixture(t)

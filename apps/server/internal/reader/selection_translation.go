@@ -64,7 +64,7 @@ func (s *Server) translateSelection(w http.ResponseWriter, r *http.Request) {
 		fail(w, http.StatusBadRequest, "请选择 1 至 12000 个字符进行翻译")
 		return
 	}
-	text, err := generateSelectionTranslation(r.Context(), s.taskGenerationService(s.aiConfig(), taskTranslation), input)
+	text, err := generateSelectionTranslation(r.Context(), s.currentGenerationServiceContext(r.Context(), taskTranslation), input)
 	if err != nil {
 		fail(w, http.StatusBadGateway, err.Error())
 		return

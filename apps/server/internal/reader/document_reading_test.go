@@ -1,17 +1,14 @@
 package reader
 
 import (
-	"bufio"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -19,91 +16,6 @@ import (
 
 // A local fake app-server exercises the real authenticated MCP transport and
 // native cancellation path, without requiring a CLI login or a model call.
-func runDocumentReadingProcess() {
-	url := ""
-	for _, arg := range os.Args {
-		if value, ok := strings.CutPrefix(arg, "mcp_servers.reader_document.url="); ok {
-			url, _ = strconv.Unquote(value)
-		}
-	}
-	enc := json.NewEncoder(os.Stdout)
-	scan := bufio.NewScanner(os.Stdin)
-	scan.Buffer(make([]byte, 4096), maxProviderFrame)
-	for scan.Scan() {
-		var request codexRPCMessage
-		if json.Unmarshal(scan.Bytes(), &request) != nil {
-			os.Exit(2)
-		}
-		reply := func(value any) { _ = enc.Encode(map[string]any{"id": request.ID, "result": value}) }
-		switch request.Method {
-		case "initialize":
-			reply(map[string]any{})
-		case "config/read":
-			servers := map[string]any{}
-			if url != "" {
-				servers["reader_document"] = map[string]any{"enabled": true, "url": url}
-			}
-			reply(map[string]any{"config": map[string]any{"mcp_servers": servers, "features": map[string]any{"code_mode": map[string]bool{"enabled": false}, "network_proxy": nil}, "model_context_window": 65536}})
-		case "thread/start":
-			reply(map[string]any{"thread": map[string]string{"id": "thread"}, "model": "test"})
-		case "mcpServerStatus/list":
-			tools := map[string]any{}
-			for _, d := range documentToolDefinitions {
-				tools[d.Name] = map[string]any{}
-			}
-			reply(map[string]any{"data": []any{map[string]any{"name": "reader_document", "tools": tools}}})
-		case "turn/start":
-			reply(map[string]any{"turn": map[string]string{"id": "turn"}})
-			if url == "" {
-				_ = enc.Encode(map[string]any{"method": "item/agentMessage/delta", "params": map[string]string{"threadId": "thread", "turnId": "turn", "itemId": "answer", "delta": "The nonce is COBALT-19 [S2]."}})
-				_ = enc.Encode(map[string]any{"method": "turn/completed", "params": map[string]any{"threadId": "thread", "turn": map[string]string{"id": "turn", "status": "completed"}}})
-				continue
-			}
-			_ = enc.Encode(map[string]any{"method": "thread/tokenUsage/updated", "params": map[string]any{"threadId": "thread", "turnId": "turn", "tokenUsage": map[string]any{"modelContextWindow": 32768, "last": TokenCounts{InputTokens: 1000, OutputTokens: 50, TotalTokens: 1050}}}})
-			for i := 0; i < documentToolCalls; i++ {
-				name, args := "search_document", map[string]string{"query": fmt.Sprintf("probe-%d", i)}
-				if i == 0 {
-					name, args = "read_passage", map[string]string{"blockId": os.Getenv("READER_DOCUMENT_TEST_BLOCK")}
-				}
-				body := jsonText(map[string]any{"jsonrpc": "2.0", "id": i + 1, "method": "tools/call", "params": map[string]any{"name": name, "arguments": args}})
-				r, _ := http.NewRequest("POST", url, strings.NewReader(body))
-				r.Header.Set("Authorization", "Bearer "+os.Getenv("READER_DOCUMENT_MCP_TOKEN"))
-				r.Header.Set("Content-Type", "application/json")
-				r.Header.Set("Accept", "application/json, text/event-stream")
-				r.Header.Set("MCP-Protocol-Version", "2025-11-25")
-				response, err := (&http.Client{Timeout: 5 * time.Second}).Do(r)
-				if err != nil {
-					os.Exit(3)
-				}
-				_, _ = io.Copy(io.Discard, response.Body)
-				response.Body.Close()
-			}
-			_ = enc.Encode(map[string]any{"method": "item/started", "params": map[string]any{"threadId": "thread", "turnId": "turn", "item": map[string]string{"id": "answer", "type": "agentMessage", "phase": "final_answer"}}})
-			_ = enc.Encode(map[string]any{"method": "item/agentMessage/delta", "params": map[string]string{"threadId": "thread", "turnId": "turn", "itemId": "answer", "delta": "The nonce is COBALT-19 [S2]."}})
-			_ = enc.Encode(map[string]any{"method": "turn/completed", "params": map[string]any{"threadId": "thread", "turn": map[string]string{"id": "turn", "status": "completed"}}})
-		}
-	}
-}
-
-func TestCodexDocumentReadingBudgetKeepsEvidence(t *testing.T) {
-	s, a := originalDocumentFixture(t)
-	fakeAgent(t, "codex", "document-reading")
-	t.Setenv("READER_DOCUMENT_TEST_BLOCK", a.corpus.Passages[1].ID)
-	ctx, cancel := context.WithTimeout(t.Context(), 90*time.Second)
-	defer cancel()
-	a.ctx = ctx
-	var text strings.Builder
-	result, err := streamCodexDocumentChat(ctx, s.Store.Root, "test", AIInput{Prompt: "Read the original nonce", Chat: &chatInput{Agent: a}}, func(e ProviderEvent) error { text.WriteString(e.Text); return nil })
-	if err != nil || result.Text != text.String() || !strings.Contains(result.Text, "阅读范围") || !strings.Contains(result.Text, "COBALT-19") || len(a.Traces) != documentToolCalls || len(a.Evidence) != 1 {
-		t.Fatal("native budget interruption lost the bounded answer", err, result.Text, len(a.Traces), len(a.Evidence))
-	}
-	if a.contextTokens != 32768 || a.contextSource != "codex_runtime" || a.runtimeUsedTokens != 1050 {
-		t.Fatal("native window event not consumed", a.contextTokens, a.contextSource, a.runtimeUsedTokens)
-	}
-	if _, err = a.references(result.Text); err != nil {
-		t.Fatal(err)
-	}
-}
 
 func writeReadingCalls(w http.ResponseWriter, count int, block, reasoning string) {
 	w.Header().Set("Content-Type", "text/event-stream")

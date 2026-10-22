@@ -17,11 +17,7 @@ import (
 
 func configureTranslationTest(t *testing.T, s *Server, url string) {
 	t.Helper()
-	c := AIConfig{Primary: "codex", Models: map[string]string{}, TextAPI: APIConnection{URL: url, Model: "test"}, Capabilities: map[string]Capability{}}
-	c.Capabilities["text-api"] = Capability{Text: true, Fingerprint: configPrint(c, "text-api")}
-	if err := s.writeAIConfig(c); err != nil {
-		t.Fatal(err)
-	}
+	configureNativeTest(t, s, url, "test", false)
 }
 func translationParagraphLine(p translationParagraph) string {
 	data, _ := json.Marshal(map[string]any{"blockId": p.BlockID, "sourceHash": p.SourceHash, "sentences": []TranslationSentence{{Source: p.Source, Target: "译文。"}}})
@@ -139,6 +135,11 @@ func TestTranslationRunsThreeBatchesAndSavesBeforeProviderCompletes(t *testing.T
 	defer close(released)
 	var active, maxActive atomic.Int32
 	provider := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "GET" {
+			w.Header().Set("Content-Type", "application/json")
+			w.Write([]byte(`{"data":[]}`))
+			return
+		}
 		batch := readTranslationInput(t, r).Batch
 		n := active.Add(1)
 		defer active.Add(-1)
@@ -256,6 +257,11 @@ func TestTranslationTruncatedBatchRetainsRowsAndRetriesOnlyMissing(t *testing.T)
 	s, p, m := translationFixture(t)
 	var calls atomic.Int32
 	provider := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "GET" {
+			w.Header().Set("Content-Type", "application/json")
+			w.Write([]byte(`{"data":[]}`))
+			return
+		}
 		batch := readTranslationInput(t, r).Batch
 		w.Header().Set("Content-Type", "text/event-stream")
 		if calls.Add(1) == 1 {
@@ -295,8 +301,8 @@ func TestTranslationTruncatedBatchRetainsRowsAndRetriesOnlyMissing(t *testing.T)
 }
 func TestTranslationDeadlineDoesNotChangeChatDeadline(t *testing.T) {
 	for _, timeout := range []time.Duration{0, translationBatchTimeout} {
-		service := &GenerationService{primary: "codex", timeout: timeout, connections: map[string]generationConnection{}}
-		service.connections["codex"] = generationConnection{VerifiedText: true, Adapter: adapterFunc(func(ctx context.Context, _ GenerateRequest, emit func(ProviderEvent) error) (GenerateResult, error) {
+		service := &GenerationService{primary: "api", timeout: timeout, connections: map[string]generationConnection{}}
+		service.connections["api"] = generationConnection{VerifiedText: true, Adapter: adapterFunc(func(ctx context.Context, _ GenerateRequest, emit func(ProviderEvent) error) (GenerateResult, error) {
 			deadline, ok := ctx.Deadline()
 			want := timeout
 			if want == 0 {
@@ -360,6 +366,11 @@ func TestTranslationAsksOnceMoreForParagraphsTheModelSkipped(t *testing.T) {
 	s, p, m := translationFixture(t)
 	var calls atomic.Int32
 	provider := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "GET" {
+			w.Header().Set("Content-Type", "application/json")
+			w.Write([]byte(`{"data":[]}`))
+			return
+		}
 		batch := readTranslationInput(t, r).Batch
 		if calls.Add(1) == 2 && (len(batch.Paragraphs) != 1 || batch.Paragraphs[0].BlockID != m.Blocks[1].ID) {
 			t.Errorf("follow-up did not ask for the skipped paragraph only: %+v", batch.Paragraphs)
@@ -383,6 +394,11 @@ func TestTranslationAsksOnceMoreForParagraphsTheModelSkipped(t *testing.T) {
 func TestTranslationFailureNamesTheCauseAndKeepsTheOutput(t *testing.T) {
 	s, p, m := translationFixture(t)
 	provider := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "GET" {
+			w.Header().Set("Content-Type", "application/json")
+			w.Write([]byte(`{"data":[]}`))
+			return
+		}
 		batch := readTranslationInput(t, r).Batch
 		text := "not json at all\n"
 		if len(batch.Paragraphs) == 2 {

@@ -342,10 +342,10 @@ func TestLivePDFPageRendering(t *testing.T) {
 	}
 }
 
-func TestLiveCodexPDFPageImages(t *testing.T) {
+func TestLiveNativePDFPageImages(t *testing.T) {
 	processor := os.Getenv("READER_TEST_PAGE_PROCESSOR")
 	if processor == "" || os.Getenv("READER_TEST_NATIVE_IMAGES") != "1" {
-		t.Skip("opt-in real Codex test using only synthetic vector pages")
+		t.Skip("opt-in native API test using only synthetic vector pages")
 	}
 	node, err := exec.LookPath("node")
 	if err != nil {
@@ -354,13 +354,9 @@ func TestLiveCodexPDFPageImages(t *testing.T) {
 	t.Setenv("READER_NODE", node)
 	t.Setenv("READER_PROCESSOR", processor)
 	s, _ := pageImageFixture(t, false)
-	config := AIConfig{Primary: "codex", Models: map[string]string{}, Capabilities: map[string]Capability{}}
-	config.Capabilities["codex"] = Capability{Text: true, Vision: true, Fingerprint: configPrint(config, "codex")}
-	if err = s.writeAIConfig(config); err != nil {
-		t.Fatal(err)
-	}
+	configureLiveNative(t, s, true)
 	question := "请调用一次 read_pdf_pages，pages=[1,2]，同时查看两页完整图像。不要调用文字检索或读取工具，图形没有可提取文字。分别数出第1页红色三角形和第2页蓝色圆形数量。用格式 red triangles: N; blue circles: N 作答，并给两页来源引用。"
-	out := conversationRequest(t, s, "codex", question)
+	out := conversationRequest(t, s, "api", question)
 	if !strings.Contains(out.Body.String(), "event: done") {
 		t.Fatal(out.Body.String())
 	}

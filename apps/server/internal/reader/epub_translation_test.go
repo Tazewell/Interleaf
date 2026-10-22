@@ -65,6 +65,10 @@ func TestEPUBTranslationUsesSharedQueueAndPersistsAcrossRetries(t *testing.T) {
 	p, _ = s.Store.processing(doc.ID)
 	calls := 0
 	provider := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "GET" {
+			w.Write([]byte(`{"data":[]}`))
+			return
+		}
 		calls++
 		batch := readTranslationInput(t, r).Batch
 		var out strings.Builder

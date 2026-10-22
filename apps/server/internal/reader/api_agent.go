@@ -16,9 +16,8 @@ import (
 
 // The "api" agent calls a protocol-aware endpoint with a
 // user-supplied key. Its models come from /models plus IDs the user adds, and
-// each model is checked separately for text and vision. Requests use only
-// models that passed: text requests the task's model, image requests the
-// vision model. Unknown relays without metadata use low/medium/high.
+// text models may be entered directly; vision and tools require an explicit
+// successful check. Unknown relays without metadata use low/medium/high.
 type apiAgentAdapter struct {
 	conn         APIConnection
 	text, vision apiModelChoice
@@ -31,58 +30,6 @@ type apiAgentAdapter struct {
 type apiModelChoice struct{ model, level string }
 
 func apiCapabilityKey(model string) string { return "api:" + model }
-
-// apiTaskModel is the user's choice for a task; empty means automatic.
-func apiTaskModel(c AIConfig, task modelTask, vision bool) string {
-	if vision {
-		return c.VisionModels["api"]
-	}
-	if task == taskTranslation {
-		return c.TranslationModels["api"]
-	}
-	return c.Models["api"]
-}
-
-// apiCapable reports whether the API agent can serve a task: the chosen model
-// passed its check or, with no choice, some checked model passed.
-func apiCapable(c AIConfig, task modelTask, vision bool) bool {
-	if model := apiTaskModel(c, task, vision); model != "" {
-		return capable(c, apiCapabilityKey(model), vision)
-	}
-	for key := range c.Capabilities {
-		if strings.HasPrefix(key, "api:") && capable(c, key, vision) {
-			return true
-		}
-	}
-	return false
-}
-
-// primaryCapable reports whether the primary agent passed the text check
-// for a task. Only the API agent picks models by its own per-model checks.
-func primaryCapable(c AIConfig, task modelTask) bool {
-	if c.Primary == "api" {
-		return apiCapable(c, task, false)
-	}
-	return capable(c, c.Primary, false)
-}
-
-func (s *Server) apiAgentAdapter(c AIConfig, task modelTask) apiAgentAdapter {
-	models, efforts := c.Models, c.Efforts
-	if task == taskTranslation {
-		models, efforts = c.TranslationModels, c.TranslationEfforts
-	}
-	choice := func(models map[string]string, efforts map[string]map[string]string) apiModelChoice {
-		model := models["api"]
-		level := efforts["api"][model]
-		if level == "" {
-			level = "medium"
-		}
-		return apiModelChoice{model, level}
-	}
-	return apiAgentAdapter{c.API, choice(models, efforts), choice(c.VisionModels, c.VisionEfforts), task, func(ctx context.Context) ([]AgentModel, error) {
-		return s.apiAgentModels(ctx, c)
-	}}
-}
 
 // resolve fixes the model and requested effort for one request. Wire mapping
 // is applied by the endpoint/model profile, even when the catalog is unavailable.
@@ -202,7 +149,7 @@ func (a apiAgentAdapter) Stream(ctx context.Context, req GenerateRequest, emit f
 const apiTranslationHistoryBytes = 256 << 10
 
 // apiTranslationSession keeps one conversation across the batches of a
-// translation worker, like the Codex thread does. A failed turn is not
+// translation worker. A failed turn is not
 // recorded and the earlier history is kept for the next batch.
 type apiTranslationSession struct {
 	apiAgentAdapter
@@ -266,10 +213,10 @@ func (s *Server) apiCatalog(c APIConnection) func(context.Context) ([]AgentModel
 // apiAgentModels lists the endpoint's models and the user's added IDs, each
 // with its current check result. Text models can be entered without a probe;
 // image recommendations require verified vision. Added IDs survive catalog errors.
-func (s *Server) apiAgentModels(ctx context.Context, c AIConfig) ([]AgentModel, error) {
-	listed, err := s.apiCatalog(c.API)(ctx)
+func (s *Server) nativeAIModels(ctx context.Context, c nativeAIStored) ([]AgentModel, error) {
+	listed, err := s.apiCatalog(c.Connection)(ctx)
 	models := append([]AgentModel{}, listed...)
-	for _, id := range c.APIModels {
+	for _, id := range c.Config.APIModels {
 		if !slices.ContainsFunc(models, func(m AgentModel) bool { return m.ID == id }) {
 			models = append(models, AgentModel{ID: id, Name: id, Custom: true})
 		}
@@ -281,9 +228,9 @@ func (s *Server) apiAgentModels(ctx context.Context, c AIConfig) ([]AgentModel, 
 		return nil, err
 	}
 	for i := range models {
-		models[i].EffortInfo = reasoningRule(resolveAPIEndpoint(c.API), models[i].ID, models[i].SupportedEfforts).info()
+		models[i].EffortInfo = reasoningRule(resolveAPIEndpoint(c.Connection), models[i].ID, models[i].SupportedEfforts).info()
 		key := apiCapabilityKey(models[i].ID)
-		if result, ok := c.Capabilities[key]; ok && result.Fingerprint == configPrint(c, key) {
+		if result, ok := c.Capabilities[key]; ok && result.Fingerprint == nativeConfigPrint(c.Connection, models[i].ID) {
 			models[i].Capability = &result
 		}
 	}
@@ -301,7 +248,7 @@ func (s *Server) apiAgentModels(ctx context.Context, c AIConfig) ([]AgentModel, 
 		if task == taskResearch {
 			choiceTask = taskChat
 		}
-		id := defaultTaskModel(choiceTask, "api", passed)
+		id := defaultTaskModel(choiceTask, passed)
 		if id == "" {
 			id = passed[0].ID
 		}

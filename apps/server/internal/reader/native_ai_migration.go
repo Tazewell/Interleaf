@@ -156,12 +156,11 @@ func migrateNativeAIConfig(legacy savedConfig) nativeAIStored {
 	} else {
 		stored.Config.NeedsConfiguration = "请确认主要 API 连接和模型；旧连接仅作为候选保留"
 	}
-	bridge := nativeLegacyView(stored)
 	if active {
 		for key, cap := range old.Capabilities {
 			cap.Fingerprint = legacy.Fingerprints[key]
 			if strings.HasPrefix(key, "api:") && cap.Fingerprint == configPrint(old, key) {
-				cap.Fingerprint = configPrint(bridge, key)
+				cap.Fingerprint = nativeConfigPrint(stored.Connection, strings.TrimPrefix(key, "api:"))
 				stored.Capabilities[key] = cap
 			}
 		}
@@ -190,7 +189,7 @@ func migrateNativeAIConfig(legacy savedConfig) nativeAIStored {
 				}
 				continue
 			}
-			cap.Fingerprint = configPrint(bridge, key)
+			cap.Fingerprint = nativeConfigPrint(stored.Connection, strings.TrimPrefix(key, "api:"))
 			stored.Capabilities[key] = cap
 		}
 	}

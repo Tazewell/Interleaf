@@ -103,7 +103,6 @@ import { ChatSession } from "./chat/chat-session";
 import { getChatSession } from "./chat/session-registry";
 import { SessionPicker } from "./chat/SessionPicker";
 import { AssistantPanel } from "./chat/AssistantPanel";
-import { CodexHandoffButton } from "./chat/CodexHandoffButton";
 import { ImagePreview, imageLabel } from "./ImagePreview";
 import { readingContext } from "./chat/reading-context";
 import { referenceLabel } from "./references";
@@ -1568,20 +1567,6 @@ export function Workspace({
                 >
                   <ChartColumn />
                 </Button>
-                {rightTab === "ai" && provider === "codex" && (
-                  <CodexHandoffButton
-                    key={doc.id}
-                    documentId={doc.id}
-                    sessionId={currentSession?.id}
-                    disabled={
-                      sending ||
-                      !chat.loaded ||
-                      !chat.messages.some(
-                        (message) => message.role === "assistant",
-                      )
-                    }
-                  />
-                )}
               </TabsList>
               <TabsContent
                 value="ai"

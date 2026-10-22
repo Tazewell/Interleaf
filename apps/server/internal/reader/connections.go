@@ -2,25 +2,20 @@ package reader
 
 import (
 	"bytes"
-	"context"
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"image"
 	"image/color"
 	"image/png"
 	"net/http"
 	"net/url"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"regexp"
-	"strconv"
 	"strings"
-	"time"
 )
 
 type APIConnection struct {
@@ -43,6 +38,9 @@ type Capability struct {
 	Error               string `json:"error,omitempty"`
 	Fingerprint         string `json:"-"`
 }
+
+// AIConfig and savedConfig decode historical JSON for one-time migration only.
+// Runtime and public configuration use NativeAIConfig.
 type AIConfig struct {
 	Primary string                       `json:"primary"`
 	Models  map[string]string            `json:"models"`
@@ -98,55 +96,6 @@ type AIResult struct {
 }
 
 func validAgent(p string) bool { return p == "codex" || p == "claude" || p == "kimi" || p == "api" }
-func (s *Server) aiConfig() AIConfig {
-	s.configMu.Lock()
-	defer s.configMu.Unlock()
-	return s.readAIConfig()
-}
-
-// Temporary server-only view for generation until the native runtime replaces it.
-func (s *Server) readAIConfig() AIConfig {
-	stored, err := s.readNativeAIConfig()
-	if err != nil {
-		return nativeLegacyView(emptyNativeAIStored())
-	}
-	return nativeLegacyView(stored)
-}
-
-// Legacy probes may update capabilities, but cannot create a second config source.
-func (s *Server) writeAIConfig(c AIConfig) error {
-	stored, err := s.readNativeAIConfig()
-	if err != nil {
-		return err
-	}
-	view := nativeLegacyView(stored)
-	comparable := c
-	comparable.Capabilities = nil
-	view.Capabilities = nil
-	incoming, _ := json.Marshal(comparable)
-	current, _ := json.Marshal(view)
-	if string(incoming) != string(current) {
-		// Private callers write through the same v2 source; public handlers never accept AIConfig.
-		fingerprints := map[string]string{}
-		for key, cap := range c.Capabilities {
-			fingerprints[key] = cap.Fingerprint
-		}
-		migrated := migrateNativeAIConfig(savedConfig{Config: c, Fingerprints: fingerprints})
-		if model, ok := stored.Config.Models[taskResearch]; ok {
-			migrated.Config.Models[taskResearch] = model
-		}
-		if effort, ok := stored.Config.Efforts[taskResearch]; ok {
-			migrated.Config.Efforts[taskResearch] = effort
-		}
-		if len(stored.Candidates) > 0 {
-			migrated.Candidates = stored.Candidates
-		}
-		stored = migrated
-	} else {
-		stored.Capabilities = c.Capabilities
-	}
-	return s.writeNativeAIConfig(stored)
-}
 func atomicFile(path string, b []byte) error {
 	if e := os.MkdirAll(filepath.Dir(path), 0700); e != nil {
 		return e
@@ -182,28 +131,11 @@ func configPrint(c AIConfig, p string) string {
 		// Checked per model, never as a whole.
 		return ""
 	} else {
-		path, _ := exec.LookPath(p)
-		value = []string{p, path, c.Models[p]}
+		value = []string{p, c.Models[p]}
 	}
 	b, _ := json.Marshal(value)
 	h := sha256.Sum256(b)
 	return hex.EncodeToString(h[:])
-}
-func capable(c AIConfig, p string, vision bool) bool {
-	if p == "api" {
-		return apiCapable(c, taskChat, false) && (!vision || apiCapable(c, taskChat, true))
-	}
-	v := c.Capabilities[p]
-	return v.Fingerprint == configPrint(c, p) && v.Text && (!vision || v.Vision)
-}
-func publicConfig(c AIConfig) AIConfig {
-	c.API.HasKey = c.API.Key != ""
-	c.API.Key = ""
-	c.TextAPI.HasKey = c.TextAPI.Key != ""
-	c.TextAPI.Key = ""
-	c.ImageAPI.HasKey = c.ImageAPI.Key != ""
-	c.ImageAPI.Key = ""
-	return c
 }
 func validateAPI(c APIConnection) error {
 	if e := validateAPIProtocol(c.Protocol); e != nil {
@@ -268,195 +200,11 @@ func (s *Server) putAIConfig(w http.ResponseWriter, r *http.Request) {
 	respond(w, 200, c)
 	s.wakeProcessing()
 }
-func (s *Server) testConnection(w http.ResponseWriter, r *http.Request) {
-	p := r.PathValue("provider")
-	if !validAgent(p) && p != "text-api" && p != "image-api" {
-		fail(w, 400, "未知连接")
-		return
-	}
-	if p == "api" {
-		// The API agent is checked one model at a time.
-		model := strings.TrimSpace(r.URL.Query().Get("model"))
-		if model == "" || len(model) > 200 {
-			fail(w, 400, "请选择要检测的 API 模型")
-			return
-		}
-		p = apiCapabilityKey(model)
-	}
-	mode := r.URL.Query().Get("capability")
-	textTimeout, visionTimeout := 45*time.Second, 90*time.Second
-	if raw := r.URL.Query().Get("timeoutSeconds"); raw != "" {
-		seconds, err := strconv.Atoi(raw)
-		if err != nil || seconds < 0 || seconds > 600 || !strings.HasPrefix(p, "api:") || mode == "tools" {
-			fail(w, 400, "检测等待上限须为 0–600 秒的整数，仅用于 API 模型的文本和图片检测")
-			return
-		}
-		if seconds > 0 {
-			textTimeout, visionTimeout = time.Duration(seconds)*time.Second, time.Duration(seconds)*time.Second
-		}
-	}
-	if mode == "tools" {
-		s.testDocumentToolConnection(w, r, p)
-		return
-	}
-	if mode != "" && mode != "text" && mode != "vision" || mode == "vision" && p == "text-api" {
-		fail(w, 400, "无效的检测能力")
-		return
-	}
-	c := s.aiConfig()
-	fingerprint := configPrint(c, p)
-	cap := Capability{CheckedAt: now(), Fingerprint: fingerprint}
-	if previous := c.Capabilities[p]; previous.Fingerprint == fingerprint {
-		cap.Tools, cap.ToolError = previous.Tools, previous.ToolError
-		cap.ToolSchemaVersion = previous.ToolSchemaVersion
-		if mode == "vision" {
-			cap.TextFirstOutputMs = previous.TextFirstOutputMs
-		}
-	}
-	if mode == "vision" {
-		if !capable(c, p, false) {
-			fail(w, 409, "请先完成文本检测")
-			return
-		}
-		cap.Text = true
-	} else {
-		// A completed, nonempty model response establishes text availability.
-		// Formatting and CLI subscription-login metadata are not capability gates.
-		answer, firstOutput, err := s.probeConnection(r.Context(), c, p, AIInput{Prompt: "Reply with exactly READER_OK. Do not use any tools."}, textTimeout)
-		cap.TextFirstOutputMs = firstOutput
-		if err != nil {
-			cap.Error = err.Error()
-		} else if strings.TrimSpace(answer) == "" {
-			cap.Error = "测试未返回文字"
-		} else {
-			cap.Text = true
-		}
-	}
-	cap.PendingVision = mode == "text" && cap.Text && p != "text-api"
-	if cap.Text && p != "text-api" && mode != "text" {
-		// The challenge still requires evidence from pixels; tolerate prose/formatting.
-		data, expected, probeErr := visionProbe()
-		if probeErr != nil {
-			cap.Error = "无法生成图片测试"
-		} else {
-			answer, firstOutput, err := s.probeConnection(r.Context(), c, p, AIInput{Prompt: visionPrompt, Image: data}, visionTimeout)
-			cap.VisionFirstOutputMs = firstOutput
-			if err != nil {
-				cap.Error = "文字可用；识图测试失败：" + err.Error()
-			} else if !matchesVisionProbe(answer, expected) {
-				cap.Error = "文字可用；识图测试未通过"
-			} else {
-				cap.Vision = true
-			}
-		}
-	}
-	if r.Context().Err() != nil {
-		return
-	}
-	s.configMu.Lock()
-	latest := s.readAIConfig()
-	if configPrint(latest, p) != fingerprint || latest.Capabilities[p].CheckedAt != c.Capabilities[p].CheckedAt {
-		s.configMu.Unlock()
-		fail(w, 409, "配置已改变，请重新检测")
-		return
-	}
-	latest.Capabilities[p] = cap
-	err := s.writeAIConfig(latest)
-	s.configMu.Unlock()
-	if err != nil {
-		fail(w, 500, "无法保存测试结果")
-		return
-	}
-	respond(w, 200, cap)
-	s.wakeProcessing()
-}
-
-// CLI probes use model defaults. API probes exercise saved reasoning settings;
-// catalog failures still allow a selected model to be tested.
-func (s *Server) probeConnection(parent context.Context, c AIConfig, p string, in AIInput, timeout time.Duration) (string, *int64, error) {
-	ctx, cancel := context.WithTimeout(parent, timeout)
-	defer cancel()
-	model := c.Models[p]
-	if model == "" && validAgent(p) {
-		// Test the model chat will actually use. Catalog failure keeps the CLI default.
-		if models, err := s.modelCatalog(ctx, p); err == nil {
-			model = defaultTaskModel(taskChat, p, models)
-		}
-	}
-	var adapter Adapter = cliAdapter{s.Store.Root, p, model}
-	if model, ok := strings.CutPrefix(p, "api:"); ok {
-		// Exercise the same parameter builder as generation, including the
-		// saved effort. A successful probe establishes acceptance, not efficacy.
-		efforts, selected := c.Efforts, c.Models["api"]
-		if len(in.images()) > 0 {
-			efforts, selected = c.VisionEfforts, c.VisionModels["api"]
-		}
-		effort := efforts["api"][model]
-		if selected == "" && efforts["api"][""] != "" {
-			effort = efforts["api"][""]
-		}
-		if effort == "" {
-			effort = "medium"
-		}
-		choice := apiModelChoice{model, effort}
-		adapter = apiAgentAdapter{c.API, choice, choice, taskChat, s.apiCatalog(c.API)}
-	}
-	if p == "text-api" {
-		adapter = apiAdapter{c.TextAPI}
-	}
-	if p == "image-api" {
-		adapter = apiAdapter{c.ImageAPI}
-	}
-	stream := adapter.Stream
-	var firstOutput *int64
-	if api, ok := adapter.(apiAgentAdapter); ok {
-		// Resolve catalog metadata before timing the actual completion request.
-		// Probes have no chat context or document tools.
-		stream = func(ctx context.Context, req GenerateRequest, _ func(ProviderEvent) error) (GenerateResult, error) {
-			completion, err := api.resolve(ctx, len(req.Input.images()) > 0)
-			if err != nil {
-				return GenerateResult{}, err
-			}
-			started := time.Now()
-			return streamCompletion(ctx, api.conn, completion, req.Input, func(event ProviderEvent) error {
-				if firstOutput == nil && (event.OutputObserved || strings.TrimSpace(event.Reasoning+event.Text) != "") {
-					elapsed := time.Since(started).Milliseconds()
-					firstOutput = &elapsed
-				}
-				return nil
-			})
-		}
-	}
-	result, err := stream(ctx, GenerateRequest{Input: in}, nil)
-	if ctx.Err() == context.DeadlineExceeded {
-		if strings.HasPrefix(p, "api:") {
-			return "", firstOutput, fmt.Errorf("检测超时（%g 秒），请检查网络或增加检测等待上限后重试", timeout.Seconds())
-		}
-		return "", nil, errors.New("检测超时，请检查网络或模型后重试")
-	}
-	return result.Text, firstOutput, err
-}
 
 var visionColorNames = regexp.MustCompile(`(?i)\b(?:red|blue|green|yellow)\b`)
 
 func matchesVisionProbe(answer, expected string) bool {
 	return strings.Join(visionColorNames.FindAllString(strings.ToUpper(answer), -1), " ") == expected
-}
-
-func (s *Server) generate(ctx context.Context, in AIInput, delta func(string), fallback func(string)) (AIResult, error) {
-	return s.generateWithConfig(ctx, s.aiConfig(), in, delta, fallback)
-}
-func (s *Server) generateWithConfig(ctx context.Context, c AIConfig, in AIInput, delta func(string), fallback func(string)) (AIResult, error) {
-	return s.generationService(c).generate(ctx, in, false, delta != nil, legacyEmitter(delta, fallback))
-}
-func (s *Server) invoke(ctx context.Context, c AIConfig, p string, in AIInput, delta func(string)) (string, error) {
-	service := s.generationService(c)
-	conn, ok := service.connections[p]
-	if !ok {
-		return "", generationError(ErrorConfiguration, "未知连接")
-	}
-	result, err := conn.Adapter.Stream(ctx, GenerateRequest{Input: in}, legacyEmitter(delta, nil))
-	return result.Text, err
 }
 
 func validEffort(provider, effort string) bool {

@@ -47,7 +47,6 @@ type documentToolTrace struct {
 }
 type documentAgent struct {
 	sessionID             string
-	codexCache            *documentCodexCache
 	canViewPages          bool
 	conversation          *documentConversation
 	conversationEvents    []toolCompletionMessage
@@ -96,7 +95,7 @@ func (a *documentAgent) resetAttempt(provider string) {
 	}
 	a.ID = id()
 	a.provider = provider
-	a.canViewPages = provider == "codex"
+	a.canViewPages = false
 	a.Traces = nil
 	a.Evidence = nil
 	a.bytes = 0

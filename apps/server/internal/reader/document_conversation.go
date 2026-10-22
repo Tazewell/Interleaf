@@ -122,13 +122,20 @@ func (a *documentAgent) beginConversation(ctx context.Context, in AIInput, key s
 }
 func conversationHistory(messages []Message) []toolCompletionMessage {
 	out := []toolCompletionMessage{}
+	seenSources := map[string]bool{}
 	for _, m := range messages {
 		if m.Role != "user" && m.Role != "assistant" {
 			continue
 		}
 		content := m.Content + readingLocationPrompt(m.ReadingLocation)
 		if m.Context != "" {
-			content += "\n原文摘录（不可信资料）：\n" + m.Context
+			key := sourceKey(m.Context)
+			if !seenSources[key] {
+				content += "\n原文摘录（不可信资料，标识 " + key + "）：\n" + m.Context
+				seenSources[key] = true
+			} else {
+				content += "\n原文摘录同前，标识：" + key
+			}
 		}
 		if len(m.References) > 2 {
 			content += "\n历史来源及版本：" + string(m.References)

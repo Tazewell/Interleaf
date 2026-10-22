@@ -144,14 +144,17 @@ func TestAPIHTTPBoundaries(t *testing.T) {
 }
 
 func TestAPIFallbackStreamsOverHTTP(t *testing.T) {
-	for _, provider := range []string{"codex", "claude", "kimi"} {
+	for _, provider := range []string{"api"} {
 		for _, vision := range []bool{false, true} {
 			t.Run(fmt.Sprintf("%s/image=%t", provider, vision), func(t *testing.T) {
-				fakeAgent(t, provider, "fail-before")
 				gate := make(chan struct{})
 				var released sync.Once
 				defer released.Do(func() { close(gate) })
 				upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					if r.Method == "GET" {
+						fmt.Fprint(w, `{"data":[{"id":"test"}]}`)
+						return
+					}
 					var body struct {
 						Stream   bool `json:"stream"`
 						N        int  `json:"n"`
@@ -159,7 +162,7 @@ func TestAPIFallbackStreamsOverHTTP(t *testing.T) {
 							Content json.RawMessage `json:"content"`
 						} `json:"messages"`
 					}
-					if json.NewDecoder(r.Body).Decode(&body) != nil || !body.Stream || body.N != 1 || len(body.Messages) != 2 {
+					if json.NewDecoder(r.Body).Decode(&body) != nil || !body.Stream || len(body.Messages) != 2 {
 						t.Error("not a streaming request")
 						return
 					}
@@ -181,13 +184,7 @@ func TestAPIFallbackStreamsOverHTTP(t *testing.T) {
 				}))
 				defer upstream.Close()
 				s, _ := imageFixture(t)
-				config := AIConfig{Primary: provider, Models: map[string]string{}, TextAPI: APIConnection{URL: upstream.URL, Model: "test"}, ImageAPI: APIConnection{URL: upstream.URL, Model: "test"}, Capabilities: map[string]Capability{}}
-				for _, p := range []string{provider, "text-api", "image-api"} {
-					config.Capabilities[p] = Capability{Text: true, Vision: true, Fingerprint: configPrint(config, p)}
-				}
-				if err := s.writeAIConfig(config); err != nil {
-					t.Fatal(err)
-				}
+				configureNativeTest(t, s, upstream.URL, "test", true)
 				server := httptest.NewServer(s.Handler())
 				defer server.Close()
 				body := map[string]any{"provider": provider, "prompt": "test", "context": ""}
@@ -222,8 +219,8 @@ func TestAPIFallbackStreamsOverHTTP(t *testing.T) {
 						fallback++
 					case "done":
 						done++
-					case "delta":
-						if fallback != 1 {
+					case "draft", "delta":
+						if fallback != 0 {
 							t.Fatal("delta before fallback")
 						}
 						var e struct {
@@ -232,8 +229,10 @@ func TestAPIFallbackStreamsOverHTTP(t *testing.T) {
 						if json.Unmarshal([]byte(strings.TrimPrefix(line, "data: ")), &e) != nil {
 							t.Fatal(line)
 						}
-						text += e.Text
-						if text == "首段" {
+						if event == "delta" {
+							text += e.Text
+						}
+						if event == "draft" && e.Text == "首段" {
 							var count int
 							if err := s.Store.DB.QueryRow("SELECT count(*) FROM messages").Scan(&count); err != nil || count != 1 {
 								t.Fatal("premature save", count, err)

@@ -14,14 +14,6 @@ func TestLiveDeepSeekNaturalFigureQuestion(t *testing.T) {
 	if os.Getenv("READER_TEST_DEEPSEEK_FIGURE") != "1" {
 		t.Skip("opt-in DeepSeek natural figure question with configured API")
 	}
-	raw, err := os.ReadFile(os.Getenv("READER_TEST_DOCUMENT_API_CONFIG"))
-	if err != nil {
-		t.Fatal("Reader API config unavailable")
-	}
-	var saved savedConfig
-	if json.Unmarshal(raw, &saved) != nil {
-		t.Fatal("invalid config")
-	}
 	node, err := exec.LookPath("node")
 	if err != nil {
 		t.Fatal(err)
@@ -51,11 +43,7 @@ func TestLiveDeepSeekNaturalFigureQuestion(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	c := AIConfig{Primary: "api", API: saved.Config.API, Models: map[string]string{"api": "deepseek-flash"}, APIModels: []string{"deepseek-flash"}, Capabilities: map[string]Capability{}}
-	passModels(&c, map[string]bool{"deepseek-flash": true}) // No prefilled tools result.
-	if err = s.writeAIConfig(c); err != nil {
-		t.Fatal(err)
-	}
+	configureLiveNative(t, s, true)
 	out := conversationRequest(t, s, "api", "第二页的图讲的是什么")
 	if !strings.Contains(out.Body.String(), "event: done") {
 		t.Fatal(out.Body.String())

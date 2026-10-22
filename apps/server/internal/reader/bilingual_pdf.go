@@ -82,7 +82,7 @@ type bilingualJob struct {
 	originalHash string
 	layoutHash   string
 	options      bilingualOptions
-	config       AIConfig
+	config       nativeAIStored
 	prepared     nativePrepared
 	reading      []TranslationBlock
 	targets      map[string]string
@@ -292,7 +292,13 @@ func (s *Server) newBilingualPDF(r *http.Request, options bilingualOptions) (bil
 	if e != nil {
 		return bilingualStatus{}, 500, errors.New("无法读取已有译文")
 	}
-	j := &bilingualJob{state: bilingualStatus{ID: id(), Status: "preparing", Stage: "prepare"}, documentID: d.ID, paperID: d.PaperID, work: work, originalHash: originalHash, layoutHash: sourceKey(string(raw)), options: options, config: s.aiConfig(), reading: reading, targets: map[string]string{}, start: make(chan bilingualStartRequest, 1), ctx: ctx, cancel: deadline, done: make(chan struct{})}
+	s.configMu.Lock()
+	frozen, configErr := s.readNativeAIConfig()
+	s.configMu.Unlock()
+	if configErr != nil {
+		return bilingualStatus{}, 500, configErr
+	}
+	j := &bilingualJob{state: bilingualStatus{ID: id(), Status: "preparing", Stage: "prepare"}, documentID: d.ID, paperID: d.PaperID, work: work, originalHash: originalHash, layoutHash: sourceKey(string(raw)), options: options, config: frozen, reading: reading, targets: map[string]string{}, start: make(chan bilingualStartRequest, 1), ctx: ctx, cancel: deadline, done: make(chan struct{})}
 	if e = s.validateBilingualSource(j); e != nil {
 		return bilingualStatus{}, 409, errors.New(e.Error())
 	}

@@ -24,6 +24,10 @@ func TestChatRegenerationReusesQuestionWithCurrentModel(t *testing.T) {
 	models := []string{}
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == "GET" {
+			w.Write([]byte(`{"data":[]}`))
+			return
+		}
+		if r.Method == "GET" {
 			respond(w, 200, map[string]any{"data": []any{map[string]string{"id": "test"}}})
 			return
 		}
@@ -89,6 +93,10 @@ func TestChatRetryRejectsChangedOrNonTailQuestion(t *testing.T) {
 		t.Run(kind, func(t *testing.T) {
 			s, _ := prepareConversationFixture(t)
 			upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.Method == "GET" {
+					w.Write([]byte(`{"data":[]}`))
+					return
+				}
 				t.Error("rejected retry reached provider")
 				w.WriteHeader(500)
 			}))
@@ -148,9 +156,12 @@ func TestChatRetryRejectsChangedOrNonTailQuestion(t *testing.T) {
 
 func TestChatRetryKeepsImagesAndUsesNewProvider(t *testing.T) {
 	s, pixels := imageFixture(t)
-	fakeAgent(t, "codex", "fail-after")
 	calls := 0
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "GET" {
+			w.Write([]byte(`{"data":[]}`))
+			return
+		}
 		if r.Method == "GET" {
 			respond(w, 200, map[string]any{"data": []any{map[string]string{"id": "vision"}}})
 			return
@@ -171,16 +182,16 @@ func TestChatRetryKeepsImagesAndUsesNewProvider(t *testing.T) {
 		if len(payload.Messages) != 2 {
 			t.Error("failed question repeated in history", len(payload.Messages))
 		}
+		if calls == 1 {
+			w.Header().Set("Content-Type", "text/event-stream")
+			fmt.Fprint(w, "data: {\"choices\":[{\"index\":0,\"delta\":{\"content\":\"partial\"}}]}\n\n")
+			return
+		}
 		writeConversationReply(w, "image answer", "")
 	}))
 	defer upstream.Close()
-	config := AIConfig{Primary: "codex", API: APIConnection{URL: upstream.URL}, Models: map[string]string{"api": "vision"}, APIModels: []string{"vision"}, Capabilities: map[string]Capability{}}
-	config.Capabilities["codex"] = Capability{Text: true, Vision: true, Fingerprint: configPrint(config, "codex")}
-	passModels(&config, map[string]bool{"vision": true})
-	if err := s.writeAIConfig(config); err != nil {
-		t.Fatal(err)
-	}
-	body := map[string]any{"provider": "codex", "prompt": "explain image", "context": "selected source", "attachments": []string{"p1-b1"}, "references": []any{map[string]string{"text": "selected source"}}, "readingLocation": map[string]any{"type": "pdf", "page": 1}, "userMessageId": "33333333333333333333333333333333"}
+	configureNativeTest(t, s, upstream.URL, "vision", true)
+	body := map[string]any{"provider": "api", "prompt": "explain image", "context": "selected source", "attachments": []string{"p1-b1"}, "references": []any{map[string]string{"text": "selected source"}}, "readingLocation": map[string]any{"type": "pdf", "page": 1}, "userMessageId": "33333333333333333333333333333333"}
 	first := request(t, s, "POST", "/api/documents/doc/chat", strings.NewReader(jsonText(body)))
 	if !strings.Contains(first.Body.String(), "event: error") {
 		t.Fatal(first.Body.String())
@@ -192,7 +203,7 @@ func TestChatRetryKeepsImagesAndUsesNewProvider(t *testing.T) {
 		t.Fatal(second.Body.String())
 	}
 	after := chatMessages(t, s)
-	if calls != 1 || len(after) != 2 || jsonText(before[0]) != jsonText(after[0]) || after[1].Content != "image answer" {
+	if calls != 2 || len(after) != 2 || jsonText(before[0]) != jsonText(after[0]) || after[1].Content != "image answer" {
 		t.Fatal("image retry changed question or left duplicates", after)
 	}
 }

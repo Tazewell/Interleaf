@@ -68,8 +68,6 @@ func (s *Server) ensureChatSession(documentID, provider string) (string, error) 
 	defer s.aiMu.Unlock()
 	session, err := s.Store.ensureDefaultChatSession(documentID, provider)
 	if err == nil {
-		s.codexChat.deleteDocument(documentID)
-		s.documentCodex.deleteDocument(documentID)
 	}
 	return session, err
 }
@@ -79,7 +77,7 @@ func (s *Server) listChatSessions(w http.ResponseWriter, r *http.Request) {
 		fail(w, 404, "文档不存在")
 		return
 	}
-	provider := s.aiConfig().Primary
+	provider := "api"
 	if !validAgent(provider) {
 		provider = "api"
 	}
@@ -248,11 +246,6 @@ func (s *Store) saveChatAnswer(ctx context.Context, chat *chatInput, text, reaso
 			return err
 		}
 	}
-	if chat.piConversation != nil {
-		chat.piConversation.LastMessageID = message.ID
-		if err = saveDocumentConversation(ctx, tx, chat.DocumentID, conversationProvider(chat.SessionID, chat.piProvider), *chat.piConversation); err != nil {
-			return err
-		}
-	}
+
 	return tx.Commit()
 }

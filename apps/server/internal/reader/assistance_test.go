@@ -100,6 +100,11 @@ func TestWholeDocumentTranslationReusesCachedResults(t *testing.T) {
 	_ = os.WriteFile(filepath.Join(s.analysisDir("doc"), "manifest.json"), raw, 0600)
 	var calls atomic.Int32
 	provider := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "GET" {
+			w.Header().Set("Content-Type", "application/json")
+			w.Write([]byte(`{"data":[]}`))
+			return
+		}
 		calls.Add(1)
 		input := readTranslationInput(t, r)
 		w.Header().Set("Content-Type", "text/event-stream")

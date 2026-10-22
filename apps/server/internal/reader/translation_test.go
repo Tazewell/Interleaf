@@ -59,6 +59,11 @@ func TestTranslationPartialFailureAndRetryPreservesCompletedBlocks(t *testing.T)
 	}
 	var calls atomic.Int32
 	provider := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "GET" {
+			w.Header().Set("Content-Type", "application/json")
+			w.Write([]byte(`{"data":[]}`))
+			return
+		}
 		n := calls.Add(1)
 		mismatched := strings.Replace(translationLine(m.Blocks[1]), "Another paragraph.", "Unrelated words here.", 1)
 		text := translationLine(m.Blocks[1])
@@ -75,11 +80,7 @@ func TestTranslationPartialFailureAndRetryPreservesCompletedBlocks(t *testing.T)
 		writeAPIReply(w, text)
 	}))
 	defer provider.Close()
-	c := AIConfig{Primary: "codex", Models: map[string]string{}, TextAPI: APIConnection{URL: provider.URL, Model: "test"}, Capabilities: map[string]Capability{}}
-	c.Capabilities["text-api"] = Capability{Text: true, Fingerprint: configPrint(c, "text-api")}
-	if err := s.writeAIConfig(c); err != nil {
-		t.Fatal(err)
-	}
+	configureTranslationTest(t, s, provider.URL)
 	if err := s.processTranslation(context.Background(), &p); err == nil {
 		t.Fatal("invalid translation reported success")
 	}
@@ -124,6 +125,11 @@ func TestTranslationResumesInterruptedWithoutPrioritizingRequestedParagraph(t *t
 	}
 	var order []string
 	provider := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "GET" {
+			w.Header().Set("Content-Type", "application/json")
+			w.Write([]byte(`{"data":[]}`))
+			return
+		}
 		batch := readTranslationInput(t, r).Batch
 		var out strings.Builder
 		for _, paragraph := range batch.Paragraphs {
@@ -167,6 +173,11 @@ func TestTranslationStageResumesPersistedProgressAfterRestart(t *testing.T) {
 			started := make(chan string, 1)
 			release := make(chan struct{})
 			provider := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.Method == "GET" {
+					w.Header().Set("Content-Type", "application/json")
+					w.Write([]byte(`{"data":[]}`))
+					return
+				}
 				batch := readTranslationInput(t, r).Batch
 				if len(batch.Paragraphs) != 1 {
 					t.Error("regenerated completed translation")

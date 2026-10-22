@@ -96,7 +96,7 @@ func bilingualStart(t *testing.T, s *Server, j string, translate bool) *httptest
 }
 func bilingualConfig(t *testing.T, s *Server, url, key, protocol string) {
 	t.Helper()
-	if err := s.writeAIConfig(AIConfig{Primary: "codex", API: APIConnection{URL: url, Key: key, Protocol: protocol}, TranslationModels: map[string]string{"api": "frozen-model"}, Models: map[string]string{"api": "chat-model"}}); err != nil {
+	if err := s.writeAIConfig(AIConfig{Primary: "api", API: APIConnection{URL: url, Key: key, Protocol: protocol}, TranslationModels: map[string]string{"api": "frozen-model"}, Models: map[string]string{"api": "chat-model"}}); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -789,7 +789,7 @@ func TestBilingualPDFProcessorCancellationJoins(t *testing.T) {
 	}
 }
 func TestBilingualPDFFrozenModelFallbacks(t *testing.T) {
-	for _, choice := range []string{"text", "legacy"} {
+	for _, choice := range []string{"text", "translation"} {
 		t.Run(choice, func(t *testing.T) {
 			s := bilingualFixture(t)
 			srv := bilingualMockAPI(t, `[{"id":"p1-b1","target":"你好"}]`, true, func(r *http.Request, b map[string]any) {
@@ -797,11 +797,12 @@ func TestBilingualPDFFrozenModelFallbacks(t *testing.T) {
 					t.Error("wrong fallback model", b["model"])
 				}
 			})
-			config := AIConfig{API: APIConnection{URL: srv.URL + "/v1", Protocol: "openai"}}
+			config := AIConfig{Primary: "api", API: APIConnection{URL: srv.URL + "/v1", Protocol: "openai"}}
 			if choice == "text" {
 				config.Models = map[string]string{"api": "expected-model"}
 			} else {
-				config.API.Model = "expected-model"
+				config.Models = map[string]string{"api": "chat-model"}
+				config.TranslationModels = map[string]string{"api": "expected-model"}
 			}
 			if err := s.writeAIConfig(config); err != nil {
 				t.Fatal(err)

@@ -101,7 +101,7 @@ func (s *Server) convertFormulas(ctx context.Context, documentID string, m layou
 		}
 		image, callErr := os.ReadFile(filepath.Join(s.analysisDir(documentID), b.Image))
 		if callErr == nil {
-			service := s.generationService(s.aiConfig())
+			service := s.currentGenerationServiceContext(ctx, taskVision)
 			service.usageSink = s.processingUsageSink(documentID, "translating", b.ID)
 			service.timeout = 3 * time.Minute
 			t.FormulaMarkdown, callErr = generateFormula(ctx, service, AIInput{Prompt: formulaPrompt + b.Text, Image: image})

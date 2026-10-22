@@ -9,8 +9,8 @@ import (
 )
 
 func TestSelectionTranslationBoundsAndCompletion(t *testing.T) {
-	g := &GenerationService{primary: "codex", connections: map[string]generationConnection{}}
-	g.connections["codex"] = generationConnection{VerifiedText: true, Adapter: adapterFunc(func(ctx context.Context, req GenerateRequest, emit func(ProviderEvent) error) (GenerateResult, error) {
+	g := &GenerationService{primary: "api", connections: map[string]generationConnection{}}
+	g.connections["api"] = generationConnection{VerifiedText: true, Adapter: adapterFunc(func(ctx context.Context, req GenerateRequest, emit func(ProviderEvent) error) (GenerateResult, error) {
 		if !req.Input.SourceOnly || req.Input.Chat != nil {
 			t.Fatal("selection translation must use an isolated source-only request")
 		}
@@ -34,8 +34,8 @@ func TestSelectionTranslationBoundsAndCompletion(t *testing.T) {
 
 func TestSelectionTranslationRejectsFailedPartialAndCancellation(t *testing.T) {
 	for _, canceled := range []bool{false, true} {
-		g := &GenerationService{primary: "codex", connections: map[string]generationConnection{}}
-		g.connections["codex"] = generationConnection{VerifiedText: true, Adapter: adapterFunc(func(ctx context.Context, req GenerateRequest, emit func(ProviderEvent) error) (GenerateResult, error) {
+		g := &GenerationService{primary: "api", connections: map[string]generationConnection{}}
+		g.connections["api"] = generationConnection{VerifiedText: true, Adapter: adapterFunc(func(ctx context.Context, req GenerateRequest, emit func(ProviderEvent) error) (GenerateResult, error) {
 			if canceled {
 				<-ctx.Done()
 				return GenerateResult{}, ctx.Err()

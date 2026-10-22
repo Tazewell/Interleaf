@@ -15,15 +15,15 @@ func TestRuntimeFailurePreservesVerifiedCapability(t *testing.T) {
 			}
 			defer store.DB.Close()
 			s := NewServer(store, "test", "")
-			c := AIConfig{Primary: "codex", Models: map[string]string{"codex": "model-a"}, Capabilities: map[string]Capability{}}
-			c.Capabilities["codex"] = Capability{Text: true, Vision: true, CheckedAt: "initial", Fingerprint: configPrint(c, "codex")}
+			configureNativeTest(t, s, "http://127.0.0.1:1", "model-a", true)
+			c := s.aiConfig()
 			if err := s.writeAIConfig(c); err != nil {
 				t.Fatal(err)
 			}
 			g := s.generationService(c)
 			ctx, cancel := context.WithCancel(t.Context())
 			defer cancel()
-			connection := g.connections["codex"]
+			connection := g.connections["api"]
 			connection.Adapter = adapterFunc(func(_ context.Context, _ GenerateRequest, emit func(ProviderEvent) error) (GenerateResult, error) {
 				if mode == "canceled" {
 					cancel()
@@ -34,11 +34,11 @@ func TestRuntimeFailurePreservesVerifiedCapability(t *testing.T) {
 				if mode == "new-model" || mode == "new-check" {
 					latest := s.aiConfig()
 					if mode == "new-model" {
-						latest.Models["codex"] = "model-b"
+						latest.Models["api"] = "model-b"
 					} else {
-						cap := latest.Capabilities["codex"]
+						cap := latest.Capabilities["api:model-a"]
 						cap.CheckedAt = "newer"
-						latest.Capabilities["codex"] = cap
+						latest.Capabilities["api:model-a"] = cap
 					}
 					if err := s.writeAIConfig(latest); err != nil {
 						t.Fatal(err)
@@ -56,7 +56,7 @@ func TestRuntimeFailurePreservesVerifiedCapability(t *testing.T) {
 				}
 				return GenerateResult{}, errors.New("provider unavailable")
 			})
-			g.connections["codex"] = connection
+			g.connections["api"] = connection
 			if mode == "fallback" {
 				g.connections["text-api"] = generationConnection{VerifiedText: true, Adapter: adapterFunc(func(_ context.Context, _ GenerateRequest, emit func(ProviderEvent) error) (GenerateResult, error) {
 					_ = emit(ProviderEvent{Text: "backup"})
@@ -73,22 +73,22 @@ func TestRuntimeFailurePreservesVerifiedCapability(t *testing.T) {
 				}
 				return nil
 			})
-			if mode == "fallback" && err != nil {
-				t.Fatal(err)
+			if err == nil {
+				t.Fatal("runtime failure unexpectedly succeeded")
 			}
-			saved := NewServer(store, "test", "").aiConfig().Capabilities["codex"]
+			saved := NewServer(store, "test", "").aiConfig().Capabilities["api:model-a"]
 
 			if !saved.Text || !saved.Vision || saved.Error != "" {
 				t.Fatalf("runtime failure revoked verified capability: %+v", saved)
 			}
 			if mode == "vision" || mode == "timeout" {
 				next := s.generationService(s.aiConfig())
-				connection := next.connections["codex"]
+				connection := next.connections["api"]
 				connection.Adapter = adapterFunc(func(_ context.Context, _ GenerateRequest, emit func(ProviderEvent) error) (GenerateResult, error) {
 					_ = emit(ProviderEvent{Text: "$$x=1$$"})
 					return GenerateResult{Text: "$$x=1$$", FinishReason: "stop"}, nil
 				})
-				next.connections["codex"] = connection
+				next.connections["api"] = connection
 				if _, err := next.Generate(t.Context(), input, false, nil); err != nil {
 					t.Fatalf("next formula blocked after a runtime error: %v", err)
 				}

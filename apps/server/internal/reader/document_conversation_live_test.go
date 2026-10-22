@@ -4,44 +4,17 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"os"
 	"strings"
 	"testing"
 	"time"
 )
 
 func TestLiveContinuousDocumentConversation(t *testing.T) {
-	provider := os.Getenv("READER_TEST_CONVERSATION_PROVIDER")
-	if provider != "codex" && provider != "api" {
-		t.Skip("set READER_TEST_CONVERSATION_PROVIDER=codex or api; original synthetic text only")
-	}
+	provider := "api"
 	s, a := prepareConversationFixture(t)
-	config := AIConfig{Primary: provider, Models: map[string]string{}, Capabilities: map[string]Capability{}}
-	if provider == "api" {
-		raw, err := os.ReadFile(os.Getenv("READER_TEST_DOCUMENT_API_CONFIG"))
-		if err != nil {
-			t.Fatal("Reader API connection unavailable")
-		}
-		var saved savedConfig
-		if json.Unmarshal(raw, &saved) != nil {
-			t.Fatal("invalid Reader API config")
-		}
-		config.API = saved.Config.API
-		if config.API.URL != "https://api.deepseek.com" && config.API.URL != "https://api.deepseek.com/v1" {
-			t.Fatal("expected official DeepSeek endpoint")
-		}
-		model := "deepseek-v4-pro"
-		config.Models[provider] = model
-		config.APIModels = []string{model}
-		config.Capabilities[apiCapabilityKey(model)] = Capability{Text: true, Tools: "passed", ToolSchemaVersion: documentToolSchemaVersion, Fingerprint: configPrint(config, apiCapabilityKey(model))}
-	} else {
-		config.Capabilities[provider] = Capability{Text: true, Fingerprint: configPrint(config, provider)}
-	}
-	if err := s.writeAIConfig(config); err != nil {
-		t.Fatal(err)
-	}
+	stored := configureLiveNative(t, s, false)
+	config := nativeLegacyView(stored)
 	questions := []string{"请记住口令 LANTERN-72841，后面都用中文回答。请读原文确认 cobalt 协议的 nonce，并给出处。", "只复述我上轮要求记住的口令。", "继续上次的讨论：口令是什么？cobalt 协议只适用于什么交易？请引用原文。"}
-	firstThread := ""
 	for i, q := range questions {
 		start := time.Now()
 		out := conversationRequest(t, s, provider, q)
@@ -62,14 +35,6 @@ func TestLiveContinuousDocumentConversation(t *testing.T) {
 		}
 		var state documentConversation
 		_ = json.Unmarshal([]byte(raw), &state)
-		if provider == "codex" {
-			if i == 0 {
-				firstThread = state.NativeThread
-			}
-			if state.NativeThread != firstThread {
-				t.Fatal("thread changed between questions")
-			}
-		}
 		usage, _ := s.Store.scopedUsageReport("doc", true)
 		cached := "unknown"
 		if usage.Total.CachedInputTokens != nil {

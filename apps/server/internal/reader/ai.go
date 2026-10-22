@@ -1,13 +1,10 @@
 package reader
 
 import (
-	"context"
 	"encoding/json"
 	"net/http"
-	"os/exec"
 	"regexp"
 	"strings"
-	"time"
 )
 
 type Provider struct {
@@ -17,66 +14,13 @@ type Provider struct {
 	Status        string `json:"status"`
 }
 
-func providerStatus(ctx context.Context, name string) Provider {
-	p := Provider{ID: name, Status: "未安装"}
-	exe, err := exec.LookPath(name)
-	if err != nil {
-		return p
-	}
-	p.Installed = true
-	if name == "kimi" {
-		p.Status = "请测试可用性"
-		return p
-	}
-	args := []string{"login", "status"}
-	if name == "claude" {
-		args = []string{"auth", "status"}
-	}
-	child, cancel := context.WithTimeout(ctx, 8*time.Second)
-	defer cancel()
-	cmd := exec.CommandContext(child, exe, args...)
-	output, err := cmd.Output()
-	p.Authenticated = err == nil
-	if name == "claude" && err == nil {
-		var auth struct {
-			LoggedIn bool `json:"loggedIn"`
-		}
-		if json.Unmarshal(output, &auth) == nil {
-			p.Authenticated = auth.LoggedIn
-		}
-	}
-	if p.Authenticated {
-		p.Status = "已登录"
-	} else {
-		p.Status = "登录状态未确认，请测试实际可用性"
-	}
-	return p
-}
 func (s *Server) providers(w http.ResponseWriter, r *http.Request) {
-	out := []Provider{}
-	for _, name := range []string{"codex", "claude", "kimi"} {
-		if r.URL.Query().Get("auth") == "skip" {
-			_, err := exec.LookPath(name)
-			status := "未安装"
-			if err == nil {
-				status = "待检测"
-			}
-			out = append(out, Provider{ID: name, Installed: err == nil, Status: status})
-		} else {
-			out = append(out, providerStatus(r.Context(), name))
-		}
+	config, err := s.nativeAIConfig()
+	if err != nil {
+		fail(w, 500, "无法读取 AI 配置")
+		return
 	}
-	respond(w, 200, append(out, apiProvider(s.aiConfig().API)))
-}
-
-// The API agent has nothing to install; a saved endpoint counts as installed
-// so Settings runs its capability checks.
-func apiProvider(c APIConnection) Provider {
-	p := Provider{ID: "api", Installed: c.URL != "", Authenticated: c.Key != "", Status: "未配置"}
-	if p.Installed {
-		p.Status = "已配置"
-	}
-	return p
+	respond(w, 200, []Provider{{ID: "api", Installed: config.Connection.URL != "", Authenticated: config.Connection.HasKey, Status: "API"}})
 }
 
 var chatMessageIDPattern = regexp.MustCompile(`^[a-f0-9]{32}$`)

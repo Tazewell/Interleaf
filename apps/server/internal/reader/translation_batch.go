@@ -473,20 +473,18 @@ func (s *Server) settleTranslations(ctx context.Context, p *Processing, m transl
 			}
 			return nil
 		}
-		config := options.apply(s.aiConfig())
-		if !validAgent(config.Primary) || !(primaryCapable(config, taskTranslation) || capable(config, "text-api", false)) {
-			s.configMu.Lock()
-			config = options.apply(s.readAIConfig())
-			if !validAgent(config.Primary) || !(primaryCapable(config, taskTranslation) || capable(config, "text-api", false)) {
-				s.processingMu.Lock()
-				p.Status = "waiting"
-				p.Detail = "请选择主 Agent 并完成文字能力测试，随后继续翻译"
-				err = s.Store.saveProcessing(*p)
-				s.processingMu.Unlock()
-				s.configMu.Unlock()
-				return err
-			}
-			s.configMu.Unlock()
+		s.configMu.Lock()
+		stored, configErr := s.readNativeAIConfig()
+		s.configMu.Unlock()
+		stored.Config = options.apply(stored.Config)
+		snapshot, snapshotErr := s.resolveNativeStoredTask(ctx, stored, taskTranslation)
+		if configErr != nil || snapshotErr != nil {
+			s.processingMu.Lock()
+			p.Status = "waiting"
+			p.Detail = "请配置 API 翻译模型后继续翻译"
+			err = s.Store.saveProcessing(*p)
+			s.processingMu.Unlock()
+			return err
 		}
 		var progressMu sync.Mutex
 		progress := func() {
@@ -509,7 +507,7 @@ func (s *Server) settleTranslations(ctx context.Context, p *Processing, m transl
 			workers.Add(1)
 			go func() {
 				defer workers.Done()
-				service, session := s.translationService(config)
+				service, session := s.nativeTranslationService(snapshot, stored.Config.TranslationPrompt)
 				defer session.close()
 				for batch := range jobs {
 					if work.Err() != nil {

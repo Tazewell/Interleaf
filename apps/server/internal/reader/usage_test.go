@@ -5,8 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"os"
-	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
@@ -75,8 +73,8 @@ func TestUsageLedgerKeepsConcurrentFailuresSnapshotsAndRetries(t *testing.T) {
 }
 func TestUsageRecordsFallbackAndPreservesFailedUsage(t *testing.T) {
 	s, _ := processingFixture(t)
-	g := &GenerationService{primary: "codex", usageSink: s.processingUsageSink("doc", "settling", "p1-b1"), connections: map[string]generationConnection{
-		"codex": {VerifiedText: true, VerifiedVision: true, Adapter: adapterFunc(func(ctx context.Context, req GenerateRequest, emit func(ProviderEvent) error) (GenerateResult, error) {
+	g := &GenerationService{primary: "api", usageSink: s.processingUsageSink("doc", "settling", "p1-b1"), connections: map[string]generationConnection{
+		"api": {VerifiedText: true, VerifiedVision: true, Adapter: adapterFunc(func(ctx context.Context, req GenerateRequest, emit func(ProviderEvent) error) (GenerateResult, error) {
 			emit(ProviderEvent{Metrics: []ModelTokens{{Model: "primary", Tokens: &TokenCounts{InputTokens: 4, OutputTokens: 1, TotalTokens: 5}}}})
 			return GenerateResult{}, errors.New("upstream")
 		})},
@@ -87,11 +85,11 @@ func TestUsageRecordsFallbackAndPreservesFailedUsage(t *testing.T) {
 		})},
 	}}
 	result, err := g.Generate(t.Context(), AIInput{Image: []byte("png")}, false, nil)
-	if err != nil || !result.Fallback {
+	if err == nil || result.Fallback {
 		t.Fatal(result, err)
 	}
 	r, err := s.Store.usageReport("doc")
-	if err != nil || len(r.Calls) != 2 || r.Total.TotalTokens != 15 || r.UnknownCalls != 0 || r.PartialCalls != 1 {
+	if err != nil || len(r.Calls) != 1 || r.Total.TotalTokens != 5 || r.UnknownCalls != 0 || r.PartialCalls != 1 {
 		t.Fatal(r, err)
 	}
 }
@@ -137,18 +135,6 @@ func TestClaudeUsageNormalizesCacheAndMultipleModels(t *testing.T) {
 		t.Fatal(metrics)
 	}
 }
-func TestCodexUsageUsesThreadTotalAndFiltersOtherThreads(t *testing.T) {
-	// Real adapter with the existing CLI protocol fixture, no live credentials.
-	fakeAgent(t, "codex", "usage")
-	root := t.TempDir()
-	os.MkdirAll(filepath.Join(root, "ai-work"), 0700)
-	var models []ModelTokens
-	text, err := invokeCLI(t.Context(), root, "codex", "", AIInput{Prompt: "test"}, nil, func(m []ModelTokens) { models = mergeModelTokens(models, m) })
-	if err != nil || text != "你好，世界" || len(models) != 1 || models[0].Model != "actual-codex" || models[0].Tokens == nil || models[0].Tokens.TotalTokens != 30 {
-		b, _ := json.Marshal(models)
-		t.Fatalf("%s %s %v", text, b, err)
-	}
-}
 
 func TestCodexMissingCountersRemainUnknown(t *testing.T) {
 	for _, raw := range []string{`{}`, `{"inputTokens":null,"outputTokens":0,"totalTokens":0}`, `{"inputTokens":-1,"outputTokens":1,"totalTokens":0}`} {
@@ -164,8 +150,8 @@ func TestCodexMissingCountersRemainUnknown(t *testing.T) {
 }
 func TestUsageStorageFailureDoesNotTriggerFallback(t *testing.T) {
 	attempts := 0
-	g := &GenerationService{primary: "codex", usageSink: func(UsageCall) error { return errors.New("storage unavailable") }, connections: map[string]generationConnection{}}
-	for _, provider := range []string{"codex", "text-api"} {
+	g := &GenerationService{primary: "api", usageSink: func(UsageCall) error { return errors.New("storage unavailable") }, connections: map[string]generationConnection{}}
+	for _, provider := range []string{"api", "text-api"} {
 		g.connections[provider] = generationConnection{VerifiedText: true, Adapter: adapterFunc(func(context.Context, GenerateRequest, func(ProviderEvent) error) (GenerateResult, error) {
 			attempts++
 			return GenerateResult{}, nil
@@ -178,21 +164,16 @@ func TestUsageStorageFailureDoesNotTriggerFallback(t *testing.T) {
 }
 
 func TestChatUsageRecordsTextAndImageAndSeparatesProcessing(t *testing.T) {
-	fakeAgent(t, "codex", "usage")
 	s, _ := imageFixture(t)
-	config := AIConfig{Primary: "codex", Models: map[string]string{}, Capabilities: map[string]Capability{}}
-	config.Capabilities["codex"] = Capability{Text: true, Vision: true, Fingerprint: configPrint(config, "codex")}
-	if err := s.writeAIConfig(config); err != nil {
-		t.Fatal(err)
-	}
-	for _, body := range []string{`{"provider":"codex","prompt":"explain","context":""}`, `{"provider":"codex","prompt":"describe image","context":"","attachments":["p1-b1"]}`} {
+	nativeFakeAgent(t, s, "usage")
+	for _, body := range []string{`{"provider":"api","prompt":"explain","context":""}`, `{"provider":"api","prompt":"describe image","context":"","attachments":["p1-b1"]}`} {
 		res := request(t, s, "POST", "/api/documents/doc/chat", strings.NewReader(body))
 		if !strings.Contains(res.Body.String(), "event: done") {
 			t.Fatal(res.Body.String())
 		}
 	}
 	r, err := s.Store.scopedUsageReport("doc", true)
-	if err != nil || !r.HistoryComplete || len(r.Calls) != 2 || r.Total.TotalTokens != 60 || r.Calls[0].Target == r.Calls[1].Target || r.Calls[0].Models[0].Model != "actual-codex" {
+	if err != nil || !r.HistoryComplete || len(r.Calls) != 2 || r.Total.TotalTokens != 60 || r.Calls[0].Target == r.Calls[1].Target || r.Calls[0].Models[0].Model != "native-model" {
 		t.Fatal(r, err)
 	}
 	processing, err := s.Store.usageReport("doc")

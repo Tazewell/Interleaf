@@ -39,8 +39,8 @@ export function CommandLineSettings({ open }: { open: boolean }) {
     <section className="mt-7 border-t pt-5">
       <h3 className="mb-3 text-sm font-medium">命令行工具</h3>
       <p className="mb-4 text-xs leading-5 text-muted-foreground">
-        在终端运行 <code>reader</code>，让 Claude Code、Codex
-        等工具检索、阅读和导入书库中的文档。使用时 Reader 需要保持打开。
+        在终端运行 <code>reader</code>，检索、阅读和导入书库中的文档。
+        使用时 Reader 需要保持打开。
       </p>
       {status && !status.supported ? (
         <p className="text-xs leading-5 text-muted-foreground">

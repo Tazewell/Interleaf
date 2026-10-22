@@ -34,9 +34,9 @@ func TestFormulaTimeoutRetryIsBoundedAndCancelable(t *testing.T) {
 				}()
 				calls := 0
 				service := &GenerationService{
-					primary: "codex",
+					primary: "api",
 					connections: map[string]generationConnection{
-						"codex": {
+						"api": {
 							VerifiedText: true, VerifiedVision: true,
 							Adapter: adapterFunc(func(call context.Context, _ GenerateRequest, emit func(ProviderEvent) error) (GenerateResult, error) {
 								calls++
@@ -118,7 +118,7 @@ func TestFormulaTimeoutRetrySavesOnlyCompletedResult(t *testing.T) {
 	if err != nil || calls.Load() != 2 || items[0].Status != "complete" || items[0].FormulaMarkdown != "$$x=1$$\n" || items[1].Status != "pending" {
 		t.Fatalf("calls=%d items=%+v err=%v", calls.Load(), items, err)
 	}
-	if !capable(s.aiConfig(), "image-api", true) {
+	if !capable(s.aiConfig(), "api:vision", true) {
 		t.Fatal("formula timeout revoked verified image capability")
 	}
 }

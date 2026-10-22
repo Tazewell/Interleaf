@@ -20,34 +20,32 @@ type translationRunOptions struct {
 	Prompt      string `json:"prompt"`
 }
 
-func snapshotTranslationOptions(c AIConfig) translationRunOptions {
-	model := c.TranslationModels[c.Primary]
-	o := translationRunOptions{Provider: c.Primary, Model: model, Effort: c.TranslationEfforts[c.Primary][model]}
+func snapshotTranslationOptions(c NativeAIConfig) translationRunOptions {
+	o := translationRunOptions{Provider: "api", Model: c.Models[taskTranslation], Effort: c.Efforts[taskTranslation]}
 	if c.TranslationPrompt != nil {
 		o.Prompt = *c.TranslationPrompt
 	}
 	return o
 }
-
-func (o *translationRunOptions) apply(c AIConfig) AIConfig {
+func (o *translationRunOptions) apply(c NativeAIConfig) NativeAIConfig {
 	if o == nil {
 		return c
 	}
-	c.Primary = o.Provider
-	c.TranslationModels = maps.Clone(c.TranslationModels)
-	if c.TranslationModels == nil {
-		c.TranslationModels = map[string]string{}
+	c.Models = maps.Clone(c.Models)
+	c.Efforts = maps.Clone(c.Efforts)
+	if c.Models == nil {
+		c.Models = map[modelTask]string{}
 	}
-	c.TranslationModels[o.Provider] = o.Model
-	c.TranslationEfforts = maps.Clone(c.TranslationEfforts)
-	if c.TranslationEfforts == nil {
-		c.TranslationEfforts = map[string]map[string]string{}
+	if c.Efforts == nil {
+		c.Efforts = map[modelTask]string{}
 	}
-	c.TranslationEfforts[o.Provider] = maps.Clone(c.TranslationEfforts[o.Provider])
-	if c.TranslationEfforts[o.Provider] == nil {
-		c.TranslationEfforts[o.Provider] = map[string]string{}
+	// Old CLI choices cannot silently become a paid API model after migration.
+	if o.Provider != "" && o.Provider != "api" {
+		c.NeedsConfiguration = "请重新选择 API 翻译模型"
+		return c
 	}
-	c.TranslationEfforts[o.Provider][o.Model] = o.Effort
+	c.Models[taskTranslation] = o.Model
+	c.Efforts[taskTranslation] = o.Effort
 	c.TranslationPrompt = &o.Prompt
 	return c
 }
@@ -91,8 +89,8 @@ func (s *Server) requestRetranslation(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer lock.Unlock()
-	config := s.aiConfig()
-	if !validAgent(config.Primary) || !(primaryCapable(config, taskTranslation) || capable(config, "text-api", false)) {
+	config, configErr := s.nativeAIConfig()
+	if configErr != nil || s.currentGenerationServiceContext(r.Context(), taskTranslation).ValidateInput(AIInput{}, false) != nil {
 		fail(w, 409, "请先配置并检测翻译模型")
 		return
 	}

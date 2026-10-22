@@ -682,11 +682,6 @@ export const api = {
       `/api/documents/${id}/chat-sessions/${sessionId}/runs/${runId}/cancel`,
       { method: "POST", signal: AbortSignal.timeout(30_000) },
     ),
-  codexHandoff: (id: string, sessionId?: string) =>
-    request<components["schemas"]["CodexHandoff"]>(
-      `/api/documents/${encodeURIComponent(id)}/codex-handoff${sessionId ? `?sessionId=${encodeURIComponent(sessionId)}` : ""}`,
-      { method: "POST" },
-    ),
   validateEvidence: (id: string, message: string, source: string) =>
     request<{ valid: boolean }>(
       `/api/documents/${encodeURIComponent(id)}/messages/${encodeURIComponent(message)}/sources/${encodeURIComponent(source)}`,

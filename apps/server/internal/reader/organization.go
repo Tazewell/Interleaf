@@ -140,7 +140,7 @@ func (s *Server) classificationWorker(ctx context.Context) {
 			return
 		case <-tick.C:
 		}
-		service := s.generationService(s.aiConfig())
+		service := s.currentGenerationServiceContext(ctx, taskChat)
 		if service.ValidateInput(AIInput{}, false) != nil {
 			continue
 		}

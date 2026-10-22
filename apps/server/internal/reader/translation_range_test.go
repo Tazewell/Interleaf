@@ -246,6 +246,10 @@ func TestBookTranslatesWholeRequestedChapterWithPaperWorkers(t *testing.T) {
 	var mu sync.Mutex
 	translated := []string{}
 	provider := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "GET" {
+			w.Write([]byte(`{"data":[]}`))
+			return
+		}
 		input := readTranslationInput(t, r)
 		w.Header().Set("Content-Type", "text/event-stream")
 		for _, paragraph := range input.Batch.Paragraphs {

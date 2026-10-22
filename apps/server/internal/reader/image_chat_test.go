@@ -57,6 +57,11 @@ func TestImageChatSendsPixelsAndRecordsAttachmentWithFallback(t *testing.T) {
 	s, data := imageFixture(t)
 	calls := 0
 	api := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "GET" {
+			w.Header().Set("Content-Type", "application/json")
+			w.Write([]byte(`{"data":[]}`))
+			return
+		}
 		calls++
 		var body struct {
 			Messages []struct {
@@ -81,20 +86,22 @@ func TestImageChatSendsPixelsAndRecordsAttachmentWithFallback(t *testing.T) {
 			t.Error(err)
 			return
 		}
-		if len(content) != 2 || content[1].ImageURL.URL != imageData(data) {
+		images := 0
+		for _, part := range content {
+			if part.ImageURL.URL == imageData(data) {
+				images++
+			}
+		}
+		if images != 1 {
 			t.Error("original image pixels missing")
 		}
 		w.Header().Set("Content-Type", "application/json")
 		writeAPIReply(w, "Image explanation")
 	}))
 	defer api.Close()
-	config := AIConfig{Primary: "codex", Models: map[string]string{}, ImageAPI: APIConnection{URL: api.URL, Model: "vision"}, Capabilities: map[string]Capability{}}
-	config.Capabilities["image-api"] = Capability{Text: true, Vision: true, Fingerprint: configPrint(config, "image-api")}
-	if err := s.writeAIConfig(config); err != nil {
-		t.Fatal(err)
-	}
-	res := request(t, s, "POST", "/api/documents/doc/chat", strings.NewReader(`{"provider":"codex","prompt":"Explain","context":"source","attachments":["p1-b1","p1-b1"]}`))
-	if res.Code != 200 || !strings.Contains(res.Body.String(), "event: fallback") || !strings.Contains(res.Body.String(), "event: done") || calls != 1 {
+	configureNativeTest(t, s, api.URL, "vision", true)
+	res := request(t, s, "POST", "/api/documents/doc/chat", strings.NewReader(`{"provider":"api","prompt":"Explain","context":"source","attachments":["p1-b1","p1-b1"]}`))
+	if res.Code != 200 || strings.Contains(res.Body.String(), "event: fallback") || !strings.Contains(res.Body.String(), "event: done") || calls != 1 {
 		t.Fatalf("chat failed: %d %s", res.Code, res.Body.String())
 	}
 	messages := request(t, s, "GET", "/api/documents/doc/messages", nil)
@@ -109,7 +116,7 @@ func TestImageChatSendsPixelsAndRecordsAttachmentWithFallback(t *testing.T) {
 func TestImageChatRejectsInvalidOrUnverifiedInput(t *testing.T) {
 	s, _ := imageFixture(t)
 	for _, ids := range []string{`["p1-b1"]`, `["../secret"]`, `["p1-b2"]`, `["p1-b1","p1-b1","p1-b1","p1-b1","p1-b1"]`} {
-		res := request(t, s, "POST", "/api/documents/doc/chat", strings.NewReader(`{"provider":"codex","prompt":"Explain","context":"","attachments":`+ids+`}`))
+		res := request(t, s, "POST", "/api/documents/doc/chat", strings.NewReader(`{"provider":"api","prompt":"Explain","context":"","attachments":`+ids+`}`))
 		if res.Code != 400 {
 			t.Fatalf("expected rejection: %d %s", res.Code, res.Body.String())
 		}
@@ -130,6 +137,11 @@ func TestImageAPIKeepsMultipleAttachments(t *testing.T) {
 		t.Fatal(err)
 	}
 	api := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "GET" {
+			w.Header().Set("Content-Type", "application/json")
+			w.Write([]byte(`{"data":[]}`))
+			return
+		}
 		var body struct {
 			Messages []struct {
 				Content json.RawMessage `json:"content"`

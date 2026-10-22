@@ -67,6 +67,14 @@ func (s *Server) blockImage(w http.ResponseWriter, r *http.Request, documentID, 
 }
 func (s *Server) chatDocument(w http.ResponseWriter, r *http.Request, document Document, provider, question, textContext string, references json.RawMessage, ids []string, readingLocation json.RawMessage, userMessageID string) {
 	documentID := document.ID
+	prep, finishPrep, prepErr := s.beginDocumentTask(r.Context(), document.ID)
+	if prepErr != nil {
+		fail(w, 404, "文档已不可用")
+		return
+	}
+	defer finishPrep()
+	r = r.WithContext(prep)
+
 	if len(ids) > 4 {
 		fail(w, 400, "每次最多附加 4 张图片")
 		return
@@ -95,15 +103,18 @@ func (s *Server) chatDocument(w http.ResponseWriter, r *http.Request, document D
 		attachments = append(attachments, ImageAttachment{ID: block.ID, Page: block.Page, Label: block.Label, Caption: block.Caption})
 		fmt.Fprintf(&descriptions, "\n附件 %d · 第 %d 页 · %s\n%s\n%s\n", len(images), block.Page, block.Label, block.Caption, block.Text)
 	}
-	config := s.aiConfig()
-	config.Primary = provider
-	if err := s.generationService(config).ValidateInput(AIInput{Images: images, Chat: &chatInput{}}, true); err != nil {
+	role := taskChat
+	if len(images) > 0 {
+		role = taskVision
+	}
+	service := s.currentGenerationServiceContext(r.Context(), role)
+	if err := service.ValidateInput(AIInput{Images: images, Chat: &chatInput{}}, true); err != nil {
 		fail(w, 400, err.Error())
 		return
 	}
 	if r.PathValue("session") != "" {
 		user := Message{ID: userMessageID, DocumentID: documentID, Role: "user", Content: question, Context: textContext, References: references, Attachments: attachments, ReadingLocation: readingLocation}
-		s.startSessionChat(w, r, document, config, user, images, textContext+descriptions.String())
+		s.startSessionChat(w, r, document, service, user, images, textContext+descriptions.String())
 		return
 	}
 	if !s.aiMu.TryLock() {
@@ -131,7 +142,7 @@ func (s *Server) chatDocument(w http.ResponseWriter, r *http.Request, document D
 		return
 	}
 	chat := &chatInput{server: s, DocumentID: documentID, Title: document.Title, Summary: document.Metadata.Abstract, Question: question, CurrentText: textContext + descriptions.String(), History: history, ReadingLocation: readingLocation}
-	s.streamChat(ctx, cancel, w, documentID, config, AIInput{Prompt: question, Images: images, Chat: chat})
+	s.streamChat(ctx, cancel, w, documentID, service, AIInput{Prompt: question, Images: images, Chat: chat})
 }
 
 // Called under aiMu: only the unanswered tail may be reused. Never delete a

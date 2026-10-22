@@ -3,12 +3,9 @@ package reader
 import (
 	"context"
 	"errors"
-	"fmt"
-	"log"
 	"log/slog"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"time"
 )
 
@@ -81,6 +78,7 @@ type generationConnection struct {
 	Incremental                  bool
 }
 type GenerationService struct {
+	initialError            error
 	translationInstructions string
 	timeout                 time.Duration // Zero keeps the normal three-minute request limit.
 	primary                 string
@@ -88,128 +86,6 @@ type GenerationService struct {
 	usageSink               func(UsageCall) error
 }
 
-func (s *Server) generationService(config AIConfig) *GenerationService {
-	return s.taskGenerationService(config, taskChat)
-}
-
-func (s *Server) taskGenerationService(config AIConfig, task modelTask) *GenerationService {
-	g := &GenerationService{primary: config.Primary, connections: map[string]generationConnection{}}
-	models, efforts := config.Models, config.Efforts
-	if task == taskTranslation {
-		models, efforts = config.TranslationModels, config.TranslationEfforts
-		if config.TranslationPrompt != nil {
-			g.translationInstructions = *config.TranslationPrompt
-		}
-	}
-	// Capability checks describe a tested configuration. Runtime failures are
-	// reported per attempt below; they must not revoke a successful probe.
-
-	for _, p := range []string{"codex", "claude", "kimi", "api", "text-api", "image-api"} {
-		model := models[p]
-		level := efforts[p][model]
-		if level == "" {
-			level = "medium"
-		}
-		cli := configuredCLIAdapter{cliAdapter{s.Store.Root, p, model}, level, task, s.modelCatalog}
-		var adapter Adapter = cli
-		if p == "codex" {
-			adapter = codexChatAdapter{cli, &s.codexChat}
-		}
-		if p == "text-api" {
-			adapter = apiAdapter{config.TextAPI}
-		}
-		if p == "image-api" {
-			adapter = apiAdapter{config.ImageAPI}
-		}
-		if p == "api" {
-			g.connections[p] = generationConnection{s.apiAgentAdapter(config, task), apiCapable(config, task, false), apiCapable(config, task, true), true}
-			continue
-		}
-		g.connections[p] = generationConnection{adapter, capable(config, p, false), capable(config, p, true), true}
-	}
-	return g
-}
-
-type cliAdapter struct{ root, provider, model string }
-
-// Capture the selected effort alongside the model in the request snapshot.
-// Resolve native capabilities only when this connection is actually attempted.
-type configuredCLIAdapter struct {
-	cliAdapter
-	level   string
-	task    modelTask
-	catalog func(context.Context, string) ([]AgentModel, error)
-}
-
-// streamWith fills an unset model with the task default and maps the effort.
-// If that automatic choice fails before any text, retry once with the CLI's
-// own default: the account may not offer the recommended model. A model the
-// user chose is never replaced.
-func (a configuredCLIAdapter) streamWith(ctx context.Context, req GenerateRequest, emit func(ProviderEvent) error, run func(cliAdapter, GenerateRequest, func(ProviderEvent) error) (GenerateResult, error)) (GenerateResult, error) {
-	models, err := a.catalog(ctx, a.provider)
-	if err != nil {
-		return GenerateResult{}, generationError(ErrorConfiguration, "无法获取模型的 Effort 配置，请重试")
-	}
-	cli := a.cliAdapter
-	automatic := cli.model == ""
-	if automatic {
-		cli.model = defaultTaskModel(a.task, a.provider, models)
-	}
-	first := req
-	first.Input.Effort = nativeEffort(a.provider, a.level, cli.model, models)
-	var visible, emitFailed atomic.Bool
-	result, err := run(cli, first, func(e ProviderEvent) error {
-		if e.Text != "" || e.Draft != "" || e.Reasoning != "" {
-			visible.Store(true)
-		}
-		if emit == nil {
-			return nil
-		}
-		if err := emit(e); err != nil {
-			emitFailed.Store(true)
-			return err
-		}
-		return nil
-	})
-	if err == nil || !automatic || cli.model == "" || visible.Load() || emitFailed.Load() || ctx.Err() != nil || errorKind(err) == ErrorCanceled {
-		return result, err
-	}
-	log.Printf("%s %s model %s failed before output, retrying with the CLI default: %v", a.provider, a.task, cli.model, err)
-	cli.model = ""
-	req.Input.Effort = nativeEffort(a.provider, a.level, "", models)
-	return run(cli, req, emit)
-}
-
-func (a configuredCLIAdapter) Stream(ctx context.Context, req GenerateRequest, emit func(ProviderEvent) error) (GenerateResult, error) {
-	return a.streamWith(ctx, req, emit, func(cli cliAdapter, req GenerateRequest, emit func(ProviderEvent) error) (GenerateResult, error) {
-		return cli.Stream(ctx, req, emit)
-	})
-}
-
-func (a cliAdapter) Stream(ctx context.Context, req GenerateRequest, emit func(ProviderEvent) error) (GenerateResult, error) {
-	child, cancel := context.WithCancel(ctx)
-	defer cancel()
-	var emitErr error
-	text, err := invokeCLI(child, a.root, a.provider, a.model, req.Input, func(part string) {
-		if emitErr == nil && emit != nil {
-			emitErr = emit(ProviderEvent{Text: part})
-			if emitErr != nil {
-				cancel()
-			}
-		}
-	}, func(metrics []ModelTokens) {
-		if emitErr == nil && emit != nil {
-			emitErr = emit(ProviderEvent{Metrics: metrics})
-		}
-	})
-	if emitErr != nil {
-		return GenerateResult{}, emitErr
-	}
-	if err != nil {
-		return GenerateResult{}, err
-	}
-	return GenerateResult{Text: text, FinishReason: "stop"}, nil
-}
 func legacyEmitter(delta, fallback func(string)) func(ProviderEvent) error {
 	if delta == nil && fallback == nil {
 		return nil
@@ -301,7 +177,7 @@ func (g *GenerationService) attempt(ctx context.Context, provider string, in AII
 		slog.Log(ctx, level, "generation.finish", "attemptId", attemptID, "requestId", requestID(ctx), "provider", provider, "durationMs", time.Since(started).Milliseconds(), "errorCode", kind)
 	}()
 	sink := g.usageSink
-	structuredUsage := in.Chat != nil && ((in.Chat.Agent != nil && provider == "codex") || (provider == "api" || provider == "text-api" || provider == "image-api"))
+	structuredUsage := in.Chat != nil && provider == "api"
 	if structuredUsage {
 		in.UsageSink = g.usageSink
 		in.UsageProvider = provider
@@ -314,90 +190,33 @@ func (g *GenerationService) attempt(ctx context.Context, provider string, in AII
 	return result, err
 }
 func (g *GenerationService) generate(ctx context.Context, in AIInput, interactive, exposeText bool, emit func(ProviderEvent) error) (AIResult, error) {
+	if err := g.ValidateInput(in, interactive); err != nil {
+		return AIResult{}, err
+	}
 	timeout := g.timeout
 	if timeout <= 0 {
 		timeout = 3 * time.Minute
 	}
-	if in.Chat != nil && (in.Chat.Agent != nil || g.primary == "api") {
+	if in.Chat != nil {
 		timeout = 10 * time.Minute
 	}
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
-	if !validAgent(g.primary) {
-		return AIResult{}, generationError(ErrorConfiguration, "请在设置中指定主 Agent 并测试")
-	}
-	vision := len(in.images()) > 0
-	primary := g.connections[g.primary]
-	visible := false
-	send := func(e ProviderEvent) error {
-		if e.Text == "" && e.Fallback == "" && e.Draft == "" && e.Reasoning == "" && !e.ResetDraft {
-			return nil
-		}
-		if ctx.Err() != nil {
-			return ctx.Err()
-		}
-		if emit != nil {
-			if (e.Text != "" || e.Draft != "" || e.Reasoning != "") && exposeText {
-				visible = true
-			}
-			if err := emit(e); err != nil {
-				cancel()
-				return err
-			}
-		}
-		return nil
-	}
-	var result GenerateResult
-	err := generationError(ErrorCapability, "主 Agent 尚未通过所需能力测试")
-	// Existing Codex/Claude text chat works with CLI login without a saved probe.
-	if interactive && in.Chat != nil && g.primary == "api" || primary.VerifiedText && (!vision || primary.VerifiedVision) || interactive && !vision && g.primary != "kimi" && g.primary != "api" {
-		result, err = g.attempt(ctx, g.primary, in, send)
-	}
-	if err == nil {
-		return AIResult{Text: result.Text, Provider: g.primary, Reasoning: result.Reasoning}, nil
-	}
+	result, err := g.attempt(ctx, "api", in, emit)
 	if ctx.Err() != nil {
 		return AIResult{}, ctx.Err()
 	}
-	if errorKind(err) == ErrorSave {
-		return AIResult{}, err
-	}
-	// Native chat binds one configured model for the entire turn. Even a
-	// failure before visible output must not spend on a second connection.
-	if visible || in.Chat != nil && g.primary == "api" {
-		return AIResult{}, err
-	}
-	target := "text-api"
-	if vision {
-		target = "image-api"
-	}
-	backup := g.connections[target]
-	if !backup.VerifiedText || vision && !backup.VerifiedVision {
-		return AIResult{}, err
-	}
-	if err = send(ProviderEvent{Fallback: fmt.Sprintf("%s 调用失败，已切换到 %s", g.primary, target)}); err != nil {
-		return AIResult{}, err
-	}
-	result, err = g.attempt(ctx, target, in, send)
-	return AIResult{Text: result.Text, Provider: target, Fallback: true, Reasoning: result.Reasoning}, err
+	return AIResult{Text: result.Text, Reasoning: result.Reasoning, Provider: "api"}, err
 }
-
 func (g *GenerationService) ValidateInput(in AIInput, interactive bool) error {
-	if !validAgent(g.primary) {
-		return generationError(ErrorConfiguration, "请选择主 Agent")
+	if g.initialError != nil {
+		return g.initialError
 	}
-	vision := len(in.images()) > 0
-	p := g.connections[g.primary]
-	if interactive && in.Chat != nil && g.primary == "api" || p.VerifiedText && (!vision || p.VerifiedVision) || interactive && !vision && g.primary != "kimi" && g.primary != "api" {
-		return nil
+	if g.primary != "api" || g.connections["api"].Adapter == nil {
+		return generationError(ErrorConfiguration, "请配置 API 连接和模型")
 	}
-	target := "text-api"
-	if vision {
-		target = "image-api"
+	if len(in.images()) > 0 && in.Chat == nil && !g.connections["api"].VerifiedVision {
+		return generationError(ErrorCapability, "图片模型未通过检测，当前为纯文字模式")
 	}
-	b := g.connections[target]
-	if b.VerifiedText && (!vision || b.VerifiedVision) {
-		return nil
-	}
-	return generationError(ErrorCapability, "当前助手尚未通过所需能力测试，请在设置中测试连接或配置备用 API")
+	return nil
 }

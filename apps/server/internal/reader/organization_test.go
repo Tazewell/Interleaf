@@ -177,7 +177,7 @@ func TestClassificationCompletionAndManualRace(t *testing.T) {
 			}
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
-			service := &GenerationService{primary: "codex", connections: map[string]generationConnection{"codex": {VerifiedText: true, Adapter: adapterFunc(func(_ context.Context, req GenerateRequest, emit func(ProviderEvent) error) (GenerateResult, error) {
+			service := &GenerationService{primary: "api", connections: map[string]generationConnection{"api": {VerifiedText: true, Adapter: adapterFunc(func(_ context.Context, req GenerateRequest, emit func(ProviderEvent) error) (GenerateResult, error) {
 				if !strings.Contains(req.Input.Prompt, "Abstract: We evaluate") || !strings.Contains(req.Input.Prompt, "untrusted document data") {
 					t.Fatal("missing document boundary")
 				}

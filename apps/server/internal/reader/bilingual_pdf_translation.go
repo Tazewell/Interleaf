@@ -13,20 +13,10 @@ import (
 	"unicode/utf8"
 )
 
-// This adapter resolves exactly one API model from the frozen settings. Export
-// never enters GenerationService, whose normal fallback chain can launch CLIs.
-func (s *Server) resolveBilingualAPI(ctx context.Context, c AIConfig) (APIConnection, completionRequest, error) {
-	a := s.apiAgentAdapter(c, taskTranslation)
-	if a.text.model == "" {
-		a.text.model = c.Models["api"]
-	}
-	if a.text.model == "" {
-		a.text.model = c.API.Model
-	}
-	child, cancel := context.WithTimeout(ctx, 10*time.Second)
-	defer cancel()
-	req, err := a.resolve(child, false)
-	return c.API, req, err
+// Export resolves against the preflight's private endpoint/model/key snapshot.
+func (s *Server) resolveBilingualAPI(ctx context.Context, c nativeAIStored) (APIConnection, completionRequest, error) {
+	snapshot, err := s.resolveNativeStoredTask(ctx, c, taskTranslation)
+	return snapshot.Connection, snapshot.completion(), err
 }
 
 // Keep the indexed candidate namespace identical to native formula.ts. Other

@@ -11,7 +11,6 @@ import (
 )
 
 func TestChatKeepsLongSourceWithoutRepeatingIt(t *testing.T) {
-	fakeAgent(t, "codex", "fail-before")
 	s := testServer(t)
 	if _, err := s.Store.DB.Exec("INSERT INTO documents(id,type,title,author,size,created_at,last_opened_at) VALUES('doc','pdf','test','',1,?,?)", now(), now()); err != nil {
 		t.Fatal(err)
@@ -25,6 +24,10 @@ func TestChatKeepsLongSourceWithoutRepeatingIt(t *testing.T) {
 	}
 	captured := ""
 	api := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "GET" {
+			respond(w, 200, map[string]any{"data": []any{map[string]string{"id": "test"}}})
+			return
+		}
 		var req struct {
 			Messages []struct {
 				Content string `json:"content"`
@@ -33,16 +36,14 @@ func TestChatKeepsLongSourceWithoutRepeatingIt(t *testing.T) {
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			t.Error(err)
 		}
-		captured = req.Messages[1].Content
+		for _, m := range req.Messages {
+			captured += m.Content
+		}
 		writeAPIReply(w, "471元")
 	}))
 	defer api.Close()
-	c := AIConfig{Primary: "codex", Models: map[string]string{}, TextAPI: APIConnection{URL: api.URL, Model: "test"}, Capabilities: map[string]Capability{}}
-	c.Capabilities["text-api"] = Capability{Text: true, Fingerprint: configPrint(c, "text-api")}
-	if err := s.writeAIConfig(c); err != nil {
-		t.Fatal(err)
-	}
-	r := request(t, s, "POST", "/api/documents/doc/chat", strings.NewReader(`{"provider":"codex","prompt":"根据原始依据确认费用","context":""}`))
+	configureNativeTest(t, s, api.URL, "test", false)
+	r := request(t, s, "POST", "/api/documents/doc/chat", strings.NewReader(`{"provider":"api","prompt":"根据原始依据确认费用","context":""}`))
 	if !strings.Contains(r.Body.String(), "event: done") {
 		t.Fatal(r.Body.String())
 	}

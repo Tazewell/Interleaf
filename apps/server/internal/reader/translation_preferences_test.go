@@ -11,7 +11,7 @@ import (
 func TestTranslationPromptSettingsPreserveAndReset(t *testing.T) {
 	s, _, _ := translationFixture(t)
 	value := "自然流畅，保留英文术语"
-	c := AIConfig{Primary: "codex", TranslationPrompt: &value}
+	c := NativeAIConfigUpdate{Version: 2, Connection: NativeAIConnectionUpdate{Protocol: "openai", URL: "http://127.0.0.1:1", Key: json.RawMessage(`null`)}, Models: map[modelTask]string{taskChat: "test"}, TranslationPrompt: &value}
 	for _, step := range []struct {
 		prompt *string
 		want   string
@@ -37,6 +37,11 @@ func TestTranslationPromptAppliesToTextButNotChatOrSource(t *testing.T) {
 	s, p, m := translationFixture(t)
 	var prompts []string
 	provider := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "GET" {
+			w.Header().Set("Content-Type", "application/json")
+			w.Write([]byte(`{"data":[]}`))
+			return
+		}
 		var req struct {
 			Messages []struct {
 				Content string `json:"content"`

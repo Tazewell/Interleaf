@@ -83,8 +83,6 @@ contextBridge.exposeInMainWorld("readerDesktop", {
     ipcRenderer.invoke("reader:document-file", id, type, "open"),
   openExternal: (url: string) =>
     ipcRenderer.invoke("reader:open-external", url),
-  openCodexThread: (threadId: string) =>
-    ipcRenderer.invoke("reader:open-codex-thread", threadId),
   onOpenLink: (callback: (target: unknown) => void) => {
     const listener = (_event: unknown, target: unknown) => callback(target);
     ipcRenderer.on("reader:open-link", listener);

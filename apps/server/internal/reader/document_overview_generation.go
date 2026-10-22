@@ -250,7 +250,7 @@ func (s *Server) overviewWorker(ctx context.Context) {
 		if err != nil {
 			continue
 		}
-		g := s.generationService(s.aiConfig())
+		g := s.currentGenerationServiceContext(ctx, taskChat)
 		if !g.connections[g.primary].VerifiedText && !g.connections["text-api"].VerifiedText {
 			_, _ = s.Store.DB.ExecContext(ctx, "UPDATE document_overview_jobs SET status='waiting',error='请配置并测试可用的文字模型后重试' WHERE document_id=? AND job_id=? AND status='queued'", job.DocumentID, job.ID)
 			continue

@@ -7,31 +7,11 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
-	"os/exec"
-	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 )
 
-func piTestRuntime(t *testing.T) {
-	t.Helper()
-	node, err := exec.LookPath("node")
-	if err != nil {
-		t.Fatal("pi integration tests require Node", err)
-	}
-	root, err := filepath.Abs("../../../agent")
-	if err != nil {
-		t.Fatal(err)
-	}
-	cmd := exec.Command(node, "build.mjs")
-	cmd.Dir = root
-	if out, err := cmd.CombinedOutput(); err != nil {
-		t.Fatalf("build pi worker: %v\n%s", err, out)
-	}
-	t.Setenv("READER_NODE", node)
-	t.Setenv("READER_AGENT", filepath.Join(root, "dist/main.mjs"))
-}
 func createSessionTest(t *testing.T, s *Server) ChatSession {
 	t.Helper()
 	out := request(t, s, "POST", "/api/documents/doc/chat-sessions", strings.NewReader(`{"provider":"api"}`))
@@ -105,8 +85,7 @@ func TestChatSessionMigrationPreservesEvidence(t *testing.T) {
 		t.Fatal("migration not idempotent", count)
 	}
 }
-func TestPiSessionsConcurrentCancelAndDetachedSubscriber(t *testing.T) {
-	piTestRuntime(t)
+func TestNativeSessionSessionsConcurrentCancelAndDetachedSubscriber(t *testing.T) {
 	s, _ := prepareConversationFixture(t)
 	started := make(chan string, 4)
 	release := make(chan struct{})
@@ -196,12 +175,11 @@ func TestPiSessionsConcurrentCancelAndDetachedSubscriber(t *testing.T) {
 		t.Fatal(err)
 	}
 	_ = json.Unmarshal([]byte(raw), &state)
-	if len(state.PiEntries) == 0 {
-		t.Fatal("pi continuation was not committed")
+	if len(state.Messages) == 0 {
+		t.Fatal("native continuation was not committed")
 	}
 }
-func TestPiSaveFailureKeepsAcceptedState(t *testing.T) {
-	piTestRuntime(t)
+func TestNativeSessionSaveFailureKeepsAcceptedState(t *testing.T) {
 	s, _ := prepareConversationFixture(t)
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == "GET" {
@@ -242,8 +220,7 @@ func TestPiSaveFailureKeepsAcceptedState(t *testing.T) {
 	}
 }
 
-func TestPiReadingToolsAndAcceptedContinuation(t *testing.T) {
-	piTestRuntime(t)
+func TestNativeSessionReadingToolsAndAcceptedContinuation(t *testing.T) {
 	s, _ := prepareConversationFixture(t)
 	requests := 0
 	toolRead := false
@@ -302,6 +279,7 @@ func TestPiReadingToolsAndAcceptedContinuation(t *testing.T) {
 
 func TestRunConcurrencyLimitAndRestartReconciliation(t *testing.T) {
 	s, _ := prepareConversationFixture(t)
+	configureNativeTest(t, s, "http://127.0.0.1:1", "test", false)
 	session := createSessionTest(t, s)
 	s.chatMu.Lock()
 	s.chatRuns = map[string]*chatRun{}
@@ -344,48 +322,5 @@ func TestRunConcurrencyLimitAndRestartReconciliation(t *testing.T) {
 		if err != nil || restored.Status != status {
 			t.Fatal(restored, err)
 		}
-	}
-}
-
-func TestManagedCodexSessionsKeepSeparateNativeThreads(t *testing.T) {
-	s, a := prepareConversationFixture(t)
-	fakeAgent(t, "codex", "document-conversation")
-	t.Setenv("READER_CONVERSATION_CAPTURE", filepath.Join(t.TempDir(), "capture.jsonl"))
-	t.Setenv("READER_DOCUMENT_TEST_BLOCK", a.corpus.Passages[1].ID)
-	first, second := createSessionTest(t, s), createSessionTest(t, s)
-	start := func(session ChatSession, prompt string) ChatRun {
-		out := request(t, s, "POST", "/api/documents/doc/chat-sessions/"+session.ID+"/chat", strings.NewReader(jsonText(map[string]any{"provider": "codex", "prompt": prompt, "context": ""})))
-		if out.Code != 202 {
-			t.Fatal(out.Code, out.Body.String())
-		}
-		var run ChatRun
-		_ = json.Unmarshal(out.Body.Bytes(), &run)
-		return run
-	}
-	ar, br := start(first, "记住 CIVET-42"), start(second, "独立问题")
-	for _, run := range []ChatRun{ar, br} {
-		if result := awaitRunTest(t, s, run); result.Status != "completed" {
-			t.Fatal(result.Error)
-		}
-	}
-	aHistory, _ := s.Store.chatHistory("doc", first.ID)
-	bHistory, _ := s.Store.chatHistory("doc", second.ID)
-	if len(aHistory) != 2 || len(bHistory) != 2 || !strings.Contains(aHistory[1].Content, "CIVET-42") || strings.Contains(bHistory[1].Content, "CIVET-42") {
-		t.Fatal("native thread history mixed", aHistory, bHistory)
-	}
-	aState, err := s.Store.documentConversation(t.Context(), "doc", conversationProvider(first.ID, "codex"), "codex-native-v1")
-	if err != nil {
-		t.Fatal(err)
-	}
-	bState, err := s.Store.documentConversation(t.Context(), "doc", conversationProvider(second.ID, "codex"), "codex-native-v1")
-	if err != nil || aState.NativeThread == bState.NativeThread {
-		t.Fatal(aState, bState, err)
-	}
-	if result := awaitRunTest(t, s, start(first, "继续")); result.Status != "completed" {
-		t.Fatal(result.Error)
-	}
-	aHistory, _ = s.Store.chatHistory("doc", first.ID)
-	if len(aHistory) != 4 || !strings.Contains(aHistory[3].Content, "CIVET-42") {
-		t.Fatal("native resume lost accepted history", aHistory)
 	}
 }

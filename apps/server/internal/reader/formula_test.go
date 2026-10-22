@@ -1,10 +1,15 @@
 package reader
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/http/httputil"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -66,13 +71,41 @@ func formulaFixture(t *testing.T) (*Server, Processing, layoutManifest) {
 }
 func configureFormulaTest(t *testing.T, s *Server, textURL, imageURL string) {
 	t.Helper()
-	configureTranslationTest(t, s, textURL)
-	config := s.aiConfig()
-	config.ImageAPI = APIConnection{URL: imageURL, Model: "test"}
-	config.Capabilities["image-api"] = Capability{Text: true, Vision: true, Fingerprint: configPrint(config, "image-api")}
-	if err := s.writeAIConfig(config); err != nil {
+	text, _ := url.Parse(textURL)
+	images, _ := url.Parse(imageURL)
+	textProxy := httputil.NewSingleHostReverseProxy(text)
+	imageProxy := httputil.NewSingleHostReverseProxy(images)
+	api := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "GET" {
+			fmt.Fprint(w, `{"data":[]}`)
+			return
+		}
+		body, _ := io.ReadAll(r.Body)
+		r.Body = io.NopCloser(bytes.NewReader(body))
+		var input struct {
+			Model string `json:"model"`
+		}
+		_ = json.Unmarshal(body, &input)
+		if input.Model == "vision" {
+			imageProxy.ServeHTTP(w, r)
+		} else {
+			textProxy.ServeHTTP(w, r)
+		}
+	}))
+	t.Cleanup(api.Close)
+	configureNativeTest(t, s, api.URL, "test", true)
+	s.configMu.Lock()
+	defer s.configMu.Unlock()
+	stored, err := s.readNativeAIConfig()
+	if err != nil {
 		t.Fatal(err)
 	}
+	stored.Config.Models[taskVision] = "vision"
+	stored.Capabilities["api:vision"] = Capability{Text: true, Vision: true, Fingerprint: nativeConfigPrint(stored.Connection, "vision")}
+	if err = s.writeNativeAIConfig(stored); err != nil {
+		t.Fatal(err)
+	}
+
 }
 func waitFormulaSignal(t *testing.T, ch <-chan struct{}) {
 	t.Helper()

@@ -75,9 +75,9 @@ func TestAPIAgentUsesOnlyCheckedModels(t *testing.T) {
 	s := testServer(t)
 	upstream, calls := fakeAPI(t, func(int, apiCall) string { return "ok" })
 	config := AIConfig{Primary: "api", API: APIConnection{URL: upstream.URL + "/v1", Key: "sk-test"}, Models: map[string]string{}, APIModels: []string{"added-model"}}
-	// Before any check, nothing is usable and nothing is guessed.
-	if apiCapable(config, taskChat, false) || s.generationService(config).ValidateInput(AIInput{Prompt: "hi"}, true) == nil {
-		t.Fatal("an unchecked API agent was accepted")
+	// Text tasks may use catalog recommendations without a paid readiness probe.
+	if apiCapable(config, taskChat, false) || s.generationService(config).ValidateInput(AIInput{Prompt: "hi"}, true) != nil {
+		t.Fatal("catalog text model was blocked")
 	}
 	passModels(&config, map[string]bool{"deepseek-flash": true, "deepseek-v4-pro": false})
 	image := [][]byte{{1}}
@@ -194,7 +194,7 @@ func TestAPITranslationSessionSpansBatches(t *testing.T) {
 	service, sessions := s.translationService(config)
 	defer sessions.close()
 	session := service.connections["api"].Adapter
-	if session != sessions.api {
+	if session != sessions {
 		t.Fatal("translation does not use the worker's API session")
 	}
 	for i, prompt := range []string{"batch-1", "batch-2", "batch-3"} {
@@ -227,7 +227,7 @@ func TestAPITranslationSessionSpansBatches(t *testing.T) {
 		}
 	}
 	sessions.close()
-	if sessions.api.history != nil {
+	if sessions.history != nil {
 		t.Fatal("closed session kept history")
 	}
 }
@@ -280,7 +280,7 @@ func TestAPIAgentConfigKeepsKeyPrivate(t *testing.T) {
 		t.Fatal("plain HTTP to a remote API was accepted")
 	}
 	w := request(t, s, "GET", "/api/providers?auth=skip", nil)
-	if !strings.Contains(w.Body.String(), `{"id":"api","installed":true,"authenticated":true,"status":"已配置"}`) {
+	if !strings.Contains(w.Body.String(), `{"id":"api","installed":true,"authenticated":true,"status":"API"}`) {
 		t.Fatal(w.Body.String())
 	}
 }
@@ -334,19 +334,19 @@ func TestLiveDeepSeekCapabilityCheck(t *testing.T) {
 		t.Skip("set READER_TEST_DEEPSEEK=1 and DEEPSEEK_API_KEY")
 	}
 	s := testServer(t)
-	config, _ := json.Marshal(AIConfig{Primary: "api", API: APIConnection{URL: "https://api.deepseek.com", Key: key}, Models: map[string]string{}})
+	config, _ := json.Marshal(map[string]any{"version": 2, "connection": map[string]any{"protocol": "openai", "url": "https://api.deepseek.com", "key": key}, "models": map[string]string{"chat": "deepseek-flash"}})
 	if w := request(t, s, "PUT", "/api/ai/config", strings.NewReader(string(config))); w.Code != 200 {
 		t.Fatal(w.Body.String())
 	}
 	for _, model := range []string{"deepseek-flash", "deepseek-v4-pro"} {
-		w := request(t, s, "POST", "/api/ai/test/api?model="+model, nil)
+		w := request(t, s, "POST", "/api/ai/check", strings.NewReader(jsonText(map[string]any{"role": "chat", "model": model, "waitSeconds": 60})))
 		t.Logf("%s: %d %s", model, w.Code, w.Body.String())
 	}
 	w := request(t, s, "GET", "/api/ai/models?role=chat", nil)
 	t.Logf("models: %d %s", w.Code, w.Body.String())
 	saved := s.aiConfig()
-	if !apiCapable(saved, taskChat, false) || !apiCapable(saved, taskChat, true) {
-		t.Fatal("no model passed text and vision")
+	if !apiCapable(saved, taskChat, false) {
+		t.Fatal("no model passed text")
 	}
 }
 

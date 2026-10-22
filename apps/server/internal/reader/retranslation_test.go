@@ -64,7 +64,7 @@ func TestRetranslationPreservesTextFormulasAndSnapshotAcrossRestart(t *testing.T
 	oldPrompt := "自然中文，保留术语"
 	c := s.aiConfig()
 	c.TranslationPrompt = &oldPrompt
-	c.TranslationModels = map[string]string{"codex": "chosen-model"}
+	c.TranslationModels = map[string]string{"api": "chosen-model"}
 	if err := s.writeAIConfig(c); err != nil {
 		t.Fatal(err)
 	}
@@ -97,9 +97,10 @@ func TestRetranslationPreservesTextFormulasAndSnapshotAcrossRestart(t *testing.T
 	}
 	changed := "其他提示词"
 	c.TranslationPrompt = &changed
-	c.TranslationModels["codex"] = "other-model"
-	frozen := options.apply(c)
-	if *frozen.TranslationPrompt != oldPrompt || frozen.TranslationModels["codex"] != "chosen-model" || c.TranslationModels["codex"] != "other-model" {
+	c.TranslationModels["api"] = "other-model"
+	native := migrateNativeAIConfig(savedConfig{Config: c}).Config
+	frozen := options.apply(native)
+	if *frozen.TranslationPrompt != oldPrompt || frozen.Models[taskTranslation] != "chosen-model" || c.TranslationModels["api"] != "other-model" {
 		t.Fatal("snapshot not isolated")
 	}
 	p = assistanceRequest(t, reopened, "resume")
@@ -119,8 +120,8 @@ func TestRetranslationWaitsForProviderCompletionAndRetainsFailedOutput(t *testin
 			ctx, cancel := context.WithCancel(t.Context())
 			defer cancel()
 			invoked := false
-			stream := &GenerationService{primary: "codex", connections: map[string]generationConnection{
-				"codex": {VerifiedText: true, Incremental: true, Adapter: retranslationTestAdapter(func(emit func(ProviderEvent) error) (GenerateResult, error) {
+			stream := &GenerationService{primary: "api", connections: map[string]generationConnection{
+				"api": {VerifiedText: true, Incremental: true, Adapter: retranslationTestAdapter(func(emit func(ProviderEvent) error) (GenerateResult, error) {
 					invoked = true
 					text := translationLine(m.Blocks[0]) + translationLine(m.Blocks[1])
 					if err := emit(ProviderEvent{Text: text}); err != nil {
@@ -174,7 +175,7 @@ func TestRetranslationQueueRollsBackAndJoinsOldWorker(t *testing.T) {
 	if _, err := s.Store.DB.Exec(`CREATE TRIGGER reject_restart BEFORE INSERT ON translation_restarts BEGIN SELECT RAISE(FAIL,'disk failure'); END`); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.queueRetranslation(p, m, snapshotTranslationOptions(s.aiConfig())); err == nil {
+	if err := s.queueRetranslation(p, m, snapshotTranslationOptions(migrateNativeAIConfig(savedConfig{Config: s.aiConfig()}).Config)); err == nil {
 		t.Fatal("transaction failure not returned")
 	}
 	items, _ := s.translations("doc", m)
@@ -203,6 +204,11 @@ func TestRetranslationRunsThroughExistingLaneAndClearsRestartState(t *testing.T)
 	prepareReparseDocument(t, s)
 	reparseFixture(t, m)
 	provider := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "GET" {
+			w.Header().Set("Content-Type", "application/json")
+			w.Write([]byte(`{"data":[]}`))
+			return
+		}
 		batch := readTranslationInput(t, r).Batch
 		if len(batch.Paragraphs) != 2 {
 			t.Error("missing retranslation scope")

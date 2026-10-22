@@ -11,34 +11,18 @@ type modelTask string
 const (
 	taskChat        modelTask = "chat"
 	taskTranslation modelTask = "translation"
-	// Only the API agent picks a separate model for image input.
+	// Image understanding has its own model role.
 	taskVision   modelTask = "vision"
 	taskResearch modelTask = "research"
 )
 
 // Families are ordered by preference for each task. Chat prefers the most
 // capable everyday tier; translation prefers the fast tier with acceptable quality.
-// Kimi names carry no tier for chat, so its CLI default (the flagship) stays.
 // Matching uses whole tokens, so "mini" never matches "gemini".
-var taskFamilies = map[modelTask]map[string][]string{
-	taskChat: {
-		// Astra is too expensive and Fable is usually unavailable, so neither
-		// is a default; users can still pick them.
-		"codex":  {"sol", "terra"},
-		"claude": {"opus", "sonnet"},
-		// API endpoints without a matching tier fall back to their first model.
-		"api": {"pro", "max", "plus"},
-	},
-	taskTranslation: {
-		"codex":  {"luna", "mini", "terra"},
-		"claude": {"sonnet", "haiku"},
-		"kimi":   {"flash", "turbo", "lite", "mini"},
-		"api":    {"flash", "turbo", "lite", "mini"},
-		"":       {"luna", "sonnet", "flash", "mini", "lite", "haiku"},
-	},
-	taskVision: {
-		"api": {"vl", "vision", "flash", "omni"},
-	},
+var taskFamilies = map[modelTask][]string{
+	taskChat:        {"pro", "max", "plus"},
+	taskTranslation: {"flash", "turbo", "lite", "mini", "luna", "sonnet", "haiku"},
+	taskVision:      {"vl", "vision", "flash", "omni"},
 }
 
 var (
@@ -84,9 +68,9 @@ func newerVersion(a, b []int) bool {
 // defaultTaskModel resolves an unset model choice from the live catalog.
 // Within the first matching family, general models beat code-specialized
 // variants and newer versions beat older ones; catalog order breaks ties.
-// No match returns "" so the CLI keeps its own default.
-func defaultTaskModel(task modelTask, provider string, models []AgentModel) string {
-	families := append(append([]string{}, taskFamilies[task][provider]...), taskFamilies[task][""]...)
+// No family match leaves selection to the API catalog ordering.
+func defaultTaskModel(task modelTask, models []AgentModel) string {
+	families := taskFamilies[task]
 	for _, family := range families {
 		var best *AgentModel
 		bestCode := false
@@ -107,17 +91,4 @@ func defaultTaskModel(task modelTask, provider string, models []AgentModel) stri
 		}
 	}
 	return ""
-}
-
-func taskRecommendations(provider string, models []AgentModel) []AgentModel {
-	out := append([]AgentModel{}, models...)
-	for _, task := range []modelTask{taskChat, taskTranslation} {
-		id := defaultTaskModel(task, provider, out)
-		for i := range out {
-			if out[i].ID == id {
-				out[i].RecommendedFor = append(append([]string{}, out[i].RecommendedFor...), string(task))
-			}
-		}
-	}
-	return out
 }

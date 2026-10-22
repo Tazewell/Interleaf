@@ -3179,55 +3179,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/documents/{id}/codex-handoff": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** @description Fork the last committed Codex reading turn into an independent conversation with local document and chat snapshots. Does not generate a model answer or change the Reader conversation. Repeated requests for the same snapshot reuse the fork. */
-        post: {
-            parameters: {
-                query?: {
-                    sessionId?: string;
-                };
-                header?: never;
-                path: {
-                    id: string;
-                };
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description Prepared independent Codex conversation */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["CodexHandoff"];
-                    };
-                };
-                /** @description Document unavailable, no committed Codex conversation, active generation, or handoff failed */
-                default: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["Error"];
-                    };
-                };
-            };
-        };
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/documents/{id}/chat": {
         parameters: {
             query?: never;
@@ -5842,14 +5793,6 @@ export interface components {
             mode: "bibtex" | "biblatex";
             path: string;
             takeover?: boolean;
-        };
-        CodexHandoff: {
-            /** Format: uuid */
-            threadId: string;
-            /** @description Local codex://threads/<threadId> link */
-            url: string;
-            /** @description Absolute path of the independent document snapshot */
-            directory: string;
         };
         OverviewContent: {
             summary: string;

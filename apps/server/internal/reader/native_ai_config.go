@@ -48,6 +48,7 @@ type nativeTaskSnapshot struct {
 	Model, Effort, Fingerprint     string
 	ContextWindow, MaxOutputTokens int
 	Text, Vision, Tools            bool
+	SupportedEfforts               []string
 }
 
 func validNativeRole(role modelTask) bool {
@@ -164,9 +165,8 @@ func (s *Server) saveNativeAIConfig(update NativeAIConfigUpdate) (NativeAIConfig
 		next.Config.TranslationPrompt = &value
 	}
 	// Probe results are valid only for this exact endpoint, key and model.
-	bridge := nativeLegacyView(next)
 	for key, cap := range next.Capabilities {
-		if cap.Fingerprint != configPrint(bridge, key) {
+		if cap.Fingerprint != nativeConfigPrint(next.Connection, strings.TrimPrefix(key, "api:")) {
 			delete(next.Capabilities, key)
 		}
 	}
@@ -174,21 +174,6 @@ func (s *Server) saveNativeAIConfig(update NativeAIConfigUpdate) (NativeAIConfig
 		return NativeAIConfig{}, err
 	}
 	return next.Config, nil
-}
-func nativeLegacyView(stored nativeAIStored) AIConfig {
-	c := AIConfig{Primary: "api", API: stored.Connection, Models: map[string]string{"api": stored.Config.Models[taskChat]}, TranslationModels: map[string]string{"api": stored.Config.Models[taskTranslation]}, VisionModels: map[string]string{"api": stored.Config.Models[taskVision]}, Efforts: map[string]map[string]string{}, TranslationEfforts: map[string]map[string]string{}, VisionEfforts: map[string]map[string]string{}, APIModels: stored.Config.APIModels, TranslationPrompt: stored.Config.TranslationPrompt, Capabilities: stored.Capabilities}
-	for role, field := range map[modelTask]map[string]map[string]string{taskChat: c.Efforts, taskTranslation: c.TranslationEfforts, taskVision: c.VisionEfforts} {
-		field["api"] = map[string]string{stored.Config.Models[role]: stored.Config.Efforts[role]}
-	}
-	if stored.Config.NeedsConfiguration != "" {
-		c.Primary = ""
-		c.API = APIConnection{}
-		c.Capabilities = map[string]Capability{}
-	}
-	if c.Capabilities == nil {
-		c.Capabilities = map[string]Capability{}
-	}
-	return c
 }
 func (s *Server) resolveNativeTask(ctx context.Context, config NativeAIConfig, role modelTask) (nativeTaskSnapshot, error) {
 	if !validNativeRole(role) {
@@ -208,7 +193,16 @@ func (s *Server) resolveNativeTask(ctx context.Context, config NativeAIConfig, r
 	if string(a) != string(b) {
 		return nativeTaskSnapshot{}, generationError(ErrorConfiguration, "AI 配置已改变，请重试")
 	}
-	models, catalogErr := s.apiAgentModels(ctx, nativeLegacyView(stored))
+	return s.resolveNativeStoredTask(ctx, stored, role)
+}
+
+// stored is a private task snapshot. Task overrides are applied to this copy only.
+func (s *Server) resolveNativeStoredTask(ctx context.Context, stored nativeAIStored, role modelTask) (nativeTaskSnapshot, error) {
+	config := stored.Config
+	if config.NeedsConfiguration != "" {
+		return nativeTaskSnapshot{}, generationError(ErrorConfiguration, "请先确认 AI 连接配置")
+	}
+	models, catalogErr := s.nativeAIModels(ctx, stored)
 	// The catalog has already excluded failed models from role recommendations.
 	// Do not rerun family ranking over its unfiltered entries.
 	recommended := func(role modelTask) string {
@@ -237,7 +231,7 @@ func (s *Server) resolveNativeTask(ctx context.Context, config NativeAIConfig, r
 				model = chat
 			}
 		case taskVision:
-			if capable(nativeLegacyView(stored), apiCapabilityKey(chat), true) {
+			if nativeCapable(stored, chat, true) {
 				model = chat
 			}
 		default:
@@ -255,14 +249,14 @@ func (s *Server) resolveNativeTask(ctx context.Context, config NativeAIConfig, r
 		effort = "medium"
 	}
 	snapshot := nativeTaskSnapshot{Connection: stored.Connection, Model: model, Effort: effort, Text: true}
-	bridge := nativeLegacyView(stored)
-	cap := bridge.Capabilities[apiCapabilityKey(model)]
-	if cap.Fingerprint == configPrint(bridge, apiCapabilityKey(model)) {
+	cap := stored.Capabilities[apiCapabilityKey(model)]
+	if cap.Fingerprint == nativeConfigPrint(stored.Connection, model) {
 		snapshot.Vision = cap.Text && cap.Vision
 		snapshot.Tools = cap.Tools == "passed" && cap.ToolSchemaVersion == documentToolSchemaVersion
 	}
 	for _, m := range models {
 		if m.ID == model {
+			snapshot.SupportedEfforts = slices.Clone(m.SupportedEfforts)
 			snapshot.ContextWindow = m.ContextWindow
 			snapshot.MaxOutputTokens = m.MaxOutputTokens
 		}
@@ -319,8 +313,7 @@ func (s *Server) checkNativeAI(w http.ResponseWriter, r *http.Request) {
 		fail(w, 400, "请先保存连接并填写模型")
 		return
 	}
-	c := nativeLegacyView(stored)
-	fingerprint := configPrint(c, apiCapabilityKey(model))
+	fingerprint := nativeConfigPrint(stored.Connection, model)
 	level := config.Efforts[input.Role]
 	if level == "" && input.Role == taskResearch && config.Models[taskResearch] == "" {
 		level = config.Efforts[taskChat]
@@ -328,15 +321,12 @@ func (s *Server) checkNativeAI(w http.ResponseWriter, r *http.Request) {
 	if level == "" {
 		level = "medium"
 	}
-	c.Models["api"] = model
-	c.Efforts["api"] = map[string]string{model: level}
-	c.VisionModels["api"] = model
-	c.VisionEfforts["api"] = map[string]string{model: level}
+	completion := completionRequest{Model: model, Effort: level}
 	cap := Capability{CheckedAt: now(), Fingerprint: fingerprint}
-	answer, first, err := s.probeConnection(r.Context(), c, apiCapabilityKey(model), AIInput{Prompt: "Reply with exactly READER_OK. Do not use any tools."}, time.Duration(wait)*time.Second)
+	answer, first, err := s.probeNativeConnection(r.Context(), stored.Connection, completion, AIInput{Prompt: "Reply with exactly READER_OK. Do not use any tools."}, time.Duration(wait)*time.Second)
 	cap.TextFirstOutputMs = first
 	if err != nil {
-		cap.Error = safeNativeError(err, c.API.Key)
+		cap.Error = safeNativeError(err, stored.Connection.Key)
 	} else {
 		cap.Text = strings.TrimSpace(answer) != ""
 		if !cap.Text {
@@ -344,7 +334,7 @@ func (s *Server) checkNativeAI(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if cap.Text {
-		if previous := c.Capabilities[apiCapabilityKey(model)]; previous.Fingerprint == fingerprint {
+		if previous := stored.Capabilities[apiCapabilityKey(model)]; previous.Fingerprint == fingerprint {
 			cap.Vision = previous.Vision
 			cap.VisionFirstOutputMs = previous.VisionFirstOutputMs
 			cap.Tools = previous.Tools
@@ -354,24 +344,24 @@ func (s *Server) checkNativeAI(w http.ResponseWriter, r *http.Request) {
 	}
 	if cap.Text && (input.Role == taskChat || input.Role == taskResearch) {
 		ctx, cancel := context.WithTimeout(r.Context(), time.Duration(wait)*time.Second)
-		status, toolErr := probeAPIDocumentTools(ctx, c.API, model)
+		status, toolErr := probeAPIDocumentTools(ctx, stored.Connection, model)
 		cancel()
 		cap.Tools = status
 		cap.ToolSchemaVersion = documentToolSchemaVersion
 		cap.ToolError = ""
 		if toolErr != nil {
-			cap.ToolError = safeNativeError(toolErr, c.API.Key)
+			cap.ToolError = safeNativeError(toolErr, stored.Connection.Key)
 		}
 	}
 	if cap.Text && input.Role == taskVision {
 		image, expected, probeErr := visionProbe()
 		if probeErr == nil {
-			answer, first, probeErr = s.probeConnection(r.Context(), c, apiCapabilityKey(model), AIInput{Prompt: visionPrompt, Image: image}, time.Duration(wait)*time.Second)
+			answer, first, probeErr = s.probeNativeConnection(r.Context(), stored.Connection, completion, AIInput{Prompt: visionPrompt, Image: image}, time.Duration(wait)*time.Second)
 		}
 		cap.VisionFirstOutputMs = first
 		cap.Vision = probeErr == nil && matchesVisionProbe(answer, expected)
 		if probeErr != nil {
-			cap.Error = safeNativeError(probeErr, c.API.Key)
+			cap.Error = safeNativeError(probeErr, stored.Connection.Key)
 		}
 	}
 	if r.Context().Err() != nil {
@@ -384,7 +374,7 @@ func (s *Server) checkNativeAI(w http.ResponseWriter, r *http.Request) {
 		fail(w, 500, "无法读取 AI 配置")
 		return
 	}
-	if configPrint(nativeLegacyView(latest), apiCapabilityKey(model)) != fingerprint {
+	if nativeConfigPrint(latest.Connection, model) != fingerprint || latest.Capabilities[apiCapabilityKey(model)].CheckedAt != stored.Capabilities[apiCapabilityKey(model)].CheckedAt {
 		s.configMu.Unlock()
 		fail(w, 409, "连接已改变，请重新检测")
 		return

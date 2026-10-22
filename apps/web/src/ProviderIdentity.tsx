@@ -1,3 +1,4 @@
+// Legacy labels preserve attribution for saved conversations; new AI runs use API models.
 import { Claude, Kimi, OpenAI } from "@lobehub/icons";
 import { KeyRound } from "lucide-react";
 

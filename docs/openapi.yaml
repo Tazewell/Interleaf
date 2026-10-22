@@ -2962,55 +2962,6 @@
                 ],
             },
         },
-      "/api/documents/{id}/codex-handoff":
-        {
-          "post":
-            {
-              "description": "Fork the last committed Codex reading turn into an independent conversation with local document and chat snapshots. Does not generate a model answer or change the Reader conversation. Repeated requests for the same snapshot reuse the fork.",
-              "parameters":
-                [
-                  {
-                    "in": "path",
-                    "name": "id",
-                    "required": true,
-                    "schema": { "type": "string" },
-                  },
-                  {
-                    "in": "query",
-                    "name": "sessionId",
-                    "required": false,
-                    "schema": { "type": "string" },
-                  },
-                ],
-              "responses":
-                {
-                  "200":
-                    {
-                      "description": "Prepared independent Codex conversation",
-                      "content":
-                        {
-                          "application/json":
-                            {
-                              "schema":
-                                { "$ref": "#/components/schemas/CodexHandoff" },
-                            },
-                        },
-                    },
-                  "default":
-                    {
-                      "description": "Document unavailable, no committed Codex conversation, active generation, or handoff failed",
-                      "content":
-                        {
-                          "application/json":
-                            {
-                              "schema":
-                                { "$ref": "#/components/schemas/Error" },
-                            },
-                        },
-                    },
-                },
-            },
-        },
       "/api/documents/{id}/chat":
         {
           "post":
@@ -6219,25 +6170,6 @@
                   "takeover": { "type": "boolean" },
                 },
               "required": ["folder", "includeChildren", "mode", "path"],
-            },
-          "CodexHandoff":
-            {
-              "type": "object",
-              "required": ["threadId", "url", "directory"],
-              "properties":
-                {
-                  "threadId": { "type": "string", "format": "uuid" },
-                  "url":
-                    {
-                      "type": "string",
-                      "description": "Local codex://threads/<threadId> link",
-                    },
-                  "directory":
-                    {
-                      "type": "string",
-                      "description": "Absolute path of the independent document snapshot",
-                    },
-                },
             },
           "OverviewContent":
             {

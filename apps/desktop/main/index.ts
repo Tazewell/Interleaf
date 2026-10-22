@@ -18,7 +18,6 @@ import {
 } from "./library-location";
 import { randomBytes } from "node:crypto";
 import { homedir } from "node:os";
-import { codexThreadURL } from "../../../packages/reader-core/src/codex-link";
 import { annotationUndoShortcut } from "../../../packages/reader-core/src/undo-shortcut";
 import { zoomCommand } from "../../../packages/reader-core/src/zoom-shortcut";
 import {
@@ -667,17 +666,6 @@ app
       linksClaimed = true;
       return pendingLinks.splice(0);
     });
-    ipcMain.handle(
-      "reader:open-codex-thread",
-      async (event, threadId: unknown) => {
-        if (
-          event.sender !== window?.webContents ||
-          event.senderFrame !== window.webContents.mainFrame
-        )
-          throw new Error("Invalid sender");
-        await shell.openExternal(codexThreadURL(threadId));
-      },
-    );
     ipcMain.handle("reader:open-external", async (event, url: unknown) => {
       if (
         event.sender !== window?.webContents ||

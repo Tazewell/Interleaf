@@ -34,8 +34,6 @@ type chatEntry struct {
 type chatInput struct {
 	nativeConversation *documentConversation
 	nativeProvider     string
-	piConversation     *documentConversation
-	piProvider         string
 	SessionID          string
 	server             *Server
 	ReadingLocation    json.RawMessage

@@ -93,7 +93,7 @@ func (s *Store) readChatRun(sessionID, runID string) (chatRunRecord, error) {
 	}
 	return run, err
 }
-func (s *Server) startSessionChat(w http.ResponseWriter, r *http.Request, document Document, config AIConfig, user Message, images [][]byte, text string) {
+func (s *Server) startSessionChat(w http.ResponseWriter, r *http.Request, document Document, service *GenerationService, user Message, images [][]byte, text string) {
 	s.chatMu.Lock()
 	sessionID := r.PathValue("session")
 	session, err := s.Store.chatSession(document.ID, sessionID)
@@ -138,7 +138,7 @@ func (s *Server) startSessionChat(w http.ResponseWriter, r *http.Request, docume
 		return
 	}
 	stamp := now()
-	record := chatRunRecord{ChatRun: ChatRun{ID: id(), SessionID: sessionID, DocumentID: document.ID, UserMessageID: user.ID, Provider: config.Primary, Status: "running", StartedAt: stamp}, Events: []chatRunEvent{}}
+	record := chatRunRecord{ChatRun: ChatRun{ID: id(), SessionID: sessionID, DocumentID: document.ID, UserMessageID: user.ID, Provider: "api", Status: "running", StartedAt: stamp}, Events: []chatRunEvent{}}
 	tx, err := s.Store.DB.BeginTx(ctx, nil)
 	if err != nil {
 		abandon()
@@ -148,7 +148,7 @@ func (s *Server) startSessionChat(w http.ResponseWriter, r *http.Request, docume
 	if session.Title == "新会话" {
 		session.Title = sessionTitle(user.Content)
 	}
-	_, err = tx.ExecContext(ctx, "UPDATE chat_sessions SET title=?,provider=?,updated_at=? WHERE id=?", session.Title, config.Primary, stamp, sessionID)
+	_, err = tx.ExecContext(ctx, "UPDATE chat_sessions SET title=?,provider=?,updated_at=? WHERE id=?", session.Title, "api", stamp, sessionID)
 	if err == nil {
 		_, err = tx.ExecContext(ctx, "INSERT INTO chat_runs(id,session_id,body) VALUES(?,?,?)", record.ID, sessionID, jsonText(record))
 	}
@@ -172,7 +172,7 @@ func (s *Server) startSessionChat(w http.ResponseWriter, r *http.Request, docume
 	go func() {
 		defer finish()
 		defer cancel()
-		s.streamChat(ctx, cancel, run, document.ID, config, AIInput{Prompt: user.Content, Images: images, Chat: chat})
+		s.streamChat(ctx, cancel, run, document.ID, service, AIInput{Prompt: user.Content, Images: images, Chat: chat})
 		s.finishChatRun(ctx, run)
 	}()
 	if r.PathValue("legacy") == "true" {
