@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"os"
@@ -685,7 +686,8 @@ func (s *Server) bilingualProcessor(j *bilingualJob, args []string) error {
 	cmd.Dir = j.work
 	cmd.Env = append(os.Environ(), "ELECTRON_RUN_AS_NODE=1")
 	cmd.WaitDelay = 3 * time.Second
-	cmd.Stderr = &boundedBilingualOutput{}
+	stderr := &boundedBilingualOutput{}
+	cmd.Stderr = stderr
 	cmd.Stdout = &bilingualProgress{job: j, cancel: cancel}
 	// Run owns the pipe readers so WaitDelay also bounds inherited stdout/stderr.
 	e := cmd.Run()
@@ -693,6 +695,26 @@ func (s *Server) bilingualProcessor(j *bilingualJob, args []string) error {
 		return j.ctx.Err()
 	}
 	if e != nil {
+		// Never publish arbitrary child stderr: it may contain paths or secrets.
+		// Only rebuild the fixed overflow diagnostic for a known prepared paragraph.
+		if len(args) >= 2 && args[0] == "--stage" && args[1] == "render" && len(stderr.b) < 8192 {
+			for _, page := range j.prepared.Pages {
+				if page.Page < 1 || page.Page > j.prepared.TotalPages {
+					continue
+				}
+				for _, p := range page.Paragraphs {
+					if p.Page != page.Page || len(p.ID) == 0 || len(p.ID) > 240 || strings.ContainsFunc(p.ID, func(c rune) bool {
+						return !(c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9' || c == '.' || c == '_' || c == '-')
+					}) {
+						continue
+					}
+					message := fmt.Sprintf("第 %d 页段落 %s 排版溢出（最小字号 9 pt）", page.Page, p.ID)
+					if strings.TrimSpace(string(stderr.b)) == message {
+						return bilingualFailure(message)
+					}
+				}
+			}
+		}
 		return bilingualFailure("PDF 排版失败：请检查文字方向、字体、段落区域或版面；可缩小页码范围重试")
 	}
 	return nil
