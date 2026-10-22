@@ -829,12 +829,69 @@ func TestBilingualPDFStartRequiresExplicitFields(t *testing.T) {
 	if w.Code != 202 {
 		t.Fatal(w.Code, w.Body.String())
 	}
+	if state := bilingualJSON(t, w); state["done"] != float64(0) || state["total"] != float64(0) {
+		t.Error("fully reused export did not start at 0/0", state)
+	}
 	bilingualPoll(t, s, j, "ready")
 }
 func TestBilingualPDFRejectsControlAndFencedEnvelope(t *testing.T) {
 	for _, answer := range []string{`[{"id":"p1-b1","target":"正文\u0000"}]`, "```json\n[{\"id\":\"p1-b1\",\"target\":\"正常\"}]\n```"} {
 		if _, err := validateBilingualTargets(answer, []nativeParagraph{{ID: "p1-b1"}}); err == nil {
 			t.Errorf("accepted illegal control/envelope: %q", answer)
+		}
+	}
+}
+
+func TestBilingualPDFTranslationStartsWithMissingParagraphProgress(t *testing.T) {
+	s := bilingualFixture(t)
+	path := filepath.Join(s.analysisDir("doc"), "manifest.json")
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var manifest map[string]any
+	if json.Unmarshal(raw, &manifest) != nil {
+		t.Fatal("invalid fixture manifest")
+	}
+	blocks := []map[string]any{}
+	for i := 1; i <= 20; i++ {
+		blocks = append(blocks, map[string]any{"id": fmt.Sprintf("p1-b%d", i), "page": 1, "label": "text", "text": fmt.Sprintf("Paragraph %d.", i)})
+	}
+	manifest["blocks"] = blocks
+	raw, _ = json.Marshal(manifest)
+	if err = os.WriteFile(path, raw, 0600); err != nil {
+		t.Fatal(err)
+	}
+	entered := make(chan struct{})
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "GET" {
+			w.WriteHeader(503)
+			return
+		}
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.WriteHeader(200)
+		w.(http.Flusher).Flush()
+		close(entered)
+		<-r.Context().Done()
+	}))
+	defer func() { s.Close(); srv.Close() }()
+	bilingualConfig(t, s, srv.URL+"/v1", "", "openai")
+	j := bilingualCreate(t, s, `{"layout":"alternating"}`)
+	bilingualPoll(t, s, j, "awaiting-confirmation")
+	started := bilingualStart(t, s, j, true)
+	if started.Code != 202 {
+		t.Fatal(started.Code, started.Body.String())
+	}
+	select {
+	case <-entered:
+	case <-time.After(time.Second):
+		t.Fatal("first SSE did not start")
+	}
+	polled := request(t, s, "GET", "/api/documents/doc/bilingual-pdf/"+j, nil)
+	for _, response := range []*httptest.ResponseRecorder{started, polled} {
+		state := bilingualJSON(t, response)
+		if state["stage"] != "translating" || state["done"] != float64(0) || state["total"] != float64(20) {
+			t.Errorf("first SSE pending: wrong translating progress %v", state)
 		}
 	}
 }

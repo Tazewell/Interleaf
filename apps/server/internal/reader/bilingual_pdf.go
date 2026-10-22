@@ -416,6 +416,7 @@ func (s *Server) confirmBilingualPDF(j *bilingualJob, start bilingualStartReques
 		return bad(400, "缺少可用 API 配置，请在设置中填写 API 地址与翻译模型后重新创建任务")
 	}
 	j.state.Status, j.state.Stage = "translating", "translating"
+	j.state.Done, j.state.Total = 0, missing
 	j.start <- start
 	return j.state, 202, nil
 }
