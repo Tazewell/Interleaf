@@ -1,11 +1,15 @@
-import { useEffect, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import { api } from "@reader/api";
-import type {
-  AIConfig,
-  AgentModel,
-  ModelTask,
-  ReasoningEffort,
+import {
+  nativeConfigUpdate,
+  type NativeAIConfig,
+  type AIModelRole,
+  type AgentModel,
+  type NativeAICheck,
+  type ReasoningEffort,
 } from "@reader/core";
+import { Input } from "@reader/ui/components/input";
+import { Button } from "@reader/ui/components/button";
 import {
   Select,
   SelectTrigger,
@@ -17,33 +21,28 @@ import { toast } from "sonner";
 import {
   catalogRevision,
   effortLabel,
-  usableModels,
   efforts,
-  modelDisplayName,
   selectedAgentModel,
 } from "./ModelSelector";
 import { useReaderStore } from "./store";
 
-const AUTO = "__auto__";
-const tasks: [ModelTask, string][] = [
-  ["chat", "问答"],
-  ["translation", "翻译"],
+const roles: [AIModelRole, string, string][] = [
+  ["chat", "问答", "自动选择推荐模型"],
+  ["translation", "翻译", "自动选择快速模型"],
+  ["vision", "图片", "仅使用已验证支持图片的问答模型"],
+  ["research", "研究", "继承问答模型"],
 ];
-// Only the API agent sends images to a separately chosen model.
-const apiTasks: [ModelTask, string][] = [...tasks, ["vision", "图片"]];
-const fields = {
-  chat: { models: "models", efforts: "efforts" },
-  translation: { models: "translationModels", efforts: "translationEfforts" },
-  vision: { models: "visionModels", efforts: "visionEfforts" },
-} as const;
-
-export function taskChoice(config: AIConfig, task: ModelTask) {
-  const provider = config.primary;
-  const model = config[fields[task].models]?.[provider] ?? "";
-  const effort = config[fields[task].efforts]?.[provider]?.[model] ?? "medium";
-  return { model, effort };
+export function taskChoice(config: NativeAIConfig, role: AIModelRole) {
+  return {
+    model: config.models[role] ?? "",
+    effort:
+      config.efforts[role] ??
+      (role === "research" && !config.models.research
+        ? config.efforts.chat
+        : undefined) ??
+      "medium",
+  };
 }
-
 export function TaskModels({ disabled }: { disabled: boolean }) {
   const {
     aiConfig: config,
@@ -51,184 +50,179 @@ export function TaskModels({ disabled }: { disabled: boolean }) {
     aiModelSaving: saving,
     setAIModelSaving,
   } = useReaderStore();
-  const provider = config?.primary ?? "";
-  const revision = catalogRevision(config);
-  const [catalog, setCatalog] = useState<{
-    provider: string;
-    models: AgentModel[];
-  }>({ provider: "", models: [] });
-  const [loading, setLoading] = useState(false);
+  const id = useId();
+  const [catalog, setCatalog] = useState<AgentModel[]>([]);
   const [error, setError] = useState("");
+  const [modelEdits, setModelEdits] = useState<
+    Partial<Record<AIModelRole, string>>
+  >({});
+  const [effortEdits, setEffortEdits] = useState<
+    Partial<Record<AIModelRole, ReasoningEffort>>
+  >({});
+  const [checking, setChecking] = useState<AIModelRole | null>(null);
+  const [checks, setChecks] = useState<
+    Partial<Record<AIModelRole, NativeAICheck>>
+  >({});
+  const [wait, setWait] = useState("15");
+  const [retry, setRetry] = useState(0);
+  const revision = catalogRevision(config);
   useEffect(() => {
-    if (!provider) return;
-    const controller = new AbortController();
-    setLoading(true);
+    setModelEdits({});
+    setEffortEdits({});
+    setChecks({});
+  }, [config]);
+  useEffect(() => {
+    setCatalog([]);
     setError("");
+    if (!config?.connection.url || config.needsConfiguration) return;
+    const controller = new AbortController();
     void api
-      .agentModels(provider, controller.signal)
+      .agentModels("chat", controller.signal)
       .then((models) => {
-        if (!controller.signal.aborted)
-          setCatalog({
-            provider,
-            models: models.map((model) => ({
-              ...model,
-              name: modelDisplayName(model.id, model.name),
-            })),
-          });
+        if (!controller.signal.aborted) setCatalog(models);
       })
-      .catch((error: Error) => {
+      .catch((error) => {
         if (!controller.signal.aborted) setError(error.message);
-      })
-      .finally(() => {
-        if (!controller.signal.aborted) setLoading(false);
       });
     return () => controller.abort();
-  }, [provider, revision]);
-  if (!config || !provider) return null;
-  const models = catalog.provider === provider ? catalog.models : [];
-
-  const save = async (change: (latest: AIConfig) => AIConfig) => {
+  }, [revision, config, retry]);
+  if (!config) return null;
+  const save = async () => {
     if (useReaderStore.getState().aiModelSaving) return;
     setAIModelSaving(true);
     try {
       const latest = await api.aiConfig();
-      if (latest.primary !== provider) {
+      if (
+        latest.connection.url !== config.connection.url ||
+        latest.connection.protocol !== config.connection.protocol
+      ) {
         setAIConfig(latest);
-        throw new Error("Agent SDK 已改变，请重新选择模型");
+        throw new Error("连接已改变，请重新选择模型");
       }
-      setAIConfig(await api.saveAIConfig(change(latest)));
+      const models = { ...latest.models, ...modelEdits };
+      setAIConfig(
+        await api.saveAIConfig({
+          ...nativeConfigUpdate(latest),
+          models,
+          efforts: { ...latest.efforts, ...effortEdits },
+          apiModels: [
+            ...new Set([
+              ...latest.apiModels,
+              ...(Object.values(models).filter(Boolean) as string[]),
+            ]),
+          ],
+        }),
+      );
     } catch (error) {
       toast.error((error as Error).message);
     } finally {
       setAIModelSaving(false);
     }
   };
-  const chooseModel = (task: ModelTask, value: string) =>
-    save((latest) => {
-      const key = fields[task].models;
-      return {
-        ...latest,
-        [key]: { ...latest[key], [provider]: value === AUTO ? "" : value },
-      };
-    });
-  const chooseEffort = (
-    task: ModelTask,
-    model: string,
-    value: ReasoningEffort,
-  ) =>
-    save((latest) => {
-      if ((latest[fields[task].models]?.[provider] ?? "") !== model)
-        throw new Error("模型已改变，请重新选择 Effort");
-      const key = fields[task].efforts;
-      return {
-        ...latest,
-        [key]: {
-          ...latest[key],
-          [provider]: { ...latest[key]?.[provider], [model]: value },
-        },
-      };
-    });
-
-  const untested = models.some((m) => !m.capability);
-  const noVision =
-    provider === "api" &&
-    !loading &&
-    !error &&
-    models.length > 0 &&
-    !untested &&
-    usableModels(provider, models, "vision").length === 0;
+  const probe = async (role: AIModelRole) => {
+    const seconds = Number(wait);
+    if (!Number.isInteger(seconds) || seconds < 1 || seconds > 60) return;
+    const snapshot = config;
+    setChecking(role);
+    setError("");
+    setChecks((old) => ({ ...old, [role]: undefined }));
+    try {
+      const result = await api.checkNativeAI(
+        role,
+        config.models[role] || undefined,
+        seconds,
+      );
+      if (useReaderStore.getState().aiConfig === snapshot)
+        setChecks((old) => ({ ...old, [role]: result }));
+    } catch (error) {
+      if (useReaderStore.getState().aiConfig === snapshot) {
+        setError((error as Error).message);
+        setChecks((old) => ({
+          ...old,
+          [role]: {
+            text: false,
+            vision: false,
+            checkedAt: "",
+            model: snapshot.models[role] ?? "",
+            fingerprint: "",
+            error: (error as Error).message,
+          },
+        }));
+      }
+    } finally {
+      setChecking(null);
+    }
+  };
   return (
-    <div className="flex flex-col gap-2">
-      {(provider === "api" ? apiTasks : tasks).map(([task, label]) => {
-        const { model, effort } = taskChoice(config, task);
-        const usable = usableModels(provider, models, task);
-        const recommended = selectedAgentModel(usable, "", task);
-        const current = model ? selectedAgentModel(models, model, task) : null;
-        // API choices list only models that passed this task's check.
-        const unavailable =
-          provider === "api" &&
-          !!current &&
-          !usable.some((m) => m.id === current.id);
-        const empty =
-          provider === "api" && !loading && !error && usable.length === 0;
-        const defaultLabel =
-          recommended?.name ??
-          (!empty ? "默认模型" : untested ? "等待检测" : "无可用模型");
-        const effortInfo = (current ?? recommended)?.effortInfo;
-        const fixedEffort =
-          effortInfo?.mode === "fixed" || effortInfo?.mode === "unknown";
-        const options =
-          current &&
-          provider !== "api" &&
-          !models.some((m) => m.id === current.id)
-            ? [current, ...usable]
-            : usable;
+    <div className="space-y-3">
+      <div className="flex items-center justify-between">
+        <h3 className="text-sm font-medium">用途模型</h3>
+        <Button
+          variant="ghost"
+          size="sm"
+          disabled={disabled || saving}
+          onClick={() => setRetry((value) => value + 1)}
+        >
+          刷新模型列表
+        </Button>
+      </div>
+      {error && (
+        <p role="alert" className="text-xs text-muted-foreground">
+          {error}
+        </p>
+      )}
+      {roles.map(([role, label, placeholder]) => {
+        const choice = taskChoice(config, role);
+        const model = modelEdits[role] ?? choice.model;
+        const effort = effortEdits[role] ?? choice.effort;
+        const metadata = selectedAgentModel(catalog, model, role)?.effortInfo;
+        const fixed =
+          metadata?.mode === "fixed" || metadata?.mode === "unknown";
+        const result =
+          checking === role
+            ? undefined
+            : (checks[role] ??
+              selectedAgentModel(catalog, model, role)?.capability);
         return (
-          <div key={task}>
+          <div key={role} className="space-y-1">
             <div className="flex items-center gap-2">
-              <span
+              <label
+                htmlFor={`${id}-${role}`}
                 className="w-10 shrink-0 text-sm"
-                id={`${task}-model-label`}
               >
                 {label}
-              </span>
-              <Select
-                value={current?.id ?? recommended?.id ?? AUTO}
-                disabled={disabled || saving || (empty && !current)}
-                onValueChange={(value) =>
-                  value &&
-                  void chooseModel(
-                    task,
-                    value === recommended?.id ? AUTO : value,
-                  )
+              </label>
+              <Input
+                id={`${id}-${role}`}
+                aria-label={`${label}模型`}
+                list={`${id}-models`}
+                placeholder={placeholder}
+                value={model}
+                disabled={disabled || saving || !!checking}
+                onChange={(event) =>
+                  setModelEdits((old) => ({
+                    ...old,
+                    [role]: event.target.value,
+                  }))
                 }
-              >
-                <SelectTrigger
-                  className="min-w-0 flex-1"
-                  aria-label={`${label}模型`}
-                  aria-busy={loading || saving}
-                >
-                  <SelectValue>
-                    {current
-                      ? `${current.name}${unavailable ? "（未通过检测）" : ""}`
-                      : loading
-                        ? "加载模型…"
-                        : defaultLabel}
-                  </SelectValue>
-                </SelectTrigger>
-                <SelectContent>
-                  {!recommended && !empty && (
-                    <SelectItem value={AUTO} label={defaultLabel}>
-                      {defaultLabel}
-                    </SelectItem>
-                  )}
-                  {options.map((m) => (
-                    <SelectItem key={m.id} value={m.id} label={m.name}>
-                      {m.name}
-                    </SelectItem>
-                  ))}
-                  {!loading && error && (
-                    <div
-                      className="px-2 py-1.5 text-xs text-muted-foreground"
-                      role="alert"
-                    >
-                      {error}
-                    </div>
-                  )}
-                </SelectContent>
-              </Select>
+              />
               <Select
                 value={effort}
-                disabled={
-                  disabled || saving || fixedEffort || (empty && !current)
-                }
-                onValueChange={(value) =>
-                  value && void chooseEffort(task, model, value)
-                }
+                disabled={disabled || saving || fixed || !!checking}
+                onValueChange={(value) => {
+                  if (efforts.includes(value as ReasoningEffort))
+                    setEffortEdits((old) => ({
+                      ...old,
+                      [role]: value as ReasoningEffort,
+                    }));
+                }}
               >
-                <SelectTrigger className="w-28" aria-label={`${label} Effort`}>
+                <SelectTrigger
+                  className="w-28 shrink-0"
+                  aria-label={`${label} Effort`}
+                >
                   <SelectValue>
-                    {fixedEffort ? "固定／自动" : effortLabel(effort)}
+                    {fixed ? "固定／自动" : effortLabel(effort)}
                   </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
@@ -239,25 +233,88 @@ export function TaskModels({ disabled }: { disabled: boolean }) {
                   ))}
                 </SelectContent>
               </Select>
+              <Button
+                variant="ghost"
+                size="sm"
+                disabled={
+                  disabled ||
+                  saving ||
+                  !!checking ||
+                  !!config.needsConfiguration ||
+                  Object.keys(modelEdits).length > 0 ||
+                  Object.keys(effortEdits).length > 0
+                }
+                onClick={() => void probe(role)}
+              >
+                {checking === role ? "检测中…" : `检测${label}`}
+              </Button>
             </div>
-            {effortInfo && (
-              <p className="mt-1 text-xs text-muted-foreground">
-                {effortInfo.note}
-                {!fixedEffort &&
-                effortInfo.mappings?.[effort] &&
-                effortInfo.mappings[effort] !== effort
-                  ? ` ${effort} → ${effortInfo.mappings[effort]}${effortInfo.mode === "budget" ? " tokens" : ""}`
+            {metadata && (
+              <p className="text-xs text-muted-foreground">
+                {metadata.note}
+                {!fixed &&
+                metadata.mappings?.[effort] &&
+                metadata.mappings[effort] !== effort
+                  ? ` ${effort} → ${metadata.mappings[effort]}${metadata.mode === "budget" ? " tokens" : ""}`
+                  : ""}
+              </p>
+            )}
+            {result && (
+              <p role="status" className="text-xs text-muted-foreground">
+                {result.text ? "文字可用" : "文字未通过"}
+                {role === "vision"
+                  ? result.vision
+                    ? "；图片可用"
+                    : "；图片未通过，使用纯文字模式"
+                  : ""}
+                {result.tools === "passed"
+                  ? "；工具可用"
+                  : result.tools
+                    ? "；工具未通过，使用文字检索"
+                    : ""}
+                {result.error ? `：${result.error}` : ""}
+                {result.textFirstOutputMs != null
+                  ? `；文本首输出 ${(result.textFirstOutputMs / 1000).toFixed(2)} s`
+                  : ""}
+                {result.visionFirstOutputMs != null
+                  ? `；图片首输出 ${(result.visionFirstOutputMs / 1000).toFixed(2)} s`
                   : ""}
               </p>
             )}
           </div>
         );
       })}
-      {noVision && (
-        <p className="text-xs text-muted-foreground" role="status">
-          此 API Key 没有通过图片理解检测的模型，公式转换与图片提问不可用。
-        </p>
-      )}
+      <datalist id={`${id}-models`}>
+        {catalog.map((model) => (
+          <option key={model.id} value={model.id}>
+            {model.name}
+          </option>
+        ))}
+      </datalist>
+      <div className="flex flex-wrap items-center justify-end gap-2">
+        <label className="text-xs text-muted-foreground">检测等待（秒）</label>
+        <Input
+          aria-label="检测等待（秒）"
+          type="number"
+          min={1}
+          max={60}
+          value={wait}
+          onChange={(event) => setWait(event.target.value)}
+          className="w-20"
+        />
+        <Button
+          variant="outline"
+          disabled={
+            disabled ||
+            saving ||
+            !!checking ||
+            !(Object.keys(modelEdits).length || Object.keys(effortEdits).length)
+          }
+          onClick={() => void save()}
+        >
+          保存模型
+        </Button>
+      </div>
     </div>
   );
 }

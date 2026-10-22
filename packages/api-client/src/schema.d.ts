@@ -3795,11 +3795,11 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List models reported by the installed Agent SDK without sending a prompt */
+        /** List API models for a role without running inference */
         get: {
             parameters: {
                 query: {
-                    provider: "codex" | "claude" | "kimi" | "api";
+                    role: components["schemas"]["AIModelRole"];
                 };
                 header?: never;
                 path?: never;
@@ -3807,7 +3807,7 @@ export interface paths {
             };
             requestBody?: never;
             responses: {
-                /** @description Models available through this SDK */
+                /** @description API models and current capability checks */
                 200: {
                     headers: {
                         [name: string]: unknown;
@@ -3816,14 +3816,14 @@ export interface paths {
                         "application/json": components["schemas"]["AgentModel"][];
                     };
                 };
-                /** @description Unknown provider */
+                /** @description Unknown role or legacy provider argument */
                 400: {
                     headers: {
                         [name: string]: unknown;
                     };
                     content?: never;
                 };
-                /** @description Agent model discovery failed */
+                /** @description API catalog unavailable */
                 502: {
                     headers: {
                         [name: string]: unknown;
@@ -3862,7 +3862,7 @@ export interface paths {
                         [name: string]: unknown;
                     };
                     content: {
-                        "application/json": components["schemas"]["AIConfig"];
+                        "application/json": components["schemas"]["NativeAIConfig"];
                     };
                 };
                 /** @description Error */
@@ -3885,7 +3885,7 @@ export interface paths {
             };
             requestBody: {
                 content: {
-                    "application/json": components["schemas"]["AIConfig"];
+                    "application/json": components["schemas"]["NativeAIConfigUpdate"];
                 };
             };
             responses: {
@@ -3895,7 +3895,7 @@ export interface paths {
                         [name: string]: unknown;
                     };
                     content: {
-                        "application/json": components["schemas"]["AIConfig"];
+                        "application/json": components["schemas"]["NativeAIConfig"];
                     };
                 };
                 /** @description Error */
@@ -3910,59 +3910,6 @@ export interface paths {
             };
         };
         post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/ai/test/{provider}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post: {
-            parameters: {
-                query?: {
-                    /** @description Test text or vision independently. Omit to run both. Vision requires a successful text check for the current configuration. */
-                    capability?: "text" | "vision" | "tools";
-                    /** @description Required for the api provider, which is checked one model at a time; the result is stored under capabilities["api:<model>"]. */
-                    model?: string;
-                    /** @description Per-stage wait limit for API model text/vision probes only. Omit or use 0 for defaults (text 45 seconds, vision 90 seconds). Does not change generation timeouts or saved connection settings. */
-                    timeoutSeconds?: number;
-                };
-                header?: never;
-                path: {
-                    provider: string;
-                };
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description Success */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["AICapability"];
-                    };
-                };
-                /** @description Error */
-                default: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["Error"];
-                    };
-                };
-            };
-        };
         delete?: never;
         options?: never;
         head?: never;
@@ -5722,6 +5669,65 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/ai/check": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Explicitly check the configured API model; never runs on save or startup */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        role: components["schemas"]["AIModelRole"];
+                        model?: string;
+                        /** @default 15 */
+                        waitSeconds?: number;
+                    };
+                };
+            };
+            responses: {
+                /** @description Model check and configuration identity */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["NativeAICheck"];
+                    };
+                };
+                /** @description Invalid role, model or wait limit */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Connection changed during probe */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -6553,6 +6559,70 @@ export interface components {
             createdAt: string;
             updatedAt: string;
             latestRun?: components["schemas"]["ChatRun"];
+        };
+        /** @enum {string} */
+        AIModelRole: "chat" | "translation" | "vision" | "research";
+        NativeAIConfig: {
+            /** @enum {integer} */
+            version: 2;
+            connection: {
+                /** @enum {string} */
+                protocol: "openai" | "anthropic";
+                url: string;
+                hasKey: boolean;
+            };
+            models: {
+                chat?: string;
+                translation?: string;
+                vision?: string;
+                research?: string;
+            };
+            efforts: {
+                /** @enum {string} */
+                chat?: "low" | "medium" | "high" | "max";
+                /** @enum {string} */
+                translation?: "low" | "medium" | "high" | "max";
+                /** @enum {string} */
+                vision?: "low" | "medium" | "high" | "max";
+                /** @enum {string} */
+                research?: "low" | "medium" | "high" | "max";
+            };
+            apiModels: string[];
+            translationPrompt?: string;
+            needsConfiguration?: string;
+        };
+        NativeAIConfigUpdate: {
+            /** @enum {integer} */
+            version: 2;
+            connection: {
+                /** @enum {string} */
+                protocol: "openai" | "anthropic";
+                url: string;
+                /** @description Omitted preserves only at the same normalized protocol and endpoint; null explicitly clears. */
+                key?: string | null;
+            };
+            models?: {
+                chat?: string;
+                translation?: string;
+                vision?: string;
+                research?: string;
+            };
+            efforts?: {
+                /** @enum {string} */
+                chat?: "low" | "medium" | "high" | "max";
+                /** @enum {string} */
+                translation?: "low" | "medium" | "high" | "max";
+                /** @enum {string} */
+                vision?: "low" | "medium" | "high" | "max";
+                /** @enum {string} */
+                research?: "low" | "medium" | "high" | "max";
+            };
+            apiModels?: string[];
+            translationPrompt?: string;
+        };
+        NativeAICheck: components["schemas"]["AICapability"] & {
+            model: string;
+            fingerprint: string;
         };
     };
     responses: never;

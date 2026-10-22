@@ -15,7 +15,13 @@ vi.mock("@reader/api", () => ({
     setAssistance: vi.fn(),
     translateRange: vi.fn(),
     translateEPUBChapter: vi.fn(),
-    aiConfig: vi.fn(async () => ({ primary: "codex" })),
+    aiConfig: vi.fn(async () => ({
+      version: 2,
+      connection: { protocol: "openai", url: "", hasKey: false },
+      models: {},
+      efforts: {},
+      apiModels: [],
+    })),
   },
 }));
 let root: Root, host: HTMLDivElement;

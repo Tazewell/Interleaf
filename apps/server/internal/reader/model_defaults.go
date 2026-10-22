@@ -12,7 +12,8 @@ const (
 	taskChat        modelTask = "chat"
 	taskTranslation modelTask = "translation"
 	// Only the API agent picks a separate model for image input.
-	taskVision modelTask = "vision"
+	taskVision   modelTask = "vision"
+	taskResearch modelTask = "research"
 )
 
 // Families are ordered by preference for each task. Chat prefers the most

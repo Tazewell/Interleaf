@@ -1,7 +1,8 @@
+import { nativeConfigUpdate } from "@reader/core";
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { api } from "@reader/api";
 import type {
-  AIConfig,
+  NativeAIConfig,
   AgentModel,
   ModelTask,
   ReasoningEffort,
@@ -41,7 +42,7 @@ export const modelDisplayName = (id: string, name = id) =>
         .replace(/-([a-z])/g, (_, letter: string) => `-${letter.toUpperCase()}`)
     : name;
 
-// Unset choices follow the server's per-task recommendation, then the CLI default.
+// Unset choices follow the server's role recommendation, then its catalog default.
 export function selectedAgentModel(
   models: AgentModel[],
   configured: string,
@@ -74,7 +75,8 @@ export function ModelSelector({
     aiModelSaving: saving,
     setAIModelSaving,
   } = useReaderStore();
-  const provider = config?.primary ?? "";
+  const provider =
+    config?.connection.url && !config.needsConfiguration ? "api" : "";
   const revision = catalogRevision(config);
   const [catalog, setCatalog] = useState<{
     provider: string;
@@ -95,7 +97,7 @@ export function ModelSelector({
     setLoading(true);
     setError("");
     void api
-      .agentModels(provider, controller.signal)
+      .agentModels("chat", controller.signal)
       .then((models) => {
         if (!controller.signal.aborted)
           setCatalog({
@@ -113,9 +115,9 @@ export function ModelSelector({
         if (!controller.signal.aborted) setLoading(false);
       });
     return () => controller.abort();
-  }, [provider, revision, retry]);
+  }, [provider, revision, retry, config]);
   const models = catalog.provider === provider ? catalog.models : [];
-  const configuredModel = config?.models[provider] ?? "";
+  const configuredModel = config?.models.chat ?? "";
   const usable = usableModels(provider, models, "chat");
   const current = configuredModel
     ? selectedAgentModel(models, configuredModel)
@@ -123,17 +125,14 @@ export function ModelSelector({
   const effortInfo = current?.effortInfo;
   const fixedEffort =
     effortInfo?.mode === "fixed" || effortInfo?.mode === "unknown";
-  const currentEffort =
-    config?.efforts?.[provider]?.[configuredModel] ?? "medium";
+  const currentEffort = config?.efforts.chat ?? "medium";
   const effort = draftEffort ?? currentEffort;
   useEffect(() => {
     setDraftEffort(null);
   }, [provider, configuredModel]);
-  // An API model that failed its check is never offered again.
+  // Preserve the configured ID even when it is absent from the current catalog.
   const options =
-    current &&
-    provider !== "api" &&
-    !models.some((model) => model.id === current.id)
+    current && !usable.some((model) => model.id === current.id)
       ? [current, ...usable]
       : usable;
 
@@ -147,14 +146,17 @@ export function ModelSelector({
     setAIModelSaving(true);
     try {
       const latest = await api.aiConfig();
-      if (latest.primary !== provider) {
+      if (
+        latest.connection.url !== config?.connection.url ||
+        latest.connection.protocol !== config?.connection.protocol
+      ) {
         setAIConfig(latest);
-        throw new Error("Agent SDK 已改变，请重新选择模型");
+        throw new Error("连接已改变，请重新选择模型");
       }
       setAIConfig(
         await api.saveAIConfig({
-          ...latest,
-          models: { ...latest.models, [provider]: value },
+          ...nativeConfigUpdate(latest),
+          models: { ...latest.models, chat: value },
         }),
       );
     } catch (error) {
@@ -180,22 +182,17 @@ export function ModelSelector({
         effortQueue.current = null;
         const latest = await api.aiConfig();
         if (
-          latest.primary !== provider ||
-          (latest.models[provider] ?? "") !== configuredModel
+          latest.connection.url !== config?.connection.url ||
+          latest.connection.protocol !== config?.connection.protocol ||
+          (latest.models.chat ?? "") !== configuredModel
         ) {
           setAIConfig(latest);
           throw new Error("模型已改变，请重新选择 Effort");
         }
         setAIConfig(
           await api.saveAIConfig({
-            ...latest,
-            efforts: {
-              ...latest.efforts,
-              [provider]: {
-                ...latest.efforts?.[provider],
-                [configuredModel]: next,
-              },
-            },
+            ...nativeConfigUpdate(latest),
+            efforts: { ...latest.efforts, chat: next },
           }),
         );
         setDraftEffort((draft) => (draft === next ? null : draft));
@@ -369,29 +366,25 @@ export function ModelSelector({
 
 /** The API agent's catalog carries per-model check results; reload it after
  * the address, the added models or any model check changes. */
-export function catalogRevision(config: AIConfig | null | undefined) {
-  if (config?.primary !== "api") return "";
-  const checks = Object.entries(config.capabilities)
-    .filter(([key]) => key.startsWith("api:"))
-    .map(([key, value]) => `${key}@${value.checkedAt}`)
-    .sort();
-  return [
-    config.api.url,
-    config.api.protocol ?? "auto",
-    ...(config.apiModels ?? []),
-    ...checks,
-  ].join("\n");
+export function catalogRevision(config: NativeAIConfig | null | undefined) {
+  if (!config) return "";
+  return JSON.stringify([
+    config.connection,
+    config.models,
+    config.efforts,
+    config.apiModels,
+  ]);
 }
 
-/** API models are offered only for tasks whose checks they passed. */
+/** Unknown IDs remain usable for text; images require a verified capability. */
 export function usableModels(
-  provider: string,
+  _provider: string,
   models: AgentModel[],
-  task: ModelTask,
+  role: ModelTask,
 ) {
-  if (provider !== "api") return models;
-  return models.filter(
-    (model) =>
-      model.capability?.text && (task !== "vision" || model.capability.vision),
+  return models.filter((model) =>
+    role === "vision"
+      ? model.capability?.text && model.capability.vision
+      : model.capability?.text !== false,
   );
 }

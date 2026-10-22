@@ -26,13 +26,12 @@ func TestAPIProbeTimeoutOverride(t *testing.T) {
 	}))
 	defer upstream.Close()
 	s := testServer(t)
-	c := s.aiConfig()
-	c.API = APIConnection{URL: upstream.URL}
-	if err := s.writeAIConfig(c); err != nil {
+	_, err := s.saveNativeAIConfig(nativeUpdate(t, `{"version":2,"connection":{"protocol":"openai","url":"`+upstream.URL+`","key":null},"models":{"chat":"test"}}`))
+	if err != nil {
 		t.Fatal(err)
 	}
 	for _, seconds := range []string{"1", "2"} {
-		w := request(t, s, "POST", "/api/ai/test/api?model=test&capability=text&timeoutSeconds="+seconds, nil)
+		w := request(t, s, "POST", "/api/ai/check", strings.NewReader(`{"role":"chat","model":"test","waitSeconds":`+seconds+`}`))
 		var cap Capability
 		if err := json.Unmarshal(w.Body.Bytes(), &cap); err != nil {
 			t.Fatal(err)
@@ -48,16 +47,10 @@ func TestAPIProbeTimeoutOverride(t *testing.T) {
 
 func TestAPIProbeRejectsInvalidTimeout(t *testing.T) {
 	s := testServer(t)
-	for _, value := range []string{"-1", "601", "1.5", "invalid"} {
-		w := request(t, s, "POST", "/api/ai/test/api?model=test&capability=text&timeoutSeconds="+value, nil)
+	for _, value := range []string{"-1", "0", "61", "1.5", `"invalid"`} {
+		w := request(t, s, "POST", "/api/ai/check", strings.NewReader(`{"role":"chat","model":"test","waitSeconds":`+value+`}`))
 		if w.Code != 400 {
-			t.Fatalf("timeout=%s: status=%d %s", value, w.Code, w.Body.String())
-		}
-	}
-	for _, value := range []string{"", "0", "600"} {
-		w := request(t, s, "POST", "/api/ai/test/api?model=test&capability=text&timeoutSeconds="+value, nil)
-		if w.Code != 200 {
-			t.Fatalf("valid timeout=%s: %s", value, w.Body.String())
+			t.Fatalf("wait=%s: status=%d %s", value, w.Code, w.Body.String())
 		}
 	}
 }
@@ -85,13 +78,12 @@ func TestAPIProbeFirstOutput(t *testing.T) {
 	}))
 	defer upstream.Close()
 	s := testServer(t)
-	c := s.aiConfig()
-	c.API = APIConnection{URL: upstream.URL}
-	if err := s.writeAIConfig(c); err != nil {
+	_, err := s.saveNativeAIConfig(nativeUpdate(t, `{"version":2,"connection":{"protocol":"openai","url":"`+upstream.URL+`","key":null},"models":{"chat":"test"}}`))
+	if err != nil {
 		t.Fatal(err)
 	}
 	started := time.Now()
-	w := request(t, s, "POST", "/api/ai/test/api?model=test&capability=text", nil)
+	w := request(t, s, "POST", "/api/ai/check", strings.NewReader(`{"role":"chat","model":"test"}`))
 	elapsed := time.Since(started).Milliseconds()
 	var text map[string]any
 	if err := json.Unmarshal(w.Body.Bytes(), &text); err != nil {
@@ -101,14 +93,14 @@ func TestAPIProbeFirstOutput(t *testing.T) {
 	if w.Code != 200 || text["text"] != true || !ok || first < 20 || float64(elapsed)-first < 300 {
 		t.Fatalf("first output must exclude catalog lookup and wait for content, elapsed=%d: %s", elapsed, w.Body.String())
 	}
-	w = request(t, s, "POST", "/api/ai/test/api?model=test&capability=vision", nil)
+	w = request(t, s, "POST", "/api/ai/check", strings.NewReader(`{"role":"vision","model":"test"}`))
 	var vision map[string]any
 	_ = json.Unmarshal(w.Body.Bytes(), &vision)
-	if vision["textFirstOutputMs"] != first || vision["visionFirstOutputMs"] == nil {
+	if vision["textFirstOutputMs"] == nil || vision["visionFirstOutputMs"] == nil {
 		t.Fatalf("stage timings lost: %s", w.Body.String())
 	}
 	fail.Store(true)
-	w = request(t, s, "POST", "/api/ai/test/api?model=test&capability=text", nil)
+	w = request(t, s, "POST", "/api/ai/check", strings.NewReader(`{"role":"chat","model":"test"}`))
 	var failed map[string]any
 	_ = json.Unmarshal(w.Body.Bytes(), &failed)
 	if failed["textFirstOutputMs"] != nil || failed["visionFirstOutputMs"] != nil {
@@ -158,13 +150,12 @@ func TestAnthropicProbeFirstThinkingOutput(t *testing.T) {
 			}))
 			defer upstream.Close()
 			s := testServer(t)
-			c := s.aiConfig()
-			c.API = APIConnection{URL: upstream.URL, Protocol: "anthropic"}
-			if err := s.writeAIConfig(c); err != nil {
+			_, err := s.saveNativeAIConfig(nativeUpdate(t, `{"version":2,"connection":{"protocol":"anthropic","url":"`+upstream.URL+`","key":null},"models":{"chat":"test"}}`))
+			if err != nil {
 				t.Fatal(err)
 			}
 			started := time.Now()
-			w := request(t, s, "POST", "/api/ai/test/api?model=test&capability=text&timeoutSeconds=1", nil)
+			w := request(t, s, "POST", "/api/ai/check", strings.NewReader(`{"role":"chat","model":"test","waitSeconds":1}`))
 			elapsed := time.Since(started).Milliseconds()
 			var cap Capability
 			if err := json.Unmarshal(w.Body.Bytes(), &cap); err != nil {

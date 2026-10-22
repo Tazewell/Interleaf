@@ -36,9 +36,6 @@ import type {
   Processing,
   ProcessingUsage,
   PDFBlock,
-  AIConfig,
-  AICapability,
-  AgentModel,
   LibraryMode,
   LibraryPreferences,
   GuidePreferences,
@@ -48,10 +45,10 @@ import type {
   JournalRankConfig,
   JournalRankResult,
 } from "@reader/core";
-let sessionToken = "";
-export function configureAPI(token: string) {
-  sessionToken = token;
-}
+import { request, sessionToken, RequestError } from "./transport";
+import { nativeAI } from "./native-ai";
+export { configureAPI, RequestError } from "./transport";
+export * from "./native-ai";
 export function publicationURL(documentId: string, resource: string) {
   return `/pub/${encodeURIComponent(sessionToken)}/${encodeURIComponent(documentId)}/${resource}`;
 }
@@ -98,37 +95,6 @@ client.use({
     return;
   },
 });
-/** A failed request; `code` and `pages` identify a long paper to confirm. */
-export class RequestError extends Error {
-  constructor(
-    message: string,
-    readonly code?: string,
-    readonly pages?: number,
-  ) {
-    super(message);
-  }
-}
-async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
-  const response = await diagnosticFetch(path, {
-    ...init,
-    headers: {
-      Authorization: `Bearer ${sessionToken}`,
-      ...(init.body instanceof FormData
-        ? {}
-        : { "Content-Type": "application/json" }),
-      ...init.headers,
-    },
-  });
-  if (!response.ok) {
-    const data = await response.json().catch(() => ({}));
-    throw new RequestError(
-      data.error || `请求失败 (${response.status})`,
-      data.code,
-      data.pages,
-    );
-  }
-  return response.status === 204 ? (undefined as T) : response.json();
-}
 // Keep annotation writes and undo in the same client order, including failures.
 let annotationQueue = Promise.resolve();
 let annotationSession = "";
@@ -493,33 +459,11 @@ export const api = {
   process: (id: string) =>
     request<Processing>(`/api/documents/${id}/processing`, { method: "POST" }),
   blocks: (id: string) => request<PDFBlock[]>(`/api/documents/${id}/blocks`),
-  aiConfig: () => request<AIConfig>("/api/ai/config"),
-  agentModels: (provider: string, signal?: AbortSignal) =>
-    request<AgentModel[]>(
-      `/api/ai/models?provider=${encodeURIComponent(provider)}`,
-      { signal },
-    ),
-  saveAIConfig: (config: AIConfig) =>
-    request<AIConfig>("/api/ai/config", {
-      method: "PUT",
-      body: JSON.stringify(config),
-    }),
-  testAI: (
-    provider: string,
-    capability?: "text" | "vision" | "tools",
-    model?: string,
-    timeoutSeconds?: number,
-  ) => {
-    const query = new URLSearchParams();
-    if (capability) query.set("capability", capability);
-    if (model) query.set("model", model);
-    if (timeoutSeconds !== undefined)
-      query.set("timeoutSeconds", String(timeoutSeconds));
-    return request<AICapability>(
-      `/api/ai/test/${provider}${query.size ? `?${query}` : ""}`,
-      { method: "POST" },
-    );
-  },
+  ...nativeAI,
+  // Existing callers use these names while runtime migration completes.
+  aiConfig: nativeAI.nativeAIConfig,
+  agentModels: nativeAI.nativeAIModels,
+  saveAIConfig: nativeAI.saveNativeAIConfig,
   documents: async (): Promise<Document[]> => {
     const { data, error } = await client.GET("/api/documents");
     if (error) throw new Error(error.error);

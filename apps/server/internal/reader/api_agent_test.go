@@ -164,11 +164,11 @@ func TestAPIModelCheckIsPerModel(t *testing.T) {
 	if err := s.writeAIConfig(config); err != nil {
 		t.Fatal(err)
 	}
-	if w := request(t, s, "POST", "/api/ai/test/api?capability=text", nil); w.Code != 400 {
+	if w := request(t, s, "POST", "/api/ai/check", strings.NewReader(`{"provider":"api"}`)); w.Code != 400 {
 		t.Fatal("a check without a model was accepted")
 	}
 	for _, model := range []string{"deepseek-flash", "broken"} {
-		if w := request(t, s, "POST", "/api/ai/test/api?capability=text&model="+model, nil); w.Code != 200 {
+		if w := request(t, s, "POST", "/api/ai/check", strings.NewReader(`{"role":"chat","model":"`+model+`"}`)); w.Code != 200 {
 			t.Fatal(w.Body.String())
 		}
 	}
@@ -176,7 +176,7 @@ func TestAPIModelCheckIsPerModel(t *testing.T) {
 	if !capable(saved, "api:deepseek-flash", false) || capable(saved, "api:broken", false) || saved.Capabilities["api:broken"].Error == "" {
 		t.Fatalf("per-model results: %+v", saved.Capabilities)
 	}
-	if got := calls(); got[0].Model != "deepseek-flash" || got[0].Effort != "high" || got[1].Model != "broken" {
+	if got := calls(); got[0].Model != "deepseek-flash" || got[0].Effort != "high" || got[len(got)-1].Model != "broken" {
 		t.Fatalf("probes: %+v", got)
 	}
 }
@@ -253,7 +253,7 @@ func TestAPITranslationHistoryTrimsOldestTurns(t *testing.T) {
 
 func TestAPIAgentConfigKeepsKeyPrivate(t *testing.T) {
 	s := testServer(t)
-	body := `{"primary":"api","models":{"api":"deepseek-flash"},"api":{"url":"https://api.deepseek.com","key":"sk-private","hasKey":false},"textAPI":{"url":"","model":"","hasKey":false},"imageAPI":{"url":"","model":"","hasKey":false},"capabilities":{}}`
+	body := `{"version":2,"models":{"chat":"deepseek-flash"},"connection":{"protocol":"openai","url":"https://api.deepseek.com","key":"sk-private"}}`
 	if w := request(t, s, "PUT", "/api/ai/config", strings.NewReader(body)); w.Code != 200 || strings.Contains(w.Body.String(), "sk-private") || !strings.Contains(w.Body.String(), `"hasKey":true`) {
 		t.Fatalf("save: %d %s", w.Code, w.Body.String())
 	}
@@ -262,8 +262,8 @@ func TestAPIAgentConfigKeepsKeyPrivate(t *testing.T) {
 	if err := s.writeAIConfig(c); err != nil {
 		t.Fatal(err)
 	}
-	// The UI resends hasKey without the secret; the key and its test survive.
-	resend := strings.Replace(body, `"key":"sk-private","hasKey":false`, `"hasKey":true`, 1)
+	// Model-only edits omit the key; the saved secret and verification survive.
+	resend := strings.Replace(body, `,"key":"sk-private"`, ``, 1)
 	if w := request(t, s, "PUT", "/api/ai/config", strings.NewReader(resend)); w.Code != 200 {
 		t.Fatal(w.Body.String())
 	}
@@ -342,7 +342,7 @@ func TestLiveDeepSeekCapabilityCheck(t *testing.T) {
 		w := request(t, s, "POST", "/api/ai/test/api?model="+model, nil)
 		t.Logf("%s: %d %s", model, w.Code, w.Body.String())
 	}
-	w := request(t, s, "GET", "/api/ai/models?provider=api", nil)
+	w := request(t, s, "GET", "/api/ai/models?role=chat", nil)
 	t.Logf("models: %d %s", w.Code, w.Body.String())
 	saved := s.aiConfig()
 	if !apiCapable(saved, taskChat, false) || !apiCapable(saved, taskChat, true) {

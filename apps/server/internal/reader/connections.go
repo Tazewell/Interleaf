@@ -18,11 +18,9 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
-	"slices"
 	"strconv"
 	"strings"
 	"time"
-	"unicode/utf8"
 )
 
 type APIConnection struct {
@@ -105,47 +103,49 @@ func (s *Server) aiConfig() AIConfig {
 	defer s.configMu.Unlock()
 	return s.readAIConfig()
 }
+
+// Temporary server-only view for generation until the native runtime replaces it.
 func (s *Server) readAIConfig() AIConfig {
-	c := AIConfig{Models: map[string]string{}, Capabilities: map[string]Capability{}}
-	b, err := os.ReadFile(filepath.Join(s.Store.Root, "ai-connections.json"))
+	stored, err := s.readNativeAIConfig()
 	if err != nil {
-		return c
+		return nativeLegacyView(emptyNativeAIStored())
 	}
-	var stored savedConfig
-	if json.Unmarshal(b, &stored) != nil {
-		return c
-	}
-	c = stored.Config
-	if c.Models == nil {
-		c.Models = map[string]string{}
-	}
-	if c.Capabilities == nil {
-		c.Capabilities = map[string]Capability{}
-	}
-	if c.APIModels == nil {
-		c.APIModels = []string{}
-	}
-	for k, v := range c.Capabilities {
-		v.Fingerprint = stored.Fingerprints[k]
-		if v.ToolSchemaVersion != documentToolSchemaVersion {
-			v.Tools = ""
-			v.ToolError = ""
-			v.ToolSchemaVersion = ""
-		}
-		c.Capabilities[k] = v
-	}
-	return c
+	return nativeLegacyView(stored)
 }
+
+// Legacy probes may update capabilities, but cannot create a second config source.
 func (s *Server) writeAIConfig(c AIConfig) error {
-	saved := savedConfig{Config: c, Fingerprints: map[string]string{}}
-	for k, v := range c.Capabilities {
-		saved.Fingerprints[k] = v.Fingerprint
+	stored, err := s.readNativeAIConfig()
+	if err != nil {
+		return err
 	}
-	b, e := json.MarshalIndent(saved, "", "  ")
-	if e != nil {
-		return e
+	view := nativeLegacyView(stored)
+	comparable := c
+	comparable.Capabilities = nil
+	view.Capabilities = nil
+	incoming, _ := json.Marshal(comparable)
+	current, _ := json.Marshal(view)
+	if string(incoming) != string(current) {
+		// Private callers write through the same v2 source; public handlers never accept AIConfig.
+		fingerprints := map[string]string{}
+		for key, cap := range c.Capabilities {
+			fingerprints[key] = cap.Fingerprint
+		}
+		migrated := migrateNativeAIConfig(savedConfig{Config: c, Fingerprints: fingerprints})
+		if model, ok := stored.Config.Models[taskResearch]; ok {
+			migrated.Config.Models[taskResearch] = model
+		}
+		if effort, ok := stored.Config.Efforts[taskResearch]; ok {
+			migrated.Config.Efforts[taskResearch] = effort
+		}
+		if len(stored.Candidates) > 0 {
+			migrated.Candidates = stored.Candidates
+		}
+		stored = migrated
+	} else {
+		stored.Capabilities = c.Capabilities
 	}
-	return atomicFile(filepath.Join(s.Store.Root, "ai-connections.json"), b)
+	return s.writeNativeAIConfig(stored)
 }
 func atomicFile(path string, b []byte) error {
 	if e := os.MkdirAll(filepath.Dir(path), 0700); e != nil {
@@ -248,112 +248,24 @@ func validateAPIURL(raw string) error {
 	return nil
 }
 func (s *Server) getAIConfig(w http.ResponseWriter, r *http.Request) {
-	respond(w, 200, publicConfig(s.aiConfig()))
+	c, err := s.nativeAIConfig()
+	if err != nil {
+		fail(w, 500, "无法读取 AI 配置")
+		return
+	}
+	respond(w, 200, c)
 }
-
 func (s *Server) putAIConfig(w http.ResponseWriter, r *http.Request) {
-	var c AIConfig
-	if !decode(w, r, &c) {
+	var update NativeAIConfigUpdate
+	if !decode(w, r, &update) {
 		return
 	}
-	if c.Primary != "" && !validAgent(c.Primary) {
-		fail(w, 400, "请选择主 Agent")
+	c, err := s.saveNativeAIConfig(update)
+	if err != nil {
+		fail(w, 400, "无法保存 AI 配置："+err.Error())
 		return
 	}
-	if c.TranslationPrompt != nil {
-		value := strings.TrimSpace(*c.TranslationPrompt)
-		if utf8.RuneCountInString(value) > 6000 {
-			fail(w, 400, "翻译提示词不能超过 6000 个字符")
-			return
-		}
-		c.TranslationPrompt = &value
-	}
-	for _, efforts := range []map[string]map[string]string{c.Efforts, c.TranslationEfforts, c.VisionEfforts} {
-		for provider, models := range efforts {
-			for _, effort := range models {
-				if !validEffort(provider, effort) {
-					fail(w, 400, "无效的 Effort 档位")
-					return
-				}
-			}
-		}
-	}
-	s.configMu.Lock()
-	defer s.configMu.Unlock()
-	old := s.readAIConfig()
-	if c.TranslationPrompt == nil {
-		c.TranslationPrompt = old.TranslationPrompt
-	}
-	if c.Efforts == nil {
-		c.Efforts = old.Efforts
-	}
-	if c.TranslationModels == nil {
-		c.TranslationModels = old.TranslationModels
-	}
-	if c.TranslationEfforts == nil {
-		c.TranslationEfforts = old.TranslationEfforts
-	}
-	if c.VisionModels == nil {
-		c.VisionModels = old.VisionModels
-	}
-	if c.VisionEfforts == nil {
-		c.VisionEfforts = old.VisionEfforts
-	}
-	if c.APIModels == nil {
-		c.APIModels = old.APIModels
-	}
-	added := []string{}
-	for _, id := range c.APIModels {
-		id = strings.TrimSpace(id)
-		if id != "" && !slices.Contains(added, id) {
-			added = append(added, id)
-		}
-	}
-	if len(added) > 50 || slices.ContainsFunc(added, func(id string) bool { return len(id) > 200 }) {
-		fail(w, 400, "手动添加的模型过多或名称过长")
-		return
-	}
-	c.APIModels = added
-	// Omitted keys preserve secrets; hasKey=false plus empty key explicitly clears one.
-	if c.TextAPI.Key == "" && c.TextAPI.HasKey {
-		c.TextAPI.Key = old.TextAPI.Key
-	}
-	if c.ImageAPI.Key == "" && c.ImageAPI.HasKey {
-		c.ImageAPI.Key = old.ImageAPI.Key
-	}
-	if c.API.Key == "" && c.API.HasKey {
-		c.API.Key = old.API.Key
-	}
-	c.API.URL = strings.TrimSpace(c.API.URL)
-	c.API.Key = strings.TrimSpace(c.API.Key)
-	c.API.Model = ""
-	c.API.HasKey = false
-	c.TextAPI.HasKey = false
-	c.ImageAPI.HasKey = false
-	if e := validateAgentAPI(c.API); e != nil {
-		fail(w, 400, e.Error())
-		return
-	}
-	for _, a := range []APIConnection{c.TextAPI, c.ImageAPI} {
-		if e := validateAPI(a); e != nil {
-			fail(w, 400, e.Error())
-			return
-		}
-	}
-	c.Capabilities = old.Capabilities
-	if c.Models == nil {
-		c.Models = map[string]string{}
-	}
-	for k, v := range c.Capabilities {
-		if v.Fingerprint != configPrint(c, k) {
-			delete(c.Capabilities, k)
-		}
-	}
-	if e := s.writeAIConfig(c); e != nil {
-		fail(w, 500, "无法保存连接配置")
-		return
-	}
-	respond(w, 200, publicConfig(c))
+	respond(w, 200, c)
 	s.wakeProcessing()
 }
 func (s *Server) testConnection(w http.ResponseWriter, r *http.Request) {

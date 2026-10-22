@@ -72,7 +72,7 @@ it.skipIf(!fixtureFile)(
 it.skipIf(!readyFile)(
   "real backend SDK -> session -> saved messages, followed by cancellation reconciliation",
   async () => {
-    if (provider === "kimi") await api.testAI("kimi");
+    await api.checkNativeAI("chat");
     const bytes = await readFile(
       new URL("../../public/samples/the-art-of-reading.epub", import.meta.url),
     );
@@ -198,7 +198,7 @@ it.skipIf(!readyFile)(
 it.skipIf(!readyFile || !process.env.READER_INTEGRATION_IMAGE)(
   "real image attachment uses the same SDK events and persistence",
   async () => {
-    const capability = await api.testAI(provider);
+    const capability = await api.checkNativeAI("vision");
     expect(capability.vision, capability.error).toBe(true);
     const id = process.env.READER_INTEGRATION_IMAGE!;
     const blocks = await api.blocks(id);

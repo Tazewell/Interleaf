@@ -33,28 +33,28 @@ type AgentModel struct {
 }
 
 func (s *Server) agentModels(w http.ResponseWriter, r *http.Request) {
-	provider := r.URL.Query().Get("provider")
-	if !validAgent(provider) {
-		fail(w, 400, "请选择有效的 Agent SDK")
+	role := modelTask(r.URL.Query().Get("role"))
+	if r.URL.Query().Has("provider") || !validNativeRole(role) {
+		fail(w, 400, "请选择有效的模型用途")
+		return
+	}
+	config, err := s.nativeAIConfig()
+	if err != nil {
+		fail(w, 500, "无法读取 AI 配置")
+		return
+	}
+	if config.NeedsConfiguration != "" {
+		fail(w, 409, "请先确认 AI 连接配置")
 		return
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), 20*time.Second)
 	defer cancel()
-	if provider == "api" {
-		models, err := s.apiAgentModels(ctx, s.aiConfig())
-		if err != nil {
-			fail(w, 502, "无法获取 API 模型列表："+err.Error())
-			return
-		}
-		respond(w, 200, models)
-		return
-	}
-	models, err := s.modelCatalog(ctx, provider)
+	models, err := s.apiAgentModels(ctx, s.aiConfig())
 	if err != nil {
-		fail(w, 502, "无法获取模型列表，请确认 Agent 已登录后重试")
+		fail(w, 502, "无法获取 API 模型列表："+safeNativeError(err, s.aiConfig().API.Key))
 		return
 	}
-	respond(w, 200, taskRecommendations(provider, models))
+	respond(w, 200, models)
 }
 
 // Model discovery only initializes the installed CLI's protocol. It never sends

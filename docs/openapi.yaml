@@ -1113,7 +1113,6 @@
                 },
             },
         },
-
       "/api/documents/{id}/annotations/recover":
         {
           "post":
@@ -3666,25 +3665,21 @@
         {
           "get":
             {
-              "summary": "List models reported by the installed Agent SDK without sending a prompt",
+              "summary": "List API models for a role without running inference",
               "parameters":
                 [
                   {
                     "in": "query",
-                    "name": "provider",
+                    "name": "role",
                     "required": true,
-                    "schema":
-                      {
-                        "type": "string",
-                        "enum": ["codex", "claude", "kimi", "api"],
-                      },
+                    "schema": { "$ref": "#/components/schemas/AIModelRole" },
                   },
                 ],
               "responses":
                 {
                   "200":
                     {
-                      "description": "Models available through this SDK",
+                      "description": "API models and current capability checks",
                       "content":
                         {
                           "application/json":
@@ -3700,8 +3695,11 @@
                             },
                         },
                     },
-                  "400": { "description": "Unknown provider" },
-                  "502": { "description": "Agent model discovery failed" },
+                  "400":
+                    {
+                      "description": "Unknown role or legacy provider argument",
+                    },
+                  "502": { "description": "API catalog unavailable" },
                 },
             },
         },
@@ -3719,7 +3717,9 @@
                           "application/json":
                             {
                               "schema":
-                                { "$ref": "#/components/schemas/AIConfig" },
+                                {
+                                  "$ref": "#/components/schemas/NativeAIConfig",
+                                },
                             },
                         },
                     },
@@ -3746,7 +3746,10 @@
                     {
                       "application/json":
                         {
-                          "schema": { "$ref": "#/components/schemas/AIConfig" },
+                          "schema":
+                            {
+                              "$ref": "#/components/schemas/NativeAIConfigUpdate",
+                            },
                         },
                     },
                 },
@@ -3760,69 +3763,9 @@
                           "application/json":
                             {
                               "schema":
-                                { "$ref": "#/components/schemas/AIConfig" },
-                            },
-                        },
-                    },
-                  "default":
-                    {
-                      "description": "Error",
-                      "content":
-                        {
-                          "application/json":
-                            {
-                              "schema":
-                                { "$ref": "#/components/schemas/Error" },
-                            },
-                        },
-                    },
-                },
-            },
-        },
-      "/api/ai/test/{provider}":
-        {
-          "post":
-            {
-              "parameters":
-                [
-                  {
-                    "name": "capability",
-                    "in": "query",
-                    "description": "Test text or vision independently. Omit to run both. Vision requires a successful text check for the current configuration.",
-                    "schema":
-                      { "type": "string", "enum": ["text", "vision", "tools"] },
-                  },
-                  {
-                    "name": "model",
-                    "in": "query",
-                    "description": 'Required for the api provider, which is checked one model at a time; the result is stored under capabilities["api:<model>"].',
-                    "schema": { "type": "string" },
-                  },
-                  {
-                    "name": "timeoutSeconds",
-                    "in": "query",
-                    "description": "Per-stage wait limit for API model text/vision probes only. Omit or use 0 for defaults (text 45 seconds, vision 90 seconds). Does not change generation timeouts or saved connection settings.",
-                    "schema":
-                      { "type": "integer", "minimum": 0, "maximum": 600 },
-                  },
-                  {
-                    "name": "provider",
-                    "in": "path",
-                    "required": true,
-                    "schema": { "type": "string" },
-                  },
-                ],
-              "responses":
-                {
-                  "200":
-                    {
-                      "description": "Success",
-                      "content":
-                        {
-                          "application/json":
-                            {
-                              "schema":
-                                { "$ref": "#/components/schemas/AICapability" },
+                                {
+                                  "$ref": "#/components/schemas/NativeAIConfig",
+                                },
                             },
                         },
                     },
@@ -5939,6 +5882,64 @@
                 },
             },
         },
+      "/api/ai/check":
+        {
+          "post":
+            {
+              "summary": "Explicitly check the configured API model; never runs on save or startup",
+              "requestBody":
+                {
+                  "required": true,
+                  "content":
+                    {
+                      "application/json":
+                        {
+                          "schema":
+                            {
+                              "type": "object",
+                              "additionalProperties": false,
+                              "required": ["role"],
+                              "properties":
+                                {
+                                  "role":
+                                    {
+                                      "$ref": "#/components/schemas/AIModelRole",
+                                    },
+                                  "model":
+                                    { "type": "string", "maxLength": 200 },
+                                  "waitSeconds":
+                                    {
+                                      "type": "integer",
+                                      "minimum": 1,
+                                      "maximum": 60,
+                                      "default": 15,
+                                    },
+                                },
+                            },
+                        },
+                    },
+                },
+              "responses":
+                {
+                  "200":
+                    {
+                      "description": "Model check and configuration identity",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                {
+                                  "$ref": "#/components/schemas/NativeAICheck",
+                                },
+                            },
+                        },
+                    },
+                  "400": { "description": "Invalid role, model or wait limit" },
+                  "409": { "description": "Connection changed during probe" },
+                },
+            },
+        },
     },
   "components":
     {
@@ -6219,7 +6220,6 @@
                 },
               "required": ["folder", "includeChildren", "mode", "path"],
             },
-
           "CodexHandoff":
             {
               "type": "object",
@@ -8046,6 +8046,179 @@
                   "updatedAt": { "type": "string" },
                   "latestRun": { "$ref": "#/components/schemas/ChatRun" },
                 },
+            },
+          "AIModelRole":
+            {
+              "type": "string",
+              "enum": ["chat", "translation", "vision", "research"],
+            },
+          "NativeAIConfig":
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required":
+                ["version", "connection", "models", "efforts", "apiModels"],
+              "properties":
+                {
+                  "version": { "type": "integer", "enum": [2] },
+                  "connection":
+                    {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": ["protocol", "url", "hasKey"],
+                      "properties":
+                        {
+                          "protocol":
+                            {
+                              "type": "string",
+                              "enum": ["openai", "anthropic"],
+                            },
+                          "url": { "type": "string" },
+                          "hasKey": { "type": "boolean" },
+                        },
+                    },
+                  "models":
+                    {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "properties":
+                        {
+                          "chat": { "type": "string", "maxLength": 200 },
+                          "translation": { "type": "string", "maxLength": 200 },
+                          "vision": { "type": "string", "maxLength": 200 },
+                          "research": { "type": "string", "maxLength": 200 },
+                        },
+                    },
+                  "efforts":
+                    {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "properties":
+                        {
+                          "chat":
+                            {
+                              "type": "string",
+                              "enum": ["low", "medium", "high", "max"],
+                            },
+                          "translation":
+                            {
+                              "type": "string",
+                              "enum": ["low", "medium", "high", "max"],
+                            },
+                          "vision":
+                            {
+                              "type": "string",
+                              "enum": ["low", "medium", "high", "max"],
+                            },
+                          "research":
+                            {
+                              "type": "string",
+                              "enum": ["low", "medium", "high", "max"],
+                            },
+                        },
+                    },
+                  "apiModels":
+                    {
+                      "type": "array",
+                      "maxItems": 50,
+                      "items": { "type": "string", "maxLength": 200 },
+                    },
+                  "translationPrompt": { "type": "string", "maxLength": 6000 },
+                  "needsConfiguration": { "type": "string" },
+                },
+            },
+          "NativeAIConfigUpdate":
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["version", "connection"],
+              "properties":
+                {
+                  "version": { "type": "integer", "enum": [2] },
+                  "connection":
+                    {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": ["protocol", "url"],
+                      "properties":
+                        {
+                          "protocol":
+                            {
+                              "type": "string",
+                              "enum": ["openai", "anthropic"],
+                            },
+                          "url": { "type": "string" },
+                          "key":
+                            {
+                              "type": ["string", "null"],
+                              "description": "Omitted preserves only at the same normalized protocol and endpoint; null explicitly clears.",
+                            },
+                        },
+                    },
+                  "models":
+                    {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "properties":
+                        {
+                          "chat": { "type": "string", "maxLength": 200 },
+                          "translation": { "type": "string", "maxLength": 200 },
+                          "vision": { "type": "string", "maxLength": 200 },
+                          "research": { "type": "string", "maxLength": 200 },
+                        },
+                    },
+                  "efforts":
+                    {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "properties":
+                        {
+                          "chat":
+                            {
+                              "type": "string",
+                              "enum": ["low", "medium", "high", "max"],
+                            },
+                          "translation":
+                            {
+                              "type": "string",
+                              "enum": ["low", "medium", "high", "max"],
+                            },
+                          "vision":
+                            {
+                              "type": "string",
+                              "enum": ["low", "medium", "high", "max"],
+                            },
+                          "research":
+                            {
+                              "type": "string",
+                              "enum": ["low", "medium", "high", "max"],
+                            },
+                        },
+                    },
+                  "apiModels":
+                    {
+                      "type": "array",
+                      "maxItems": 50,
+                      "items": { "type": "string", "maxLength": 200 },
+                    },
+                  "translationPrompt": { "type": "string", "maxLength": 6000 },
+                },
+            },
+          "NativeAICheck":
+            {
+              "allOf":
+                [
+                  { "$ref": "#/components/schemas/AICapability" },
+                  {
+                    "type": "object",
+                    "required": ["model", "fingerprint"],
+                    "properties":
+                      {
+                        "model": { "type": "string" },
+                        "fingerprint": { "type": "string" },
+                      },
+                  },
+                ],
             },
         },
     },

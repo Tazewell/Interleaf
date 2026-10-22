@@ -1,9 +1,10 @@
+import { nativeConfigUpdate } from "@reader/core";
 // @vitest-environment jsdom
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { api } from "@reader/api";
-import type { AIConfig, AgentModel } from "@reader/core";
+import type { NativeAIConfig, AgentModel } from "@reader/core";
 import { ModelSelector, selectedAgentModel } from "./ModelSelector";
 import { useReaderStore } from "./store";
 vi.mock("@reader/api", () => ({
@@ -30,7 +31,7 @@ const models: AgentModel[] = [
 ];
 let root: Root;
 let host: HTMLDivElement;
-let config: AIConfig;
+let config: NativeAIConfig;
 const onSettings = vi.fn();
 async function render() {
   await act(async () =>
@@ -76,17 +77,24 @@ beforeEach(() => {
     },
   );
   config = {
-    primary: "codex",
-    models: { codex: "model-a", claude: "sonnet" },
-    capabilities: {},
-    api: { url: "", model: "", hasKey: false },
-    textAPI: { url: "", model: "", hasKey: false },
-    imageAPI: { url: "", model: "", hasKey: false },
+    version: 2,
+    connection: {
+      protocol: "openai",
+      url: "https://example.test/v1",
+      hasKey: false,
+    },
+    models: { chat: "model-a", translation: "other-model" },
+    efforts: {},
+    apiModels: [],
   };
   useReaderStore.setState({ aiConfig: config, aiModelSaving: false });
   vi.mocked(api.agentModels).mockResolvedValue(models);
   vi.mocked(api.aiConfig).mockImplementation(async () => config);
-  vi.mocked(api.saveAIConfig).mockImplementation(async (value) => value);
+  vi.mocked(api.saveAIConfig).mockImplementation(async (value) => ({
+    ...config,
+    ...value,
+    connection: { ...config.connection, ...value.connection },
+  }));
   host = document.createElement("div");
   document.body.append(host);
   root = createRoot(host);
@@ -96,20 +104,13 @@ afterEach(async () => {
   host.remove();
   vi.unstubAllGlobals();
 });
-it("saves the selected model while preserving the latest SDK and API configuration", async () => {
+it("saves the selected model while preserving the latest connection configuration", async () => {
   await render();
-  config = {
-    ...config,
-    textAPI: {
-      url: "https://example.test/v1",
-      model: "external-model",
-      hasKey: true,
-    },
-  };
+  config = { ...config, connection: { ...config.connection, hasKey: true } };
   await chooseB();
   expect(api.saveAIConfig).toHaveBeenCalledWith({
-    ...config,
-    models: { ...config.models, codex: "model-b" },
+    ...nativeConfigUpdate(config),
+    models: { ...config.models, chat: "model-b" },
   });
   expect(host.querySelector(".model-trigger-name")?.textContent).toBe(
     "Model B",
@@ -123,31 +124,41 @@ it("keeps the previous model after a failed save", async () => {
   expect(host.querySelector(".model-trigger-name")?.textContent).toBe(
     "Model A",
   );
-  expect(useReaderStore.getState().aiConfig?.models.codex).toBe("model-a");
+  expect(useReaderStore.getState().aiConfig?.models.chat).toBe("model-a");
   expect(useReaderStore.getState().aiModelSaving).toBe(false);
 });
-it("rejects a model save when the SDK changed elsewhere", async () => {
+it("rejects a model save when the endpoint changed elsewhere", async () => {
   await render();
-  config = { ...config, primary: "claude" };
+  config = {
+    ...config,
+    connection: { ...config.connection, url: "https://changed.test/v1" },
+  };
   await chooseB();
   expect(api.saveAIConfig).not.toHaveBeenCalled();
-  expect(useReaderStore.getState().aiConfig?.primary).toBe("claude");
-});
-it("does not replace the new SDK catalog with a late response", async () => {
-  let finish!: (value: AgentModel[]) => void;
-  vi.mocked(api.agentModels).mockImplementation((provider) =>
-    provider === "codex"
-      ? new Promise((resolve) => {
-          finish = resolve;
-        })
-      : Promise.resolve([
-          { id: "sonnet", name: "Sonnet", description: "", isDefault: true },
-        ]),
+  expect(useReaderStore.getState().aiConfig?.connection.url).toBe(
+    "https://changed.test/v1",
   );
+});
+it("does not replace the new endpoint catalog with a late response", async () => {
+  let finish!: (value: AgentModel[]) => void;
+  vi.mocked(api.agentModels)
+    .mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve;
+        }),
+    )
+    .mockResolvedValue([
+      { id: "sonnet", name: "Sonnet", description: "", isDefault: true },
+    ]);
   await render();
   const signal = vi.mocked(api.agentModels).mock.calls[0]![1]!;
   await act(async () =>
-    useReaderStore.getState().setAIConfig({ ...config, primary: "claude" }),
+    useReaderStore.getState().setAIConfig({
+      ...config,
+      connection: { ...config.connection, url: "https://changed.test/v1" },
+      models: { chat: "sonnet" },
+    }),
   );
   await act(async () => finish(models));
   expect(signal.aborted).toBe(true);
@@ -183,13 +194,13 @@ async function effortKey(key: string) {
     slider.dispatchEvent(new KeyboardEvent("keyup", { key, bubbles: true }));
   });
 }
-it.each(["codex", "claude", "kimi"])(
+it.each(["openai", "anthropic"] as const)(
   "always offers four effort levels for %s",
-  async (provider) => {
+  async (protocol) => {
     config = {
       ...config,
-      primary: provider,
-      models: { [provider]: "model-a" },
+      connection: { ...config.connection, protocol },
+      models: { chat: "model-a" },
     };
     useReaderStore.setState({ aiConfig: config });
     await render();
@@ -200,14 +211,14 @@ it.each(["codex", "claude", "kimi"])(
     expect(slider.getAttribute("aria-valuetext")).toBe("Medium");
     await effortKey("End");
     expect(api.saveAIConfig).toHaveBeenCalledWith({
-      ...config,
-      efforts: { [provider]: { "model-a": "max" } },
+      ...nativeConfigUpdate(config),
+      efforts: { chat: "max" },
     });
     expect(document.querySelector(".effort-title")?.textContent).toBe("Max");
   },
 );
 it("restores the previous effort if saving fails", async () => {
-  config = { ...config, efforts: { codex: { "model-a": "high" } } };
+  config = { ...config, efforts: { chat: "high" } };
   useReaderStore.setState({ aiConfig: config });
   vi.mocked(api.saveAIConfig).mockRejectedValue(new Error("save failed"));
   await render();
@@ -220,8 +231,9 @@ it("resets to Medium while preserving other model preferences", async () => {
   config = {
     ...config,
     efforts: {
-      codex: { "model-a": "max", "model-b": "low" },
-      claude: { sonnet: "high" },
+      chat: "max",
+      translation: "low",
+      research: "high",
     },
   };
   useReaderStore.setState({ aiConfig: config });
@@ -235,21 +247,18 @@ it("resets to Medium while preserving other model preferences", async () => {
     ).click(),
   );
   expect(api.saveAIConfig).toHaveBeenCalledWith({
-    ...config,
-    efforts: {
-      ...config.efforts,
-      codex: { "model-a": "medium", "model-b": "low" },
-    },
+    ...nativeConfigUpdate(config),
+    efforts: { ...config.efforts, chat: "medium" },
   });
   expect(document.querySelector(".effort-title")?.textContent).toBe("Medium");
 });
 it("does not save effort to a model that changed elsewhere", async () => {
   await render();
   await openEffort();
-  config = { ...config, models: { ...config.models, codex: "model-b" } };
+  config = { ...config, models: { ...config.models, chat: "model-b" } };
   await effortKey("End");
   expect(api.saveAIConfig).not.toHaveBeenCalled();
-  expect(useReaderStore.getState().aiConfig?.models.codex).toBe("model-b");
+  expect(useReaderStore.getState().aiConfig?.models.chat).toBe("model-b");
 });
 
 it("drags the thumb through effort levels and saves only on release", async () => {
@@ -302,13 +311,13 @@ it("drags the thumb through effort levels and saves only on release", async () =
     document.dispatchEvent(pointer("pointerup", 287, 0));
   });
   expect(api.saveAIConfig).toHaveBeenCalledExactlyOnceWith({
-    ...config,
-    efforts: { codex: { "model-a": "max" } },
+    ...nativeConfigUpdate(config),
+    efforts: { chat: "max" },
   });
 });
 
 it("keeps the slider interactive during saving and persists the latest choice", async () => {
-  let finish!: (value: AIConfig) => void;
+  let finish!: (value: NativeAIConfig) => void;
   vi.mocked(api.saveAIConfig).mockImplementationOnce(
     () =>
       new Promise((resolve) => {
@@ -328,13 +337,9 @@ it("keeps the slider interactive during saving and persists the latest choice", 
   await effortKey("Home");
   expect(document.querySelector(".effort-title")?.textContent).toBe("Low");
   expect(api.saveAIConfig).toHaveBeenCalledTimes(1);
-  await act(async () =>
-    finish({ ...config, efforts: { codex: { "model-a": "max" } } }),
-  );
+  await act(async () => finish({ ...config, efforts: { chat: "max" } }));
   expect(api.saveAIConfig).toHaveBeenCalledTimes(2);
-  expect(useReaderStore.getState().aiConfig?.efforts?.codex?.["model-a"]).toBe(
-    "low",
-  );
+  expect(useReaderStore.getState().aiConfig?.efforts?.chat).toBe("low");
   expect(document.querySelector(".effort-title")?.textContent).toBe("Low");
   expect(useReaderStore.getState().aiModelSaving).toBe(false);
 });

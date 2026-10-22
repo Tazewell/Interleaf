@@ -11,9 +11,11 @@ import { paper } from "./papers/fixtures";
 vi.mock("@reader/api", () => ({
   api: {
     aiConfig: vi.fn(async () => ({
-      primary: "",
+      version: 2,
+      connection: { protocol: "openai", url: "", hasKey: false },
       models: {},
-      capabilities: {},
+      efforts: {},
+      apiModels: [],
     })),
     recoverAnnotations: vi.fn(async () => ({ checked: true })),
     annotations: vi.fn(async () => []),

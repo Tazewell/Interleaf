@@ -394,7 +394,8 @@ export function Workspace({
   }
   const currentSession =
     sessions.find((s) => s.id === preferred) ?? sessions[0];
-  const provider = aiConfig?.primary ?? "";
+  const provider: string =
+    aiConfig?.connection.url && !aiConfig.needsConfiguration ? "api" : "";
   const sessionListSerial = useRef(0);
   const refreshSessions = useCallback(async () => {
     const serial = ++sessionListSerial.current;

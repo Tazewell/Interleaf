@@ -4,7 +4,7 @@ import {
   type Document,
   type PaperItem,
   type ReaderTheme,
-  type AIConfig,
+  type NativeAIConfig,
   type LibraryMode,
   type LibraryPreferences,
   type ReaderLinkTarget,
@@ -17,7 +17,7 @@ export const useReaderStore = create<{
   paperTrash: PaperItem[];
   active: Document | null;
   theme: ReaderTheme;
-  aiConfig?: AIConfig;
+  aiConfig?: NativeAIConfig;
   aiModelSaving: boolean;
   libraryPreferences: LibraryPreferences;
   trash: Document[];
@@ -26,7 +26,7 @@ export const useReaderStore = create<{
   linkTarget: ReaderLinkTarget | null;
   setLinkTarget: (target: ReaderLinkTarget | null) => void;
   setLibraryPreferences: (preferences: LibraryPreferences) => void;
-  setAIConfig: (config: AIConfig) => void;
+  setAIConfig: (config: NativeAIConfig) => void;
   setAIModelSaving: (saving: boolean) => void;
   setDocuments: (documents: Document[]) => void;
   open: (active: Document | null) => void;
@@ -164,9 +164,8 @@ useReaderStore.subscribe((state, previous) => {
       ...state.theme,
       mode: state.libraryPreferences.mode,
       primaryMode: state.libraryPreferences.primaryMode,
-      provider: state.aiConfig?.primary,
-      chatModel: state.aiConfig?.models[state.aiConfig.primary],
-      translationModel:
-        state.aiConfig?.translationModels?.[state.aiConfig.primary],
+      provider: state.aiConfig?.connection.protocol,
+      chatModel: state.aiConfig?.models.chat,
+      translationModel: state.aiConfig?.models.translation,
     });
 });

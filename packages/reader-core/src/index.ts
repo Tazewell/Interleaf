@@ -688,7 +688,7 @@ export interface AgentModel {
   capability?: AICapability;
 }
 /** "vision" is the API agent's image-input model. */
-export type ModelTask = "chat" | "translation" | "vision";
+export type ModelTask = import("./native-ai").AIModelRole;
 
 export { isPDFPageDecoration } from "./pdf-content";
 
@@ -829,3 +829,5 @@ export interface DocumentChatSession {
   updatedAt: string;
   latestRun?: ChatRun;
 }
+
+export * from "./native-ai";

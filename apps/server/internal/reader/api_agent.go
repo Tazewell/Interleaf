@@ -251,8 +251,8 @@ func (s *Server) apiCatalog(c APIConnection) func(context.Context) ([]AgentModel
 }
 
 // apiAgentModels lists the endpoint's models and the user's added IDs, each
-// with its current check result. Recommendations consider only models that
-// passed what the task needs. Added IDs still list when /models fails.
+// with its current check result. Text models can be entered without a probe;
+// image recommendations require verified vision. Added IDs survive catalog errors.
 func (s *Server) apiAgentModels(ctx context.Context, c AIConfig) ([]AgentModel, error) {
 	listed, err := s.apiCatalog(c.API)(ctx)
 	models := append([]AgentModel{}, listed...)
@@ -274,17 +274,21 @@ func (s *Server) apiAgentModels(ctx context.Context, c AIConfig) ([]AgentModel, 
 			models[i].Capability = &result
 		}
 	}
-	for _, task := range []modelTask{taskChat, taskTranslation, taskVision} {
+	for _, task := range []modelTask{taskChat, taskTranslation, taskVision, taskResearch} {
 		passed := []AgentModel{}
 		for _, m := range models {
-			if m.Capability != nil && m.Capability.Text && (task != taskVision || m.Capability.Vision) {
+			if task != taskVision && (m.Capability == nil || m.Capability.Text) || task == taskVision && m.Capability != nil && m.Capability.Text && m.Capability.Vision {
 				passed = append(passed, m)
 			}
 		}
 		if len(passed) == 0 {
 			continue
 		}
-		id := defaultTaskModel(task, "api", passed)
+		choiceTask := task
+		if task == taskResearch {
+			choiceTask = taskChat
+		}
+		id := defaultTaskModel(choiceTask, "api", passed)
 		if id == "" {
 			id = passed[0].ID
 		}
