@@ -423,6 +423,7 @@ func TestPaperMergePreservesIndependentAuthorAndRefreshesDerivedSummary(t *testi
 		{"empty author and filled creators", "", `[]`, roe, `{}`, "John Roe", "Roe"},
 		{"derived author retains target creators", "Jane Doe", doe, roe, `{}`, "Jane Doe", "Doe"},
 		{"selected creators refresh derived author", "Jane Doe", doe, roe, `{"metadata":{"creators":` + roe + `}}`, "John Roe", "Roe"},
+		{"selected creators preserve independent author", "Curated display author", doe, roe, `{"metadata":{"creators":` + roe + `}}`, "Curated display author", "Roe"},
 		{"explicit author takes priority over creators", "Curated display author", doe, roe, `{"author":"Selected display author","metadata":{"creators":` + roe + `}}`, "Selected display author", "Roe"},
 		{"explicit empty author takes priority", "Curated display author", doe, roe, `{"author":"","metadata":{"creators":` + roe + `}}`, "", "Roe"},
 	} {

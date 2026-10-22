@@ -584,7 +584,13 @@ func (s *Store) MergePaperItems(id string, v PaperMerge) (PaperItem, error) {
 	}
 	p.CitationKey = chosen
 	if v.Patch != nil {
-		if err = applyPaperPatch(tx, &p, PaperPatch{Title: v.Patch.Title, Author: v.Patch.Author, Metadata: v.Patch.Metadata}); err != nil {
+		author := v.Patch.Author
+		if !refreshAuthor && author == nil {
+			// Selecting creators in a merge does not select the independent
+			// display author. Keep it explicit to avoid PATCH's derivation.
+			author = &p.Author
+		}
+		if err = applyPaperPatch(tx, &p, PaperPatch{Title: v.Patch.Title, Author: author, Metadata: v.Patch.Metadata}); err != nil {
 			return p, err
 		}
 	}
