@@ -1,5 +1,8 @@
 export type {
   BilingualPDFOptions,
+  BilingualPDFJob,
+  BilingualPDFPreflight,
+  BilingualPDFStart,
   NativePDFBounds,
   NativePDFFormula,
   NativePDFParagraph,

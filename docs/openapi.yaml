@@ -4,6 +4,314 @@
   "security": [{ "session": [] }],
   "paths":
     {
+      "/api/documents/{id}/bilingual-pdf":
+        {
+          "post":
+            {
+              "summary": "Freeze PDF, layout, reading translations and API settings; max 2 jobs, 30 minute TTL",
+              "parameters":
+                [
+                  {
+                    "name": "id",
+                    "in": "path",
+                    "required": true,
+                    "schema": { "type": "string" },
+                  },
+                ],
+              "requestBody":
+                {
+                  "required": true,
+                  "content":
+                    {
+                      "application/json":
+                        {
+                          "schema":
+                            {
+                              "$ref": "#/components/schemas/BilingualPDFCreate",
+                            },
+                        },
+                    },
+                },
+              "responses":
+                {
+                  "202":
+                    {
+                      "description": "Export state; poll until awaiting-confirmation, ready or failed",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                {
+                                  "$ref": "#/components/schemas/BilingualPDFJob",
+                                },
+                            },
+                        },
+                    },
+                  "400":
+                    {
+                      "description": "Invalid input or missing API configuration",
+                    },
+                  "403":
+                    { "description": "Local session authentication required" },
+                  "404": { "description": "Document/job not found or expired" },
+                  "409":
+                    {
+                      "description": "Busy, not ready, stale source or attachment conflict",
+                    },
+                  "500": { "description": "Export could not be prepared" },
+                },
+            },
+        },
+      "/api/documents/{id}/bilingual-pdf/{job}":
+        {
+          "get":
+            {
+              "summary": "Read in-memory export state; validates live source identity",
+              "parameters":
+                [
+                  {
+                    "name": "id",
+                    "in": "path",
+                    "required": true,
+                    "schema": { "type": "string" },
+                  },
+                  {
+                    "name": "job",
+                    "in": "path",
+                    "required": true,
+                    "schema": { "type": "string" },
+                  },
+                ],
+              "responses":
+                {
+                  "200":
+                    {
+                      "description": "Export state; poll until awaiting-confirmation, ready or failed",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                {
+                                  "$ref": "#/components/schemas/BilingualPDFJob",
+                                },
+                            },
+                        },
+                    },
+                  "400":
+                    {
+                      "description": "Invalid input or missing API configuration",
+                    },
+                  "403":
+                    { "description": "Local session authentication required" },
+                  "404": { "description": "Document/job not found or expired" },
+                  "409":
+                    {
+                      "description": "Busy, not ready, stale source or attachment conflict",
+                    },
+                  "500": { "description": "Export could not be prepared" },
+                },
+            },
+          "delete":
+            {
+              "summary": "Cancel and join export work, delete owned output; idempotent",
+              "parameters":
+                [
+                  {
+                    "name": "id",
+                    "in": "path",
+                    "required": true,
+                    "schema": { "type": "string" },
+                  },
+                  {
+                    "name": "job",
+                    "in": "path",
+                    "required": true,
+                    "schema": { "type": "string" },
+                  },
+                ],
+              "responses":
+                {
+                  "204": { "description": "Cancelled or already unavailable" },
+                  "400":
+                    {
+                      "description": "Invalid input or missing API configuration",
+                    },
+                  "403":
+                    { "description": "Local session authentication required" },
+                  "404": { "description": "Document/job not found or expired" },
+                  "409":
+                    {
+                      "description": "Busy, not ready, stale source or attachment conflict",
+                    },
+                  "500": { "description": "Export could not be prepared" },
+                },
+            },
+        },
+      "/api/documents/{id}/bilingual-pdf/{job}/start":
+        {
+          "post":
+            {
+              "summary": "Confirm translation and explicit original-only pages",
+              "parameters":
+                [
+                  {
+                    "name": "id",
+                    "in": "path",
+                    "required": true,
+                    "schema": { "type": "string" },
+                  },
+                  {
+                    "name": "job",
+                    "in": "path",
+                    "required": true,
+                    "schema": { "type": "string" },
+                  },
+                ],
+              "requestBody":
+                {
+                  "required": true,
+                  "content":
+                    {
+                      "application/json":
+                        {
+                          "schema":
+                            {
+                              "$ref": "#/components/schemas/BilingualPDFStart",
+                            },
+                        },
+                    },
+                },
+              "responses":
+                {
+                  "202":
+                    {
+                      "description": "Export state; poll until awaiting-confirmation, ready or failed",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                {
+                                  "$ref": "#/components/schemas/BilingualPDFJob",
+                                },
+                            },
+                        },
+                    },
+                  "400":
+                    {
+                      "description": "Invalid input or missing API configuration",
+                    },
+                  "403":
+                    { "description": "Local session authentication required" },
+                  "404": { "description": "Document/job not found or expired" },
+                  "409":
+                    {
+                      "description": "Busy, not ready, stale source or attachment conflict",
+                    },
+                  "500": { "description": "Export could not be prepared" },
+                },
+            },
+        },
+      "/api/documents/{id}/bilingual-pdf/{job}/file":
+        {
+          "get":
+            {
+              "summary": "Download successfully generated PDF; rejects changed or deleted source",
+              "parameters":
+                [
+                  {
+                    "name": "id",
+                    "in": "path",
+                    "required": true,
+                    "schema": { "type": "string" },
+                  },
+                  {
+                    "name": "job",
+                    "in": "path",
+                    "required": true,
+                    "schema": { "type": "string" },
+                  },
+                ],
+              "responses":
+                {
+                  "200":
+                    {
+                      "description": "Independent bilingual PDF",
+                      "content":
+                        {
+                          "application/pdf":
+                            {
+                              "schema":
+                                { "type": "string", "format": "binary" },
+                            },
+                        },
+                    },
+                  "400":
+                    {
+                      "description": "Invalid input or missing API configuration",
+                    },
+                  "403":
+                    { "description": "Local session authentication required" },
+                  "404": { "description": "Document/job not found or expired" },
+                  "409":
+                    {
+                      "description": "Busy, not ready, stale source or attachment conflict",
+                    },
+                  "500": { "description": "Export could not be prepared" },
+                },
+            },
+        },
+      "/api/documents/{id}/bilingual-pdf/{job}/attachment":
+        {
+          "post":
+            {
+              "summary": "Attach generated PDF to the current original paper as translation; atomic content deduplication; ready file survives attachment failure",
+              "parameters":
+                [
+                  {
+                    "name": "id",
+                    "in": "path",
+                    "required": true,
+                    "schema": { "type": "string" },
+                  },
+                  {
+                    "name": "job",
+                    "in": "path",
+                    "required": true,
+                    "schema": { "type": "string" },
+                  },
+                ],
+              "responses":
+                {
+                  "200":
+                    {
+                      "description": "Real content-addressed attachment Document",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                { "$ref": "#/components/schemas/Document" },
+                            },
+                        },
+                    },
+                  "400":
+                    {
+                      "description": "Invalid input or missing API configuration",
+                    },
+                  "403":
+                    { "description": "Local session authentication required" },
+                  "404": { "description": "Document/job not found or expired" },
+                  "409":
+                    {
+                      "description": "Busy, not ready, stale source or attachment conflict",
+                    },
+                  "500": { "description": "Export could not be prepared" },
+                },
+            },
+        },
       "/api/papers":
         {
           "get":
@@ -5637,6 +5945,104 @@
       "securitySchemes": { "session": { "type": "http", "scheme": "bearer" } },
       "schemas":
         {
+          "BilingualPDFCreate":
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["layout"],
+              "properties":
+                {
+                  "layout":
+                    {
+                      "type": "string",
+                      "enum": ["side-by-side", "alternating"],
+                    },
+                  "fromPage": { "type": "integer", "minimum": 1 },
+                  "toPage": { "type": "integer", "minimum": 1 },
+                },
+            },
+          "BilingualPDFStart":
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["translateMissing", "keepOriginalPages"],
+              "properties":
+                {
+                  "translateMissing": { "type": "boolean" },
+                  "keepOriginalPages":
+                    {
+                      "type": "array",
+                      "items": { "type": "integer", "minimum": 1 },
+                      "uniqueItems": true,
+                    },
+                },
+            },
+          "BilingualPDFPreflight":
+            {
+              "type": "object",
+              "required":
+                [
+                  "pages",
+                  "outputPages",
+                  "missingParagraphs",
+                  "noTextPages",
+                  "apiConfigured",
+                  "warnings",
+                ],
+              "properties":
+                {
+                  "pages": { "type": "integer", "minimum": 0 },
+                  "outputPages": { "type": "integer", "minimum": 0 },
+                  "missingParagraphs": { "type": "integer", "minimum": 0 },
+                  "noTextPages":
+                    {
+                      "type": "array",
+                      "items": { "type": "integer", "minimum": 1 },
+                    },
+                  "apiConfigured": { "type": "boolean" },
+                  "warnings":
+                    { "type": "array", "items": { "type": "string" } },
+                },
+            },
+          "BilingualPDFJob":
+            {
+              "type": "object",
+              "required": ["id", "status", "stage", "done", "total"],
+              "properties":
+                {
+                  "id": { "type": "string" },
+                  "status":
+                    {
+                      "type": "string",
+                      "enum":
+                        [
+                          "preparing",
+                          "awaiting-confirmation",
+                          "translating",
+                          "running",
+                          "ready",
+                          "failed",
+                        ],
+                    },
+                  "stage":
+                    {
+                      "type": "string",
+                      "enum":
+                        [
+                          "prepare",
+                          "translating",
+                          "layout",
+                          "composing",
+                          "ready",
+                        ],
+                    },
+                  "done": { "type": "integer", "minimum": 0 },
+                  "total": { "type": "integer", "minimum": 0 },
+                  "preflight":
+                    { "$ref": "#/components/schemas/BilingualPDFPreflight" },
+                  "error": { "type": "string" },
+                },
+            },
           "PaperAttachment":
             {
               "type": "object",

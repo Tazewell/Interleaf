@@ -45,3 +45,32 @@ export interface NativePDFPrepared {
   noTextPages: number[];
   warnings: string[];
 }
+
+export interface BilingualPDFPreflight {
+  pages: number;
+  outputPages: number;
+  missingParagraphs: number;
+  noTextPages: number[];
+  apiConfigured: boolean;
+  warnings: string[];
+}
+export interface BilingualPDFStart {
+  translateMissing: boolean;
+  keepOriginalPages: number[];
+}
+/** In-memory export; cancellation, deletion, restart or 30 minutes removes it. */
+export interface BilingualPDFJob {
+  id: string;
+  status:
+    | "preparing"
+    | "awaiting-confirmation"
+    | "translating"
+    | "running"
+    | "ready"
+    | "failed";
+  stage: "prepare" | "translating" | "layout" | "composing" | "ready";
+  done: number;
+  total: number;
+  preflight?: BilingualPDFPreflight;
+  error?: string;
+}

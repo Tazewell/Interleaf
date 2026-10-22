@@ -367,6 +367,43 @@ export const api = {
     request<import("@reader/core").TranslationBlock[]>(
       `/api/documents/${id}/translations`,
     ),
+  createBilingualPDF: (
+    id: string,
+    options: Pick<
+      import("@reader/core").BilingualPDFOptions,
+      "layout" | "fromPage" | "toPage"
+    >,
+    signal?: AbortSignal,
+  ) =>
+    request<import("@reader/core").BilingualPDFJob>(
+      `/api/documents/${encodeURIComponent(id)}/bilingual-pdf`,
+      { method: "POST", body: JSON.stringify(options), signal },
+    ),
+  bilingualPDF: (id: string, job: string, signal?: AbortSignal) =>
+    request<import("@reader/core").BilingualPDFJob>(
+      `/api/documents/${encodeURIComponent(id)}/bilingual-pdf/${encodeURIComponent(job)}`,
+      { signal },
+    ),
+  startBilingualPDF: (
+    id: string,
+    job: string,
+    input: import("@reader/core").BilingualPDFStart,
+    signal?: AbortSignal,
+  ) =>
+    request<import("@reader/core").BilingualPDFJob>(
+      `/api/documents/${encodeURIComponent(id)}/bilingual-pdf/${encodeURIComponent(job)}/start`,
+      { method: "POST", body: JSON.stringify(input), signal },
+    ),
+  cancelBilingualPDF: (id: string, job: string) =>
+    request<void>(
+      `/api/documents/${encodeURIComponent(id)}/bilingual-pdf/${encodeURIComponent(job)}`,
+      { method: "DELETE" },
+    ),
+  attachBilingualPDF: (id: string, job: string, signal?: AbortSignal) =>
+    request<Document>(
+      `/api/documents/${encodeURIComponent(id)}/bilingual-pdf/${encodeURIComponent(job)}/attachment`,
+      { method: "POST", body: "{}", signal },
+    ),
   exportTranslation: async (
     id: string,
     format: "markdown" | "zip",

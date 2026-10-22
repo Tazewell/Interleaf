@@ -30,6 +30,9 @@ import (
 )
 
 type Server struct {
+	bilingualMu            sync.Mutex
+	bilingualJobs          map[string]*bilingualJob
+	bilingualRoot          string
 	exportCapability       string
 	chatReservations       map[string]bool
 	chatMu                 sync.Mutex
@@ -75,8 +78,14 @@ type Server struct {
 	journalRankRequests    singleflight.Group
 }
 
-func NewServer(s *Store, token, web string) *Server { return &Server{Store: s, Token: token, Web: web} }
-func id() string                                    { b := make([]byte, 16); _, _ = rand.Read(b); return hex.EncodeToString(b) }
+func NewServer(s *Store, token, web string) *Server {
+	server := &Server{Store: s, Token: token, Web: web}
+	// Only dedicated, recognizable export sessions are recovered on restart.
+	// A filesystem error is reported when an export is requested.
+	_ = server.initBilingualPDF()
+	return server
+}
+func id() string { b := make([]byte, 16); _, _ = rand.Read(b); return hex.EncodeToString(b) }
 func respond(w http.ResponseWriter, status int, v any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
@@ -102,6 +111,7 @@ func decode(w http.ResponseWriter, r *http.Request, v any) bool {
 func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
 	s.registerPaperRoutes(mux)
+	s.registerBilingualPDFRoutes(mux)
 	s.registerPaperBibliographyRoutes(mux)
 	s.registerBibliographyExportRoutes(mux)
 	mux.HandleFunc("POST /api/diagnostics/events", s.recordDiagnostic)
