@@ -50,21 +50,23 @@ export function validateFormulaTokens(
   text: string,
   formulas: NativePDFFormula[],
 ) {
-  const found = text.match(/\{[^{}]*\}/g) ?? [];
+  // Shared with the Go completed-target validator: only indexed v/V markers
+  // reserve a namespace; JSON, named placeholders and unmatched braces are text.
+  const found = text.match(/\{[vV][0-9][^{}]*\}?/g) ?? [];
   const expected = formulas.map((f) => f.token);
   if (
     new Set(expected).size !== expected.length ||
     expected.some((t, i) => t !== `{v${i}}`) ||
     found.length !== expected.length ||
     found.some((t) => !expected.includes(t)) ||
-    expected.some((t) => found.filter((v) => v === t).length !== 1) ||
-    /[{}]/.test(text.replace(/\{[^{}]*\}/g, ""))
+    expected.some((t) => found.filter((v) => v === t).length !== 1)
   )
     throw new Error("公式占位符缺失、重复或不受支持");
 }
 export function protectFormulas(spans: SourceSpan[]) {
   let source = "",
-    originalSource = "";
+    originalSource = "",
+    unprotectedSource = "";
   const formulas: NativePDFFormula[] = [];
   let previous: SourceSpan | undefined;
   let active: NativePDFFormula | undefined;
@@ -78,6 +80,7 @@ export function protectFormulas(spans: SourceSpan[]) {
         : "";
     originalSource += gap + span.text;
     if (span.math) {
+      unprotectedSource += "\0";
       const sameGroup =
         active &&
         previous?.math &&
@@ -95,11 +98,12 @@ export function protectFormulas(spans: SourceSpan[]) {
       }
     } else {
       source += gap + span.text;
+      unprotectedSource += gap + span.text;
       active = undefined;
     }
     previous = span;
   }
-  if (spans.some((span) => !span.math && /[{}]/.test(span.text)))
-    throw new Error("原文包含与公式协议冲突的花括号");
+  if (/\{[vV][0-9]/.test(unprotectedSource))
+    throw new Error("原文包含与公式协议冲突的保留占位符");
   return { source, originalSource, formulas };
 }

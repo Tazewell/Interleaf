@@ -21,6 +21,72 @@ import { fitParagraph } from "./layout";
 import { openPDF, loadFont } from "./runtime";
 
 const dirs: string[] = [];
+it("prepares and renders literal prose braces with real embedded font in both layouts", async () => {
+  const f = await fixture(),
+    doc = await PDFDocument.create(),
+    font = await doc.embedFont(StandardFonts.Helvetica);
+  const source = 'Use {} {name} {value} {"a":{"b":1}} open { and close }.';
+  doc.addPage([600, 250]).drawText(source, { x: 20, y: 180, size: 12, font });
+  const bytes = await doc.save();
+  await writeFile(f.input, bytes);
+  await writeFile(
+    f.layout,
+    JSON.stringify({
+      schemaVersion: 1,
+      inputSHA256: createHash("sha256").update(bytes).digest("hex"),
+      pages: 1,
+      blocks: [
+        {
+          id: "braces",
+          page: 1,
+          label: "text",
+          bounds: { x: 0.02, y: 0.15, width: 0.96, height: 0.5 },
+        },
+      ],
+    }),
+  );
+  const prepared = await prepareNativePDF(f),
+    p = prepared.pages[0].paragraphs[0];
+  expect(p.source).toBe(source);
+  expect(p.formulas).toEqual([]);
+  const target = '文本 {} {name} {value} {"a":{"b":1}} 打开 { 关闭 }。';
+  for (const layout of ["alternating", "side-by-side"] as const) {
+    const output = join(f.dir, `braces-${layout}.pdf`);
+    await renderNativePDF({
+      ...f,
+      prepared,
+      targets: { [p.id]: target },
+      layout,
+      output,
+    });
+    const task = await openPDF(output);
+    try {
+      const pdf = await task.promise,
+        page = await pdf.getPage(layout === "alternating" ? 2 : 1);
+      const text = (await page.getTextContent()).items
+        .map((i) => ("str" in i ? i.str : ""))
+        .join("");
+      expect(text.replace(/\s/g, "")).toContain(target.replace(/\s/g, ""));
+      if (layout === "alternating") expect(text).not.toContain("Use");
+      const result = await PDFDocument.load(await readFile(output));
+      expect(
+        result.context
+          .enumerateIndirectObjects()
+          .some(([, o]) => o.toString().includes("/FontFile2")),
+      ).toBe(true);
+    } finally {
+      await task.destroy();
+    }
+  }
+  const collision = await PDFDocument.create();
+  collision.addPage([600, 250]).drawText("Use {v0} literally.", { x: 20, y: 180, size: 12, font: await collision.embedFont(StandardFonts.Helvetica) });
+  const collisionBytes = await collision.save();
+  await writeFile(f.input, collisionBytes);
+  const manifest = JSON.parse(await readFile(f.layout, "utf8"));
+  manifest.inputSHA256 = createHash("sha256").update(collisionBytes).digest("hex");
+  await writeFile(f.layout, JSON.stringify(manifest));
+  await expect(prepareNativePDF(f)).rejects.toThrow(/原文.*公式协议/);
+}, 30000);
 afterEach(async () => {
   vi.restoreAllMocks();
   for (const d of dirs.splice(0)) await rm(d, { recursive: true, force: true });
@@ -573,7 +639,7 @@ it("protects math tokens and rejects missing, duplicate and unknown placeholders
   for (const text of ["结果", "{v0}{v0}", "{v0}{v1}", "{v0}{V2}", "{v0}{v01}"])
     expect(() => validateFormulaTokens(text, formulas)).toThrow(/公式/);
 });
-it("allows set braces inside a protected formula while rejecting unprotected source braces", () => {
+it("allows set braces inside a protected formula and literal source prose", () => {
   const span = {
     text: "S={1,2}",
     math: true,
@@ -585,7 +651,13 @@ it("allows set braces inside a protected formula while rejecting unprotected sou
     originalSource: "S={1,2}",
     formulas: [{ token: "{v0}" }],
   });
-  expect(() => protectFormulas([{ ...span, math: false }])).toThrow(/花括号/);
+  expect(protectFormulas([{ ...span, math: false }])).toMatchObject({
+    source: "S={1,2}",
+    formulas: [],
+  });
+  expect(() =>
+    protectFormulas([{ ...span, text: "Use {v0}", math: false }]),
+  ).toThrow(/公式协议/);
 });
 it("measures CJK, retains Latin words and spaces, moves formulas inline and fails at the 9pt floor", async () => {
   const { font } = await loadFont(await PDFDocument.create());

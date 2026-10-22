@@ -370,6 +370,46 @@ func TestBilingualPDFTokens(t *testing.T) {
 		})
 	}
 }
+func TestBilingualPDFLiteralBracesAndReservedCandidates(t *testing.T) {
+	for _, tc := range []struct {
+		text  string
+		valid bool
+	}{
+		{`{} {name} {value} {"a":{"b":1}} open { close } {version} {Vname} {v０}`, true},
+		{`{v0}`, false}, {`{V0}`, false}, {`{v00}`, false}, {`{v0`, false}, {`{v0x}`, false}, {`{v0 }`, false}, {`{v0{`, false},
+	} {
+		t.Run(tc.text, func(t *testing.T) {
+			for _, withFormula := range []bool{false, true} {
+				p := nativeParagraph{ID: "p"}
+				target := tc.text
+				if withFormula {
+					p.Formulas = append(p.Formulas, struct {
+						Token string `json:"token"`
+					}{"{v0}"})
+					target = "{v0} " + target
+				}
+				body, _ := json.Marshal([]map[string]string{{"id": "p", "target": target}})
+				got, err := validateBilingualTargets(string(body), []nativeParagraph{p})
+				if (err == nil) != tc.valid {
+					t.Fatalf("formula=%v target=%q err=%v", withFormula, target, err)
+				}
+				if err == nil && got["p"] != target {
+					t.Fatal("literal text changed")
+				}
+			}
+		})
+	}
+	for _, token := range []string{"{v1}", "{v00}", "{V0}"} {
+		p := nativeParagraph{ID: "p"}
+		p.Formulas = append(p.Formulas, struct {
+			Token string `json:"token"`
+		}{token})
+		body, _ := json.Marshal([]map[string]string{{"id": "p", "target": token}})
+		if _, err := validateBilingualTargets(string(body), []nativeParagraph{p}); err == nil {
+			t.Fatal("nonsequential manifest accepted", token)
+		}
+	}
+}
 func TestBilingualPDFStreamingCancellationJoins(t *testing.T) {
 	for _, action := range []string{"cancel", "trash", "delete", "close", "expiry"} {
 		t.Run(action, func(t *testing.T) {

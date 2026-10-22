@@ -6,6 +6,7 @@ import (
 	"errors"
 	"io"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 	"unicode"
@@ -28,7 +29,9 @@ func (s *Server) resolveBilingualAPI(ctx context.Context, c AIConfig) (APIConnec
 	return c.API, req, err
 }
 
-var bilingualToken = regexp.MustCompile(`\{v[^{}]*\}`)
+// Keep the indexed candidate namespace identical to native formula.ts. Other
+// braces are literal text; even an unclosed/case-modified indexed marker fails.
+var bilingualToken = regexp.MustCompile(`\{[vV][0-9][^{}]*\}?`)
 var bilingualMarkup = regexp.MustCompile("[`$\\\\*_<>]|!\\[|\\]\\(|(?m)^\\s{0,3}(?:#{1,6} |[-+] |[0-9]+\\. )")
 
 func plainBilingualTarget(value string) bool {
@@ -104,7 +107,10 @@ func validateBilingualTargets(text string, paragraphs []nativeParagraph) (map[st
 			return invalid()
 		}
 		tokens := map[string]int{}
-		for _, f := range p.Formulas {
+		for i, f := range p.Formulas {
+			if f.Token != "{v"+strconv.Itoa(i)+"}" {
+				return invalid()
+			}
 			tokens[f.Token]++
 		}
 		for _, token := range bilingualToken.FindAllString(row.Target, -1) {
