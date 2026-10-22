@@ -1,4 +1,12 @@
 export type {
+  BilingualPDFOptions,
+  NativePDFBounds,
+  NativePDFFormula,
+  NativePDFParagraph,
+  NativePDFPage,
+  NativePDFPrepared,
+} from "./bilingual-pdf";
+export type {
   PaperAttachmentRole,
   PaperAttachment,
   PaperItem,

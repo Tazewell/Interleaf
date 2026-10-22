@@ -39,6 +39,7 @@ await build({
     "src/corpus.ts",
     "src/render-pages.ts",
     "src/endnote-pdf-cli.ts",
+    "src/bilingual-pdf-cli.ts",
   ],
   bundle: true,
   platform: "node",
@@ -55,3 +56,4 @@ await mkdir(models, { recursive: true });
 const filename = `${model.name}-${model.revision}.onnx`;
 await cp(join(root, "models", filename), join(models, filename));
 await cp(join(root, "model-license"), models, { recursive: true });
+await cp(join(root, "fonts"), join(root, "dist/fonts"), { recursive: true });
