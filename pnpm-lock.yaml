@@ -5,6 +5,9 @@ settings:
   excludeLinksFromLockfile: false
 
 patchedDependencies:
+  '@pdf-lib/fontkit@1.1.1':
+    hash: 959941bdf9da7294329f5151bfec897ed66497f248fe635f19d286e949901c10
+    path: patches/@pdf-lib__fontkit@1.1.1.patch
   '@readium/navigator-html-injectables@2.8.4':
     hash: 55e79bbe1e906c6abe3e0a35e3acce6fca5c6f9f13df231684da0ba1ae0bfc29
     path: patches/@readium__navigator-html-injectables@2.8.4.patch
@@ -105,7 +108,7 @@ importers:
         version: 1.0.10
       '@pdf-lib/fontkit':
         specifier: 1.1.1
-        version: 1.1.1
+        version: 1.1.1(patch_hash=959941bdf9da7294329f5151bfec897ed66497f248fe635f19d286e949901c10)
       onnxruntime-node:
         specifier: ^1.22.0
         version: 1.30.0
@@ -6382,7 +6385,7 @@ snapshots:
 
   '@noble/hashes@1.8.0': {}
 
-  '@pdf-lib/fontkit@1.1.1':
+  '@pdf-lib/fontkit@1.1.1(patch_hash=959941bdf9da7294329f5151bfec897ed66497f248fe635f19d286e949901c10)':
     dependencies:
       pako: 1.0.11
 

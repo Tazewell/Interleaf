@@ -1357,3 +1357,112 @@ it("requires explicit retention for blank pages and refuses oversized 300DPI pag
     await task.destroy();
   }
 }, 30000);
+it("renders every repeated Latin and Chinese glyph across pages against the original regular face outlines", async () => {
+  const f = await fixture(),
+    doc = await PDFDocument.create(),
+    sourceFont = await doc.embedFont(StandardFonts.Helvetica);
+  for (let i = 0; i < 2; i++)
+    doc
+      .addPage([360, 180])
+      .drawText("Source paragraph", {
+        x: 20,
+        y: 130,
+        size: 18,
+        font: sourceFont,
+      });
+  const bytes = await doc.save();
+  await writeFile(f.input, bytes);
+  await writeFile(
+    f.layout,
+    JSON.stringify({
+      schemaVersion: 1,
+      inputSHA256: createHash("sha256").update(bytes).digest("hex"),
+      pages: 2,
+      blocks: [1, 2].map((page) => ({
+        id: `body-${page}`,
+        page,
+        label: "text",
+        bounds: { x: 0.05, y: 0.15, width: 0.9, height: 0.6 },
+      })),
+    }),
+  );
+  const prepared = await prepareNativePDF(f),
+    texts = ["PDF API PBXD 中文 PDF", "API PDF XBDP 第二页 API"],
+    targets = Object.fromEntries(
+      prepared.pages.map((p, i) => [p.paragraphs[0].id, texts[i]]),
+    ),
+    { font, face } = await loadFont(await PDFDocument.create()),
+    { createCanvas, Path2D } = await import("@napi-rs/canvas"),
+    scale = 300 / 72;
+  const ratios: { glyph: string; ratio: number }[] = [];
+  for (const layout of ["alternating", "side-by-side"] as const) {
+    const output = join(f.dir, `${layout}-glyphs.pdf`);
+    await renderNativePDF({ ...f, prepared, targets, output, layout });
+    const task = await openPDF(output);
+    try {
+      const pdf = await task.promise;
+      for (let i = 0; i < 2; i++) {
+        const page = await pdf.getPage(
+            layout === "alternating" ? 2 * i + 2 : i + 1,
+          ),
+          viewport = page.getViewport({ scale }),
+          actual = createCanvas(
+            Math.ceil(viewport.width),
+            Math.ceil(viewport.height),
+          ),
+          expected = createCanvas(actual.width, actual.height),
+          context = expected.getContext("2d"),
+          offset = layout === "side-by-side" ? 372 : 0,
+          fit = fitParagraph(prepared.pages[i].paragraphs[0], texts[i], font);
+        context.fillStyle = "white";
+        context.fillRect(0, 0, expected.width, expected.height);
+        context.fillStyle = "black";
+        await page.render({
+          canvas: actual as unknown as HTMLCanvasElement,
+          viewport,
+          background: "white",
+        }).promise;
+        for (const run of fit.runs) {
+          const shaped = face.layout(run.text),
+            unit = fit.fontSize / face.unitsPerEm;
+          let advance = 0;
+          for (let g = 0; g < shaped.glyphs.length; g++) {
+            const glyph = shaped.glyphs[g],
+              pos = shaped.positions[g],
+              b = glyph.bbox,
+              x = offset + run.x + (advance + pos.xOffset) * unit,
+              y = run.y + run.ascent - pos.yOffset * unit;
+            advance += pos.xAdvance;
+            if (!Number.isFinite(b.minX)) continue;
+            context.save();
+            context.translate(x * scale, y * scale);
+            context.scale(unit * scale, -unit * scale);
+            context.fill(new Path2D(glyph.path.toSVG()));
+            context.restore();
+            const left = Math.floor((x + b.minX * unit) * scale) - 1,
+              top = Math.floor((y - b.maxY * unit) * scale) - 1,
+              width = Math.ceil((b.maxX - b.minX) * unit * scale) + 3,
+              height = Math.ceil((b.maxY - b.minY) * unit * scale) + 3,
+              ink = (c: SKRSContext2D) =>
+                c
+                  .getImageData(left, top, width, height)
+                  .data.reduce(
+                    (sum, v, n) => sum + (n % 4 === 0 ? (255 - v) / 255 : 0),
+                    0,
+                  ),
+              reference = ink(context);
+            expect(reference).toBeGreaterThan(10);
+            ratios.push({
+              glyph: `${layout}/page${i + 1}/${String.fromCodePoint(...glyph.codePoints)}`,
+              ratio: ink(actual.getContext("2d")) / reference,
+            });
+          }
+        }
+      }
+    } finally {
+      await task.destroy();
+    }
+  }
+  expect(ratios.length).toBeGreaterThan(50);
+  expect(ratios.filter((r) => r.ratio < 0.8 || r.ratio > 1.2)).toEqual([]);
+}, 30000);
