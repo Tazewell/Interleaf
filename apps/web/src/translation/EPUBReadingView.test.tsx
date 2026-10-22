@@ -179,7 +179,7 @@ async function click(label: string) {
 }
 
 it("supports all modes and chapter navigation without PDF page locations", async () => {
-  await click("仅译文");
+  await click("译文");
   expect(host.querySelector('[data-mode="translation"]')).toBeTruthy();
   vi.mocked(adapter.goTo).mockClear();
   await act(async () => fixture.ready!.next());
@@ -190,14 +190,14 @@ it("supports all modes and chapter navigation without PDF page locations", async
   expect(adapter.goTo).not.toHaveBeenCalled();
   expect(await fixture.ready!.getContext()).toBe(blocks[1].text);
   expect(adapter.getContext).not.toHaveBeenCalled();
-  await click("原文译文");
+  await click("对照");
   await act(async () => new Promise((resolve) => setTimeout(resolve, 30)));
   expect(adapter.goTo).toHaveBeenLastCalledWith(
     expect.objectContaining({ type: "epub", href: "b.xhtml" }),
   );
 });
 it("keeps translated selection while source navigation emits selection resets", async () => {
-  await click("原文译文");
+  await click("对照");
   await act(async () => new Promise((resolve) => setTimeout(resolve, 30)));
   const sentence = host.querySelector('[data-sentence="1"]')!;
   const range = document.createRange();
@@ -219,8 +219,8 @@ it("keeps translated selection while source navigation emits selection resets", 
   expect(events.selection).toHaveBeenLastCalledWith(null);
 });
 it("restores an original interaction after following the translated pane", async () => {
-  await click("仅译文");
-  await click("原文译文");
+  await click("译文");
+  await click("对照");
   await act(async () => fixture.events!.epubInteraction?.());
   await act(async () =>
     fixture.events!.selection({
@@ -241,15 +241,15 @@ it("restores an original interaction after following the translated pane", async
   ).toBe(false);
 });
 it("keeps the translation subscription alive across modes and aborts on close", async () => {
-  await click("原文译文");
-  await click("仅译文");
+  await click("对照");
+  await click("译文");
   expect(fixture.signal?.aborted).toBe(false);
   await act(async () => root.unmount());
   expect(fixture.signal?.aborted).toBe(true);
 });
 
 it("renders successive chapters together without chapter-turn buttons", async () => {
-  await click("仅译文");
+  await click("译文");
   expect(
     Array.from(host.querySelectorAll("[data-chapter]")).map((n) =>
       n.getAttribute("data-chapter"),
@@ -269,7 +269,7 @@ it("retains both original chapter locations when selecting across a chapter boun
       ],
     }),
   );
-  await click("仅译文");
+  await click("译文");
   const start = host.querySelector(
     '[data-chapter="a.xhtml"] [data-sentence="1"]',
   )!;
@@ -303,7 +303,7 @@ it("follows the latest translated position after an earlier chapter navigation f
       ],
     }),
   );
-  await click("原文译文");
+  await click("对照");
   await act(async () => new Promise((resolve) => setTimeout(resolve, 30)));
   vi.mocked(adapter.goTo).mockClear();
   let release!: () => void;
@@ -354,7 +354,7 @@ it("uses independent translation typography even when old preferences request pa
   expect(host.querySelector(".pdf-page-navigation")).toBeNull();
 });
 it("keeps selection navigation without highlighting the source counterpart", async () => {
-  await click("原文译文");
+  await click("对照");
   await act(async () => new Promise((resolve) => setTimeout(resolve, 30)));
   const sentence = host.querySelector('[data-sentence="1"]')!;
   const range = document.createRange();
@@ -379,7 +379,7 @@ it("keeps selection navigation without highlighting the source counterpart", asy
   );
 });
 it("follows source block anchors and scrolls the source to the translated block in both directions", async () => {
-  await click("原文译文");
+  await click("对照");
   await act(async () => new Promise((resolve) => setTimeout(resolve, 30)));
   const pane = host.querySelector<HTMLElement>(".translation-document")!;
   Object.defineProperty(pane, "clientHeight", { value: 400 });

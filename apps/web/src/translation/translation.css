@@ -184,8 +184,8 @@
 }
 .pdf-reading[data-theme="sepia"] .pdf-page-navigation,
 .epub-reading[data-theme="sepia"] .pdf-page-navigation {
-  background: #f7f6f2;
-  color: #1f1e1d;
+  background: var(--card);
+  color: var(--foreground);
 }
 
 .textLayer ::highlight(reader-linked-sentences) {
@@ -203,10 +203,10 @@
   bottom: 0;
   width: 3px;
   border-radius: 3px;
-  background: #e6b94c;
+  background: var(--accent-ink);
 }
 :root[data-theme="sepia"] .translation-note-indicator {
-  background: var(--brand-30);
+  background: var(--accent-ink);
 }
 @media (prefers-reduced-motion: reduce) {
   .translation-document {
@@ -215,8 +215,8 @@
 }
 .pdf-reading[data-theme="sepia"] .translation-document,
 .epub-reading[data-theme="sepia"] .translation-document {
-  background: #f7f6f2;
-  color: #1f1e1d;
+  background: var(--card);
+  color: var(--foreground);
 }
 ::highlight(reader-translation-marks) {
   background: #e6b94c66;

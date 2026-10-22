@@ -180,7 +180,7 @@ it("uses repaired text for search and focuses the matching block", async () => {
   expect(results).toHaveLength(1);
   expect(results[0]).toMatchObject({ blockId: "p1-b1", side: "translation" });
   await renderView(defaultTheme, [], results);
-  await click("原文译文");
+  await click("对照");
   expect(
     host
       .querySelector('[data-translation-block="p1-b1"]')
@@ -217,7 +217,7 @@ async function click(label: string) {
   )!;
   expect(button).toBeTruthy();
   await act(async () => button.click());
-  if (label === "原文译文" && !vi.isFakeTimers()) {
+  if (label === "对照" && !vi.isFakeTimers()) {
     await act(async () => {
       await new Promise<void>((resolve) =>
         requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
@@ -226,7 +226,7 @@ async function click(label: string) {
   }
 }
 it("switches modes without recreating the PDF or marking the opposite selection", async () => {
-  await click("原文译文");
+  await click("对照");
   expect(adapter.focusBlock).not.toHaveBeenCalled();
   await act(async () =>
     fixture.events!.selection({
@@ -243,11 +243,11 @@ it("switches modes without recreating the PDF or marking the opposite selection"
   expect(
     host.querySelector('[data-sentence="0"]')?.hasAttribute("data-linked"),
   ).toBe(false);
-  await click("仅译文");
+  await click("译文");
   expect(host.querySelector(".translation-source")?.hasAttribute("inert")).toBe(
     true,
   );
-  await click("仅原文");
+  await click("原页");
   expect(host.querySelector(".translation-document")).toBeNull();
   expect(adapter.destroy).not.toHaveBeenCalled();
 });
@@ -262,7 +262,7 @@ it("keeps the translated selection and navigation metadata without marking the o
       }
     },
   );
-  await click("原文译文");
+  await click("对照");
   const sentence = host.querySelector('[data-sentence="1"] p')!;
   await act(async () =>
     sentence.dispatchEvent(new MouseEvent("pointerdown", { bubbles: true })),
@@ -322,7 +322,7 @@ it("keeps the translated selection and navigation metadata without marking the o
 });
 it("focuses the visible middle translation once when entering parallel mode", async () => {
   vi.stubGlobal("matchMedia", () => ({ matches: true }));
-  await click("仅译文");
+  await click("译文");
   const pane = host.querySelector<HTMLElement>(".translation-document")!;
   const block = pane.querySelector<HTMLElement>("[data-translation-block]")!;
   pane.getBoundingClientRect = () => new DOMRect(0, 0, 600, 600);
@@ -333,7 +333,7 @@ it("focuses the visible middle translation once when entering parallel mode", as
     await new Promise((resolve) => requestAnimationFrame(resolve));
   });
   expect(adapter.followBlock).not.toHaveBeenCalled();
-  await click("原文译文");
+  await click("对照");
   expect(adapter.focusBlock).toHaveBeenCalledExactlyOnceWith(
     "p1-b1",
     "parallel",
@@ -341,8 +341,8 @@ it("focuses the visible middle translation once when entering parallel mode", as
   expect(adapter.followBlock).not.toHaveBeenCalled();
   await renderView({ ...defaultTheme, translationFontSize: 1.2 });
   expect(adapter.focusBlock).toHaveBeenCalledTimes(1);
-  await click("仅译文");
-  await click("原文译文");
+  await click("译文");
+  await click("对照");
   expect(adapter.focusBlock).toHaveBeenCalledTimes(2);
 });
 
@@ -369,15 +369,15 @@ it("chooses the source viewport's middle block before resizing, even with a stal
   page.getBoundingClientRect = () => new DOMRect(0, -300, 1000, 1000);
   source.append(page);
   host.querySelector(".translation-source")!.append(source);
-  await click("原文译文");
+  await click("对照");
   expect(adapter.focusBlock).toHaveBeenCalledExactlyOnceWith(
     "p1-b2",
     "parallel",
   );
   await click("交换原文和译文");
   expect(adapter.focusBlock).toHaveBeenCalledTimes(1);
-  await click("仅原文");
-  await click("原文译文");
+  await click("原页");
+  await click("对照");
   expect(adapter.focusBlock).toHaveBeenCalledTimes(2);
   expect(adapter.focusBlock).toHaveBeenLastCalledWith("p1-b2", "parallel");
 });
@@ -399,7 +399,7 @@ it("navigates to the matching bibliography block and restores the translated vie
       bounds: { x: 0.1, y: 0.6, width: 0.3, height: 0.2 },
     },
   ]);
-  await click("仅译文");
+  await click("译文");
   const { pane } = translationGeometry();
   const reference = host.querySelector<HTMLElement>(
     '[data-translation-block="p9-ref"]',
@@ -425,7 +425,7 @@ it("navigates to the matching bibliography block and restores the translated vie
 });
 
 it("renders an incoming paragraph while the subscription remains open", async () => {
-  await click("原文译文");
+  await click("对照");
   const block = fixture.translations[0];
   await act(async () =>
     fixture.push!({
@@ -441,7 +441,7 @@ it("renders an incoming paragraph while the subscription remains open", async ()
 });
 
 it("links block hover in both directions and clears it without changing sentence selections", async () => {
-  await click("原文译文");
+  await click("对照");
   vi.mocked(adapter.focusSentences!).mockClear();
   await act(async () =>
     fixture.events!.blockHover?.({
@@ -471,7 +471,7 @@ it("links block hover in both directions and clears it without changing sentence
   await act(async () =>
     block.dispatchEvent(new MouseEvent("pointerover", { bubbles: true })),
   );
-  await click("仅原文");
+  await click("原页");
   expect(adapter.hoverBlock).toHaveBeenLastCalledWith(null);
 });
 
@@ -485,7 +485,7 @@ it("supports explicit block focus in source and parallel modes", async () => {
     } as PDFBlock),
   );
   expect(adapter.focusBlock).toHaveBeenLastCalledWith("p1-b1", "source");
-  await click("原文译文");
+  await click("对照");
   await act(async () =>
     fixture.events!.blockFocus?.({
       id: "p1-b1",
@@ -516,7 +516,7 @@ it("focuses the paragraph containing a saved annotation like clicking it", async
     }),
   );
   expect(adapter.focusBlock).toHaveBeenLastCalledWith("p1-b2", "source");
-  await click("原文译文");
+  await click("对照");
   await act(async () =>
     fixture.ready!.focusLocation?.({
       type: "pdf",
@@ -535,7 +535,7 @@ it("focuses the paragraph containing a saved annotation like clicking it", async
 });
 
 it("can disable automatic original centering while reading the translation", async () => {
-  await click("原文译文");
+  await click("对照");
   vi.mocked(adapter.focusBlock!).mockClear();
   const centerButton = host.querySelector<HTMLButtonElement>(
     '[aria-label="取消同步效果"]',
@@ -606,7 +606,7 @@ function translationGeometry(height = 200) {
   return { pane, block };
 }
 it("smoothly centers clicked translation blocks and follows their original without scroll feedback", async () => {
-  await click("原文译文");
+  await click("对照");
   const { pane, block } = translationGeometry();
   vi.useFakeTimers();
   try {
@@ -633,7 +633,7 @@ it("smoothly centers clicked translation blocks and follows their original witho
   }
 });
 it("top-aligns tall translation blocks and cancels their motion when the user scrolls", async () => {
-  await click("仅译文");
+  await click("译文");
   const { pane, block } = translationGeometry(800);
   vi.useFakeTimers();
   try {
@@ -663,7 +663,7 @@ it("top-aligns tall translation blocks and cancels their motion when the user sc
   }
 });
 it("does not treat drags, native selections or interactive controls as block navigation", async () => {
-  await click("原文译文");
+  await click("对照");
   const { pane, block } = translationGeometry();
   await act(async () => {
     block.dispatchEvent(
@@ -707,7 +707,7 @@ it("replaces an unfinished click with an image focus and does not re-highlight o
       bounds: { x: 0.55, y: 0.4, width: 0.3, height: 0.2 },
     },
   ]);
-  await click("原文译文");
+  await click("对照");
   const { pane, block } = translationGeometry();
   const image = pane.querySelector<HTMLElement>(
     '[data-translation-block="p1-image"]',
@@ -743,7 +743,7 @@ it("replaces an unfinished click with an image focus and does not re-highlight o
   }
 });
 it("does not focus during manual scrolling and cancels keyboard focus when the pane closes", async () => {
-  await click("仅译文");
+  await click("译文");
   const { pane, block } = translationGeometry();
   vi.useFakeTimers();
   try {
@@ -765,7 +765,7 @@ it("does not focus during manual scrolling and cancels keyboard focus when the p
     });
     expect(pane.scrollTop).toBeGreaterThan(0);
     const top = pane.scrollTop;
-    await click("仅原文");
+    await click("原页");
     await act(async () => {
       await vi.advanceTimersByTimeAsync(500);
     });
@@ -777,7 +777,7 @@ it("does not focus during manual scrolling and cancels keyboard focus when the p
 });
 
 it("centers both panels from a source click and recalculates a focused translation after resizing", async () => {
-  await click("原文译文");
+  await click("对照");
   const { pane, block } = translationGeometry(800);
   let width = 600,
     height = 600,
@@ -882,7 +882,7 @@ it.each([false, true])(
       });
     vi.useFakeTimers();
     try {
-      await click("原文译文");
+      await click("对照");
       expanded = true;
       await act(async () =>
         fixture.events!.readingAnchor?.({ blockId: "p1-b1", fraction: 0 }),
@@ -909,9 +909,9 @@ it.each(["mode", "wheel"])(
     );
     vi.useFakeTimers();
     try {
-      await click("原文译文");
+      await click("对照");
       expect(adapter.focusBlock).not.toHaveBeenCalled();
-      if (action === "mode") await click("仅原文");
+      if (action === "mode") await click("原页");
       else
         await act(async () =>
           host
@@ -931,7 +931,7 @@ it.each(["mode", "wheel"])(
 );
 
 it("disables source following and smoothly resynchronizes from the source when enabled", async () => {
-  await click("原文译文");
+  await click("对照");
   const { pane } = translationGeometry();
   await click("取消同步效果");
   await act(async () =>
@@ -957,7 +957,7 @@ it("disables source following and smoothly resynchronizes from the source when e
 });
 
 it("disables translation following and resynchronizes from the last manually scrolled translation", async () => {
-  await click("原文译文");
+  await click("对照");
   const { pane } = translationGeometry();
   await click("取消同步效果");
   vi.mocked(adapter.followBlock!).mockClear();
@@ -983,10 +983,10 @@ it("disables translation following and resynchronizes from the last manually scr
   }
 });
 
-it.each(["仅原文", "原文译文"])(
+it.each(["原页", "对照"])(
   "keeps annotation and search focus available with sync disabled in %s",
   async (mode) => {
-    if (mode === "原文译文") await click(mode);
+    if (mode === "对照") await click(mode);
     await click("取消同步效果");
     vi.mocked(adapter.focusBlock!).mockClear();
     await act(async () => {
@@ -999,7 +999,7 @@ it.each(["仅原文", "原文译文"])(
     });
     expect(adapter.focusBlock).toHaveBeenLastCalledWith(
       "p1-b1",
-      mode === "仅原文" ? "source" : "parallel",
+      mode === "原页" ? "source" : "parallel",
     );
     expect(
       host
@@ -1022,7 +1022,7 @@ it("focuses the image from a translated figure reference even with sync disabled
       bounds: { x: 0.1, y: 0.1, width: 0.5, height: 0.3 },
     },
   ]);
-  await click("原文译文");
+  await click("对照");
   await click("取消同步效果");
   vi.mocked(adapter.focusBlock!).mockClear();
   await act(async () =>
@@ -1066,7 +1066,7 @@ it("paints a jump target on an unparsed page after page navigation", async () =>
 it.each(["left", "right"] as const)(
   "refocuses the viewport center once after the %s sidebar closes",
   async (closed) => {
-    await click("原文译文");
+    await click("对照");
     vi.mocked(adapter.focusBlock!).mockClear();
     const extra: PDFBlock[] = [
       {
@@ -1151,7 +1151,7 @@ it.each(["wheel", "mode", "reopen"])(
               new WheelEvent("wheel", { bubbles: true, deltaY: 50 }),
             ),
         );
-      if (action === "mode") await click("仅译文");
+      if (action === "mode") await click("译文");
       if (action === "reopen") await renderView();
       await act(async () => {
         await vi.advanceTimersByTimeAsync(300);
@@ -1217,7 +1217,7 @@ it("strips legacy cross-side links when preparing a mark without losing its posi
     page: 1,
     rects: location.rects,
   });
-  await click("原文译文");
+  await click("对照");
   await click("取消同步效果");
   vi.mocked(adapter.focusBlock!).mockClear();
   await act(async () => fixture.ready!.focusLocation!(prepared.location));
