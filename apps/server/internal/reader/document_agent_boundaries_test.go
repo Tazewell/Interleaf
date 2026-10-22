@@ -30,7 +30,7 @@ func configureDocumentAPI(t *testing.T, s *Server, url string) {
 	}
 }
 func TestDocumentAgentFailureNeverCommitsAnAnswer(t *testing.T) {
-	for _, mode := range []string{"invalid-json", "round-limit", "forged-source", "save-failure"} {
+	for _, mode := range []string{"invalid-json", "unknown-tool", "forged-source", "save-failure"} {
 		t.Run(mode, func(t *testing.T) {
 			s, _ := originalDocumentFixture(t)
 			calls := 0
@@ -43,7 +43,7 @@ func TestDocumentAgentFailureNeverCommitsAnAnswer(t *testing.T) {
 				switch mode {
 				case "invalid-json":
 					writeToolReply(w, "read_passage", "{")
-				case "round-limit":
+				case "unknown-tool":
 					writeToolReply(w, "not_a_reader_tool", "{}")
 				default:
 					if mode == "forged-source" {
@@ -73,8 +73,8 @@ func TestDocumentAgentFailureNeverCommitsAnAnswer(t *testing.T) {
 			if count != 0 {
 				t.Fatal("failed run committed as complete")
 			}
-			if mode == "round-limit" && calls != documentReadingRounds {
-				t.Fatalf("loop not bounded: %d", calls)
+			if mode == "unknown-tool" && calls != 1 {
+				t.Fatalf("unauthorized tool not rejected immediately: %d", calls)
 			}
 		})
 	}
@@ -197,7 +197,7 @@ func TestDocumentMCPAuthenticationRevocationAndAttemptScope(t *testing.T) {
 
 func TestDocumentToolCapabilityVersionDoesNotInvalidateText(t *testing.T) {
 	s := testServer(t)
-	config := AIConfig{API: APIConnection{URL: "http://127.0.0.1:1"}, Models: map[string]string{"api": "test"}, Capabilities: map[string]Capability{}}
+	config := AIConfig{Primary: "api", API: APIConnection{URL: "http://127.0.0.1:1"}, Models: map[string]string{"api": "test"}, Capabilities: map[string]Capability{}}
 	passModels(&config, map[string]bool{"test": false})
 	cap := config.Capabilities["api:test"]
 	cap.Tools = "passed"
@@ -206,11 +206,16 @@ func TestDocumentToolCapabilityVersionDoesNotInvalidateText(t *testing.T) {
 	if e := s.writeAIConfig(config); e != nil {
 		t.Fatal(e)
 	}
-	current := s.aiConfig()
-	if !apiCapable(current, taskChat, false) || current.Capabilities["api:test"].Tools != "" {
-		t.Fatal("stale tool check either survived or invalidated independent text capability")
+	current, err := s.nativeAIConfig()
+	if err != nil {
+		t.Fatal(err)
+	}
+	snapshot, err := s.resolveNativeTask(t.Context(), current, taskChat)
+	if err != nil || !snapshot.Text || snapshot.Tools {
+		t.Fatal("stale tool schema enabled tools or blocked independent text", snapshot, err)
 	}
 }
+
 func TestDocumentReadReturnsTargetWithinResultBudget(t *testing.T) {
 	s, _ := epubRangeFixture(t, nil)
 	text := strings.Repeat("原始中文段落", 1200)

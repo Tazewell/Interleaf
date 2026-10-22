@@ -9,9 +9,6 @@ import (
 )
 
 func probeAPIDocumentTools(ctx context.Context, c APIConnection, model string) (string, error) {
-	if resolveAPIEndpoint(c).Protocol != "openai" {
-		return "unsupported", generationError(ErrorCapability, "Messages API 暂未适配文档工具调用")
-	}
 	req := completionRequest{Model: model}
 	tool := map[string]any{"type": "function", "function": map[string]any{"name": "reader_probe", "description": "Get the hidden random nonce. Call this to obtain it.", "parameters": map[string]any{"type": "object", "properties": map[string]any{}, "additionalProperties": false}}}
 	messages := []toolCompletionMessage{{Role: "user", Content: "Call reader_probe once, then reply with its exact returned nonce. Do not guess."}}
@@ -23,7 +20,7 @@ func probeAPIDocumentTools(ctx context.Context, c APIConnection, model string) (
 		return "unsupported", fmt.Errorf("模型未返回合法工具调用")
 	}
 	nonce := "reader-" + id()
-	messages = append(messages, toolCompletionMessage{Role: "assistant", Content: result.Text, Calls: result.Calls, Reasoning: result.Reasoning}, toolCompletionMessage{Role: "tool", CallID: result.Calls[0].ID, Content: nonce})
+	messages = append(messages, toolCompletionMessage{Role: "assistant", Content: result.Text, Calls: result.Calls, Reasoning: result.Reasoning, AnthropicContent: result.AnthropicContent}, toolCompletionMessage{Role: "tool", CallID: result.Calls[0].ID, Content: nonce})
 	result, e = toolCompletion(ctx, c, req, messages, nil)
 	if e != nil {
 		return "failed", e

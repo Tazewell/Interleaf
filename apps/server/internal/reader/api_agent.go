@@ -159,25 +159,38 @@ func apiEffort(level string, supported []string) string {
 }
 
 func (a apiAgentAdapter) Stream(ctx context.Context, req GenerateRequest, emit func(ProviderEvent) error) (GenerateResult, error) {
+	if a.task == taskChat && req.Input.Chat != nil {
+		chat := req.Input.Chat
+		server := chat.server
+		if server == nil && chat.Agent != nil {
+			server = chat.Agent.server
+		}
+		var snapshot nativeTaskSnapshot
+		if server != nil {
+			config, e := server.nativeAIConfig()
+			if e != nil {
+				return GenerateResult{}, e
+			}
+			snapshot, e = server.resolveNativeTask(ctx, config, taskChat)
+			if e != nil {
+				return GenerateResult{}, e
+			}
+		} else {
+			completion, e := a.resolve(ctx, false)
+			if e != nil {
+				return GenerateResult{}, e
+			}
+			snapshot = nativeSnapshot(a.conn, completion)
+		}
+		completion := completionRequest{Model: snapshot.Model, Effort: snapshot.Effort, ContextWindow: snapshot.ContextWindow, MaxOutputTokens: snapshot.MaxOutputTokens, Tools: snapshot.Tools, Vision: snapshot.Vision}
+		if chat.Agent != nil {
+			return streamAPIDocumentChat(ctx, snapshot.Connection, completion, req.Input, emit)
+		}
+		return streamNativeChat(ctx, snapshot, req.Input, emit)
+	}
 	completion, err := a.resolve(ctx, len(req.Input.images()) > 0)
 	if err != nil {
 		return GenerateResult{}, err
-	}
-	if req.Input.Chat != nil && req.Input.Chat.Agent != nil && a.task == taskChat && (len(req.Input.images()) == 0 || req.Input.Chat.SessionID != "") {
-		agent := req.Input.Chat.Agent
-		capability, err := agent.server.ensureDocumentTools(ctx, a.conn, completion.Model, agent.activity)
-		if err != nil {
-			return GenerateResult{}, err
-		}
-		completion.Tools = capability.Tools == "passed"
-		completion.Vision = capability.Vision
-		if req.Input.Chat.SessionID != "" {
-			return streamPiChat(ctx, a.conn, completion, req.Input, emit)
-		}
-		return streamAPIDocumentChat(ctx, a.conn, completion, req.Input, emit)
-	}
-	if a.task == taskChat && req.Input.Chat != nil && req.Input.Chat.SessionID != "" {
-		return streamPiChat(ctx, a.conn, completion, req.Input, emit)
 	}
 	return streamCompletion(ctx, a.conn, completion, req.Input, emit)
 }

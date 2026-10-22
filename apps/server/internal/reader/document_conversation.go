@@ -9,8 +9,8 @@ import (
 	"strings"
 )
 
-// One logical conversation per document and provider. Native history belongs to
-// Codex; Messages is the active, possibly compacted Chat Completions window.
+// One logical conversation per document and provider. Reader native Messages
+// hold the active, possibly compacted protocol window; old CLI fields are legacy.
 // The UI transcript and per-turn protocol events remain in messages/agent_runs.
 type documentConversation struct {
 	PiEntries       json.RawMessage         `json:"piEntries,omitempty"`
@@ -74,6 +74,10 @@ func (a *documentAgent) beginConversation(ctx context.Context, in AIInput, key s
 	a.documentChanged = c.Revision != "" && c.Revision != a.corpus.Revision
 	if c.Revision != "" && c.Revision != a.corpus.Revision {
 		c.SourceOffset += c.PassageCount
+		// Rebuild from visible history when the source changes. Old image
+		// envelopes must not rehydrate an earlier revision as current evidence.
+		c.Messages = nil
+		c.LastMessageID = ""
 		c.ReadBlocks = nil
 		c.ReadPages = nil
 		c.SeenSources = map[string]bool{}
@@ -215,6 +219,9 @@ func cleanConversationEvents(messages []toolCompletionMessage) []toolCompletionM
 	out := append([]toolCompletionMessage(nil), messages...)
 	for i := range out {
 		out[i].Reasoning = ""
+		// Signed thinking is private protocol continuation, not audit prose or
+		// compaction evidence. Calls/content already have a canonical mirror.
+		out[i].AnthropicContent = nil
 	}
 	return out
 }

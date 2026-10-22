@@ -260,7 +260,7 @@ func TestAPIPageImagesPersistWithoutBase64AndCompact(t *testing.T) {
 	}
 	var raw string
 	_ = s.Store.DB.QueryRow("SELECT body FROM document_conversations WHERE document_id='doc' AND provider='api'").Scan(&raw)
-	if strings.Contains(raw, "data:image") || !strings.Contains(raw, "readerPageImages") {
+	if strings.Contains(raw, "data:image") || !strings.Contains(raw, "readerImages") {
 		t.Fatal("durable window contains image bytes or lost references")
 	}
 	var state documentConversation
@@ -275,7 +275,7 @@ func TestAPIPageImagesPersistWithoutBase64AndCompact(t *testing.T) {
 	found := false
 	var freshImages []toolCompletionMessage
 	for _, g := range groups {
-		if len(g[0].Calls) > 0 && len(g[len(g)-1].PageImages) == 2 {
+		if len(g[0].Calls) > 0 && len(g[len(g)-1].NativeImages) == 2 {
 			found = true
 			freshImages = g
 		}
@@ -289,7 +289,7 @@ func TestAPIPageImagesPersistWithoutBase64AndCompact(t *testing.T) {
 	req := completionRequest{Model: "test", Vision: true, PageImageData: a.pageImageData}
 	state.Messages = append(state.Messages, toolCompletionMessage{Role: "user", Content: "继续"})
 	next, err := compactAPIConversation(t.Context(), config.API, req, a, state.Messages)
-	if err != nil || strings.Contains(jsonText(next), "readerPageImages") {
+	if err != nil || strings.Contains(jsonText(next), "readerImages") {
 		t.Fatal("old visual group not compacted", err)
 	}
 	// New images must survive compact until the next actual model request.
@@ -297,7 +297,7 @@ func TestAPIPageImagesPersistWithoutBase64AndCompact(t *testing.T) {
 	fresh := []toolCompletionMessage{state.Messages[0], {Role: "user", Content: "旧问题"}, {Role: "assistant", Content: strings.Repeat("旧的说明", 10000)}, {Role: "user", Content: "看这两页"}}
 	fresh = append(fresh, freshImages...)
 	next, err = compactAPIConversation(t.Context(), config.API, req, a, fresh)
-	if err != nil || len(next[len(next)-1].PageImages) != 2 {
+	if err != nil || len(next[len(next)-1].NativeImages) != 2 {
 		t.Fatal("fresh images compacted before model could view them", err)
 	}
 }

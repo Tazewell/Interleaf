@@ -26,23 +26,12 @@ func (a apiAdapter) Stream(ctx context.Context, req GenerateRequest, emit func(P
 	if e := validateAPI(a.config); e != nil {
 		return GenerateResult{}, generationError(ErrorConfiguration, e.Error())
 	}
-	if req.Input.Chat != nil && req.Input.Chat.Agent != nil && len(req.Input.images()) == 0 {
+	if req.Input.Chat != nil {
 		completion := completionRequest{Model: a.config.Model}
-		if models, err := req.Input.Chat.Agent.server.apiCatalog(a.config)(ctx); err == nil {
-			for _, m := range models {
-				if m.ID == completion.Model {
-					completion.ContextWindow = m.ContextWindow
-					break
-				}
-			}
+		if req.Input.Chat.Agent != nil {
+			return streamAPIDocumentChat(ctx, a.config, completion, req.Input, emit)
 		}
-		if req.Input.Chat.SessionID != "" {
-			return streamPiChat(ctx, a.config, completion, req.Input, emit)
-		}
-		return streamAPIDocumentChat(ctx, a.config, completion, req.Input, emit)
-	}
-	if req.Input.Chat != nil && req.Input.Chat.SessionID != "" {
-		return streamPiChat(ctx, a.config, completionRequest{Model: a.config.Model}, req.Input, emit)
+		return streamNativeChat(ctx, nativeSnapshot(a.config, completion), req.Input, emit)
 	}
 	return streamCompletion(ctx, a.config, completionRequest{Model: a.config.Model}, req.Input, emit)
 }
@@ -56,6 +45,8 @@ type completionMessage struct {
 // History holds earlier completed turns of the same conversation; the new user
 // turn is appended after it. Effort is resolved by the calling adapter.
 type completionRequest struct {
+	MaxOutputTokens  int
+	NativeImageData  func(nativeToolImage) ([]byte, error)
 	Vision           bool
 	PageImageData    func(documentPageImage) ([]byte, error)
 	ContextWindow    int

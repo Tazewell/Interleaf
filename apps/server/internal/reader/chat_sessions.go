@@ -242,6 +242,12 @@ func (s *Store) saveChatAnswer(ctx context.Context, chat *chatInput, text, reaso
 	if _, err = tx.ExecContext(ctx, "INSERT INTO messages VALUES(?,?,?,?)", message.ID, message.DocumentID, jsonText(message), message.CreatedAt); err != nil {
 		return err
 	}
+	if chat.nativeConversation != nil {
+		chat.nativeConversation.LastMessageID = message.ID
+		if err = saveDocumentConversation(ctx, tx, chat.DocumentID, conversationProvider(chat.SessionID, chat.nativeProvider), *chat.nativeConversation); err != nil {
+			return err
+		}
+	}
 	if chat.piConversation != nil {
 		chat.piConversation.LastMessageID = message.ID
 		if err = saveDocumentConversation(ctx, tx, chat.DocumentID, conversationProvider(chat.SessionID, chat.piProvider), *chat.piConversation); err != nil {

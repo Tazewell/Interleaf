@@ -8,60 +8,69 @@ import (
 	"testing"
 )
 
-func TestDocumentChatChecksMissingToolCapabilityOnce(t *testing.T) {
+func TestDocumentChatWaitsForExplicitToolCapabilityCheck(t *testing.T) {
 	s, _ := pageImageFixture(t, true)
-	probes, reads := 0, 0
+	probes, reads, generations := 0, 0, 0
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == "GET" {
 			respond(w, 200, map[string]any{"data": []any{map[string]string{"id": "test"}}})
 			return
 		}
-		var p struct {
+		var payload struct {
 			Messages []toolCompletionMessage `json:"messages"`
 			Tools    []any                   `json:"tools"`
 		}
-		_ = json.NewDecoder(r.Body).Decode(&p)
-		if strings.Contains(jsonText(p.Messages), "Call reader_probe once") {
-			if p.Messages[len(p.Messages)-1].Role == "tool" {
-				writeConversationReply(w, p.Messages[len(p.Messages)-1].Content.(string), "")
-				return
-			}
+		json.NewDecoder(r.Body).Decode(&payload)
+		if strings.Contains(jsonText(payload.Messages), "Call reader_probe once") {
 			probes++
-			writeToolReply(w, "reader_probe", `{}`)
+			if payload.Messages[len(payload.Messages)-1].Role == "tool" {
+				writeConversationReply(w, payload.Messages[len(payload.Messages)-1].Content.(string), "")
+			} else {
+				writeToolReply(w, "reader_probe", `{}`)
+			}
 			return
 		}
-		if !strings.Contains(jsonText(p.Tools), "read_pdf_pages") {
-			writeConversationReply(w, "NO_TOOLS", "")
+		// Explicit /check also performs its separately requested text check.
+		if strings.Contains(jsonText(payload.Messages), "Reply with exactly READER_OK") {
+			writeConversationReply(w, "READER_OK", "")
 			return
 		}
-		if p.Messages[len(p.Messages)-1].Content == "再解释一次" {
-			writeConversationReply(w, "说明 [S2]", "")
-			return
-		}
-		if len(p.Messages[len(p.Messages)-1].PageImages) == 0 && !strings.Contains(jsonText(p.Messages), "image_url") {
+		generations++
+		if strings.Contains(jsonText(payload.Tools), "read_pdf_pages") {
 			reads++
-			writeToolReply(w, "read_pdf_pages", `{"pages":[2]}`)
+			writeConversationReply(w, "checked tools available", "")
 			return
 		}
-		writeConversationReply(w, "第二页图像说明 [S2]", "")
+		if len(payload.Tools) != 0 {
+			t.Error("unverified tools enabled")
+		}
+		writeConversationReply(w, "text assistance", "")
 	}))
 	defer upstream.Close()
 	c := AIConfig{Primary: "api", API: APIConnection{URL: upstream.URL}, Models: map[string]string{"api": "test"}, APIModels: []string{"test"}, Capabilities: map[string]Capability{}}
-	passModels(&c, map[string]bool{"test": true}) // Legacy configuration: text/vision passed, no tool result.
+	passModels(&c, map[string]bool{"test": true})
 	if err := s.writeAIConfig(c); err != nil {
 		t.Fatal(err)
 	}
 	for range 2 {
 		out := conversationRequest(t, s, "api", "第二页的图讲的是什么")
-		if !strings.Contains(out.Body.String(), "event: done") || strings.Contains(out.Body.String(), "NO_TOOLS") {
-			t.Fatalf("document chat silently ran without tools: %s", out.Body.String())
+		if !strings.Contains(out.Body.String(), "event: done") || !strings.Contains(out.Body.String(), "文字检索辅助") {
+			t.Fatal(out.Body.String())
 		}
 	}
-	if probes != 1 || reads != 1 {
-		t.Fatal("missing probe cache or visual read", probes, reads)
+	if probes != 0 || reads != 0 || generations != 2 {
+		t.Fatal("hidden paid probe", probes, reads, generations)
 	}
-	if c = s.aiConfig(); c.Capabilities["api:test"].Tools != "passed" {
-		t.Fatal("tool check not persisted")
+	out := request(t, s, "POST", "/api/ai/check", strings.NewReader(`{"role":"chat","model":"test"}`))
+	if out.Code != 200 {
+		t.Fatal(out.Body.String())
+	}
+	if probes != 2 {
+		t.Fatal("missing explicit tool round trip", probes)
+	}
+	out = conversationRequest(t, s, "api", "再解释一次")
+	if !strings.Contains(out.Body.String(), "event: done") || reads != 1 || generations != 3 || probes != 2 {
+		t.Fatal(out.Body.String(), probes, reads, generations)
 	}
 }
 

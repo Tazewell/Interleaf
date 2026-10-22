@@ -32,15 +32,17 @@ type chatEntry struct {
 
 // Private request metadata: never accepted from HTTP clients or documents.
 type chatInput struct {
-	piConversation  *documentConversation
-	piProvider      string
-	SessionID       string
-	server          *Server
-	ReadingLocation json.RawMessage
-	History         []Message
-	Summary         string
-	CurrentText     string
-	Agent           *documentAgent
+	nativeConversation *documentConversation
+	nativeProvider     string
+	piConversation     *documentConversation
+	piProvider         string
+	SessionID          string
+	server             *Server
+	ReadingLocation    json.RawMessage
+	History            []Message
+	Summary            string
+	CurrentText        string
+	Agent              *documentAgent
 
 	DocumentID, Title, Question string
 	// Populated only for the legacy text/image adapters.

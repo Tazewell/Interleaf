@@ -301,7 +301,7 @@ func (g *GenerationService) attempt(ctx context.Context, provider string, in AII
 		slog.Log(ctx, level, "generation.finish", "attemptId", attemptID, "requestId", requestID(ctx), "provider", provider, "durationMs", time.Since(started).Milliseconds(), "errorCode", kind)
 	}()
 	sink := g.usageSink
-	structuredUsage := in.Chat != nil && ((in.Chat.Agent != nil && provider == "codex") || ((in.Chat.Agent != nil || in.Chat.SessionID != "") && (provider == "api" || provider == "text-api" || provider == "image-api")))
+	structuredUsage := in.Chat != nil && ((in.Chat.Agent != nil && provider == "codex") || (provider == "api" || provider == "text-api" || provider == "image-api"))
 	if structuredUsage {
 		in.UsageSink = g.usageSink
 		in.UsageProvider = provider
@@ -318,7 +318,7 @@ func (g *GenerationService) generate(ctx context.Context, in AIInput, interactiv
 	if timeout <= 0 {
 		timeout = 3 * time.Minute
 	}
-	if in.Chat != nil && in.Chat.Agent != nil {
+	if in.Chat != nil && (in.Chat.Agent != nil || g.primary == "api") {
 		timeout = 10 * time.Minute
 	}
 	ctx, cancel := context.WithTimeout(ctx, timeout)
@@ -350,7 +350,7 @@ func (g *GenerationService) generate(ctx context.Context, in AIInput, interactiv
 	var result GenerateResult
 	err := generationError(ErrorCapability, "主 Agent 尚未通过所需能力测试")
 	// Existing Codex/Claude text chat works with CLI login without a saved probe.
-	if primary.VerifiedText && (!vision || primary.VerifiedVision) || interactive && !vision && g.primary != "kimi" && g.primary != "api" {
+	if interactive && in.Chat != nil && g.primary == "api" || primary.VerifiedText && (!vision || primary.VerifiedVision) || interactive && !vision && g.primary != "kimi" && g.primary != "api" {
 		result, err = g.attempt(ctx, g.primary, in, send)
 	}
 	if err == nil {
@@ -362,7 +362,9 @@ func (g *GenerationService) generate(ctx context.Context, in AIInput, interactiv
 	if errorKind(err) == ErrorSave {
 		return AIResult{}, err
 	}
-	if visible {
+	// Native chat binds one configured model for the entire turn. Even a
+	// failure before visible output must not spend on a second connection.
+	if visible || in.Chat != nil && g.primary == "api" {
 		return AIResult{}, err
 	}
 	target := "text-api"
@@ -386,7 +388,7 @@ func (g *GenerationService) ValidateInput(in AIInput, interactive bool) error {
 	}
 	vision := len(in.images()) > 0
 	p := g.connections[g.primary]
-	if p.VerifiedText && (!vision || p.VerifiedVision) || interactive && !vision && g.primary != "kimi" && g.primary != "api" {
+	if interactive && in.Chat != nil && g.primary == "api" || p.VerifiedText && (!vision || p.VerifiedVision) || interactive && !vision && g.primary != "kimi" && g.primary != "api" {
 		return nil
 	}
 	target := "text-api"

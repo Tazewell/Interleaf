@@ -97,7 +97,7 @@ func (s *Server) chatDocument(w http.ResponseWriter, r *http.Request, document D
 	}
 	config := s.aiConfig()
 	config.Primary = provider
-	if err := s.generationService(config).ValidateInput(AIInput{Images: images}, true); err != nil {
+	if err := s.generationService(config).ValidateInput(AIInput{Images: images, Chat: &chatInput{}}, true); err != nil {
 		fail(w, 400, err.Error())
 		return
 	}
@@ -130,7 +130,7 @@ func (s *Server) chatDocument(w http.ResponseWriter, r *http.Request, document D
 		fail(w, status, err.Error())
 		return
 	}
-	chat := &chatInput{DocumentID: documentID, Title: document.Title, Summary: document.Metadata.Abstract, Question: question, CurrentText: textContext + descriptions.String(), History: history, ReadingLocation: readingLocation}
+	chat := &chatInput{server: s, DocumentID: documentID, Title: document.Title, Summary: document.Metadata.Abstract, Question: question, CurrentText: textContext + descriptions.String(), History: history, ReadingLocation: readingLocation}
 	s.streamChat(ctx, cancel, w, documentID, config, AIInput{Prompt: question, Images: images, Chat: chat})
 }
 
