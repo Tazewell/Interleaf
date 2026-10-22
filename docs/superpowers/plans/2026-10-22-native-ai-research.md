@@ -123,11 +123,13 @@ OpenAPI 同时定义 NativeAIConfig、Research*、Novelty*；`pnpm api:generate`
 
 ## Task 2: Reader 自有模型/工具循环与持久会话
 
-**Files:** Create `native_ai_loop.go`、`native_ai_conversation.go`、`native_ai_tools.go`、`native_ai_loop_test.go`、`native_ai_conversation_test.go`；Modify `api_chat_tools.go`、`api_conversation_compact.go`、`api_anthropic.go`、`api_agent.go`、`api_stream.go`、`api_page_images.go`、`document_conversation.go`、`chat_context.go`、`chat_sessions.go`、`chat_runs.go`、`chat_stream.go`、`document_tools.go`。
+**Files:** Create `native_ai_loop.go`、`native_ai_conversation.go`、`native_ai_tools.go`、`native_ai_loop_test.go`、`native_ai_conversation_test.go`；Modify `api_chat_tools.go`、`api_conversation_compact.go`、`api_anthropic.go`、`api_agent.go`、`api_stream.go`、`api_page_images.go`、`document_conversation.go`、`chat_context.go`、`chat_sessions.go`、`chat_stream.go`。
+
+**复用边界：** `chat_runs.go` 的现有运行生命周期和 `document_tools.go` 的只读工具/来源校验流程由新原生适配器复用，本任务保持这两个文件不变；Task3 按完整运行时退役的实际需要调整调用侧。相关行为和最终完整测试要求不变。
 
 **Interfaces:** 消费 nativeTaskSnapshot，产生 A 中 runNativeLoop/nativeToolset/nativeConversation/nativeLoopResult。documentToolset 包装既有 `documentAgent`，保持 `get_outline/search_document/read_passage/read_pdf_pages` 和来源验证；研究下一阶段不必依赖 documentAgent 内部 Codex 字段。
 
-- [ ] 写 `TestNativeLoopOpenAIAndAnthropicCompletion`，使用同一套transcript fixture验证文字/工具/图片、分片参数、未知/重复工具ID、明确finish、断流、取消；断言 `if savedAnswers != 0 { t.Fatal(savedAnswers) }` 直到正常结束与来源校验。失败后无Fallback/第二模型调用，draft/reasoning已可见时同样如此。
+- [ ] 写 `TestNativeLoopOpenAIAndAnthropicCompletion`，使用同一套transcript fixture验证文字/工具/图片、分片参数、未知/重复工具ID、明确finish、断流、取消；配套 `TestNativeSessionDocumentCompletionCommitsAtomically` 用实际 SQLite assistant 行数、运行审计及会话窗口验证保存屏障：每次流事件及显式保存入口前均保持未提交，只有正常终态和来源校验通过后的事务成功才出现一次保存；不使用独立局部变量模拟保存计数。失败后无Fallback/第二模型调用，draft/reasoning已可见时同样如此。
 - [ ] 写 `TestNativeSessionRebuildAndCompaction`：以可见历史重建旧CLI/Pi会话，保留消息ID/来源/阅读位置；不消费piEntries/thread ID；换端点或模型重建窗口；压缩只切完整调用-结果组，失败不覆盖历史；SessionID非空也不调用Pi。
 - [ ] RED：`go test ./internal/reader -run 'TestNative(Loop|Session)' -count=1`（server目录）。预期当前Pi分支/缺失nativeLoop失败。
 - [ ] 抽取现有 Go API 循环为 runNativeLoop；单文献活动状态以versioned native connection key保存，完整回答/证据/窗口/审计沿用一次事务。原始历史与跨provider可见记录保留；api_stream/api_agent中全部SessionID路径用同一native循环；未支持工具/图片时用已有文字辅助而非假称可看图。
@@ -254,7 +256,7 @@ OpenAPI 同时定义 NativeAIConfig、Research*、Novelty*；`pnpm api:generate`
 | Task | 新测试必须实际观察的断言示例 |
 | --- | --- |
 | 1 | `if strings.Contains(string(publicJSON), "sk-test-secret") || !got.Connection.HasKey { t.Fatal(got) }`；换端点后 `got.Connection.HasKey == false` |
-| 2 | 截断/未知工具后 `savedAnswers == 0 && fallbackCalls == 0`；完整stop后恰好一次保存，旧thread/piEntries从未被传到模型 |
+| 2 | 截断/未知工具后真实 SQLite assistant 新增行数为0、`fallbackCalls == 0`，每次流事件检查审计和会话仍未提交；完整stop与来源校验后的事务恰好保存一次，旧thread/piEntries从未被传到模型 |
 | 3 | `if len(agentTrapCalls) != 0 { t.Fatal(agentTrapCalls) }`；依次执行所有用途后实际API记录均有正确role/model |
 | 4 | fixture默认 `len(snapshot.Members) == 3`（原文+译本的A、子级EPUB的B、metadata的C；回收站D不含），关闭子级为2，rename前后topic.ID相同 |
 | 5 | `if a.ID == b.ID || a.PaperID == b.PaperID { t.Fatal(a,b) }`；两条来源均来自各自p1-b1，非成员读取失败 |

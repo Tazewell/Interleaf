@@ -130,25 +130,19 @@ func runNativeLoop(ctx context.Context, in nativeLoopRequest, emit func(Provider
 		requests++
 		return nil
 	}
+	definitionsForRound := func() []any {
+		if in.Tools != nil && req.Tools && calls < b.MaxToolCalls && requests < b.MaxRounds-1 && (doc == nil || !doc.readingStopped()) {
+			return in.Tools.Definitions(req.Vision)
+		}
+		return nil
+	}
 	for requests < b.MaxRounds {
 		if in.Tools != nil {
 			if err := in.Tools.Check(ctx); err != nil {
 				return fail(err)
 			}
 		}
-		var definitions []any
-		if in.Tools != nil && req.Tools && calls < b.MaxToolCalls && requests < b.MaxRounds-1 {
-			definitions = in.Tools.Definitions(req.Vision)
-		}
-		if doc != nil {
-			if requests == b.MaxRounds-1 && !doc.readingStopped() {
-				doc.stopReading("工具轮次达到保护上限")
-			}
-			doc.readingRounds = requests + 1
-			if doc.readingStopped() {
-				definitions = nil
-			}
-		}
+		definitions := definitionsForRound()
 		force := doc != nil && doc.needsCompaction
 		next, checkpoint, err := compactNativeConversation(ctx, in.Snapshot.Connection, req, window.Messages, definitions, limit, force, in.Input.UsageSink, reserve)
 		if err != nil {
@@ -162,6 +156,19 @@ func runNativeLoop(ctx context.Context, in nativeLoopRequest, emit func(Provider
 				doc.conversation.SeenSources = map[string]bool{}
 			}
 		}
+		// Compaction spends from the same budget as answer generation. Refresh
+		// the real request's inventory and document state after every compact
+		// request has settled, preserving the last call for a final answer.
+		if requests >= b.MaxRounds {
+			return fail(generationError(ErrorLimit, "模型调用达到保护上限"))
+		}
+		if doc != nil {
+			doc.readingRounds = requests + 1
+			if requests == b.MaxRounds-1 && !doc.readingStopped() {
+				doc.stopReading("工具轮次达到保护上限")
+			}
+		}
+		definitions = definitionsForRound()
 		if err = reserve(); err != nil {
 			return fail(err)
 		}

@@ -55,11 +55,13 @@ func nativeFixtureFrame(protocol, kind string) string {
 	}
 	return text + "data: {\"type\":\"content_block_stop\",\"index\":0}\n\ndata: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"end_turn\"}}\n\ndata: {\"type\":\"message_stop\"}\n\n"
 }
+
+// Persistence is exercised against SQLite in TestNativeSessionDocumentCompletionCommitsAtomically.
 func TestNativeLoopOpenAIAndAnthropicCompletion(t *testing.T) {
 	for _, protocol := range []string{"openai", "anthropic"} {
 		for _, mode := range []string{"complete", "partial", "unknown", "duplicate", "invalid-source", "cancel"} {
 			t.Run(protocol+"/"+mode, func(t *testing.T) {
-				calls, savedAnswers := 0, 0
+				calls := 0
 				tools := &nativeFixtureTools{reject: mode == "invalid-source"}
 				ctx, cancel := context.WithCancel(t.Context())
 				defer cancel()
@@ -92,9 +94,6 @@ func TestNativeLoopOpenAIAndAnthropicCompletion(t *testing.T) {
 				}))
 				defer server.Close()
 				result, err := runNativeLoop(ctx, nativeLoopRequest{Snapshot: nativeTaskSnapshot{Connection: APIConnection{URL: server.URL, Protocol: protocol}, Model: "test", Tools: true, Vision: true}, Input: AIInput{Prompt: "question"}, Tools: tools}, func(e ProviderEvent) error {
-					if savedAnswers != 0 {
-						t.Fatal(savedAnswers)
-					}
 					if mode == "cancel" {
 						cancel()
 					}
@@ -104,13 +103,9 @@ func TestNativeLoopOpenAIAndAnthropicCompletion(t *testing.T) {
 					if err != nil || result.Result.Text != "answer [S1]" || tools.calls != 1 || !tools.validated || calls != 2 {
 						t.Fatal(result, err, tools, calls)
 					}
-					savedAnswers++
 				} else {
 					if err == nil || result.Result.Text != "" {
 						t.Fatal("saved incomplete result", result, err)
-					}
-					if savedAnswers != 0 {
-						t.Fatal(savedAnswers)
 					}
 					if calls > 2 {
 						t.Fatal("fallback call", calls)
@@ -320,5 +315,100 @@ func TestNativeLoopBoundsAnthropicPrivateContinuation(t *testing.T) {
 	_, err := readNativeAnthropicCompletion(t.Context(), strings.NewReader(frame), APIConnection{})
 	if err == nil || errorKind(err) != ErrorLimit {
 		t.Fatal("unbounded private signature accepted", err)
+	}
+}
+
+// Promoted from the independently failing review overlay. Compaction and
+// generation spend the same model-call budget; the last call must finish.
+func TestNativeLoopCompactionReservesFinalAnswerRound(t *testing.T) {
+	for _, protocol := range []string{"openai", "anthropic"} {
+		for _, scope := range []string{"generic", "document"} {
+			for _, mode := range []string{"answer", "late-tool", "exhausted"} {
+				t.Run(protocol+"/"+scope+"/"+mode, func(t *testing.T) {
+					calls, reserved, compactions, answerCalls := 0, 0, 0, 0
+					fixture := &nativeFixtureTools{}
+					var tools nativeToolset = fixture
+					var agent *documentAgent
+					repeat := 1500
+					if scope == "document" {
+						_, agent = prepareConversationFixture(t)
+						agent.contextTokens = 8192
+						agent.conversation = &documentConversation{SeenSources: map[string]bool{}}
+						tools = documentToolset{agent}
+					}
+					maxRounds := 4
+					if mode == "exhausted" {
+						maxRounds = 3
+					}
+					messages := []toolCompletionMessage{{Role: "system", Content: "instructions"}, {Role: "user", Content: "old question"}, {Role: "assistant", Content: strings.Repeat("old evidence ", repeat)}, {Role: "user", Content: "continue"}}
+					before := jsonText(messages)
+					upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+						calls++
+						var payload struct {
+							Tools    []any  `json:"tools"`
+							Messages any    `json:"messages"`
+							System   string `json:"system"`
+						}
+						if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+							t.Error(err)
+							return
+						}
+						w.Header().Set("Content-Type", "text/event-stream")
+						frame := nativeFixtureFrame(protocol, "answer")
+						if strings.Contains(jsonText(payload), "整理对话检查点") {
+							compactions++
+							fmt.Fprint(w, strings.ReplaceAll(frame, "answer [S1]", "checkpoint"))
+							return
+						}
+						answerCalls++
+						if calls != maxRounds || reserved != maxRounds {
+							t.Errorf("final generation did not consume last reserved call: HTTP=%d reserved=%d budget=%d", calls, reserved, maxRounds)
+						}
+						if len(payload.Tools) != 0 {
+							t.Error("final remaining model call still advertises read tools after compaction")
+						}
+						if mode == "late-tool" || len(payload.Tools) != 0 {
+							frame = nativeFixtureFrame(protocol, "tool")
+						} else {
+							frame = strings.ReplaceAll(frame, "answer [S1]", "answer")
+						}
+						fmt.Fprint(w, frame)
+					}))
+					defer upstream.Close()
+					result, err := runNativeLoop(t.Context(), nativeLoopRequest{Snapshot: nativeTaskSnapshot{Connection: APIConnection{URL: upstream.URL, Protocol: protocol}, Model: "test", Tools: true, Vision: true, ContextWindow: 8192}, Window: nativeConversation{Messages: messages}, Tools: tools, Budget: nativeLoopBudget{MaxRounds: maxRounds, ReserveCall: func(context.Context) error { reserved++; return nil }}}, nil)
+					if calls != maxRounds || reserved != maxRounds || compactions != 3 {
+						t.Fatal("incorrect paid-call count", calls, reserved, compactions, err)
+					}
+					toolCalls := fixture.calls
+					if agent != nil {
+						toolCalls = len(agent.Traces)
+					}
+					if toolCalls != 0 || jsonText(messages) != before {
+						t.Fatal("late tool executed or original window changed", toolCalls)
+					}
+					if mode == "answer" {
+						if err != nil || result.Result.Text != "answer" || answerCalls != 1 || len(result.Window.Checkpoints) != 1 {
+							t.Fatal(result, err, answerCalls)
+						}
+						if agent != nil {
+							if agent.readingRounds != maxRounds || !agent.readingStopped() {
+								t.Fatal("document last-round state was not refreshed", agent.readingRounds, agent.readingStop)
+							}
+							finished, finishErr := agent.finishDocumentAnswer(t.Context(), result.Result, nil)
+							if finishErr != nil || !strings.Contains(finished.Text, "工具轮次达到保护上限") {
+								t.Fatal("reading scope stop reminder missing", finished, finishErr)
+							}
+						}
+					} else {
+						if err == nil || result.Result.Text != "" || len(result.Window.Messages) != 0 {
+							t.Fatal("budget failure reported success", result, err)
+						}
+						if mode == "exhausted" && (answerCalls != 0 || errorKind(err) != ErrorLimit) {
+							t.Fatal("generation escaped exhausted compaction budget", answerCalls, err)
+						}
+					}
+				})
+			}
+		}
 	}
 }

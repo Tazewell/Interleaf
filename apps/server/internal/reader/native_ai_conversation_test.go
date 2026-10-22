@@ -50,14 +50,17 @@ func TestNativeSessionRebuildAndCompaction(t *testing.T) {
 
 func TestNativeSessionDocumentCompletionCommitsAtomically(t *testing.T) {
 	for _, protocol := range []string{"openai", "anthropic"} {
-		for _, mode := range []string{"complete", "partial", "invalid-source", "save-failure"} {
+		for _, mode := range []string{"complete", "complete-tool", "partial", "partial-tool", "unknown-tool", "duplicate-tool", "cancel", "invalid-source", "save-failure"} {
 			t.Run(protocol+"/"+mode, func(t *testing.T) {
 				s, _ := prepareConversationFixture(t)
 				session, err := s.Store.ensureDefaultChatSession("doc", "api")
 				if err != nil {
 					t.Fatal(err)
 				}
+				ctx, cancel := context.WithCancel(t.Context())
+				defer cancel()
 				calls := 0
+				blockID := ""
 				upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 					if r.Method == "GET" {
 						respond(w, 200, map[string]any{"data": []any{map[string]string{"id": "test"}}})
@@ -71,11 +74,22 @@ func TestNativeSessionDocumentCompletionCommitsAtomically(t *testing.T) {
 						t.Error("hidden probe")
 					}
 					kind := "answer"
-					if mode == "partial" {
+					if mode == "partial" || mode == "cancel" || mode == "partial-tool" && calls == 2 {
 						kind = "partial"
 					}
+					if (mode == "complete-tool" || mode == "partial-tool") && calls == 1 || mode == "unknown-tool" || mode == "duplicate-tool" {
+						kind = "tool"
+					}
 					frame := nativeFixtureFrame(protocol, kind)
-					frame = strings.ReplaceAll(frame, "answer [S1]", "native answer")
+					frame = strings.ReplaceAll(frame, "p1-b1", blockID)
+					if mode == "unknown-tool" {
+						frame = strings.ReplaceAll(frame, "read_passage", "execute_shell")
+					}
+					answer := "native answer"
+					if mode == "complete-tool" {
+						answer = "native answer [S2]"
+					}
+					frame = strings.ReplaceAll(frame, "answer [S1]", answer)
 					if mode == "invalid-source" {
 						frame = strings.ReplaceAll(frame, "native answer", "forged [S999]")
 					}
@@ -86,6 +100,11 @@ func TestNativeSessionDocumentCompletionCommitsAtomically(t *testing.T) {
 				configureDocumentAPI(t, s, upstream.URL)
 				config := s.aiConfig()
 				config.API.Protocol = protocol
+				// This fixture explicitly supplies checked tools for the selected
+				// protocol; a protocol edit must not reuse the old fingerprint.
+				cap := config.Capabilities["api:test"]
+				cap.Fingerprint = configPrint(config, "api:test")
+				config.Capabilities["api:test"] = cap
 				if err = s.writeAIConfig(config); err != nil {
 					t.Fatal(err)
 				}
@@ -93,6 +112,7 @@ func TestNativeSessionDocumentCompletionCommitsAtomically(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
+				blockID = aCorpus.Passages[1].ID
 				a := &documentAgent{server: s, corpus: aCorpus, ctx: t.Context(), ID: id(), sessionID: session}
 				user := Message{ID: "original-user", DocumentID: "doc", SessionID: session, Role: "user", Content: "old question", ReadingLocation: json.RawMessage(`{"type":"epub","href":"chapter.xhtml"}`)}
 				old := Message{ID: "original-answer", DocumentID: "doc", SessionID: session, Role: "assistant", Content: "old answer", References: json.RawMessage(`[{"sourceId":"S1","corpusRevision":"old"}]`)}
@@ -113,29 +133,64 @@ func TestNativeSessionDocumentCompletionCommitsAtomically(t *testing.T) {
 					}
 				}
 				input := AIInput{Prompt: "continue", Chat: &chatInput{server: s, DocumentID: "doc", SessionID: session, Agent: a, History: []Message{user, old}, Question: "continue"}}
-				result, err := s.apiAgentAdapter(config, taskChat).Stream(t.Context(), GenerateRequest{input}, func(event ProviderEvent) error {
-					var savedAnswers int
-					s.Store.DB.QueryRow("SELECT count(*) FROM messages WHERE id NOT IN ('original-user','original-answer')").Scan(&savedAnswers)
+				events := 0
+				assertUncommitted := func() {
+					t.Helper()
+					var savedAnswers, runs int
+					if scanErr := s.Store.DB.QueryRow("SELECT count(*) FROM messages WHERE document_id='doc' AND json_extract(body,'$.role')='assistant' AND id!='original-answer'").Scan(&savedAnswers); scanErr != nil {
+						t.Fatal(scanErr)
+					}
 					if savedAnswers != 0 {
-						t.Fatal(savedAnswers)
+						t.Fatal("answer persisted before validated save", savedAnswers)
+					}
+					if scanErr := s.Store.DB.QueryRow("SELECT count(*) FROM chat_agent_runs WHERE document_id='doc'").Scan(&runs); scanErr != nil {
+						t.Fatal(scanErr)
+					}
+					var raw string
+					if scanErr := s.Store.DB.QueryRow("SELECT body FROM document_conversations WHERE document_id='doc' AND provider=?", conversationProvider(session, "api")).Scan(&raw); scanErr != nil {
+						t.Fatal(scanErr)
+					}
+					if runs != 0 || raw != before {
+						t.Fatal("audit or conversation committed before validated save", runs, raw)
+					}
+				}
+				result, err := s.apiAgentAdapter(config, taskChat).Stream(ctx, GenerateRequest{input}, func(event ProviderEvent) error {
+					events++
+					assertUncommitted()
+					if mode == "cancel" {
+						cancel()
 					}
 					if event.Text != "" && mode == "invalid-source" {
 						t.Fatal("unvalidated final answer emitted")
 					}
 					return nil
 				})
+				if events == 0 {
+					t.Fatal("save boundary was never observed during streaming")
+				}
+				assertUncommitted()
 				if err == nil {
 					err = s.saveDocumentAgentAnswer(t.Context(), a, result.Text, "api")
 				}
-				if calls != 1 {
-					t.Fatal("fallback or hidden generation", calls)
+				expectedCalls := 1
+				if mode == "complete-tool" || mode == "partial-tool" || mode == "duplicate-tool" {
+					expectedCalls = 2
+				}
+				if calls != expectedCalls {
+					t.Fatal("fallback or hidden generation", calls, err)
 				}
 				var raw string
-				s.Store.DB.QueryRow("SELECT body FROM document_conversations WHERE document_id='doc' AND provider=?", conversationProvider(session, "api")).Scan(&raw)
+				if scanErr := s.Store.DB.QueryRow("SELECT body FROM document_conversations WHERE document_id='doc' AND provider=?", conversationProvider(session, "api")).Scan(&raw); scanErr != nil {
+					t.Fatal(scanErr)
+				}
 				var answers, runs int
-				s.Store.DB.QueryRow("SELECT count(*) FROM messages WHERE id NOT IN ('original-user','original-answer')").Scan(&answers)
-				s.Store.DB.QueryRow("SELECT count(*) FROM chat_agent_runs").Scan(&runs)
-				if mode == "complete" {
+				if scanErr := s.Store.DB.QueryRow("SELECT count(*) FROM messages WHERE id NOT IN ('original-user','original-answer')").Scan(&answers); scanErr != nil {
+					t.Fatal(scanErr)
+				}
+				if scanErr := s.Store.DB.QueryRow("SELECT count(*) FROM chat_agent_runs").Scan(&runs); scanErr != nil {
+					t.Fatal(scanErr)
+				}
+				if mode == "complete" || mode == "complete-tool" {
 					if err != nil || answers != 1 || runs != 1 || raw == before || strings.Contains(raw, "DO_NOT_SEND") {
 						t.Fatal(err, answers, runs, raw)
 					}
@@ -145,6 +200,9 @@ func TestNativeSessionDocumentCompletionCommitsAtomically(t *testing.T) {
 					}
 				}
 				history, err := s.Store.chatHistory("doc", session)
+				if mode == "complete-tool" && err == nil && !strings.Contains(string(history[len(history)-1].References), "S2") {
+					t.Fatal("successful tool evidence not saved", history[len(history)-1])
+				}
 				if err != nil || history[0].ID != user.ID || string(history[0].ReadingLocation) != string(user.ReadingLocation) || history[1].ID != old.ID || string(history[1].References) != string(old.References) {
 					t.Fatal("historical data changed", history, err)
 				}
