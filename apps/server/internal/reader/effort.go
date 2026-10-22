@@ -22,6 +22,12 @@ func (s *Server) modelCatalog(ctx context.Context, provider string) ([]AgentMode
 }
 
 func (s *Server) cachedCatalog(ctx context.Context, key string, discover func(context.Context) ([]AgentModel, error)) ([]AgentModel, error) {
+	ctx, finishIO, ioErr := s.beginAIIO(ctx)
+	if ioErr != nil {
+		return nil, ioErr
+	}
+	defer finishIO()
+
 	s.modelMu.Lock()
 	entry, ok := s.modelCache[key]
 	s.modelMu.Unlock()

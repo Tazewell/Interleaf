@@ -30,6 +30,7 @@ import (
 )
 
 type Server struct {
+	aiTasks                map[*documentTask]struct{}
 	bilingualMu            sync.Mutex
 	bilingualJobs          map[string]*bilingualJob
 	bilingualRoot          string

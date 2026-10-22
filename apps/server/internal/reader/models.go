@@ -33,6 +33,14 @@ type AgentModel struct {
 }
 
 func (s *Server) agentModels(w http.ResponseWriter, r *http.Request) {
+	ctxIO, finishIO, ioErr := s.beginAIIO(r.Context())
+	if ioErr != nil {
+		fail(w, 503, ioErr.Error())
+		return
+	}
+	defer finishIO()
+	r = r.WithContext(ctxIO)
+
 	role := modelTask(r.URL.Query().Get("role"))
 	if r.URL.Query().Has("provider") || !validNativeRole(role) {
 		fail(w, 400, "请选择有效的模型用途")

@@ -273,6 +273,14 @@ func (s *Server) resolveNativeTask(ctx context.Context, config NativeAIConfig, r
 	return snapshot, nil
 }
 func (s *Server) checkNativeAI(w http.ResponseWriter, r *http.Request) {
+	ctxIO, finishIO, ioErr := s.beginAIIO(r.Context())
+	if ioErr != nil {
+		fail(w, 503, ioErr.Error())
+		return
+	}
+	defer finishIO()
+	r = r.WithContext(ctxIO)
+
 	var input struct {
 		Role        modelTask `json:"role"`
 		Model       string    `json:"model"`

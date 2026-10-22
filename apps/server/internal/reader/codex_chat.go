@@ -185,24 +185,6 @@ func (a codexChatAdapter) Stream(ctx context.Context, req GenerateRequest, emit 
 		return GenerateResult{Text: text, FinishReason: "stop"}, nil
 	})
 }
-func (s *Server) Close() {
-	s.documentMu.Lock()
-	s.documentClosed = true
-	var tasks []*documentTask
-	for _, group := range s.documentTasks {
-		for task := range group {
-			task.cancel()
-			tasks = append(tasks, task)
-		}
-	}
-	s.documentMu.Unlock()
-	s.codexChat.close()
-	s.documentCodex.close()
-	for _, task := range tasks {
-		<-task.done
-	}
-}
-
 func (c *codexChatCache) deleteDocument(document string) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
