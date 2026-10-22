@@ -101,6 +101,7 @@ import {
   paperYear,
   publicationDate,
   paperProgress,
+  paperExcerpt,
   fileSize,
   relativeTime,
   venueLabel,
@@ -1272,6 +1273,8 @@ function PaperRow({
 }) {
   const byline = paperByline(doc);
   const percent = paperProgress(doc.percentage);
+  const excerpt = paperExcerpt(doc.metadata.abstract);
+  const tags = doc.tags.slice(0, 3);
   const check = picking && (
     <span className="paper-row-check" data-row-action>
       <Checkbox
@@ -1509,9 +1512,41 @@ function PaperRow({
                 config={journalRankConfig}
                 refreshRevision={journalRankRefresh}
               />
+              {excerpt && (
+                <p className="paper-row-excerpt" title={doc.metadata.abstract}>
+                  {excerpt}
+                </p>
+              )}
+              {tags.length > 0 && (
+                <div className="paper-row-tags">
+                  {tags.map((tag) => (
+                    <button
+                      key={tag}
+                      type="button"
+                      className="paper-row-tag"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        onFilterTag(tag);
+                      }}
+                    >
+                      {tag}
+                    </button>
+                  ))}
+                  {doc.tags.length > tags.length && (
+                    <span className="paper-row-tag">
+                      +{doc.tags.length - tags.length}
+                    </span>
+                  )}
+                </div>
+              )}
             </div>
             <div className="paper-row-meta">
-              {counts}
+              {percent > 0 && (
+                <span className="paper-row-progress" aria-hidden="true">
+                  <span style={{ width: `${percent}%` }} />
+                </span>
+              )}
+              <span className="paper-row-counts">{counts}</span>
               {status}
             </div>
             {more}
