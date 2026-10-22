@@ -18,6 +18,7 @@ type Session = {
   cleanup?: Promise<void>;
   timer?: ReturnType<typeof setTimeout>;
   querying?: boolean;
+  startError?: string;
 };
 const newSession = (): Session => ({
   active: true,
@@ -53,6 +54,7 @@ function ExportArea({ document: doc }: { document: Document }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [queryFailed, setQueryFailed] = useState(false);
+  const [recoveringStart, setRecoveringStart] = useState(false);
   const [keep, setKeep] = useState(false);
   const [attach, setAttach] = useState(false);
   const [saved, setSaved] = useState("");
@@ -99,6 +101,7 @@ function ExportArea({ document: doc }: { document: Document }) {
       setJob(null);
       setError("");
       setQueryFailed(false);
+      setRecoveringStart(false);
       setKeep(false);
       setSaved("");
       setAttached(false);
@@ -134,10 +137,24 @@ function ExportArea({ document: doc }: { document: Document }) {
     setQueryFailed(false);
     setError("");
     try {
-      update(s, await api.bilingualPDF(doc.id, s.jobId, s.controller.signal));
+      const result = await api.bilingualPDF(
+        doc.id,
+        s.jobId,
+        s.controller.signal,
+      );
+      if (!alive(s)) return;
+      update(s, result);
+      setRecoveringStart(false);
+      if (result.status === "awaiting-confirmation")
+        setError(s.startError || "");
+      else s.startError = undefined;
     } catch (e) {
       if (alive(s)) {
-        setError(message(e));
+        setError(
+          s.startError
+            ? `${s.startError}；查询失败：${message(e)}`
+            : message(e),
+        );
         setQueryFailed(true);
       }
     } finally {
@@ -203,8 +220,10 @@ function ExportArea({ document: doc }: { document: Document }) {
       preflight = job?.preflight;
     if (
       lock.current ||
+      recoveringStart ||
       !alive(s) ||
       !job ||
+      job.status !== "awaiting-confirmation" ||
       !preflight ||
       (preflight.noTextPages.length > 0 && !keep) ||
       (preflight.missingParagraphs > 0 && !preflight.apiConfigured)
@@ -213,6 +232,7 @@ function ExportArea({ document: doc }: { document: Document }) {
     lock.current = true;
     setBusy(true);
     setError("");
+    s.startError = undefined;
     try {
       update(
         s,
@@ -227,7 +247,13 @@ function ExportArea({ document: doc }: { document: Document }) {
         ),
       );
     } catch (e) {
-      if (alive(s)) setError(message(e));
+      if (alive(s)) {
+        // POST may already have started paid work. Resolve the existing job
+        // before enabling another explicit start; never replay POST here.
+        s.startError = message(e);
+        setRecoveringStart(true);
+        await query(s);
+      }
     } finally {
       if (alive(s)) {
         lock.current = false;
@@ -425,6 +451,7 @@ function ExportArea({ document: doc }: { document: Document }) {
           <Button
             disabled={
               busy ||
+              recoveringStart ||
               !session.current.active ||
               (preflight.noTextPages.length > 0 && !keep) ||
               (preflight.missingParagraphs > 0 && !preflight.apiConfigured)

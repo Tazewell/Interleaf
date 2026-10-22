@@ -418,3 +418,115 @@ it("retries a failed query for the same job without creating or translating agai
     vi.useRealTimers();
   }
 });
+
+it("recovers an accepted start whose response rejects, then saves the same paid job", async () => {
+  vi.useFakeTimers();
+  try {
+    vi.mocked(api.startBilingualPDF).mockRejectedValueOnce(
+      new Error("开始响应中断"),
+    );
+    vi.mocked(api.bilingualPDF)
+      .mockResolvedValueOnce({
+        id: "job",
+        status: "translating",
+        stage: "translating",
+        done: 1,
+        total: 3,
+      })
+      .mockResolvedValueOnce(ready);
+    await mount();
+    await click("预检双语 PDF");
+    await click("翻译并导出");
+    expect(host.textContent).toContain("翻译 1 / 3");
+    await act(async () => vi.advanceTimersByTimeAsync(750));
+    expect(button("保存双语 PDF").disabled).toBe(false);
+    await click("保存双语 PDF");
+    expect(host.textContent).toContain("已保存：双语.pdf");
+    expect(api.createBilingualPDF).toHaveBeenCalledOnce();
+    expect(api.startBilingualPDF).toHaveBeenCalledOnce();
+    for (const call of vi.mocked(api.bilingualPDF).mock.calls)
+      expect(call).toEqual(["doc", "job", expect.any(AbortSignal)]);
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+it("retries only the same-job query when start and recovery responses both fail", async () => {
+  vi.mocked(api.startBilingualPDF).mockRejectedValueOnce(
+    new Error("开始响应中断"),
+  );
+  vi.mocked(api.bilingualPDF)
+    .mockRejectedValueOnce(new Error("查询中断"))
+    .mockResolvedValueOnce(ready);
+  await mount();
+  await click("预检双语 PDF");
+  await click("翻译并导出");
+  expect(button("翻译并导出").disabled).toBe(true);
+  expect(host.textContent).toContain("查询中断");
+  expect(button("重试查询")).toBeDefined();
+  await click("翻译并导出");
+  expect(api.startBilingualPDF).toHaveBeenCalledOnce();
+  await click("重试查询");
+  await click("保存双语 PDF");
+  expect(save).toHaveBeenCalledWith({ documentId: "doc", jobId: "job" });
+  expect(api.createBilingualPDF).toHaveBeenCalledOnce();
+  expect(api.startBilingualPDF).toHaveBeenCalledOnce();
+  expect(api.bilingualPDF).toHaveBeenCalledTimes(2);
+  for (const call of vi.mocked(api.bilingualPDF).mock.calls)
+    expect(call).toEqual(["doc", "job", expect.any(AbortSignal)]);
+});
+
+it("retains the original start rejection when querying confirms awaiting confirmation", async () => {
+  vi.mocked(api.startBilingualPDF).mockRejectedValueOnce(
+    new Error("API 设置不可用，请重新预检"),
+  );
+  vi.mocked(api.bilingualPDF).mockResolvedValueOnce(preflight);
+  await mount();
+  await click("预检双语 PDF");
+  await click("翻译并导出");
+  expect(api.bilingualPDF).toHaveBeenCalledWith(
+    "doc",
+    "job",
+    expect.any(AbortSignal),
+  );
+  expect(host.textContent).toContain("API 设置不可用，请重新预检");
+  expect(button("翻译并导出").disabled).toBe(false);
+  expect(api.startBilingualPDF).toHaveBeenCalledOnce();
+  await click("翻译并导出");
+  expect(button("保存双语 PDF")).toBeDefined();
+  expect(api.startBilingualPDF).toHaveBeenCalledTimes(2);
+  expect(api.createBilingualPDF).toHaveBeenCalledOnce();
+});
+
+it.each(["cancel", "unmount"])(
+  "does not resurrect or save a job after %s during deferred start recovery",
+  async (action) => {
+    let resolve!: (job: BilingualPDFJob) => void;
+    vi.mocked(api.startBilingualPDF).mockRejectedValueOnce(
+      new Error("开始响应中断"),
+    );
+    vi.mocked(api.bilingualPDF).mockImplementationOnce(
+      () =>
+        new Promise((done) => {
+          resolve = done;
+        }),
+    );
+    await mount();
+    await click("预检双语 PDF");
+    await click("翻译并导出");
+    expect(api.bilingualPDF).toHaveBeenCalledOnce();
+    const signal = vi.mocked(api.bilingualPDF).mock.calls[0][2]!;
+    expect(button("翻译并导出").disabled).toBe(true);
+    if (action === "cancel") await click("重新设置");
+    else await act(async () => root.render(null));
+    expect(signal.aborted).toBe(true);
+    await act(async () => resolve(ready));
+    expect(button("保存双语 PDF")).toBeUndefined();
+    expect(save).not.toHaveBeenCalled();
+    expect(api.cancelBilingualPDF).toHaveBeenCalledWith("doc", "job");
+    expect(api.createBilingualPDF).toHaveBeenCalledOnce();
+    expect(api.startBilingualPDF).toHaveBeenCalledOnce();
+    if (action === "cancel")
+      expect(button("预检双语 PDF").disabled).toBe(false);
+  },
+);
