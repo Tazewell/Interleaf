@@ -18,7 +18,6 @@ import {
 } from "./library-location";
 import { randomBytes } from "node:crypto";
 import { homedir } from "node:os";
-import { agentPath } from "./agent-path";
 import { codexThreadURL } from "../../../packages/reader-core/src/codex-link";
 import { annotationUndoShortcut } from "../../../packages/reader-core/src/undo-shortcut";
 import { zoomCommand } from "../../../packages/reader-core/src/zoom-shortcut";
@@ -95,7 +94,6 @@ async function startServer() {
   const web = app.isPackaged
     ? join(process.resourcesPath, "web")
     : join(root, "web", "dist");
-  const pathValue = await agentPath(childEnv, homedir(), process.platform);
   child = spawn(
     binary,
     [
@@ -117,11 +115,7 @@ async function startServer() {
         ...childEnv,
         READER_TOKEN: serverToken,
         READER_EXPORT_CAPABILITY: bibliographyExportCapability,
-        PATH: pathValue,
         READER_NODE: process.execPath,
-        READER_AGENT: app.isPackaged
-          ? join(process.resourcesPath, "agent", "dist", "main.mjs")
-          : join(root, "agent", "dist", "main.mjs"),
         READER_PROCESSOR: app.isPackaged
           ? join(process.resourcesPath, "processor", "main.mjs")
           : join(root, "processor", "dist", "main.mjs"),

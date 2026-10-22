@@ -127,7 +127,6 @@ beforeEach(async () => {
     migrateLibrary: migrate,
     stopLibraryServer: stop,
   }));
-  vi.doMock("./agent-path", () => ({ agentPath: async () => "/bin" }));
   vi.doMock("./proxy-settings", () => ({
     ProxySettingsService: {
       open: async () => ({
