@@ -100,7 +100,29 @@ afterEach(async () => {
   await act(async () => root.unmount());
   host.remove();
   document.body.innerHTML = "";
+  delete window.readerDesktop;
   vi.unstubAllGlobals();
+});
+
+it("embeds native bilingual export only for desktop PDF documents", async () => {
+  await mount();
+  expect(document.querySelector('[aria-label="双语 PDF"]')).toBeNull();
+  window.readerDesktop = {
+    saveBilingualPDF: vi.fn(),
+  } as unknown as Window["readerDesktop"];
+  await mount();
+  expect(button("预检双语 PDF")).toBeDefined();
+  await act(async () =>
+    root.render(
+      <ExportDocumentDialog
+        document={{ ...doc, type: "epub" }}
+        annotations={[]}
+        messages={[]}
+        onClose={close}
+      />,
+    ),
+  );
+  expect(document.querySelector('[aria-label="双语 PDF"]')).toBeNull();
 });
 
 it("combines translation and selected notes in one Markdown download", async () => {

@@ -35,6 +35,7 @@ import {
 import { startUpdateService } from "./update-service";
 import { devIsolation } from "./dev-isolation";
 import { configureBibliographyExport } from "./bibliography-export";
+import { BilingualPDFSaveService } from "./bilingual-pdf-export";
 import { startDiagnosticService } from "./diagnostic-service";
 import { serverSpawnDiagnostics } from "./server-spawn-diagnostics";
 import { discoverEndNote } from "./endnote-discovery";
@@ -62,6 +63,9 @@ let restartRequested = false;
 let proxySettings: ProxySettingsService;
 let activeLibrary: string | undefined;
 let choosingLibrary = false;
+let bilingualPDFSave: BilingualPDFSaveService | undefined;
+let waitingForBilingualSaveStop = false;
+let bilingualSavesStoppedForQuit = false;
 let pendingLibraryMove:
   { destination: string; resolve: (moved: boolean) => void } | undefined;
 const root = resolve(__dirname, "../..");
@@ -363,6 +367,7 @@ app
       },
     });
     window.webContents.on("render-process-gone", (_event, details) => {
+      void bilingualPDFSave?.stop();
       diagnostics!.logs.record("desktop", {
         level: "error",
         event: "renderer.exited",
@@ -389,6 +394,7 @@ app
       event.preventDefault();
       if (closing) return;
       closing = true;
+      const stoppedBilingualSave = bilingualPDFSave?.stop();
       window!.webContents.send("reader:flush");
       const timer = setTimeout(() => {
         void finish("保存超时，请重试。");
@@ -407,6 +413,7 @@ app
         finished = true;
         clearTimeout(timer);
         ipcMain.removeListener("reader:flushed", handler);
+        await stoppedBilingualSave;
         if (error) {
           // A failed flush must never produce a migrated, stale snapshot.
           pendingLibraryMove?.resolve(false);
@@ -422,6 +429,7 @@ app
           });
           if (result.response === 0) {
             closing = false;
+            configureBilingualSave();
             restartRequested = false;
             return;
           }
@@ -454,6 +462,7 @@ app
           }
         }
         flushed = true;
+        bilingualSavesStoppedForQuit = true;
         window?.close();
       };
       ipcMain.on("reader:flushed", handler);
@@ -507,6 +516,35 @@ app
       )
         throw new Error("Invalid sender");
     };
+    function configureBilingualSave() {
+      bilingualPDFSave = new BilingualPDFSaveService({
+        context: () => ({
+          contents: window?.webContents,
+          appURL: url,
+          serverURL,
+          token: serverToken,
+          library: activeLibrary!,
+          available: !closing && !quitting && !restartRequested,
+        }),
+        choose: async (defaultPath) => {
+          const result = await dialog.showSaveDialog(window!, {
+            title: "保存双语 PDF",
+            defaultPath,
+            filters: [{ name: "PDF", extensions: ["pdf"] }],
+          });
+          return result.canceled ? null : result.filePath || null;
+        },
+        fetch: (target, init) => fetch(target, init),
+      });
+    }
+    configureBilingualSave();
+    ipcMain.handle("reader:save-bilingual-pdf", (event, input: unknown) =>
+      bilingualPDFSave!.save(event, input),
+    );
+    ipcMain.handle(
+      "reader:cancel-bilingual-pdf-save",
+      (event, input: unknown) => bilingualPDFSave!.cancel(event, input),
+    );
     ipcMain.handle("reader:library-location", (event) => {
       settingsSender(event);
       return activeLibrary;
@@ -842,9 +880,22 @@ app
     app.quit();
   });
 app.on("before-quit", (event) => {
+  const stoppedBilingualSave = bilingualPDFSave?.stop();
   if (window && !window.isDestroyed() && !flushed) {
     event.preventDefault();
     window.close();
+    return;
+  }
+  // Renderer crashes and destroyed windows also join owned downloads before exit.
+  if (stoppedBilingualSave && !bilingualSavesStoppedForQuit) {
+    event.preventDefault();
+    if (!waitingForBilingualSaveStop) {
+      waitingForBilingualSaveStop = true;
+      void stoppedBilingualSave.then(() => {
+        bilingualSavesStoppedForQuit = true;
+        app.quit();
+      });
+    }
     return;
   }
   quitting = true;

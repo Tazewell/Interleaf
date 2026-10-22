@@ -17,6 +17,10 @@ async function proxyRequest(channel: string, ...args: unknown[]) {
 }
 contextBridge.exposeInMainWorld("readerDesktop", {
   platform: process.platform,
+  saveBilingualPDF: (input: { documentId: string; jobId: string }) =>
+    proxyRequest("reader:save-bilingual-pdf", input),
+  cancelBilingualPDFSave: (input: { documentId: string; jobId: string }) =>
+    proxyRequest("reader:cancel-bilingual-pdf-save", input),
   configureBibliographyExport: (options: unknown) =>
     proxyRequest("reader:configure-bibliography-export", options),
   exportDiagnostics: () => ipcRenderer.invoke("reader:export-diagnostics"),

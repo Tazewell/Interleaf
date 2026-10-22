@@ -3,6 +3,14 @@
 interface Window {
   readerDesktop?: {
     platform: string;
+    saveBilingualPDF?: (input: {
+      documentId: string;
+      jobId: string;
+    }) => Promise<{ saved: boolean; fileName?: string }>;
+    cancelBilingualPDFSave?: (input: {
+      documentId: string;
+      jobId: string;
+    }) => Promise<void>;
     configureBibliographyExport?: (options: {
       folder: string;
       includeChildren: boolean;

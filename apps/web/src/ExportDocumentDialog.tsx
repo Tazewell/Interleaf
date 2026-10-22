@@ -21,6 +21,7 @@ import {
 } from "./notes-export";
 import { downloadBlob, downloadText, fileTitle } from "./download";
 import { exportAnnotatedPDFWithToast } from "./annotated-pdf-export";
+import { BilingualPDFExport } from "./BilingualPDFExport";
 
 type DocumentExportPart = "translation" | ExportPart;
 const labels = { translation: "译文", ...exportParts };
@@ -295,6 +296,7 @@ export function ExportDocumentDialog({
             </Button>
           </div>
         )}
+        <BilingualPDFExport document={doc} />
       </DialogContent>
     </Dialog>
   );
