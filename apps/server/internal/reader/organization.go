@@ -140,10 +140,6 @@ func (s *Server) classificationWorker(ctx context.Context) {
 			return
 		case <-tick.C:
 		}
-		service := s.currentGenerationServiceContext(ctx, taskChat)
-		if service.ValidateInput(AIInput{}, false) != nil {
-			continue
-		}
 		var id string
 		// Wait for PDF extraction; failed extraction becomes an actionable classification failure.
 		err := s.Store.DB.QueryRow(`SELECT d.id FROM documents d LEFT JOIN document_processing p ON p.document_id=d.id
@@ -153,7 +149,7 @@ func (s *Server) classificationWorker(ctx context.Context) {
 		if err != nil {
 			continue
 		}
-		s.classifyDocument(ctx, id, service)
+		s.classifyDocument(ctx, id, nil)
 	}
 }
 func (s *Server) classificationInput(d Document) (AIInput, error) {
@@ -209,6 +205,12 @@ func (s *Server) classifyDocument(ctx context.Context, id string, service *Gener
 		return
 	}
 	defer finish()
+	if service == nil {
+		service = s.currentGenerationServiceContext(ctx, taskChat)
+		if service.ValidateInput(AIInput{}, false) != nil {
+			return
+		}
+	}
 	result, err := s.Store.DB.Exec("UPDATE documents SET classification_status='running',classification_error='' WHERE id=? AND classification_status='pending' AND category_source!='manual'", id)
 	if err != nil {
 		return

@@ -321,3 +321,59 @@ func TestNativeCloseDuringChatCatalogJoinsPreparation(t *testing.T) {
 		})
 	}
 }
+
+func TestNativeCloseBackgroundCatalog(t *testing.T) {
+	for _, kind := range []string{"overview", "classification"} {
+		t.Run(kind, func(t *testing.T) {
+			s, _ := originalDocumentFixture(t)
+			entered := make(chan struct{})
+			release := make(chan struct{})
+			api := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				close(entered)
+				select {
+				case <-r.Context().Done():
+				case <-release:
+				}
+			}))
+			defer api.Close()
+			defer close(release)
+			configureNativeTest(t, s, api.URL, "test", false)
+			ctx, cancel := context.WithCancel(t.Context())
+			defer cancel()
+			workerDone := make(chan struct{})
+			if kind == "overview" {
+				job := overviewTestJob(t, s)
+				s.Store.DB.Exec("DELETE FROM document_corpus_jobs WHERE document_id='doc'")
+				s.Store.DB.Exec("UPDATE document_overview_jobs SET status='queued' WHERE job_id=?", job.ID)
+				go func() { defer close(workerDone); s.overviewWorker(ctx) }()
+			} else {
+				s.Store.DB.Exec("UPDATE documents SET classification_status='pending',category_source='default' WHERE id='doc'")
+				s.Store.DB.Exec("UPDATE document_processing SET phase='complete' WHERE document_id='doc'")
+				go func() { defer close(workerDone); s.classificationWorker(ctx) }()
+			}
+			select {
+			case <-entered:
+			case <-time.After(4 * time.Second):
+				t.Fatal("background catalog not reached")
+			}
+			s.documentMu.Lock()
+			registered := len(s.documentTasks["doc"])
+			s.documentMu.Unlock()
+			if registered == 0 {
+				t.Error("catalog I/O started without document registration")
+			}
+			deleted := make(chan struct{})
+			go func() { defer close(deleted); request(t, s, "DELETE", "/api/documents/doc", nil) }()
+			select {
+			case <-deleted:
+			case <-time.After(time.Second):
+				t.Fatal("delete did not cancel background catalog")
+			}
+			cancel()
+			<-workerDone
+			if _, err := s.Store.Document("doc"); err == nil {
+				t.Fatal("document survived delete")
+			}
+		})
+	}
+}
