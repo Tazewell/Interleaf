@@ -6,6 +6,7 @@ import (
 	"compress/gzip"
 	"context"
 	"crypto/x509"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -296,5 +297,99 @@ func TestPublicFetchBodyResetIsNotRetried(t *testing.T) {
 	_, err := c.FetchPublic(t.Context(), "http://paper.example/reset", "html")
 	if err == nil || calls.Load() != 1 {
 		t.Fatalf("partial body retried: calls=%d err=%v", calls.Load(), err)
+	}
+}
+
+func TestPublicFetchDocumentMIME(t *testing.T) {
+	for _, tc := range []struct {
+		name, mime, body, kind string
+		ok                     bool
+	}{
+		{"json", "application/json", `{"error":"unavailable"}`, "document", false},
+		{"json-as-html", "application/json", "<p>error</p>", "html", false},
+		{"image", "image/png", "<p>not html</p>", "document", false},
+		{"binary", "application/octet-stream", "\x00\x01\x02", "document", false},
+		{"html", "text/html; charset=utf-8", "<p>Article.</p>", "document", true},
+		{"xhtml", "application/xhtml+xml", `<html xmlns="http://www.w3.org/1999/xhtml"><p>Article.</p></html>`, "html", true},
+		{"missing-html", "", "<!doctype html><p>Article.</p>", "document", true},
+		{"generic-html", "application/octet-stream", "<html><p>Article.</p></html>", "document", true},
+		{"missing-json", "", `{"error":"unavailable"}`, "document", false},
+		{"plain-error", "text/plain", "service unavailable", "document", false},
+		{"missing-pdf", "", "%PDF-1.7\n", "document", true},
+		{"generic-pdf", "application/octet-stream", "%PDF-1.7\n", "pdf", true},
+		{"fake-pdf", "application/pdf", "<p>error</p>", "document", false},
+		{"wrong-declared-pdf", "image/png", "%PDF-1.7\n", "pdf", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			c, _, _ := publicFixture(t, func(w http.ResponseWriter, r *http.Request) {
+				w.Header()["Content-Type"] = nil
+				if tc.mime != "" {
+					w.Header().Set("Content-Type", tc.mime)
+				}
+				fmt.Fprint(w, tc.body)
+			})
+			got, err := c.FetchPublic(t.Context(), "http://paper.example/content", tc.kind)
+			if (err == nil) != tc.ok {
+				t.Fatalf("MIME=%q kind=%s got=%q err=%v", tc.mime, tc.kind, got.Bytes, err)
+			}
+		})
+	}
+}
+
+func TestPublicFetchDocumentDecodedCap(t *testing.T) {
+	for _, tc := range []struct {
+		name, mime, prefix string
+		gzip               bool
+		limit              int
+	}{
+		{"html", "text/html", "<p>", false, 4 << 20},
+		{"gzip-html", "text/html", "<p>", true, 4 << 20},
+		{"missing-html", "", "<html>", false, 4 << 20},
+		{"generic-html", "application/octet-stream", "<html>", true, 4 << 20},
+		{"pdf", "application/pdf", "%PDF-1.7\n", false, 64 << 20},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			closed := make(chan struct{})
+			c, _, _ := publicFixture(t, func(w http.ResponseWriter, r *http.Request) {
+				defer close(closed)
+				w.Header()["Content-Type"] = nil
+				if tc.mime != "" {
+					w.Header().Set("Content-Type", tc.mime)
+				}
+				var output io.Writer = w
+				var z *gzip.Writer
+				if tc.gzip {
+					w.Header().Set("Content-Encoding", "gzip")
+					z = gzip.NewWriter(w)
+					output = z
+				}
+				fmt.Fprint(output, tc.prefix)
+				io.CopyN(output, strings.NewReader(strings.Repeat("a", tc.limit)), int64(tc.limit+1-len(tc.prefix)))
+				if z != nil {
+					z.Flush()
+				}
+				w.(http.Flusher).Flush()
+				<-r.Context().Done()
+			})
+			ctx, cancel := context.WithTimeout(t.Context(), time.Second)
+			defer cancel()
+			_, err := c.FetchPublic(ctx, "http://paper.example/over", "document")
+			if err == nil || errors.Is(err, context.DeadlineExceeded) || !strings.Contains(err.Error(), "大小限制") {
+				t.Fatalf("decoded cap was not early: %v", err)
+			}
+			select {
+			case <-closed:
+			case <-time.After(time.Second):
+				t.Fatal("oversized body not closed")
+			}
+		})
+	}
+	c, _, _ := publicFixture(t, func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/pdf")
+		fmt.Fprint(w, "%PDF-1.7\n"+strings.Repeat("a", 4<<20))
+	})
+	got, err := c.FetchPublic(t.Context(), "http://paper.example/large-pdf", "document")
+	if err != nil || len(got.Bytes) <= 4<<20 {
+		t.Fatal("PDF incorrectly limited to HTML cap", len(got.Bytes), err)
 	}
 }

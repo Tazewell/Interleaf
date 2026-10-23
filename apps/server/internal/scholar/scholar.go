@@ -150,7 +150,7 @@ func (c *Client) checkURL(u *url.URL) error {
 const userAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126 Safari/537.36 Reader"
 
 func (c *Client) get(ctx context.Context, raw, accept string, limit int64) ([]byte, string, string, error) {
-	resource, err := c.fetchPublic(ctx, raw, accept, limit, "", true)
+	resource, err := c.fetchPublic(ctx, raw, accept, limit, "", "", true)
 	return resource.Bytes, resource.ContentType, resource.FinalURL, err
 }
 func (c *Client) pdf(ctx context.Context, raw string) ([]byte, error) {

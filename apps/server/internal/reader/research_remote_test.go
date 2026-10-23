@@ -524,3 +524,38 @@ func TestResearchRemoteArxivIdentityBoundaries(t *testing.T) {
 		})
 	}
 }
+
+func TestResearchRemoteMIMEClassification(t *testing.T) {
+	remoteRealProcessor(t)
+	for _, tc := range []struct {
+		name, mime string
+		body       []byte
+		kind       string
+	}{
+		{"json", "application/json", []byte(`{"error":"unavailable"}`), "remote-abstract"},
+		{"image", "image/png", []byte("image data"), "remote-abstract"},
+		{"binary", "application/octet-stream", []byte{0, 1, 2}, "remote-abstract"},
+		{"html", "text/html", []byte("<p>Article.</p>"), "remote-html"},
+		{"xhtml", "application/xhtml+xml", []byte(`<html xmlns="http://www.w3.org/1999/xhtml"><p>Article.</p></html>`), "remote-html"},
+		{"missing-html", "", []byte("<!doctype html><p>Article.</p>"), "remote-html"},
+		{"missing-pdf", "", remotePDFBytes(), "remote-page"},
+		{"generic-pdf", "application/octet-stream", remotePDFBytes(), "remote-page"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			s, run, c, _ := remoteFixture(t, func(w http.ResponseWriter, r *http.Request) {
+				w.Header()["Content-Type"] = nil
+				if tc.mime != "" {
+					w.Header().Set("Content-Type", tc.mime)
+				}
+				w.Write(tc.body)
+			})
+			ev, err := s.readResearchRemote(t.Context(), run.ID, c.ID)
+			if err != nil || len(ev) != 1 || ev[0].Kind != tc.kind {
+				t.Fatalf("wrong evidence class: want=%s got=%+v err=%v", tc.kind, ev, err)
+			}
+			if _, err = s.resolveResearchSource(t.Context(), ev[0].ID); err != nil {
+				t.Fatal(err)
+			}
+		})
+	}
+}

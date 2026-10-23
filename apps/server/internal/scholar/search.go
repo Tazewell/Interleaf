@@ -132,7 +132,7 @@ func (c *Client) Search(ctx context.Context, in SearchQuery) (SearchPage, error)
 		u.RawQuery = q.Encode()
 		raw = u.String()
 	}
-	resource, err := c.fetchPublic(ctx, raw, "application/atom+xml,application/json", 8<<20, in.Source, false)
+	resource, err := c.fetchPublic(ctx, raw, "application/atom+xml,application/json", 8<<20, in.Source, "metadata", false)
 	if err != nil {
 		return page, err
 	}

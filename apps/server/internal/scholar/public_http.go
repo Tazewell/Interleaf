@@ -12,6 +12,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"mime"
 	"net"
 	"net/http"
 	"net/netip"
@@ -112,7 +113,7 @@ func publicSource(u *url.URL) string {
 // the direct dial, the HTTP proxy request-target or HTTPS CONNECT authority.
 // Origin Host and TLS SNI/certificate verification retain the original host.
 // Environment proxies are trusted user exits; they never resolve the target.
-func (c *Client) publicHop(ctx context.Context, u *url.URL, accept string, limit int64, source string, legacy bool) (PublicResource, int, http.Header, error) {
+func (c *Client) publicHop(ctx context.Context, u *url.URL, accept string, limit int64, source, kind string, legacy bool) (PublicResource, int, http.Header, error) {
 	p := c.publicConfig()
 	release, err := p.Limiter.acquire(ctx, source)
 	if err != nil {
@@ -191,7 +192,11 @@ func (c *Client) publicHop(ctx context.Context, u *url.URL, accept string, limit
 		return PublicResource{}, res.StatusCode, res.Header, nil
 	}
 	// net/http transparently decompresses gzip before this bound is applied.
-	data, err := io.ReadAll(io.LimitReader(res.Body, limit+1))
+	body, limit, contentType, err := publicDocumentBody(res.Body, res.Header.Get("Content-Type"), kind, limit)
+	if err != nil {
+		return PublicResource{}, 0, nil, err
+	}
+	data, err := io.ReadAll(io.LimitReader(body, limit+1))
 	if err != nil {
 		if ctx.Err() != nil {
 			return PublicResource{}, 0, nil, ctx.Err()
@@ -201,7 +206,53 @@ func (c *Client) publicHop(ctx context.Context, u *url.URL, accept string, limit
 	if int64(len(data)) > limit {
 		return PublicResource{}, 0, nil, Error{"公开资料正文超过大小限制"}
 	}
-	return PublicResource{FinalURL: u.String(), ContentType: res.Header.Get("Content-Type"), Bytes: data, Hash: publicHash(data), FetchedAt: p.Clock.Now().UTC().Format(time.RFC3339Nano)}, res.StatusCode, res.Header, nil
+	return PublicResource{FinalURL: u.String(), ContentType: contentType, Bytes: data, Hash: publicHash(data), FetchedAt: p.Clock.Now().UTC().Format(time.RFC3339Nano)}, res.StatusCode, res.Header, nil
+}
+
+// Select a decoded-body cap before consuming the document. Generic/missing
+// types permit only a bounded positive HTML/PDF sniff, never arbitrary text.
+// The prefix is replayed into the same stream; no extra GET or decompression.
+func publicDocumentBody(body io.Reader, declared, kind string, limit int64) (io.Reader, int64, string, error) {
+	if kind != "html" && kind != "pdf" && kind != "document" {
+		return body, limit, declared, nil
+	}
+	media := ""
+	if declared != "" {
+		var err error
+		media, _, err = mime.ParseMediaType(declared)
+		if err != nil {
+			return nil, 0, "", Error{"公开资料响应类型无效"}
+		}
+	}
+	switch media {
+	case "text/html", "application/xhtml+xml":
+		if kind == "pdf" {
+			return nil, 0, "", Error{"链接打开的不是 PDF"}
+		}
+		return body, 4 << 20, media, nil
+	case "application/pdf", "", "application/octet-stream", "text/plain":
+	default:
+		return nil, 0, "", Error{"公开资料响应不是 HTML 或 PDF"}
+	}
+	prefixSize := int64(512)
+	if media == "application/pdf" {
+		prefixSize = 5
+	}
+	prefix, err := io.ReadAll(io.LimitReader(body, prefixSize))
+	if err != nil {
+		return nil, 0, "", publicBodyError{err}
+	}
+	isPDF := bytes.HasPrefix(prefix, []byte("%PDF-"))
+	if isPDF && kind != "html" {
+		return io.MultiReader(bytes.NewReader(prefix), body), 64 << 20, "application/pdf", nil
+	}
+	if media == "application/pdf" || kind == "pdf" {
+		return nil, 0, "", Error{"链接打开的不是 PDF"}
+	}
+	if !strings.HasPrefix(http.DetectContentType(prefix), "text/html") {
+		return nil, 0, "", Error{"公开资料响应不是可识别的 HTML"}
+	}
+	return io.MultiReader(bytes.NewReader(prefix), body), 4 << 20, "text/html", nil
 }
 
 type publicBufferedConn struct {
@@ -292,7 +343,7 @@ func safeGETRetry(err error) bool {
 	var op *net.OpError
 	return errors.As(err, &op) && (op.Op == "dial" || op.Op == "read") && !errors.Is(err, context.Canceled) && !errors.Is(err, context.DeadlineExceeded)
 }
-func (c *Client) fetchPublic(ctx context.Context, raw, accept string, limit int64, source string, legacy bool) (PublicResource, error) {
+func (c *Client) fetchPublic(ctx context.Context, raw, accept string, limit int64, source, kind string, legacy bool) (PublicResource, error) {
 	ctx, cancel := context.WithTimeout(ctx, 90*time.Second)
 	defer cancel()
 	for redirects := 0; redirects <= 5; redirects++ {
@@ -314,7 +365,7 @@ func (c *Client) fetchPublic(ctx context.Context, raw, accept string, limit int6
 		var status int
 		var headers http.Header
 		for attempt := 0; attempt < 3; attempt++ {
-			got, status, headers, err = c.publicHop(ctx, u, accept, limit, slot, legacy)
+			got, status, headers, err = c.publicHop(ctx, u, accept, limit, slot, kind, legacy)
 			if ctx.Err() != nil {
 				return PublicResource{}, ctx.Err()
 			}
@@ -371,23 +422,13 @@ func (c *Client) FetchPublic(ctx context.Context, raw, kind string) (PublicResou
 	default:
 		return PublicResource{}, Error{"未知公开资料类型"}
 	}
-	got, err := c.fetchPublic(ctx, raw, accept, limit, "", false)
+	got, err := c.fetchPublic(ctx, raw, accept, limit, "", kind, false)
 	if err != nil {
 		return got, err
 	}
-	if kind == "pdf" && !bytes.HasPrefix(got.Bytes, []byte("%PDF-")) {
-		return PublicResource{}, Error{"链接打开的不是 PDF"}
-	}
 	if kind == "document" {
-		if bytes.HasPrefix(got.Bytes, []byte("%PDF-")) {
-			got.ContentType = "application/pdf"
+		if got.ContentType == "application/pdf" {
 			return got, nil
-		}
-		if strings.Contains(strings.ToLower(got.ContentType), "pdf") {
-			return PublicResource{}, Error{"链接打开的不是 PDF"}
-		}
-		if len(got.Bytes) > 4<<20 {
-			return PublicResource{}, Error{"公开 HTML 正文超过大小限制"}
 		}
 		kind = "html"
 	}
