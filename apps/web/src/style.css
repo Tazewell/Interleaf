@@ -3643,3 +3643,22 @@ textarea.paper-title-input {
 .paper-abstract h3 {
   font-size: 11px;
 }
+
+/* Book library header: same title scale and padding as the paper library. */
+.library-main:not(.paper-library) .library-topbar {
+  height: 72px;
+  padding: 0 28px;
+  border-bottom: 1px solid var(--border);
+}
+.library-main:not(.paper-library) .library-title {
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: -0.015em;
+}
+.library-main:not(.paper-library) .library-content {
+  max-width: none;
+  padding: 18px 28px 40px;
+}
+.library-main:not(.paper-library) .library-filter-bar {
+  margin-bottom: 18px;
+}
