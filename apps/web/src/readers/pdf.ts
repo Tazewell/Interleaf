@@ -247,9 +247,12 @@ export class PDFReaderAdapter implements ReaderAdapter {
         }
       };
       // Refit once the sidebar settles, not on every animation frame.
-      if (container.closest("[data-toggling]"))
+      if (toggling) {
         this.resizeTimer = setTimeout(fit, 100);
-      else fit();
+        // The panel transition is 220ms; PDF.js can apply its old scale after
+        // the first pass. A second fit after the transition lands is cheap.
+        window.setTimeout(fit, 360);
+      } else fit();
     });
     this.resize.observe(container);
   }
