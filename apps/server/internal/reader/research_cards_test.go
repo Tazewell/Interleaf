@@ -10,9 +10,264 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
+
+func TestResearchCardsAbstractMutationCancelsOwnedModel(t *testing.T) {
+	for _, action := range []string{"delete", "trash"} {
+		t.Run(action, func(t *testing.T) {
+			s, topic, _ := researchFixture(t)
+			target := paperCreate(t, s, "Abstract target")
+			other := paperCreate(t, s, "Unrelated abstract")
+			paperCall(t, s, "PATCH", "/api/papers/"+target, `{"folders":["ML"],"metadata":{"abstract":"Measured result."}}`, 200)
+			paperCall(t, s, "PATCH", "/api/papers/"+other, `{"folders":["Other"],"metadata":{"abstract":"Measured result."}}`, 200)
+			otherTopic := paperCall(t, s, "POST", "/api/research/topics", `{"title":"Other scope","folder":"Other"}`, 201)["id"].(string)
+			started := make(chan string, 3)
+			canceled := make(chan string, 3)
+			release := make(chan struct{})
+			var releaseOnce sync.Once
+			endpoint := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.Method == "GET" {
+					fmt.Fprint(w, `{"data":[{"id":"test"}]}`)
+					return
+				}
+				var input struct {
+					Messages []struct {
+						Content string `json:"content"`
+					} `json:"messages"`
+				}
+				json.NewDecoder(r.Body).Decode(&input)
+				wire := input.Messages[len(input.Messages)-1].Content
+				marker := strings.Index(wire, "RESEARCH_EVIDENCE_JSON\n")
+				var evidence []struct {
+					SourceID string `json:"sourceId"`
+				}
+				json.Unmarshal([]byte(wire[marker+len("RESEARCH_EVIDENCE_JSON\n"):]), &evidence)
+				var paper string
+				s.Store.DB.QueryRow(`SELECT paper_id FROM research_evidence WHERE id=?`, evidence[0].SourceID).Scan(&paper)
+				started <- paper
+				select {
+				case <-r.Context().Done():
+					canceled <- paper
+				case <-release:
+					w.Header().Set("Content-Type", "text/event-stream")
+					fmt.Fprint(w, "data: "+jsonText(map[string]any{"choices": []any{map[string]any{"index": 0, "delta": map[string]any{"content": jsonText(researchCardFacts{Problem: ResearchFact{Text: "Measured result.", EvidenceIDs: []string{evidence[0].SourceID}}})}, "finish_reason": "stop"}}})+"\n\ndata: [DONE]\n\n")
+				}
+			}))
+			defer endpoint.Close()
+			defer releaseOnce.Do(func() { close(release) })
+			_, err := s.saveNativeAIConfig(nativeUpdate(t, `{"version":2,"connection":{"protocol":"openai","url":"`+endpoint.URL+`","key":null},"models":{"chat":"test"}}`))
+			if err != nil {
+				t.Fatal(err)
+			}
+			ctx, cancel := context.WithCancel(t.Context())
+			defer cancel()
+			run := researchRunFixture(t, s, topic)
+			otherRun := researchRunFixture(t, s, otherTopic)
+			done := make(chan error, 1)
+			otherDone := make(chan error, 1)
+			go func() { _, err := s.analyzeResearchPaper(ctx, run.ID, target); done <- err }()
+			go func() { _, err := s.analyzeResearchPaper(ctx, otherRun.ID, other); otherDone <- err }()
+			for i := 0; i < 2; i++ {
+				select {
+				case <-started:
+				case <-time.After(3 * time.Second):
+					t.Fatal("models did not start")
+				}
+			}
+			heldCtx, finishHeld, err := s.beginResearchPaperTask(ctx, target)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer finishHeld()
+			method, path := "DELETE", "/api/papers/"+target
+			if action == "trash" {
+				method, path = "POST", path+"/trash"
+			}
+			mutation := make(chan int, 1)
+			go func() { mutation <- request(t, s, method, path, strings.NewReader(`{}`)).Code }()
+			select {
+			case paper := <-canceled:
+				if paper != target {
+					t.Fatal("unrelated model canceled", paper)
+				}
+			case <-time.After(time.Second):
+				cancel()
+				t.Fatal("abstract HTTP not canceled before mutation returned")
+			}
+			select {
+			case err := <-done:
+				if err == nil {
+					t.Fatal("canceled analysis completed")
+				}
+			case <-time.After(time.Second):
+				t.Fatal("analysis not joined")
+			}
+			select {
+			case <-heldCtx.Done():
+			case <-time.After(time.Second):
+				t.Fatal("paper task not canceled")
+			}
+			select {
+			case status := <-mutation:
+				t.Fatal("mutation returned before source task joined", status)
+			default:
+			}
+			if _, err = s.analyzeResearchPaper(t.Context(), run.ID, target); err == nil {
+				t.Fatal("new analysis admitted while mutation joining")
+			}
+			select {
+			case paper := <-started:
+				t.Fatal("new model call during mutation", paper)
+			default:
+			}
+			finishHeld()
+			select {
+			case status := <-mutation:
+				want := 204
+				if action == "trash" {
+					want = 200
+				}
+				if status != want {
+					t.Fatal(status)
+				}
+			case <-time.After(time.Second):
+				t.Fatal("mutation did not complete")
+			}
+			select {
+			case paper := <-canceled:
+				t.Fatal("unrelated model canceled", paper)
+			default:
+			}
+			releaseOnce.Do(func() { close(release) })
+			select {
+			case err := <-otherDone:
+				if err != nil {
+					t.Fatal("unrelated paper analysis failed", err)
+				}
+			case <-time.After(time.Second):
+				t.Fatal("unrelated model did not settle")
+			}
+			var n int
+			s.Store.DB.QueryRow(`SELECT count(*) FROM research_cards WHERE paper_id=?`, target).Scan(&n)
+			if n != 0 {
+				t.Fatal("deleted abstract saved card")
+			}
+		})
+	}
+}
+
+
+func TestResearchCardsPaperMutationRollbackReleasesGate(t *testing.T) {
+	for _, action := range []string{"delete", "trash"} {
+		t.Run(action, func(t *testing.T) {
+			s, topic, _ := researchFixture(t)
+			paper := paperCreate(t, s, "Abstract")
+			paperCall(t, s, "PATCH", "/api/papers/"+paper, `{"folders":["ML"],"metadata":{"abstract":"Keep this abstract."}}`, 200)
+			run := researchRunFixture(t, s, topic)
+			mode := "ok"
+			calls := 0
+			researchCardModel(t, s, &mode, &calls)
+			card, err := s.analyzeResearchPaper(t.Context(), run.ID, paper)
+			if err != nil {
+				t.Fatal(err)
+			}
+			mutation := "DELETE"
+			if action == "trash" {
+				mutation = "UPDATE"
+			}
+			_, err = s.Store.DB.Exec(`CREATE TRIGGER refuse_paper_mutation BEFORE ` + mutation + ` ON paper_items BEGIN SELECT RAISE(ABORT,'rollback test'); END`)
+			if err != nil {
+				t.Fatal(err)
+			}
+			method, path := "DELETE", "/api/papers/"+paper
+			if action == "trash" {
+				method, path = "POST", path+"/trash"
+			}
+			w := request(t, s, method, path, strings.NewReader(`{}`))
+			if w.Code != 400 {
+				t.Fatal(w.Code, w.Body.String())
+			}
+			p, err := s.Store.PaperItem(paper)
+			if err != nil || p.DeletedAt != "" || p.Metadata.Abstract != "Keep this abstract." {
+				t.Fatal("mutation lost original", p, err)
+			}
+			var n int
+			s.Store.DB.QueryRow(`SELECT count(*) FROM research_cards WHERE cache_key=?`, card.CacheKey).Scan(&n)
+			if n != 1 {
+				t.Fatal("rollback lost cached fact")
+			}
+			task, finish, err := s.beginResearchPaperTask(t.Context(), paper)
+			if err != nil {
+				t.Fatal("failed mutation kept gate closed", err)
+			}
+			if task.Err() != nil {
+				t.Fatal(task.Err())
+			}
+			finish()
+		})
+	}
+}
+
+
+func TestResearchCardsAbstractMutationCancelsCatalog(t *testing.T) {
+	s, topic, _ := researchFixture(t)
+	paper := paperCreate(t, s, "Abstract")
+	paperCall(t, s, "PATCH", "/api/papers/"+paper, `{"folders":["ML"],"metadata":{"abstract":"Actual abstract"}}`, 200)
+	started, canceled := make(chan struct{}), make(chan struct{})
+	endpoint := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "GET" {
+			t.Error("unexpected model request")
+			return
+		}
+		close(started)
+		<-r.Context().Done()
+		close(canceled)
+	}))
+	defer endpoint.Close()
+	_, err := s.saveNativeAIConfig(nativeUpdate(t, `{"version":2,"connection":{"protocol":"openai","url":"`+endpoint.URL+`","key":null},"models":{"chat":"test"}}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	run := researchRunFixture(t, s, topic)
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	done := make(chan error, 1)
+	go func() { _, err := s.analyzeResearchPaper(ctx, run.ID, paper); done <- err }()
+	select {
+	case <-started:
+	case <-time.After(time.Second):
+		t.Fatal("catalog did not start")
+	}
+	mutation := make(chan int, 1)
+	go func() { mutation <- request(t, s, "DELETE", "/api/papers/"+paper, nil).Code }()
+	select {
+	case <-canceled:
+	case <-time.After(time.Second):
+		t.Fatal("paper did not own catalog cancellation")
+	}
+	select {
+	case err := <-done:
+		if err == nil {
+			t.Fatal("catalog analysis not canceled")
+		}
+	case <-time.After(time.Second):
+		t.Fatal("catalog analysis not joined")
+	}
+	select {
+	case code := <-mutation:
+		if code != 204 {
+			t.Fatal(code)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("delete did not return")
+	}
+}
+
+// Only the paid HTTP boundary is a fixture. Parsing, scoped reads, SQLite
+// evidence, the native completion gate, and cross-run cache adoption are real.
 
 // Only the paid HTTP boundary is a fixture. Parsing, scoped reads, SQLite
 // evidence, the native completion gate, and cross-run cache adoption are real.

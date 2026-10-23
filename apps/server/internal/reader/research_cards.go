@@ -110,6 +110,11 @@ func (s *Server) analyzeResearchPaper(parent context.Context, runID, paperID str
 		return ResearchPaperCard{}, err
 	}
 	defer finish()
+	ctx, finishPaper, err := s.beginResearchPaperTask(ctx, paperID)
+	if err != nil {
+		return ResearchPaperCard{}, err
+	}
+	defer finishPaper()
 	toolset, err := s.researchTools(ctx, runID)
 	if err != nil {
 		return ResearchPaperCard{}, err

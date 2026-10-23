@@ -416,6 +416,8 @@ func (s *Server) deletePaper(w http.ResponseWriter, r *http.Request) {
 		paperError(w, paperConflict("请先将文献移到回收站，或解除附件关联"))
 		return
 	}
+	finishPaper := s.stopResearchPaperTasks(p.ID)
+	defer finishPaper()
 	for _, a := range p.Attachments {
 		if status, message := s.purgeDocument(r.Context(), a.DocumentID); message != "" {
 			fail(w, status, message)
@@ -448,6 +450,10 @@ func (s *Server) paperTrash(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	restore := strings.HasSuffix(r.URL.Path, "/restore")
+	if !restore {
+		finishPaper := s.stopResearchPaperTasks(p.ID)
+		defer finishPaper()
+	}
 	for _, a := range p.Attachments {
 		if restore {
 			_, err = s.restore(a.DocumentID)

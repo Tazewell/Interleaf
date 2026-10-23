@@ -31,6 +31,8 @@ import (
 
 type Server struct {
 	aiTasks                map[*documentTask]struct{}
+	paperTasks             map[string]map[*documentTask]struct{}
+	deletingPapers         map[string]bool
 	bilingualMu            sync.Mutex
 	bilingualJobs          map[string]*bilingualJob
 	bilingualRoot          string
