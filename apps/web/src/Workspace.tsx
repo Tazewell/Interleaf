@@ -25,6 +25,7 @@ import {
   ListTree,
   Search,
   BookmarkPlus,
+  MoreHorizontal,
   Sparkles,
   Settings2,
   Underline,
@@ -71,6 +72,12 @@ import {
   TabsContent,
 } from "@reader/ui/components/tabs";
 import { ScrollArea } from "@reader/ui/components/scroll-area";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@reader/ui/components/dropdown-menu";
 import {
   Popover,
   PopoverTrigger,
@@ -1057,12 +1064,6 @@ export function Workspace({
           <div ref={setReadingToolbar} />
           <span className="toolbar-divider" />
           <div ref={setSourceAutoCenterToolbar} />
-          <IconButton
-            label="添加书签"
-            onClick={() => void annotate("bookmark")}
-          >
-            <BookmarkPlus />
-          </IconButton>
           <Popover>
             <PopoverTrigger
               render={
@@ -1279,9 +1280,30 @@ export function Workspace({
           >
             <Sparkles />
           </IconButton>
-          <IconButton label="设置" onClick={onSettings}>
-            <Settings2 />
-          </IconButton>
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              render={
+                <Button
+                  size="icon-sm"
+                  variant="ghost"
+                  aria-label="更多阅读操作"
+                  title="更多阅读操作"
+                />
+              }
+            >
+              <MoreHorizontal />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-44">
+              <DropdownMenuItem onClick={() => void annotate("bookmark")}>
+                <BookmarkPlus />
+                添加书签
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={onSettings}>
+                <Settings2 />
+                设置
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </header>
       <ResizablePanelGroup
