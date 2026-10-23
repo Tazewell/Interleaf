@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net"
 	"net/http"
@@ -557,5 +558,76 @@ func TestResearchRemoteMIMEClassification(t *testing.T) {
 				t.Fatal(err)
 			}
 		})
+	}
+}
+
+func TestResearchRemoteURLSecretBoundary(t *testing.T) {
+	const secret = "remote-url-sentinel"
+	for _, mode := range []string{"success", "dial", "redirect"} {
+		t.Run(mode, func(t *testing.T) {
+			s, run, c, _ := remoteFixture(t, func(w http.ResponseWriter, r *http.Request) {
+				if r.URL.Query().Get("signature") != secret {
+					t.Error("fetch lost operational signature")
+				}
+				if mode == "redirect" {
+					w.Header().Set("Location", "http://127.0.0.1/?signature="+secret)
+					w.WriteHeader(302)
+					return
+				}
+				fmt.Fprint(w, "<p>Article.</p>")
+			})
+			c.LandingURL += "?signature=" + secret + "#" + secret
+			remoteRegister(t, s, run, c)
+			if mode == "dial" {
+				s.scholar.Public.DialContext = func(context.Context, string, string) (net.Conn, error) {
+					return nil, errors.New("dial failure " + secret)
+				}
+			}
+			ev, err := s.readResearchRemote(t.Context(), run.ID, c.ID)
+			if err != nil || len(ev) != 1 {
+				t.Fatal(ev, err)
+			}
+			if strings.Contains(jsonText(ev), secret) {
+				t.Fatal("secret in returned evidence", jsonText(ev))
+			}
+			resolved, err := s.resolveResearchSource(t.Context(), ev[0].ID)
+			if err != nil || strings.Contains(jsonText(resolved), secret) {
+				t.Fatal("secret in source", resolved, err)
+			}
+			var raw string
+			if err = s.Store.DB.QueryRow(`SELECT body FROM research_units WHERE run_id=? AND kind='remote'`, run.ID).Scan(&raw); err != nil || strings.Contains(raw, secret) {
+				t.Fatal("secret in owned cache", raw, err)
+			}
+		})
+	}
+}
+
+func TestResearchRemoteRejectsPriorUnsafeProtocol(t *testing.T) {
+	s, run, c, _ := remoteFixture(t, func(w http.ResponseWriter, r *http.Request) { fmt.Fprint(w, "<p>Article.</p>") })
+	ev, err := s.readResearchRemote(t.Context(), run.ID, c.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Replay an old-protocol cache, as created before MIME/URL boundaries were
+	// validated. It must not become a valid source after upgrading the helper.
+	oldVersion := sourceKey("public-evidence-v1\n" + jsonText(c))
+	var body string
+	s.Store.DB.QueryRow(`SELECT body FROM research_units WHERE run_id=? AND kind='remote'`, run.ID).Scan(&body)
+	var unit ResearchUnit
+	if json.Unmarshal([]byte(body), &unit) != nil {
+		t.Fatal(body)
+	}
+	var cache researchRemoteCache
+	json.Unmarshal(unit.Result, &cache)
+	cache.Version, cache.Protocol = oldVersion, "public-evidence-v1"
+	cache.Evidence[0].Revision = sourceKey(oldVersion + "\n" + cache.ResourceHash)
+	unit.UnitKey = remoteCacheKey(c.ID, oldVersion)
+	unit.Result = json.RawMessage(jsonText(cache))
+	unit.ContentHash = sourceKey(string(unit.Result))
+	s.Store.DB.Exec(`DELETE FROM research_units WHERE run_id=? AND kind='remote'`, run.ID)
+	s.Store.DB.Exec(`INSERT INTO research_units(run_id,unit_key,kind,status,body,created_at,updated_at) VALUES(?,?,?,?,?,?,?)`, run.ID, unit.UnitKey, unit.Kind, unit.Status, jsonText(unit), now(), now())
+	s.Store.DB.Exec(`UPDATE research_evidence SET body=? WHERE id=?`, jsonText(cache.Evidence[0]), ev[0].ID)
+	if _, err = s.resolveResearchSource(t.Context(), ev[0].ID); err == nil {
+		t.Fatal("old unvalidated protocol accepted")
 	}
 }

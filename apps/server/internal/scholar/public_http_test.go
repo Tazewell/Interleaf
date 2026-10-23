@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"compress/gzip"
 	"context"
+	"crypto/tls"
 	"crypto/x509"
 	"errors"
 	"fmt"
@@ -391,5 +392,74 @@ func TestPublicFetchDocumentDecodedCap(t *testing.T) {
 	got, err := c.FetchPublic(t.Context(), "http://paper.example/large-pdf", "document")
 	if err != nil || len(got.Bytes) <= 4<<20 {
 		t.Fatal("PDF incorrectly limited to HTML cap", len(got.Bytes), err)
+	}
+}
+
+func TestPublicFetchURLSecretBoundary(t *testing.T) {
+	const secret = "url-boundary-sentinel"
+	for _, mode := range []string{"success", "dial", "tls", "redirect", "timeout"} {
+		t.Run(mode, func(t *testing.T) {
+			c, _, _ := publicFixture(t, func(w http.ResponseWriter, r *http.Request) {
+				if r.URL.Query().Get("access_token") != secret {
+					t.Error("operational query changed")
+				}
+				if mode == "redirect" {
+					w.Header().Set("Location", "http://127.0.0.1/private?signature="+secret)
+					w.WriteHeader(302)
+					return
+				}
+				if mode == "timeout" {
+					<-r.Context().Done()
+					return
+				}
+				fmt.Fprint(w, "<p>Article.</p>")
+			})
+			raw := "http://paper.example/page?access_token=" + secret + "#" + secret
+			calls := 0
+			cause := errors.New("dial contains " + secret)
+			if mode == "dial" {
+				c.Public.DialContext = func(context.Context, string, string) (net.Conn, error) {
+					calls++
+					return nil, &net.OpError{Op: "dial", Net: "tcp", Err: cause}
+				}
+			}
+			if mode == "tls" {
+				server := httptest.NewTLSServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) { t.Error("untrusted TLS succeeded") }))
+				defer server.Close()
+				c.Public.DialContext = func(ctx context.Context, network, address string) (net.Conn, error) {
+					calls++
+					return (&net.Dialer{}).DialContext(ctx, network, server.Listener.Addr().String())
+				}
+				raw = strings.Replace(raw, "http:", "https:", 1)
+			}
+			ctx := t.Context()
+			if mode == "timeout" {
+				var cancel context.CancelFunc
+				ctx, cancel = context.WithTimeout(ctx, 100*time.Millisecond)
+				defer cancel()
+			}
+			got, err := c.FetchPublic(ctx, raw, "document")
+			if mode == "success" {
+				if err != nil || got.FinalURL != "http://paper.example/page" {
+					t.Fatalf("unsafe display URL: %s %v", got.FinalURL, err)
+				}
+				return
+			}
+			if err == nil || strings.Contains(err.Error(), secret) {
+				t.Fatalf("unsafe public error: %v", err)
+			}
+			if mode == "dial" && (!errors.Is(err, cause) || calls != 3) {
+				t.Fatalf("retry/error identity lost: calls=%d err=%v", calls, err)
+			}
+			if mode == "tls" {
+				var cert *tls.CertificateVerificationError
+				if !errors.As(err, &cert) || calls != 1 {
+					t.Fatalf("TLS classification lost: calls=%d err=%v", calls, err)
+				}
+			}
+			if mode == "timeout" && !errors.Is(err, context.DeadlineExceeded) {
+				t.Fatal("timeout identity lost", err)
+			}
+		})
 	}
 }

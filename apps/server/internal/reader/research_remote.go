@@ -15,7 +15,7 @@ import (
 	"reader.local/server/internal/scholar"
 )
 
-const researchRemoteProtocol = "public-evidence-v1"
+const researchRemoteProtocol = "public-evidence-v2"
 
 type researchRemoteCache struct {
 	RunID, SnapshotID, TopicID, CandidateID, Version, ResourceHash, FinalURL, FetchedAt, Protocol string
@@ -396,7 +396,7 @@ func (s *Server) readResearchRemote(ctx context.Context, runID, candidateID stri
 			}
 			return nil, fmt.Errorf("公开资料没有可读正文或摘要")
 		}
-		cache.FinalURL = c.LandingURL
+		cache.FinalURL = scholar.PublicDisplayURL(c.LandingURL)
 		cache.ResourceHash = sourceKey(abstract)
 		cache.FetchedAt = ""
 		reason := "未获取可读全文，仅有已登记摘要"

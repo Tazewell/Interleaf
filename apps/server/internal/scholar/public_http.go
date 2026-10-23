@@ -32,10 +32,30 @@ type PublicConfig struct {
 	Limiter     *SourceLimiter
 }
 type PublicResource struct {
+	// FinalURL is safe for public display: query and fragment are omitted.
 	FinalURL, ContentType string
 	Bytes                 []byte
 	Hash, FetchedAt       string
 }
+
+// Keep operational URL parameters inside transport/registration only. Public
+// sources never expose query values or fragments, including unknown signature
+// names. The safe display URL is not a replay credential for the download.
+func PublicDisplayURL(raw string) string {
+	u, err := url.Parse(raw)
+	if err != nil || u.User != nil || u.Hostname() == "" || u.Opaque != "" || (u.Scheme != "http" && u.Scheme != "https") {
+		return ""
+	}
+	u.RawQuery, u.Fragment, u.RawFragment, u.ForceQuery = "", "", "", false
+	return u.String()
+}
+
+// Preserve the underlying error for retry/cancel/TLS classification, while
+// never formatting a request URL, proxy address or resolver message outward.
+type publicNetworkError struct{ cause error }
+
+func (e publicNetworkError) Error() string { return "公开资料网络请求失败" }
+func (e publicNetworkError) Unwrap() error { return e.cause }
 
 func (c *Client) publicConfig() PublicConfig {
 	p := PublicConfig{}
@@ -127,7 +147,7 @@ func (c *Client) publicHop(ctx context.Context, u *url.URL, accept string, limit
 	if ips[0] == nil {
 		ips, err = p.LookupIP(ctx, u.Hostname())
 		if err != nil {
-			return PublicResource{}, 0, nil, err
+			return PublicResource{}, 0, nil, publicNetworkError{err}
 		}
 	}
 	if len(ips) == 0 {
@@ -140,11 +160,11 @@ func (c *Client) publicHop(ctx context.Context, u *url.URL, accept string, limit
 	}
 	original, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
 	if err != nil {
-		return PublicResource{}, 0, nil, err
+		return PublicResource{}, 0, nil, publicNetworkError{err}
 	}
 	proxy, err := p.Proxy(original)
 	if err != nil {
-		return PublicResource{}, 0, nil, err
+		return PublicResource{}, 0, nil, publicNetworkError{err}
 	}
 	if proxy != nil && ((proxy.Scheme != "http" && proxy.Scheme != "https") || proxy.Hostname() == "") {
 		return PublicResource{}, 0, nil, Error{"该代理协议无法保证公开资料目标 IP 固定"}
@@ -160,7 +180,7 @@ func (c *Client) publicHop(ctx context.Context, u *url.URL, accept string, limit
 	pinned.Host = net.JoinHostPort(ips[0].String(), port)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, pinned.String(), nil)
 	if err != nil {
-		return PublicResource{}, 0, nil, err
+		return PublicResource{}, 0, nil, publicNetworkError{err}
 	}
 	req.Host = u.Host
 	req.Header.Set("User-Agent", userAgent)
@@ -181,7 +201,7 @@ func (c *Client) publicHop(ctx context.Context, u *url.URL, accept string, limit
 	client := &http.Client{Transport: transport, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
 	res, err := client.Do(req)
 	if err != nil {
-		return PublicResource{}, 0, nil, err
+		return PublicResource{}, 0, nil, publicNetworkError{err}
 	}
 	defer res.Body.Close()
 	p.Limiter.observe(source, res.Header)
@@ -329,7 +349,7 @@ func publicProxyTunnel(ctx context.Context, p PublicConfig, proxy *url.URL, targ
 
 type publicBodyError struct{ err error }
 
-func (e publicBodyError) Error() string { return "公开资料正文不完整: " + e.err.Error() }
+func (e publicBodyError) Error() string { return "公开资料正文不完整" }
 func (e publicBodyError) Unwrap() error { return e.err }
 
 func safeGETRetry(err error) bool {
@@ -426,6 +446,7 @@ func (c *Client) FetchPublic(ctx context.Context, raw, kind string) (PublicResou
 	if err != nil {
 		return got, err
 	}
+	got.FinalURL = PublicDisplayURL(got.FinalURL)
 	if kind == "document" {
 		if got.ContentType == "application/pdf" {
 			return got, nil
