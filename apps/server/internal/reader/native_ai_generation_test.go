@@ -52,7 +52,7 @@ func TestNativeTasksWithoutAgentRuntimes(t *testing.T) {
 	for name, run := range map[string]func(*testing.T){
 		"chat-images":               TestImageChatSendsPixelsAndRecordsAttachmentWithFallback,
 		"multi-session":             TestNativeSessionSessionsConcurrentCancelAndDetachedSubscriber,
-		"translation-batches":       TestTranslationRunsThreeBatchesAndSavesBeforeProviderCompletes,
+		"translation-batches":       TestTranslationRunsThreeBatchesAndWaitsForProviderCompletion,
 		"formula":                   TestFormulaConversionDoesNotBlockCaptionTranslation,
 		"bilingual-preflight-start": TestBilingualPDFStreamingFrozenAPIAndAttachment,
 	} {

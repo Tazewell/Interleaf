@@ -122,7 +122,7 @@ func waitTranslationSignal(t *testing.T, ch <-chan string) string {
 		return ""
 	}
 }
-func TestTranslationRunsThreeBatchesAndSavesBeforeProviderCompletes(t *testing.T) {
+func TestTranslationRunsThreeBatchesAndWaitsForProviderCompletion(t *testing.T) {
 	s, p, m := translationFixture(t)
 	m.Blocks = append(m.Blocks, m.Blocks[1], m.Blocks[1])
 	m.Blocks[2].ID = "p1-b3"
@@ -169,19 +169,18 @@ func TestTranslationRunsThreeBatchesAndSavesBeforeProviderCompletes(t *testing.T
 	if first == second || first == third || second == third || first == "p1-b4" || second == "p1-b4" || third == "p1-b4" {
 		t.Fatalf("bad batch scheduling: %s %s %s", first, second, third)
 	}
-	deadline := time.Now().Add(10 * time.Second)
-	for {
-		items, err := s.translations("doc", m)
-		if err != nil {
-			t.Fatal(err)
+
+	// Give the decoder time to receive the flushed complete JSONL rows while all
+	// three requests remain gated before their successful terminal events.
+	time.Sleep(100 * time.Millisecond)
+	items, err := s.translations("doc", m)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, item := range items {
+		if item.Status == "complete" {
+			t.Errorf("published before provider completion: %+v", item)
 		}
-		if items[0].Status == "complete" && items[1].Status == "complete" && items[2].Status == "complete" {
-			break
-		}
-		if time.Now().After(deadline) {
-			t.Fatal("paragraphs waited for provider completion")
-		}
-		time.Sleep(time.Millisecond)
 	}
 	select {
 	case <-started:
@@ -194,14 +193,23 @@ func TestTranslationRunsThreeBatchesAndSavesBeforeProviderCompletes(t *testing.T
 	case <-time.After(10 * time.Second):
 		t.Fatal("workers ignored cancellation")
 	}
-	items, _ := s.translations("doc", m)
-	if maxActive.Load() != 3 || items[0].Status != "complete" || items[1].Status != "complete" || items[2].Status != "complete" || items[3].Status != "pending" {
-		t.Fatalf("lost partial results or exceeded concurrency: max=%d %+v", maxActive.Load(), items)
+	items, err = s.translations("doc", m)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if maxActive.Load() != 3 {
+		t.Fatalf("concurrency=%d", maxActive.Load())
+	}
+	for _, item := range items {
+		if item.Status != "pending" {
+			t.Errorf("canceled row was published: %+v", item)
+		}
 	}
 	saved, err := s.Store.processing("doc")
-	if err != nil || saved.Phase != "translating" || saved.TranslationsDone != 3 || saved.TranslationsTotal != 4 {
-		t.Fatalf("streamed progress was not persisted: %+v, %v", saved, err)
+	if err != nil || saved.Phase != "translating" || saved.TranslationsDone != 0 || saved.TranslationsTotal != 4 {
+		t.Fatalf("canceled draft became progress: %+v, %v", saved, err)
 	}
+
 }
 func TestTranslationSubscriptionSnapshotAndLiveLine(t *testing.T) {
 	s, _, m := translationFixture(t)
@@ -253,8 +261,14 @@ func TestTranslationSubscriptionSnapshotAndLiveLine(t *testing.T) {
 		t.Fatal("reconnect lost committed paragraph")
 	}
 }
-func TestTranslationTruncatedBatchRetainsRowsAndRetriesOnlyMissing(t *testing.T) {
+func TestTranslationTruncatedBatchRetriesAllUncommittedRows(t *testing.T) {
 	s, p, m := translationFixture(t)
+	sentinel := m.Blocks[1]
+	sentinel.ID = "p1-b3"
+	m.Blocks = append(m.Blocks, sentinel)
+	if err := os.WriteFile(filepath.Join(s.analysisDir("doc"), "manifest.json"), []byte(jsonText(m)), 0600); err != nil {
+		t.Fatal(err)
+	}
 	var calls atomic.Int32
 	provider := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == "GET" {
@@ -264,39 +278,77 @@ func TestTranslationTruncatedBatchRetainsRowsAndRetriesOnlyMissing(t *testing.T)
 		}
 		batch := readTranslationInput(t, r).Batch
 		w.Header().Set("Content-Type", "text/event-stream")
-		if calls.Add(1) == 1 {
+		n := calls.Add(1)
+		if n == 1 {
+			if len(batch.Paragraphs) != 1 || batch.Paragraphs[0].BlockID != sentinel.ID {
+				t.Errorf("wrong completed batch: %+v", batch.Paragraphs)
+			}
+			sendTranslationDelta(w, translationParagraphLine(batch.Paragraphs[0]))
+			finishTranslationStream(w)
+			return
+		}
+		if n == 2 {
 			sendTranslationDelta(w, translationParagraphLine(batch.Paragraphs[0]))
 			tail := translationParagraphLine(batch.Paragraphs[1])
 			sendTranslationDelta(w, tail[:len(tail)/2])
 			return // Upstream disconnects without a successful terminal event.
 		}
-		if len(batch.Paragraphs) != 1 || batch.Paragraphs[0].BlockID != m.Blocks[1].ID {
-			t.Errorf("regenerated completed row: %+v", batch.Paragraphs)
+		if len(batch.Paragraphs) != 2 {
+			t.Errorf("retry omitted uncommitted row: %+v", batch.Paragraphs)
 		}
-		sendTranslationDelta(w, translationParagraphLine(batch.Paragraphs[0]))
+		for _, row := range batch.Paragraphs {
+			sendTranslationDelta(w, translationParagraphLine(row))
+		}
 		finishTranslationStream(w)
 	}))
 	defer provider.Close()
 	configureTranslationTest(t, s, provider.URL)
+	doc, err := s.Store.Document("doc")
+	if err != nil {
+		t.Fatal(err)
+	}
+	source := translationParagraph{sentinel.ID, translationHash(translationSource(sentinel)), translationSource(sentinel)}
+	if err := s.translateBatch(t.Context(), doc, m, translationBatch{Paragraphs: []translationParagraph{source}}, s.currentGenerationService(taskTranslation), func() {}); err != nil {
+		t.Fatal(err)
+	}
+	before, err := s.translations("doc", m)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if before[2].Status != "complete" {
+		t.Fatal("first batch not committed")
+	}
+
 	if err := s.settleTranslations(context.Background(), &p, m); err == nil {
 		t.Fatal("truncated batch reported complete")
 	}
-	items, _ := s.translations("doc", m)
-	if items[0].Status != "complete" || items[1].Status != "failed" {
-		t.Fatalf("partial progress lost: %+v", items)
+	items, err := s.translations("doc", m)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if items[0].Status != "failed" || items[1].Status != "failed" {
+		t.Fatalf("truncated rows published: %+v", items)
 	}
 	p.Status = "failed"
-	_ = s.Store.saveProcessing(p)
-	if res := request(t, s, "POST", "/api/documents/doc/translations", strings.NewReader(`{"blockId":"p1-b2"}`)); res.Code != 202 {
+	if err := s.Store.saveProcessing(p); err != nil {
+		t.Fatal(err)
+	}
+	if res := request(t, s, "POST", "/api/documents/doc/translations", strings.NewReader(`{}`)); res.Code != 202 {
 		t.Fatal(res.Body.String())
 	}
 	configureTranslationTest(t, s, provider.URL)
 	if err := s.settleTranslations(context.Background(), &p, m); err != nil {
 		t.Fatal(err)
 	}
-	items, _ = s.translations("doc", m)
-	if calls.Load() != 2 || items[0].Status != "complete" || items[1].Status != "complete" {
+	items, err = s.translations("doc", m)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if calls.Load() != 3 || items[0].Status != "complete" || items[1].Status != "complete" {
 		t.Fatal("resume failed")
+	}
+	if jsonText(items[2]) != jsonText(before[2]) {
+		t.Fatal("previous completed batch changed")
 	}
 }
 func TestTranslationDeadlineDoesNotChangeChatDeadline(t *testing.T) {
@@ -439,5 +491,63 @@ func TestTranslationFailureNamesTheCauseAndKeepsTheOutput(t *testing.T) {
 	}
 	if entries, _ = os.ReadDir(dir); len(entries) != translationFailureLogs {
 		t.Fatalf("kept %d diagnostics", len(entries))
+	}
+}
+
+func TestTranslationAttemptPublishesOnlyAfterSuccessfulResult(t *testing.T) {
+	for _, outcome := range []string{"complete", "truncated", "canceled"} {
+		t.Run(outcome, func(t *testing.T) {
+			s, _, m := translationFixture(t)
+			doc, err := s.Store.Document("doc")
+			if err != nil {
+				t.Fatal(err)
+			}
+			ctx, cancel := context.WithCancel(t.Context())
+			defer cancel()
+			paragraphs := m.translationParagraphs()
+			batch := translationBatch{Paragraphs: paragraphs}
+			service := &GenerationService{primary: "api", connections: map[string]generationConnection{}}
+			service.connections["api"] = generationConnection{VerifiedText: true, Adapter: adapterFunc(func(ctx context.Context, _ GenerateRequest, emit func(ProviderEvent) error) (GenerateResult, error) {
+				var text string
+				for _, row := range paragraphs {
+					text += translationParagraphLine(row)
+				}
+				if err := emit(ProviderEvent{Text: text}); err != nil {
+					return GenerateResult{}, err
+				}
+				// Synchronous callback returned: every valid row reached the decoder.
+				// Query the real persisted store before this request is allowed to finish.
+				var n int
+				if err := s.Store.DB.QueryRow("SELECT count(*) FROM translations WHERE document_id='doc' AND status='complete'").Scan(&n); err != nil {
+					t.Fatal(err)
+				}
+				if n != 0 {
+					t.Errorf("rows published before successful result: %d", n)
+				}
+				if outcome == "truncated" {
+					return GenerateResult{}, generationError(ErrorProtocol, "incomplete terminal")
+				}
+				if outcome == "canceled" {
+					cancel()
+					return GenerateResult{}, ctx.Err()
+				}
+				return GenerateResult{Text: text, FinishReason: "stop"}, nil
+			})}
+			a, err := s.translationAttempt(ctx, doc, m, batch, service, func() {})
+			if err != nil {
+				t.Fatal(err)
+			}
+			var n int
+			if err := s.Store.DB.QueryRow("SELECT count(*) FROM translations WHERE document_id='doc' AND status='complete'").Scan(&n); err != nil {
+				t.Fatal(err)
+			}
+			if outcome == "complete" {
+				if a.err != nil || n != len(paragraphs) {
+					t.Fatalf("normal completion not committed: %d %v", n, a.err)
+				}
+			} else if a.err == nil || n != 0 {
+				t.Fatalf("unconfirmed rows committed: %d %v", n, a.err)
+			}
+		})
 	}
 }

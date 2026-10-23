@@ -244,23 +244,12 @@ const translationFailureLogs = 10
 
 func (s *Server) translationAttempt(ctx context.Context, doc Document, m translationInput, batch translationBatch, service *GenerationService, progress func()) (*translationAttempt, error) {
 	a := &translationAttempt{paragraphs: len(batch.Paragraphs)}
-	previous, err := s.translationPrevious(doc.ID)
-	if err != nil {
-		return nil, err
-	}
-	var replacements []TranslationBlock
+	var staged []TranslationBlock
 	a.decoder = newTranslationJSONL(batch, func(t TranslationBlock) error {
 		if err := ctx.Err(); err != nil {
 			return err
 		}
-		if previous[t.BlockID+":"+t.SourceHash] {
-			replacements = append(replacements, t)
-			return nil
-		}
-		if err := s.saveTranslation(doc.ID, t); err != nil {
-			return err
-		}
-		progress()
+		staged = append(staged, t)
 		return nil
 	})
 	a.decoder.strictSource = doc.Type == "epub"
@@ -284,13 +273,14 @@ func (s *Server) translationAttempt(ctx context.Context, doc Document, m transla
 	if a.err == nil && strings.TrimSpace(a.decoder.buffer) != "" {
 		a.err = a.decoder.line(a.decoder.buffer)
 	}
-	// Keep the previous translation until the provider confirms completion.
-	// Failed/cancelled streams must not replace it even with complete JSONL rows.
-	for _, item := range replacements {
-		delete(a.decoder.completed, item.BlockID)
+	// Parsed rows are drafts until this request confirms successful completion.
+	// Both first translations and replacements obey the same publication gate.
+	clear(a.decoder.completed)
+	if a.err == nil {
+		a.err = ctx.Err()
 	}
-	if a.err == nil && ctx.Err() == nil {
-		for _, item := range replacements {
+	if a.err == nil {
+		for _, item := range staged {
 			if err := ctx.Err(); err != nil {
 				a.err = err
 				break
