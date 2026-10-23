@@ -481,3 +481,46 @@ func TestResearchRemoteModelReportRejectsForgedPayload(t *testing.T) {
 		t.Fatal("model report accepted mismatched remote payload")
 	}
 }
+
+func TestResearchRemoteArxivIdentityBoundaries(t *testing.T) {
+	for _, tc := range []struct {
+		candidate, local string
+		match            bool
+	}{
+		{"solv-int/9701002", "solv-int/9701001", false},
+		{"solv-int/9701001", "solv-int/9701001v1", true},
+		{"1706.03762v10", "1706.03762v1", true},
+		{"1706.03762vbad", "1706.03762v1", false},
+		{"solv-int/9701001vbad", "solv-int/9701001vbad", false},
+	} {
+		t.Run(tc.candidate+"_"+tc.local, func(t *testing.T) {
+			s, run, c, hits := remoteFixture(t, func(w http.ResponseWriter, r *http.Request) { fmt.Fprint(w, "<p>Remote paper.</p>") })
+			scope, err := readResearchRunScope(t.Context(), s.Store.DB, run.ID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			member := scope.Snapshot.Members[0]
+			if _, err = s.Store.DB.Exec(`UPDATE paper_items SET metadata=json_set(metadata,'$.arxiv',?) WHERE id=?`, tc.local, member.PaperID); err != nil {
+				t.Fatal(err)
+			}
+			c.DOI, c.ArXiv = "", tc.candidate
+			remoteRegister(t, s, run, c)
+			ev, err := s.readResearchRemote(t.Context(), run.ID, c.ID)
+			if err != nil || len(ev) == 0 {
+				t.Fatal(ev, err)
+			}
+			if (ev[0].Kind == "local-passage") != tc.match || (hits.Load() == 0) != tc.match {
+				t.Fatalf("wrong scholarly identity: match=%v hits=%d evidence=%+v", tc.match, hits.Load(), ev[0])
+			}
+			if _, err = s.resolveResearchSource(t.Context(), ev[0].ID); err != nil {
+				t.Fatal(err)
+			}
+			if tc.match {
+				s.Store.DB.Exec(`UPDATE paper_items SET metadata=json_set(metadata,'$.arxiv','solv-int/9701999') WHERE id=?`, member.PaperID)
+				if _, err = s.resolveResearchSource(t.Context(), ev[0].ID); err == nil {
+					t.Fatal("source accepted changed arxiv identity")
+				}
+			}
+		})
+	}
+}

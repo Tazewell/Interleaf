@@ -28,6 +28,14 @@ var (
 
 func bareArXiv(id string) string { return arxivVersion.ReplaceAllString(id, "") }
 
+// SameArXiv compares complete, validated identifiers, ignoring only a terminal
+// numeric version. A category such as solv-int must never be cut at its v.
+func SameArXiv(a, b string) bool {
+	left := arxivID.FindStringSubmatch(strings.TrimSpace(a))
+	right := arxivID.FindStringSubmatch(strings.TrimSpace(b))
+	return left != nil && right != nil && bareArXiv(strings.ToLower(left[1])) == bareArXiv(strings.ToLower(right[1]))
+}
+
 func (c *Client) arxivMetadata(ctx context.Context, id string) (Metadata, error) {
 	data, _, _, err := c.get(ctx, c.ArXivAPI+"?id_list="+url.QueryEscape(id), "application/atom+xml", 2<<20)
 	if err != nil {

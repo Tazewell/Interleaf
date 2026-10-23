@@ -212,7 +212,7 @@ func (s *Server) researchRemoteLocal(ctx context.Context, scope researchScope, c
 			if json.Unmarshal([]byte(raw), &m) != nil {
 				continue
 			}
-			if c.DOI != "" && strings.EqualFold(strings.TrimSpace(c.DOI), strings.TrimSpace(m.DOI)) || c.ArXiv != "" && remoteBareArxiv(c.ArXiv) == remoteBareArxiv(m.ArXiv) {
+			if c.DOI != "" && strings.EqualFold(strings.TrimSpace(c.DOI), strings.TrimSpace(m.DOI)) || scholar.SameArXiv(c.ArXiv, m.ArXiv) {
 				if paperID != "" && paperID != pid {
 					rows.Close()
 					return nil, true, errResearchScopeChanged
@@ -250,12 +250,6 @@ func (s *Server) researchRemoteLocal(ctx context.Context, scope researchScope, c
 	}
 	evidence, err := s.readCandidateLocalOriginal(ctx, scope, c, paper)
 	return evidence, true, err
-}
-func remoteBareArxiv(v string) string {
-	if i := strings.LastIndex(v, "v"); i > 0 {
-		return v[:i]
-	}
-	return v
 }
 
 func remoteCacheKey(candidate, version string) string { return "remote:" + candidate + ":" + version }

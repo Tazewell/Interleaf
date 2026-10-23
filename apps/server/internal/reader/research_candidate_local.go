@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"errors"
 	"strings"
+
+	"reader.local/server/internal/scholar"
 )
 
 // A registered online candidate can point to an original already in another
@@ -24,7 +26,7 @@ func candidatePaperIdentity(c ResearchCandidate, p PaperItem) bool {
 	if c.PaperID != "" && c.PaperID != p.ID {
 		return false
 	}
-	return c.DOI != "" && strings.EqualFold(strings.TrimSpace(c.DOI), strings.TrimSpace(p.Metadata.DOI)) || c.ArXiv != "" && remoteBareArxiv(c.ArXiv) == remoteBareArxiv(p.Metadata.ArXiv)
+	return c.DOI != "" && strings.EqualFold(strings.TrimSpace(c.DOI), strings.TrimSpace(p.Metadata.DOI)) || scholar.SameArXiv(c.ArXiv, p.Metadata.ArXiv)
 }
 func readCandidateLocalCache(ctx context.Context, q researchRowQuery, scope researchScope, c ResearchCandidate, version string) (researchCandidateLocalCache, error) {
 	var cache researchCandidateLocalCache
