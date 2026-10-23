@@ -67,7 +67,7 @@ func (s *Server) validateChatEvidence(w http.ResponseWriter, r *http.Request) {
 		fail(w, 404, "文档已不可用")
 		return
 	}
-	fingerprint, e := s.corpusFingerprint(d)
+	fingerprint, e := s.corpusFingerprintContext(r.Context(), d)
 	if e != nil {
 		fail(w, 409, "原文已更新")
 		return

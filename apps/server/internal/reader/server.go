@@ -50,6 +50,8 @@ type Server struct {
 	annotationMu           sync.Mutex
 	annotationHistory      []annotationChange
 	corpusMu               sync.Mutex
+	parserPublicationMu    sync.RWMutex
+	parserGenerations      map[string]uint64
 	overviewMu             sync.Mutex
 	overviewActive         map[string]context.CancelFunc
 	Store                  *Store

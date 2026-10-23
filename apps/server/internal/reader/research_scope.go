@@ -92,22 +92,9 @@ func researchFileHash(ctx context.Context, path string) (string, error) {
 	if !info.Mode().IsRegular() {
 		return "", errors.New("原文不是普通文件")
 	}
-	h := sha256.New()
-	buf := make([]byte, 128<<10)
-	for {
-		if err = ctx.Err(); err != nil {
-			return "", err
-		}
-		n, e := f.Read(buf)
-		if n > 0 {
-			h.Write(buf[:n])
-		}
-		if e == io.EOF {
-			break
-		}
-		if e != nil {
-			return "", e
-		}
+	hash, err := researchHashReader(ctx, f)
+	if err != nil {
+		return "", err
 	}
 	after, err := f.Stat()
 	if err != nil {
@@ -115,6 +102,30 @@ func researchFileHash(ctx context.Context, path string) (string, error) {
 	}
 	if info.Size() != after.Size() || !info.ModTime().Equal(after.ModTime()) {
 		return "", errResearchScopeChanged
+	}
+	return hash, nil
+}
+
+func researchHashReader(ctx context.Context, reader io.Reader) (string, error) {
+	h := sha256.New()
+	buf := make([]byte, 128<<10)
+	for {
+		if err := ctx.Err(); err != nil {
+			return "", err
+		}
+		n, err := reader.Read(buf)
+		if n > 0 {
+			h.Write(buf[:n])
+		}
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return "", err
+		}
+	}
+	if err := ctx.Err(); err != nil {
+		return "", err
 	}
 	return hex.EncodeToString(h.Sum(nil)), nil
 }
@@ -184,6 +195,7 @@ type researchPreparedDocument struct {
 	Hash, Revision, Reason, Fingerprint string
 	Context                             context.Context
 	SourceInfo                          os.FileInfo
+	ParserGeneration                    uint64
 }
 
 func (s *Server) snapshotResearchScope(ctx context.Context, topicID string) (ResearchSnapshot, error) {
@@ -215,7 +227,7 @@ func (s *Server) snapshotResearchScope(ctx context.Context, topicID string) (Res
 				return snap, e
 			}
 			finishes = append(finishes, finish)
-			p := researchPreparedDocument{Document: d, Context: taskCtx}
+			p := researchPreparedDocument{Document: d, Context: taskCtx, ParserGeneration: s.parserGeneration(d.ID)}
 			p.Hash, e = researchFileHash(taskCtx, s.Store.File(d))
 			if e == nil {
 				e = s.researchParserSource(taskCtx, d, p.Hash)
@@ -269,12 +281,25 @@ func (s *Server) snapshotResearchScope(ctx context.Context, topicID string) (Res
 		}
 		prepared[id] = p
 	}
-	tx, err = s.Store.DB.BeginTx(ctx, nil)
+	return s.commitResearchScope(ctx, snap, topic, items, prepared)
+}
+
+// Commit the prepared scope without repeating expensive original reads inside
+// SQLite's sole connection. All prepared identities are checked here.
+func (s *Server) commitResearchScope(ctx context.Context, snap ResearchSnapshot, topic ResearchTopic, items []researchScopePaper, prepared map[string]researchPreparedDocument) (ResearchSnapshot, error) {
+	s.parserPublicationMu.RLock()
+	defer s.parserPublicationMu.RUnlock()
+	for _, p := range prepared {
+		if s.parserGenerations[p.Document.ID] != p.ParserGeneration {
+			return snap, errResearchScopeChanged
+		}
+	}
+	tx, err := s.Store.DB.BeginTx(ctx, nil)
 	if err != nil {
 		return snap, err
 	}
 	defer tx.Rollback()
-	current, currentItems, err := readResearchScope(tx, topicID)
+	current, currentItems, err := readResearchScope(tx, topic.ID)
 	if err != nil {
 		return snap, err
 	}
@@ -284,6 +309,13 @@ func (s *Server) snapshotResearchScope(ctx context.Context, topicID string) (Res
 	// A cheap final file-identity/version check closes app-managed replacement
 	// races without holding the sole SQLite connection while hashing large files.
 	for _, p := range prepared {
+		if p.Revision != "" {
+			var revision, fingerprint string
+			e := tx.QueryRowContext(ctx, `SELECT revision,fingerprint FROM document_corpora WHERE document_id=?`, p.Document.ID).Scan(&revision, &fingerprint)
+			if e != nil || revision != p.Revision || fingerprint != p.Fingerprint {
+				return snap, errResearchScopeChanged
+			}
+		}
 		info, e := os.Stat(s.Store.File(p.Document))
 		if p.SourceInfo == nil {
 			if !os.IsNotExist(e) {

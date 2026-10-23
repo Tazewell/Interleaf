@@ -90,7 +90,10 @@ func (s *Server) overviewState(ctx context.Context, documentID string) (document
 	if o.Revision != "" {
 		var revision, fingerprint, corpusBody string
 		e := s.Store.DB.QueryRowContext(ctx, "SELECT revision,fingerprint,body FROM document_corpora WHERE document_id=?", documentID).Scan(&revision, &fingerprint, &corpusBody)
-		current, fe := s.corpusFingerprint(d)
+		current, fe := s.corpusFingerprintContext(ctx, d)
+		if ctx.Err() != nil {
+			return o, ctx.Err()
+		}
 		if e != nil || fe != nil || o.Revision != revision || fingerprint != current || o.Version != overviewVersion {
 			o.Status = "stale"
 			o.Stale = true

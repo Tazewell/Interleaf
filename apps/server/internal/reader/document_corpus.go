@@ -43,9 +43,6 @@ type documentCorpus struct {
 	Passages    []documentPassage `json:"passages"`
 }
 
-func (s *Server) corpusFingerprint(d Document) (string, error) {
-	return s.corpusFingerprintContext(context.Background(), d)
-}
 func (s *Server) corpusFingerprintContext(ctx context.Context, d Document) (string, error) {
 	paths := []string{s.Store.File(d)}
 	// File metadata alone cannot distinguish a same-size source replacement.

@@ -525,12 +525,16 @@ func (s *Server) learnPDF(ctx context.Context, p *Processing) error {
 			return e
 		}
 		// A successful worker writes its manifest last. Publish the directory once.
+		finishPublication := s.beginParserPublication(d.ID)
 		if _, e = os.Stat(s.analysisDir(d.ID)); e == nil {
+			finishPublication()
 			return errors.New("已有解析目录异常，已保留，未覆盖")
 		}
 		if e = os.Rename(work, s.analysisDir(d.ID)); e != nil {
+			finishPublication()
 			return errors.New("无法保存解析附件")
 		}
+		finishPublication()
 		m, e = s.readLayout(d.ID)
 	}
 	if e != nil && d.Library == "books" {

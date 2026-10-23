@@ -1,6 +1,7 @@
 package reader
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"io"
@@ -165,6 +166,11 @@ func checkLibraryDatabase(source, destination string) error {
 // Only rebind indexes that matched the source before relocation. Already stale
 // indexes remain stale; content revisions, passages and citations never change.
 func relocateCorpusFingerprints(db *sql.DB, source, destination string) error {
+	return relocateCorpusFingerprintsUsing(context.Background(), db, source, destination, func(ctx context.Context, s *Server, d Document) (string, error) {
+		return s.corpusFingerprintContext(ctx, d)
+	})
+}
+func relocateCorpusFingerprintsUsing(ctx context.Context, db *sql.DB, source, destination string, fingerprint func(context.Context, *Server, Document) (string, error)) error {
 	rows, err := db.Query(`SELECT c.document_id,d.type,c.fingerprint FROM document_corpora c JOIN documents d ON d.id=c.document_id`)
 	if err != nil {
 		return err
@@ -189,21 +195,32 @@ func relocateCorpusFingerprints(db *sql.DB, source, destination string) error {
 	}
 	original := &Server{Store: &Store{Root: source}}
 	moved := &Server{Store: &Store{Root: destination}}
-	tx, err := db.Begin()
+	type relocation struct{ documentID, before, after string }
+	changes := []relocation{}
+	for _, c := range corpora {
+		before, err := fingerprint(ctx, original, c.document)
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		if err != nil || before != c.fingerprint {
+			continue
+		}
+		after, err := fingerprint(ctx, moved, c.document)
+		if err != nil {
+			return err
+		}
+		changes = append(changes, relocation{c.document.ID, c.fingerprint, after})
+	}
+	// Source and destination are protected by CopyLibrary's library locks and
+	// the desktop server has exited. Only SQL conditional rechecks need the Tx;
+	// full original-file scans above never occupy its connection.
+	tx, err := db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}
 	defer tx.Rollback()
-	for _, c := range corpora {
-		before, err := original.corpusFingerprint(c.document)
-		if err != nil || before != c.fingerprint {
-			continue
-		}
-		after, err := moved.corpusFingerprint(c.document)
-		if err != nil {
-			return err
-		}
-		if _, err = tx.Exec("UPDATE document_corpora SET fingerprint=? WHERE document_id=?", after, c.document.ID); err != nil {
+	for _, change := range changes {
+		if _, err = tx.ExecContext(ctx, "UPDATE document_corpora SET fingerprint=? WHERE document_id=? AND fingerprint=?", change.after, change.documentID, change.before); err != nil {
 			return err
 		}
 	}

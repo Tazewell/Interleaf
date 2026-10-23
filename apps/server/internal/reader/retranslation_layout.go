@@ -56,7 +56,7 @@ func (s *Server) refreshRetranslationLayout(ctx context.Context, p *Processing) 
 		if err != nil || d.Type != "pdf" || d.Library == "books" {
 			return errors.New("全文版面重解析仅适用于 PDF 论文")
 		}
-		fingerprint, err := s.corpusFingerprint(d)
+		fingerprint, err := s.corpusFingerprintContext(ctx, d)
 		if err != nil {
 			return err
 		}
@@ -78,13 +78,19 @@ func (s *Server) refreshRetranslationLayout(ctx context.Context, p *Processing) 
 		if err != nil || len(m.ParsedPages) != 0 {
 			return errors.New("全文版面解析结果无效")
 		}
-		if current, e := s.corpusFingerprint(d); e != nil || current != fingerprint {
+		if current, e := s.corpusFingerprintContext(ctx, d); e != nil || current != fingerprint {
+			if ctx.Err() != nil {
+				return ctx.Err()
+			}
 			return errors.New("原文或版面已更新，请重新开始翻译")
 		}
 		if err = ctx.Err(); err != nil {
 			return err
 		}
-		if err = publishRetranslatedLayout(work, dir, options.LayoutRun, m); err != nil {
+		finishPublication := s.beginParserPublication(p.DocumentID)
+		err = publishRetranslatedLayout(work, dir, options.LayoutRun, m)
+		finishPublication()
+		if err != nil {
 			return err
 		}
 		m, err = s.readLayout(p.DocumentID)

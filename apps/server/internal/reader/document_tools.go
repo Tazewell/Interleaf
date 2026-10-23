@@ -131,7 +131,10 @@ func (a *documentAgent) check(ctx context.Context) error {
 	if e != nil || d.DeletedAt != "" {
 		return generationError(ErrorCanceled, "文档已不可用")
 	}
-	fingerprint, e := a.server.corpusFingerprint(d)
+	fingerprint, e := a.server.corpusFingerprintContext(ctx, d)
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
 	if e != nil || fingerprint != a.corpus.Fingerprint {
 		return generationError(ErrorProtocol, "原文版本已改变，请重新提问")
 	}

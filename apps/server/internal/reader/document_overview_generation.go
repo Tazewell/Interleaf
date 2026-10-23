@@ -221,7 +221,7 @@ func (s *Server) compileOverview(ctx context.Context, job overviewJob, g *Genera
 		}
 		content = notes[0]
 	}
-	current, err := s.corpusFingerprint(d)
+	current, err := s.corpusFingerprintContext(ctx, d)
 	if err != nil {
 		return err
 	}

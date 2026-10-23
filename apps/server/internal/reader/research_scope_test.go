@@ -175,7 +175,7 @@ func TestResearchScopeSourceReplacementSameSizeAndTime(t *testing.T) {
 	s, topic, _ := researchFixture(t)
 	a := researchSnapshot(t, s, topic)
 	d, _ := s.Store.Document("doc")
-	before, err := s.corpusFingerprint(d)
+	before, err := s.corpusFingerprintContext(t.Context(), d)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -190,7 +190,7 @@ func TestResearchScopeSourceReplacementSameSizeAndTime(t *testing.T) {
 	if err = os.Chtimes(path, info.ModTime(), info.ModTime()); err != nil {
 		t.Fatal(err)
 	}
-	after, err := s.corpusFingerprint(d)
+	after, err := s.corpusFingerprintContext(t.Context(), d)
 	if err != nil || after == before {
 		t.Fatal("cache identity did not detect source byte replacement", err)
 	}

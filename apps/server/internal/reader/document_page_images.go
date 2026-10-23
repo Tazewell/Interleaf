@@ -96,7 +96,10 @@ func (s *Server) renderDocumentPages(ctx context.Context, c *documentCorpus, pag
 			}
 			return nil, generationError(ErrorProtocol, "PDF 页面渲染失败")
 		}
-		if fingerprint, err := s.corpusFingerprint(d); err != nil || fingerprint != c.Fingerprint {
+		if fingerprint, err := s.corpusFingerprintContext(ctx, d); err != nil || fingerprint != c.Fingerprint {
+			if ctx.Err() != nil {
+				return nil, ctx.Err()
+			}
 			return nil, generationError(ErrorProtocol, "原文已更新，请重新读取页面")
 		}
 		for _, number := range missing {
