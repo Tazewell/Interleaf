@@ -439,7 +439,17 @@ func writeResearchReport(ctx context.Context, tx *sql.Tx, r ResearchReport, requ
 	if scope.Run.TopicID != r.TopicID || scope.Run.SessionID != r.SessionID || scope.Run.Revision != r.SourceRevision || r.RunID != "" && r.RunID != r.SourceRunID {
 		return errResearchScopeChanged
 	}
+	if r.Origin == "user" {
+		if err = validateResearchHistoricalRevision(ctx, tx, scope, r, requestID); err != nil {
+			return err
+		}
+	}
 	for _, source := range r.SourceIDs {
+		if r.Origin == "user" {
+			// Historical edits retain only the parent's trusted identities, even
+			// when the source payload has been removed. Never read it as evidence.
+			continue
+		}
 		ev, e := readResearchEvidence(ctx, tx, source)
 		if e != nil || ev.RunID != r.SourceRunID || ev.TopicID != r.TopicID || ev.SnapshotID != scope.Snapshot.ID {
 			return errResearchScopeChanged
@@ -447,6 +457,37 @@ func writeResearchReport(ctx context.Context, tx *sql.Tx, r ResearchReport, requ
 	}
 	_, err = tx.ExecContext(ctx, `INSERT INTO research_reports(id,topic_id,session_id,run_id,user_request_id,revision,body,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?)`, r.ID, r.TopicID, r.SessionID, nullResearchString(r.RunID), nullResearchString(requestID), r.Revision, jsonText(r), r.CreatedAt, r.CreatedAt)
 	return err
+}
+
+func validateResearchHistoricalRevision(ctx context.Context, tx *sql.Tx, scope researchScope, r ResearchReport, requestID string) error {
+	parent, err := readResearchReport(ctx, tx, r.DerivedFromID)
+	if err != nil {
+		return err
+	}
+	if !researchRequestID.MatchString(requestID) || r.RunID != "" || parent.SourceRunID != r.SourceRunID || parent.TopicID != r.TopicID || parent.SessionID != r.SessionID || parent.SourceRevision != r.SourceRevision || parent.Kind != r.Kind || parent.Stale != r.Stale || !reflect.DeepEqual(parent.SourceIDs, r.SourceIDs) || !reflect.DeepEqual(parent.Coverage, r.Coverage) {
+		return errResearchScopeChanged
+	}
+	for _, source := range r.SourceIDs {
+		// Select identity metadata only; generic evidence reads and source GET
+		// deliberately remain valid-only. Both indexed and JSON owners must agree.
+		var count int
+		err = tx.QueryRowContext(ctx, `SELECT count(*) FROM research_evidence
+			WHERE id=? AND run_id=? AND topic_id=? AND snapshot_id=?
+			AND availability IN ('valid','stale','removed')
+			AND json_extract(body,'$.id')=id AND json_extract(body,'$.runId')=run_id
+			AND json_extract(body,'$.topicId')=topic_id AND json_extract(body,'$.snapshotId')=snapshot_id
+			AND json_extract(body,'$.availability')=availability
+			AND COALESCE(json_extract(body,'$.paperId'),'')=COALESCE(paper_id,'')
+			AND COALESCE(json_extract(body,'$.documentId'),'')=COALESCE(document_id,'')
+			AND COALESCE(json_extract(body,'$.candidateId'),'')=COALESCE(candidate_id,'')`, source, r.SourceRunID, r.TopicID, scope.Snapshot.ID).Scan(&count)
+		if err != nil {
+			return err
+		}
+		if count != 1 {
+			return errResearchScopeChanged
+		}
+	}
+	return nil
 }
 func readResearchReport(ctx context.Context, q researchRowQuery, reportID string) (ResearchReport, error) {
 	var r ResearchReport
