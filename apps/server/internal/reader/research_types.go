@@ -70,6 +70,8 @@ type ResearchRunInput struct {
 	IdeaCount     int            `json:"ideaCount,omitempty"`
 }
 type ResearchReadCoverage struct {
+	// Native PDF pages / EPUB spine resources; abstract=1, metadata=0. A unit
+	// completes only when all extractable text was provided. Images are separate.
 	TotalUnits int               `json:"totalUnits"`
 	ReadUnits  int               `json:"readUnits"`
 	Ranges     []json.RawMessage `json:"ranges"`

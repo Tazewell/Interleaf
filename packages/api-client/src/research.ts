@@ -4,6 +4,7 @@ import type {
   ResearchTopicPatch,
   ResearchSession,
   ResearchSessionInput,
+  ResearchEvidence,
 } from "@reader/core";
 import { request } from "./transport";
 
@@ -11,6 +12,11 @@ const topicPath = (id: string) =>
   `/api/research/topics/${encodeURIComponent(id)}`;
 
 export const researchAPI = {
+  getSource: (sourceId: string, signal?: AbortSignal) =>
+    request<ResearchEvidence>(
+      `/api/research/sources/${encodeURIComponent(sourceId)}`,
+      { signal },
+    ),
   createTopic: (input: ResearchTopicInput, signal?: AbortSignal) =>
     request<ResearchTopic>("/api/research/topics", {
       method: "POST",

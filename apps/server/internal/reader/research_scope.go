@@ -332,6 +332,7 @@ func (s *Server) commitResearchScope(ctx context.Context, snap ResearchSnapshot,
 		if strings.TrimSpace(p.Metadata.Abstract) != "" {
 			m.Coverage = "abstract"
 		}
+		m.SourceHash = researchMetadataHash(p)
 		candidates := []researchPreparedDocument{}
 		var primary *researchPreparedDocument
 		originals := 0
@@ -368,6 +369,7 @@ func (s *Server) commitResearchScope(ctx context.Context, snap ResearchSnapshot,
 			m.Coverage = "fulltext"
 			versions = nil
 		} else if len(p.Attachments) > 0 {
+			m.SourceHash = ""
 			m.Coverage = "unavailable"
 			m.Reason = "没有可读取且来源可验证的原文附件"
 			if len(candidates) > 1 {

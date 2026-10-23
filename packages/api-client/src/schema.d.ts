@@ -4,6 +4,62 @@
  */
 
 export interface paths {
+    "/api/research/sources/{source}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Validate original bytes, parser revision, native location and research ownership before returning source content. Historical valid sources remain readable after a run stops. */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    source: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Validated source */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ResearchEvidence"];
+                    };
+                };
+                /** @description Source is stale, removed, forged or unavailable; no content or guessed navigation is returned */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                /** @description Error */
+                default: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/documents/{id}/bilingual-pdf": {
         parameters: {
             query?: never;
@@ -6883,6 +6939,7 @@ export interface components {
             /** @default 3 */
             ideaCount: number;
         };
+        /** @description Native PDF pages / EPUB spine resources; abstract=1, metadata=0. A unit completes only after all extractable text was provided. Exact partial ranges remain recorded; viewed images are separate and textless units remain unread. */
         ResearchReadCoverage: {
             totalUnits: number;
             readUnits: number;

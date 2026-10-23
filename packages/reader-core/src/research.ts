@@ -79,6 +79,9 @@ export interface ResearchRunInput {
 }
 
 export interface ResearchReadCoverage {
+  /** Native PDF pages / EPUB spine resources; abstract=1, metadata=0.
+   * A unit completes only after all extractable text was provided.
+   * Exact partial ranges remain here; viewed images are separate. */
   totalUnits: number;
   readUnits: number;
   ranges: unknown[];

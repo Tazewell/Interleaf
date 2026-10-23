@@ -3,6 +3,14 @@ package reader
 import "net/http"
 
 func (s *Server) registerResearchRoutes(mux *http.ServeMux) {
+	mux.HandleFunc("GET /api/research/sources/{source}", func(w http.ResponseWriter, r *http.Request) {
+		ev, err := s.resolveResearchSource(r.Context(), r.PathValue("source"))
+		if err != nil {
+			fail(w, 409, "来源已失效或不可用")
+			return
+		}
+		respond(w, 200, ev)
+	})
 	mux.HandleFunc("POST /api/research/topics", func(w http.ResponseWriter, r *http.Request) {
 		var in ResearchTopicInput
 		if !decode(w, r, &in) {

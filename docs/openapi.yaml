@@ -4,6 +4,63 @@
   "security": [{ "session": [] }],
   "paths":
     {
+      "/api/research/sources/{source}":
+        {
+          "get":
+            {
+              "description": "Validate original bytes, parser revision, native location and research ownership before returning source content. Historical valid sources remain readable after a run stops.",
+              "parameters":
+                [
+                  {
+                    "name": "source",
+                    "in": "path",
+                    "required": true,
+                    "schema": { "type": "string" },
+                  },
+                ],
+              "responses":
+                {
+                  "200":
+                    {
+                      "description": "Validated source",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                {
+                                  "$ref": "#/components/schemas/ResearchEvidence",
+                                },
+                            },
+                        },
+                    },
+                  "409":
+                    {
+                      "description": "Source is stale, removed, forged or unavailable; no content or guessed navigation is returned",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                { "$ref": "#/components/schemas/Error" },
+                            },
+                        },
+                    },
+                  "default":
+                    {
+                      "description": "Error",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                { "$ref": "#/components/schemas/Error" },
+                            },
+                        },
+                    },
+                },
+            },
+        },
       "/api/documents/{id}/bilingual-pdf":
         {
           "post":
@@ -8659,6 +8716,7 @@
           "ResearchReadCoverage":
             {
               "type": "object",
+              "description": "Native PDF pages / EPUB spine resources; abstract=1, metadata=0. A unit completes only after all extractable text was provided. Exact partial ranges remain recorded; viewed images are separate and textless units remain unread.",
               "properties":
                 {
                   "totalUnits": { "type": "integer", "minimum": 0 },
