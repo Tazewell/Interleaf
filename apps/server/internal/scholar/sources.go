@@ -109,7 +109,6 @@ var crossrefTypes = map[string]string{
 	"book": "book", "monograph": "book", "edited-book": "book", "book-chapter": "chapter", "book-section": "chapter",
 	"dissertation": "thesis", "report": "report",
 }
-var jatsTag = regexp.MustCompile(`<[^>]+>`)
 
 func datePart(parts [][]int) string {
 	if len(parts) == 0 || len(parts[0]) == 0 || parts[0][0] < 1000 {
@@ -178,9 +177,9 @@ func (c *Client) crossref(ctx context.Context, doi string) (Metadata, error) {
 		}
 	}
 	if r.Abstract != "" {
-		text := strings.NewReplacer("</jats:p>", "\n", "</jats:title>", "\n").Replace(r.Abstract)
+		text := PublicText(r.Abstract)
 		paragraphs := []string{}
-		for _, p := range strings.Split(html.UnescapeString(jatsTag.ReplaceAllString(text, " ")), "\n") {
+		for _, p := range strings.Split(text, "\n") {
 			if p = clean(p); p != "" && !strings.EqualFold(p, "abstract") {
 				paragraphs = append(paragraphs, p)
 			}
