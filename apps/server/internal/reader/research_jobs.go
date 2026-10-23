@@ -18,6 +18,10 @@ var errResearchBudget = errors.New("本次研究预算已耗尽，可显式继�
 // Only safe immutable identities are persisted. The private native snapshot,
 // including the API key, belongs exclusively to the in-memory attempt.
 type researchRunRecord struct {
+	AttemptSearchRequests int `json:"attemptSearchRequests"`
+	SearchRequests        int `json:"searchRequests"`
+	AttemptRemoteReads    int `json:"attemptRemoteReads"`
+	RemoteReads           int `json:"remoteReads"`
 	ResearchRun
 	Input           ResearchRunInput `json:"input"`
 	ConfigHash      string           `json:"configHash"`
@@ -403,6 +407,8 @@ func (s *Server) controlResearchRun(ctx context.Context, runID, action string, i
 	r.ModelIdentity = identity
 	r.Attempt++
 	r.AttemptRequests = 0
+	r.AttemptSearchRequests = 0
+	r.AttemptRemoteReads = 0
 	r.AttemptBudget = budget
 	r.AttemptStarted = now()
 	r.Status = "queued"

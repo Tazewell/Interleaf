@@ -221,13 +221,26 @@ func writeResearchEvidence(ctx context.Context, tx *sql.Tx, ev ResearchEvidence)
 	if scope.Run.TopicID != ev.TopicID || scope.Snapshot.ID != ev.SnapshotID {
 		return errResearchScopeChanged
 	}
+	if ev.CandidateID != "" && ev.Kind != "local-passage" && ev.Kind != "remote-abstract" && ev.Kind != "remote-html" && ev.Kind != "remote-page" {
+		return errResearchScopeChanged
+	}
+	if strings.HasPrefix(ev.Kind, "remote-") {
+		if err := validateResearchRemoteEvidence(ctx, tx, scope, ev); err != nil {
+			return err
+		}
+	}
 	if ev.PaperID == "" && (ev.DocumentID != "" || strings.HasPrefix(ev.Kind, "local-")) {
 		return errResearchScopeChanged
 	}
-	if ev.PaperID != "" {
+	if ev.PaperID != "" && ev.CandidateID == "" {
 		m, err := scope.member(ev.PaperID)
 		if err != nil || m.DocumentID != ev.DocumentID {
 			return errResearchScopeChanged
+		}
+	}
+	if ev.CandidateID != "" && ev.Kind == "local-passage" {
+		if err := validateCandidateLocalEvidence(ctx, tx, scope, ev); err != nil {
+			return err
 		}
 	}
 	if ev.CandidateID != "" {
@@ -357,6 +370,27 @@ func (s *Server) resolveResearchSource(ctx context.Context, sourceID string) (Re
 	scope, err := readResearchRunScope(ctx, s.Store.DB, ev.RunID)
 	if err != nil {
 		return ResearchEvidence{}, err
+	}
+	if ev.CandidateID != "" && ev.Kind == "local-passage" {
+		return s.resolveCandidateLocalSource(ctx, scope, ev)
+	}
+	if strings.HasPrefix(ev.Kind, "remote-") {
+		tx, e := s.Store.DB.BeginTx(ctx, nil)
+		if e != nil {
+			return ResearchEvidence{}, e
+		}
+		defer tx.Rollback()
+		current, e := readResearchEvidence(ctx, tx, sourceID)
+		if e != nil || jsonText(current) != jsonText(ev) {
+			return ResearchEvidence{}, errResearchScopeChanged
+		}
+		if e = validateResearchRemoteEvidence(ctx, tx, scope, ev); e != nil {
+			return ResearchEvidence{}, e
+		}
+		if e = tx.Commit(); e != nil {
+			return ResearchEvidence{}, e
+		}
+		return ev, nil
 	}
 	m, err := scope.member(ev.PaperID)
 	if err != nil {

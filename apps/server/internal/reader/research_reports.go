@@ -393,6 +393,12 @@ func (s *Server) composeResearchReport(ctx context.Context, runID string) (Resea
 		}
 		for _, source := range sources {
 			ev, e := readResearchEvidence(ctx, tx, source)
+			if e == nil && ev.CandidateID != "" && ev.Kind == "local-passage" {
+				e = validateCandidateLocalEvidence(ctx, tx, scope, ev)
+			}
+			if e == nil && strings.HasPrefix(ev.Kind, "remote-") {
+				e = validateResearchRemoteEvidence(ctx, tx, scope, ev)
+			}
 			if e != nil || ev.RunID != runID || ev.TopicID != r.TopicID || ev.SnapshotID != r.SnapshotID || ev.Availability != "valid" {
 				return errResearchScopeChanged
 			}
@@ -451,6 +457,12 @@ func writeResearchReport(ctx context.Context, tx *sql.Tx, r ResearchReport, requ
 			continue
 		}
 		ev, e := readResearchEvidence(ctx, tx, source)
+		if e == nil && ev.CandidateID != "" && ev.Kind == "local-passage" {
+			e = validateCandidateLocalEvidence(ctx, tx, scope, ev)
+		}
+		if e == nil && strings.HasPrefix(ev.Kind, "remote-") {
+			e = validateResearchRemoteEvidence(ctx, tx, scope, ev)
+		}
 		if e != nil || ev.RunID != r.SourceRunID || ev.TopicID != r.TopicID || ev.SnapshotID != scope.Snapshot.ID {
 			return errResearchScopeChanged
 		}

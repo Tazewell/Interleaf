@@ -5,10 +5,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"log/slog"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -392,31 +390,13 @@ func (s *Server) pdfCorpus(ctx context.Context, d Document, c *documentCorpus) e
 			return err
 		}
 		defer os.RemoveAll(work)
-		out := filepath.Join(work, "text.json")
-		cmd := exec.CommandContext(ctx, node, worker, "--input", s.Store.File(d), "--output", out)
+		pages := ""
 		if layoutErr == nil {
-			cmd.Args = append(cmd.Args, "--pages", strings.Join(missingPages, ","))
+			pages = strings.Join(missingPages, ",")
 		}
-		cmd.Dir = work
-		cmd.Env = append(os.Environ(), "ELECTRON_RUN_AS_NODE=1")
-		cmd.Stderr = io.Discard
-		cmd.WaitDelay = 3_000_000_000
-		if err = cmd.Run(); err != nil {
-			if ctx.Err() != nil {
-				return ctx.Err()
-			}
-			return generationError(ErrorConfiguration, "全文文字提取失败，请检查 PDF 或本地解析程序")
-		}
-		info, err := os.Stat(out)
-		if err != nil || info.Size() > 32<<20 {
-			return generationError(ErrorLimit, "PDF 原文索引不可用或过大")
-		}
-		data, err := os.ReadFile(out)
+		extracted, err = runPDFTextWorker(ctx, work, s.Store.File(d), pages)
 		if err != nil {
 			return err
-		}
-		if json.Unmarshal(data, &extracted) != nil || len(extracted.Pages) < 1 || extracted.TotalPages < 1 || extracted.TotalPages > 1000 {
-			return fmt.Errorf("PDF corpus invalid")
 		}
 	}
 	if len(extracted.Pages) == 0 && layoutErr != nil {
