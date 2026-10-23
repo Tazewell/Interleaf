@@ -233,6 +233,9 @@ func (s *Store) changeLabels(library, column, from, to string) (int, error) {
 		if err = s.renameBibliographyExportFolders(tx, from, to); err != nil {
 			return 0, err
 		}
+		if err = s.renameResearchFolders(tx, from, to); err != nil {
+			return 0, err
+		}
 	}
 	return len(changes), tx.Commit()
 }

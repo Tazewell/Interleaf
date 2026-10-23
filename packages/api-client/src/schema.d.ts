@@ -5679,6 +5679,242 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/research/topics": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Success */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ResearchTopic"][];
+                    };
+                };
+                /** @description Error */
+                default: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["ResearchTopicInput"];
+                };
+            };
+            responses: {
+                /** @description Success */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ResearchTopic"];
+                    };
+                };
+                /** @description Error */
+                default: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/research/topics/{topic}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    topic: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Success */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ResearchTopic"];
+                    };
+                };
+                /** @description Error */
+                default: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    topic: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["ResearchTopicPatch"];
+                };
+            };
+            responses: {
+                /** @description Success */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ResearchTopic"];
+                    };
+                };
+                /** @description Error */
+                default: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+            };
+        };
+        trace?: never;
+    };
+    "/api/research/topics/{topic}/sessions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    topic: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Success */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ResearchSession"][];
+                    };
+                };
+                /** @description Error */
+                default: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    topic: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["ResearchSessionInput"];
+                };
+            };
+            responses: {
+                /** @description Success */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ResearchSession"];
+                    };
+                };
+                /** @description Error */
+                default: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -6566,6 +6802,271 @@ export interface components {
         NativeAICheck: components["schemas"]["AICapability"] & {
             model: string;
             fingerprint: string;
+        };
+        ResearchTopic: {
+            id: string;
+            title: string;
+            folder: string;
+            includeChildren: boolean;
+            networkAllowed: boolean;
+            /** @enum {string} */
+            scopeState: "active" | "detached";
+            createdAt: string;
+            updatedAt: string;
+        };
+        /** @description 每个稳定 PaperItem 仅选一个可读原文。fulltext 表示资料级别，实际已读范围以 readCoverage 为准；无法验证解析来源时 unavailable。 */
+        ResearchMember: {
+            paperId: string;
+            documentId?: string;
+            citationKey: string;
+            title: string;
+            sourceHash?: string;
+            corpusRevision?: string;
+            /** @enum {string} */
+            coverage: "fulltext" | "abstract" | "metadata" | "unavailable";
+            reason?: string;
+        };
+        /** @description revision 摘要有序成员、内容、解析协议和元数据，不包含绝对路径、文件时间或分类名称。 */
+        ResearchSnapshot: {
+            id: string;
+            topicId: string;
+            revision: string;
+            members: components["schemas"]["ResearchMember"][];
+            createdAt: string;
+        };
+        ResearchSession: {
+            id: string;
+            topicId: string;
+            title: string;
+            networkAllowed: boolean;
+            createdAt: string;
+            updatedAt: string;
+        };
+        ResearchEvidence: {
+            id: string;
+            topicId: string;
+            snapshotId: string;
+            runId: string;
+            paperId?: string;
+            documentId?: string;
+            candidateId?: string;
+            /** @enum {string} */
+            kind: "local-passage" | "local-page" | "remote-abstract" | "remote-html" | "remote-page";
+            revision: string;
+            contentHash: string;
+            location: unknown;
+            excerpt: string;
+            readAt: string;
+            /** @enum {string} */
+            availability: "valid" | "stale" | "removed";
+        };
+        ResearchBudget: {
+            /** @default 200 */
+            maxModelRequests: number;
+            /** @default 24 */
+            maxSearchRequests: number;
+            /** @default 8 */
+            maxRemoteReads: number;
+            /** @default 30 */
+            maxMinutes: number;
+        };
+        ResearchRunInput: {
+            userMessageId: string;
+            question: string;
+            /** @enum {string} */
+            mode: "question" | "overview" | "compare" | "ideas" | "novelty";
+            ideaId?: string;
+            /** @enum {string} */
+            network: "inherit" | "allow-task" | "deny";
+            budget: components["schemas"]["ResearchBudget"];
+            urls?: string[];
+            /** @default 3 */
+            ideaCount: number;
+        };
+        ResearchReadCoverage: {
+            totalUnits: number;
+            readUnits: number;
+            ranges: unknown[];
+        };
+        ResearchCoverage: {
+            totalPapers: number;
+            analyzedPapers: number;
+            abstractOnlyPapers: number;
+            unavailablePapers: number;
+            pendingPapers: number;
+            readUnits: number;
+            totalUnits: number;
+            readCoverage: {
+                [key: string]: components["schemas"]["ResearchReadCoverage"];
+            };
+        };
+        ResearchRun: {
+            id: string;
+            topicId: string;
+            sessionId: string;
+            userMessageId: string;
+            /** @enum {string} */
+            status: "preparing" | "queued" | "running" | "paused" | "interrupted" | "completed" | "failed" | "canceled";
+            /** @enum {string} */
+            phase: "snapshot" | "reading" | "searching" | "synthesizing" | "checking";
+            snapshotId: string;
+            revision: string;
+            done: number;
+            total: number;
+            coverage: components["schemas"]["ResearchCoverage"];
+            error?: string;
+            limitReason?: string;
+            latestReportId?: string;
+            updatedAt: string;
+        };
+        ResearchControl: {
+            requestId: string;
+            budget?: components["schemas"]["ResearchBudget"];
+        };
+        ResearchReport: {
+            id: string;
+            topicId: string;
+            sessionId: string;
+            runId?: string;
+            sourceRunId?: string;
+            kind: string;
+            revision: string;
+            sourceRevision: string;
+            /** @enum {string} */
+            origin: "model" | "user";
+            derivedFromId?: string;
+            content: string;
+            sourceIds: string[];
+            coverage: components["schemas"]["ResearchCoverage"];
+            stale: boolean;
+            createdAt: string;
+        };
+        ResearchFact: {
+            text: string;
+            evidenceIds: string[];
+        };
+        ResearchPaperCard: {
+            cacheKey: string;
+            paperId: string;
+            documentId?: string;
+            revision: string;
+            /** @enum {string} */
+            level: "fulltext" | "abstract" | "metadata";
+            problem: components["schemas"]["ResearchFact"];
+            method: components["schemas"]["ResearchFact"];
+            assumptions: components["schemas"]["ResearchFact"];
+            dataAndEvaluation: components["schemas"]["ResearchFact"];
+            findings: components["schemas"]["ResearchFact"];
+            limitations: components["schemas"]["ResearchFact"];
+            evidenceIds: string[];
+            readCoverage: components["schemas"]["ResearchReadCoverage"];
+        };
+        ResearchSearch: {
+            id: string;
+            runId: string;
+            query: string;
+            source: string;
+            filters: unknown;
+            /** @enum {string} */
+            status: "ok" | "failed" | "limited";
+            candidateIds: string[];
+            fetchedAt: string;
+            error?: string;
+        };
+        ResearchCandidate: {
+            id: string;
+            topicId: string;
+            identityKey: string;
+            title: string;
+            authors: string;
+            doi: string;
+            arxiv: string;
+            publishedAt: string;
+            updatedAt: string;
+            abstract: string;
+            landingUrl: string;
+            pdfUrl: string;
+            aliases: string[];
+            paperId?: string;
+            documentId?: string;
+        };
+        ResearchClaim: {
+            id: string;
+            /** @enum {string} */
+            kind: "problem" | "method" | "experiment";
+            text: string;
+        };
+        ResearchIdea: {
+            id: string;
+            problem: string;
+            mechanism: string;
+            hypotheses: string[];
+            changes: string[];
+            nearestWorkIds: string[];
+            minimumExperiment: string;
+            baselines: string[];
+            ablations: string[];
+            falsification: string;
+            resources: string;
+            claims: components["schemas"]["ResearchClaim"][];
+        };
+        NoveltyRow: {
+            claimId: string;
+            /** @enum {string} */
+            status: "high_overlap" | "partial_overlap" | "not_found" | "insufficient";
+            relatedWorkIds: string[];
+            evidenceIds: string[];
+            overlap: string;
+            difference: string;
+            unverified: string;
+        };
+        NoveltyReport: {
+            ideaId: string;
+            rows: components["schemas"]["NoveltyRow"][];
+            queryIds: string[];
+            asOf: string;
+            coverage: components["schemas"]["ResearchCoverage"];
+            caveats: string[];
+        };
+        ResearchUnit: {
+            runId: string;
+            unitKey: string;
+            kind: string;
+            status: string;
+            contentHash: string;
+            result: unknown;
+            createdAt: string;
+            updatedAt: string;
+        };
+        ResearchConversation: {
+            sessionId: string;
+            connectionKey: string;
+            revision: string;
+            messages: unknown[];
+        };
+        ResearchMessage: {
+            id: string;
+            sessionId: string;
+            runId?: string;
+            /** @enum {string} */
+            role: "user" | "assistant";
+            content: string;
+            createdAt: string;
+        };
+        ResearchTopicInput: {
+            title: string;
+            folder: string;
+            includeChildren?: boolean;
+            networkAllowed?: boolean;
+        };
+        ResearchTopicPatch: {
+            title?: string;
+            folder?: string;
+            includeChildren?: boolean;
+            networkAllowed?: boolean;
+        };
+        ResearchSessionInput: {
+            title: string;
         };
     };
     responses: never;

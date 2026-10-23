@@ -118,6 +118,9 @@ func (s *Server) purgeDocument(ctx context.Context, id string) (int, string) {
 		return 500, "无法删除文档"
 	}
 	defer tx.Rollback()
+	if err = s.Store.invalidateResearchDocumentTx(ctx, tx, id, "removed"); err != nil {
+		return 500, "研究来源清理失败，文档已保留"
+	}
 	// FTS virtual tables have no foreign-key cascade.
 	if _, err = tx.Exec("DELETE FROM search_index WHERE document_id=?", id); err == nil {
 		_, err = tx.Exec("DELETE FROM document_passages_fts WHERE document_id=?", id)

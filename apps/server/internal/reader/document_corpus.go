@@ -44,7 +44,17 @@ type documentCorpus struct {
 }
 
 func (s *Server) corpusFingerprint(d Document) (string, error) {
+	return s.corpusFingerprintContext(context.Background(), d)
+}
+func (s *Server) corpusFingerprintContext(ctx context.Context, d Document) (string, error) {
 	paths := []string{s.Store.File(d)}
+	// File metadata alone cannot distinguish a same-size source replacement.
+	// Missing historical originals retain the existing reader compatibility;
+	// research independently requires the original and parser provenance.
+	sourceHash, err := researchFileHash(ctx, paths[0])
+	if err != nil && !os.IsNotExist(err) {
+		return "", err
+	}
 	if d.Type == "epub" {
 		root := filepath.Join(s.Store.Root, "cache", d.ID)
 		manifestPath := filepath.Join(root, "manifest.json")
@@ -79,9 +89,15 @@ func (s *Server) corpusFingerprint(d Document) (string, error) {
 			return "", e
 		}
 	}
-	return sourceKey(corpusVersion + "\n" + strings.Join(parts, "\n")), nil
+	return sourceKey(corpusVersion + "\n" + sourceHash + "\n" + strings.Join(parts, "\n")), nil
 }
 func (s *Server) documentCorpus(ctx context.Context, documentID string, preparing func() error) (*documentCorpus, error) {
+	return s.prepareDocumentCorpus(ctx, documentID, preparing, true)
+}
+
+// Scope preflight may build the local corpus, but cannot enqueue paid work.
+// Ordinary import/reading callers retain their automatic overview refresh.
+func (s *Server) prepareDocumentCorpus(ctx context.Context, documentID string, preparing func() error, refreshOverview bool) (*documentCorpus, error) {
 	if ctx.Err() != nil {
 		return nil, ctx.Err()
 	}
@@ -89,7 +105,7 @@ func (s *Server) documentCorpus(ctx context.Context, documentID string, preparin
 	if err != nil || d.DeletedAt != "" {
 		return nil, generationError(ErrorCanceled, "文档已不可用")
 	}
-	fingerprint, err := s.corpusFingerprint(d)
+	fingerprint, err := s.corpusFingerprintContext(ctx, d)
 	if err != nil {
 		return nil, err
 	}
@@ -123,7 +139,7 @@ func (s *Server) documentCorpus(ctx context.Context, documentID string, preparin
 	if ctx.Err() != nil {
 		return nil, ctx.Err()
 	}
-	if current, e := s.corpusFingerprint(d); e != nil || current != fingerprint {
+	if current, e := s.corpusFingerprintContext(ctx, d); e != nil || current != fingerprint {
 		return nil, generationError(ErrorProtocol, "原文已更新，请重试")
 	}
 	raw, _ := json.Marshal(c)
@@ -158,7 +174,7 @@ func (s *Server) documentCorpus(ctx context.Context, documentID string, preparin
 	var prefs struct {
 		Enabled bool `json:"autoGenerateOverview"`
 	}
-	if json.Unmarshal([]byte(settings), &prefs) == nil && prefs.Enabled {
+	if refreshOverview && json.Unmarshal([]byte(settings), &prefs) == nil && prefs.Enabled {
 		if _, err = tx.ExecContext(ctx, `INSERT INTO document_overview_jobs(document_id,job_id,status,error)
  SELECT ?,?,'queued','' WHERE EXISTS(SELECT 1 FROM document_overviews WHERE document_id=?)
  ON CONFLICT(document_id) DO UPDATE SET job_id=excluded.job_id,status='queued',error='' WHERE document_overview_jobs.status NOT IN ('running','queued')`, d.ID, id(), d.ID); err != nil {

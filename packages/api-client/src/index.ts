@@ -47,6 +47,7 @@ import type {
 } from "@reader/core";
 import { request, sessionToken, RequestError } from "./transport";
 import { nativeAI } from "./native-ai";
+export { researchAPI } from "./research";
 export { configureAPI, RequestError } from "./transport";
 export * from "./native-ai";
 export function publicationURL(documentId: string, resource: string) {

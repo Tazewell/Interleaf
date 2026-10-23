@@ -146,6 +146,10 @@ func OpenStore(root string) (*Store, error) {
 		db.Close()
 		return nil, err
 	}
+	if err = store.migrateResearch(); err != nil {
+		db.Close()
+		return nil, err
+	}
 	if err = store.compactMarks(); err != nil {
 		db.Close()
 		return nil, err

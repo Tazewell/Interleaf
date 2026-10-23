@@ -110,6 +110,7 @@ func decode(w http.ResponseWriter, r *http.Request, v any) bool {
 func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
 	s.registerPaperRoutes(mux)
+	s.registerResearchRoutes(mux)
 	s.registerBilingualPDFRoutes(mux)
 	s.registerPaperBibliographyRoutes(mux)
 	s.registerBibliographyExportRoutes(mux)
@@ -738,6 +739,9 @@ func (s *Server) updateDocument(w http.ResponseWriter, r *http.Request) {
 	}
 	defer tx.Rollback()
 	_, err = tx.Exec("UPDATE documents SET title=COALESCE(?,title),author=COALESCE(?,author),favorite=COALESCE(?,favorite),progress=COALESCE(?,progress),percentage=COALESCE(?,percentage),last_opened_at=COALESCE(?,last_opened_at),category=COALESCE(?,category),tags=COALESCE(?,tags),folders=COALESCE(?,folders),library=COALESCE(?,library),metadata=COALESCE(?,metadata),reading_status=COALESCE(?,reading_status),category_source=CASE WHEN ? IS NOT NULL THEN 'manual' ELSE category_source END,classification_status=CASE WHEN ? IS NOT NULL THEN 'done' ELSE classification_status END,classification_error=CASE WHEN ? IS NOT NULL THEN '' ELSE classification_error END WHERE id=?", title, author, v.Favorite, progress, v.Percentage, openedAt, category, tags, folders, library, metadata, status, category, category, category, d.ID)
+	if err == nil && (title != nil || author != nil || metadata != nil || library != nil || folders != nil) {
+		err = s.Store.invalidateResearchDocumentTx(r.Context(), tx, d.ID, "文献信息或所属书库已变更")
+	}
 	// The library trigger restores the authority's projection. Reapply only the
 	// fields explicitly edited in this same request, within the same transaction.
 	if err == nil && v.Library != nil && *v.Library == "papers" {

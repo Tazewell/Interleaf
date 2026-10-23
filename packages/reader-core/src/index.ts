@@ -831,3 +831,4 @@ export interface DocumentChatSession {
 }
 
 export * from "./native-ai";
+export type * from "./research";

@@ -1,6 +1,7 @@
 package reader
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"errors"
@@ -235,6 +236,11 @@ func (s *Store) UpdatePaperItem(id string, v PaperPatch) (PaperItem, error) {
 	if err = applyPaperPatch(tx, &p, v); err != nil {
 		return p, err
 	}
+	if v.Title != nil || v.Author != nil || v.Metadata != nil || v.PrimaryDocumentID != nil || v.CitationKey != nil || v.Folders != nil {
+		if err = s.invalidateResearchPaperTx(context.Background(), tx, p, "文献信息或研究成员已变更"); err != nil {
+			return p, err
+		}
+	}
 	if err = savePaper(tx, p); err != nil {
 		return p, err
 	}
@@ -345,6 +351,10 @@ func (s *Server) paperAttachment(w http.ResponseWriter, r *http.Request) {
 		paperError(w, paperConflict("附件已属于其他文献，请先解除关联或合并"))
 		return
 	}
+	if err = s.Store.invalidateResearchPaperTx(r.Context(), tx, p, "文献附件已变更"); err != nil {
+		paperError(w, err)
+		return
+	}
 	if r.Method == "DELETE" {
 		if owner != p.ID {
 			paperError(w, sql.ErrNoRows)
@@ -412,7 +422,18 @@ func (s *Server) deletePaper(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	if _, err = s.Store.DB.Exec(`DELETE FROM paper_items WHERE id=?`, p.ID); err != nil {
+	tx, err := s.Store.DB.BeginTx(r.Context(), nil)
+	if err == nil {
+		defer tx.Rollback()
+		err = s.Store.invalidateResearchPaperTx(r.Context(), tx, p, "文献已永久删除")
+		if err == nil {
+			_, err = tx.Exec(`DELETE FROM paper_items WHERE id=?`, p.ID)
+		}
+		if err == nil {
+			err = tx.Commit()
+		}
+	}
+	if err != nil {
 		paperError(w, err)
 		return
 	}
@@ -446,7 +467,19 @@ func (s *Server) paperTrash(w http.ResponseWriter, r *http.Request) {
 	if !restore {
 		deleted = now()
 	}
-	_, err = s.Store.DB.Exec(`UPDATE paper_items SET deleted_at=? WHERE id=?`, deleted, p.ID)
+	tx, err := s.Store.DB.BeginTx(r.Context(), nil)
+	if err == nil {
+		defer tx.Rollback()
+		if !restore {
+			err = s.Store.invalidateResearchPaperTx(r.Context(), tx, p, "文献已移到回收站")
+		}
+		if err == nil {
+			_, err = tx.Exec(`UPDATE paper_items SET deleted_at=? WHERE id=?`, deleted, p.ID)
+		}
+		if err == nil {
+			err = tx.Commit()
+		}
+	}
 	if err != nil {
 		paperError(w, err)
 		return
@@ -544,6 +577,9 @@ func (s *Store) MergePaperItems(id string, v PaperMerge) (PaperItem, error) {
 		}
 	}
 	for _, source := range sources {
+		if err = s.invalidateResearchPaperTx(context.Background(), tx, source, "文献已合并"); err != nil {
+			return p, err
+		}
 		if err = mergePaperBibliography(tx, p.ID, source.ID); err != nil {
 			return p, err
 		}
@@ -566,6 +602,9 @@ func (s *Store) MergePaperItems(id string, v PaperMerge) (PaperItem, error) {
 		if _, err = tx.Exec(`INSERT INTO paper_redirects(id,target_id) VALUES(?,?)`, source.ID, p.ID); err != nil {
 			return p, err
 		}
+	}
+	if err = s.invalidateResearchPaperTx(context.Background(), tx, p, "文献已合并"); err != nil {
+		return p, err
 	}
 	if chosen != "" {
 		if _, err = tx.Exec(`UPDATE paper_citation_keys SET paper_id=? WHERE key=?`, p.ID, chosen); err != nil {

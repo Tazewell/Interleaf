@@ -62,7 +62,18 @@ func (s *Server) moveToTrash(ctx context.Context, id string) (Document, int, str
 		interrupted = p.Status == "running" || (p.Translating != nil && p.Translating.Status == "running")
 	}
 	// Marking first rejects new work; running work is then cancelled and joined.
-	if _, err = s.Store.DB.Exec("UPDATE documents SET deleted_at=? WHERE id=?", now(), id); err != nil {
+	tx, err := s.Store.DB.BeginTx(ctx, nil)
+	if err == nil {
+		defer tx.Rollback()
+		err = s.Store.invalidateResearchDocumentTx(ctx, tx, id, "原文已移到回收站")
+		if err == nil {
+			_, err = tx.Exec("UPDATE documents SET deleted_at=? WHERE id=?", now(), id)
+		}
+		if err == nil {
+			err = tx.Commit()
+		}
+	}
+	if err != nil {
 		s.documentMu.Unlock()
 		return Document{}, 500, "无法移到回收站"
 	}

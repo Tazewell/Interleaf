@@ -169,6 +169,10 @@ func (s *Server) mergeDocuments(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer tx.Rollback()
+	if err = s.Store.invalidateResearchDocumentTx(r.Context(), tx, id, "文献信息已合并"); err != nil {
+		fail(w, 500, "合并失败")
+		return
+	}
 	tagsJSON, _ := json.Marshal(merged)
 	foldersJSON, _ := json.Marshal(mergedFolders)
 	metaJSON, _ := json.Marshal(meta)

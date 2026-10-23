@@ -5891,6 +5891,293 @@
                 },
             },
         },
+      "/api/research/topics":
+        {
+          "post":
+            {
+              "responses":
+                {
+                  "201":
+                    {
+                      "description": "Success",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                {
+                                  "$ref": "#/components/schemas/ResearchTopic",
+                                },
+                            },
+                        },
+                    },
+                  "default":
+                    {
+                      "description": "Error",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                { "$ref": "#/components/schemas/Error" },
+                            },
+                        },
+                    },
+                },
+              "requestBody":
+                {
+                  "required": true,
+                  "content":
+                    {
+                      "application/json":
+                        {
+                          "schema":
+                            {
+                              "$ref": "#/components/schemas/ResearchTopicInput",
+                            },
+                        },
+                    },
+                },
+            },
+          "get":
+            {
+              "responses":
+                {
+                  "200":
+                    {
+                      "description": "Success",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                {
+                                  "type": "array",
+                                  "items":
+                                    {
+                                      "$ref": "#/components/schemas/ResearchTopic",
+                                    },
+                                },
+                            },
+                        },
+                    },
+                  "default":
+                    {
+                      "description": "Error",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                { "$ref": "#/components/schemas/Error" },
+                            },
+                        },
+                    },
+                },
+            },
+        },
+      "/api/research/topics/{topic}":
+        {
+          "get":
+            {
+              "responses":
+                {
+                  "200":
+                    {
+                      "description": "Success",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                {
+                                  "$ref": "#/components/schemas/ResearchTopic",
+                                },
+                            },
+                        },
+                    },
+                  "default":
+                    {
+                      "description": "Error",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                { "$ref": "#/components/schemas/Error" },
+                            },
+                        },
+                    },
+                },
+              "parameters":
+                [
+                  {
+                    "name": "topic",
+                    "in": "path",
+                    "required": true,
+                    "schema": { "type": "string" },
+                  },
+                ],
+            },
+          "patch":
+            {
+              "responses":
+                {
+                  "200":
+                    {
+                      "description": "Success",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                {
+                                  "$ref": "#/components/schemas/ResearchTopic",
+                                },
+                            },
+                        },
+                    },
+                  "default":
+                    {
+                      "description": "Error",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                { "$ref": "#/components/schemas/Error" },
+                            },
+                        },
+                    },
+                },
+              "parameters":
+                [
+                  {
+                    "name": "topic",
+                    "in": "path",
+                    "required": true,
+                    "schema": { "type": "string" },
+                  },
+                ],
+              "requestBody":
+                {
+                  "required": true,
+                  "content":
+                    {
+                      "application/json":
+                        {
+                          "schema":
+                            {
+                              "$ref": "#/components/schemas/ResearchTopicPatch",
+                            },
+                        },
+                    },
+                },
+            },
+        },
+      "/api/research/topics/{topic}/sessions":
+        {
+          "post":
+            {
+              "responses":
+                {
+                  "201":
+                    {
+                      "description": "Success",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                {
+                                  "$ref": "#/components/schemas/ResearchSession",
+                                },
+                            },
+                        },
+                    },
+                  "default":
+                    {
+                      "description": "Error",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                { "$ref": "#/components/schemas/Error" },
+                            },
+                        },
+                    },
+                },
+              "parameters":
+                [
+                  {
+                    "name": "topic",
+                    "in": "path",
+                    "required": true,
+                    "schema": { "type": "string" },
+                  },
+                ],
+              "requestBody":
+                {
+                  "required": true,
+                  "content":
+                    {
+                      "application/json":
+                        {
+                          "schema":
+                            {
+                              "$ref": "#/components/schemas/ResearchSessionInput",
+                            },
+                        },
+                    },
+                },
+            },
+          "get":
+            {
+              "responses":
+                {
+                  "200":
+                    {
+                      "description": "Success",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                {
+                                  "type": "array",
+                                  "items":
+                                    {
+                                      "$ref": "#/components/schemas/ResearchSession",
+                                    },
+                                },
+                            },
+                        },
+                    },
+                  "default":
+                    {
+                      "description": "Error",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                { "$ref": "#/components/schemas/Error" },
+                            },
+                        },
+                    },
+                },
+              "parameters":
+                [
+                  {
+                    "name": "topic",
+                    "in": "path",
+                    "required": true,
+                    "schema": { "type": "string" },
+                  },
+                ],
+            },
+        },
     },
   "components":
     {
@@ -8151,6 +8438,705 @@
                       },
                   },
                 ],
+            },
+          "ResearchTopic":
+            {
+              "type": "object",
+              "properties":
+                {
+                  "id": { "type": "string" },
+                  "title": { "type": "string" },
+                  "folder": { "type": "string" },
+                  "includeChildren": { "type": "boolean" },
+                  "networkAllowed": { "type": "boolean" },
+                  "scopeState":
+                    { "type": "string", "enum": ["active", "detached"] },
+                  "createdAt": { "type": "string" },
+                  "updatedAt": { "type": "string" },
+                },
+              "required":
+                [
+                  "id",
+                  "title",
+                  "folder",
+                  "includeChildren",
+                  "networkAllowed",
+                  "scopeState",
+                  "createdAt",
+                  "updatedAt",
+                ],
+            },
+          "ResearchMember":
+            {
+              "type": "object",
+              "properties":
+                {
+                  "paperId": { "type": "string" },
+                  "documentId": { "type": "string" },
+                  "citationKey": { "type": "string" },
+                  "title": { "type": "string" },
+                  "sourceHash": { "type": "string" },
+                  "corpusRevision": { "type": "string" },
+                  "coverage":
+                    {
+                      "type": "string",
+                      "enum":
+                        ["fulltext", "abstract", "metadata", "unavailable"],
+                    },
+                  "reason": { "type": "string" },
+                },
+              "required": ["paperId", "citationKey", "title", "coverage"],
+              "description": "每个稳定 PaperItem 仅选一个可读原文。fulltext 表示资料级别，实际已读范围以 readCoverage 为准；无法验证解析来源时 unavailable。",
+            },
+          "ResearchSnapshot":
+            {
+              "type": "object",
+              "properties":
+                {
+                  "id": { "type": "string" },
+                  "topicId": { "type": "string" },
+                  "revision": { "type": "string" },
+                  "members":
+                    {
+                      "type": "array",
+                      "items":
+                        { "$ref": "#/components/schemas/ResearchMember" },
+                    },
+                  "createdAt": { "type": "string" },
+                },
+              "required": ["id", "topicId", "revision", "members", "createdAt"],
+              "description": "revision 摘要有序成员、内容、解析协议和元数据，不包含绝对路径、文件时间或分类名称。",
+            },
+          "ResearchSession":
+            {
+              "type": "object",
+              "properties":
+                {
+                  "id": { "type": "string" },
+                  "topicId": { "type": "string" },
+                  "title": { "type": "string" },
+                  "networkAllowed": { "type": "boolean" },
+                  "createdAt": { "type": "string" },
+                  "updatedAt": { "type": "string" },
+                },
+              "required":
+                [
+                  "id",
+                  "topicId",
+                  "title",
+                  "networkAllowed",
+                  "createdAt",
+                  "updatedAt",
+                ],
+            },
+          "ResearchEvidence":
+            {
+              "type": "object",
+              "properties":
+                {
+                  "id": { "type": "string" },
+                  "topicId": { "type": "string" },
+                  "snapshotId": { "type": "string" },
+                  "runId": { "type": "string" },
+                  "paperId": { "type": "string" },
+                  "documentId": { "type": "string" },
+                  "candidateId": { "type": "string" },
+                  "kind":
+                    {
+                      "type": "string",
+                      "enum":
+                        [
+                          "local-passage",
+                          "local-page",
+                          "remote-abstract",
+                          "remote-html",
+                          "remote-page",
+                        ],
+                    },
+                  "revision": { "type": "string" },
+                  "contentHash": { "type": "string" },
+                  "location": {},
+                  "excerpt": { "type": "string" },
+                  "readAt": { "type": "string" },
+                  "availability":
+                    { "type": "string", "enum": ["valid", "stale", "removed"] },
+                },
+              "required":
+                [
+                  "id",
+                  "topicId",
+                  "snapshotId",
+                  "runId",
+                  "kind",
+                  "revision",
+                  "contentHash",
+                  "location",
+                  "excerpt",
+                  "readAt",
+                  "availability",
+                ],
+            },
+          "ResearchBudget":
+            {
+              "type": "object",
+              "properties":
+                {
+                  "maxModelRequests":
+                    {
+                      "type": "integer",
+                      "minimum": 0,
+                      "default": 200,
+                      "maximum": 1000,
+                    },
+                  "maxSearchRequests":
+                    {
+                      "type": "integer",
+                      "minimum": 0,
+                      "default": 24,
+                      "maximum": 100,
+                    },
+                  "maxRemoteReads":
+                    {
+                      "type": "integer",
+                      "minimum": 0,
+                      "default": 8,
+                      "maximum": 50,
+                    },
+                  "maxMinutes":
+                    {
+                      "type": "integer",
+                      "minimum": 0,
+                      "default": 30,
+                      "maximum": 120,
+                    },
+                },
+              "required":
+                [
+                  "maxModelRequests",
+                  "maxSearchRequests",
+                  "maxRemoteReads",
+                  "maxMinutes",
+                ],
+            },
+          "ResearchRunInput":
+            {
+              "type": "object",
+              "properties":
+                {
+                  "userMessageId":
+                    { "type": "string", "pattern": "^[0-9a-f]{32}$" },
+                  "question": { "type": "string" },
+                  "mode":
+                    {
+                      "type": "string",
+                      "enum":
+                        ["question", "overview", "compare", "ideas", "novelty"],
+                    },
+                  "ideaId": { "type": "string" },
+                  "network":
+                    {
+                      "type": "string",
+                      "enum": ["inherit", "allow-task", "deny"],
+                    },
+                  "budget": { "$ref": "#/components/schemas/ResearchBudget" },
+                  "urls":
+                    {
+                      "type": "array",
+                      "items": { "type": "string", "maxLength": 4096 },
+                      "maxItems": 8,
+                    },
+                  "ideaCount":
+                    {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 3,
+                      "default": 3,
+                    },
+                },
+              "required":
+                ["userMessageId", "question", "mode", "network", "budget"],
+            },
+          "ResearchReadCoverage":
+            {
+              "type": "object",
+              "properties":
+                {
+                  "totalUnits": { "type": "integer", "minimum": 0 },
+                  "readUnits": { "type": "integer", "minimum": 0 },
+                  "ranges": { "type": "array", "items": {} },
+                },
+              "required": ["totalUnits", "readUnits", "ranges"],
+            },
+          "ResearchCoverage":
+            {
+              "type": "object",
+              "properties":
+                {
+                  "totalPapers": { "type": "integer", "minimum": 0 },
+                  "analyzedPapers": { "type": "integer", "minimum": 0 },
+                  "abstractOnlyPapers": { "type": "integer", "minimum": 0 },
+                  "unavailablePapers": { "type": "integer", "minimum": 0 },
+                  "pendingPapers": { "type": "integer", "minimum": 0 },
+                  "readUnits": { "type": "integer", "minimum": 0 },
+                  "totalUnits": { "type": "integer", "minimum": 0 },
+                  "readCoverage":
+                    {
+                      "type": "object",
+                      "additionalProperties":
+                        { "$ref": "#/components/schemas/ResearchReadCoverage" },
+                    },
+                },
+              "required":
+                [
+                  "totalPapers",
+                  "analyzedPapers",
+                  "abstractOnlyPapers",
+                  "unavailablePapers",
+                  "pendingPapers",
+                  "readUnits",
+                  "totalUnits",
+                  "readCoverage",
+                ],
+            },
+          "ResearchRun":
+            {
+              "type": "object",
+              "properties":
+                {
+                  "id": { "type": "string" },
+                  "topicId": { "type": "string" },
+                  "sessionId": { "type": "string" },
+                  "userMessageId": { "type": "string" },
+                  "status":
+                    {
+                      "type": "string",
+                      "enum":
+                        [
+                          "preparing",
+                          "queued",
+                          "running",
+                          "paused",
+                          "interrupted",
+                          "completed",
+                          "failed",
+                          "canceled",
+                        ],
+                    },
+                  "phase":
+                    {
+                      "type": "string",
+                      "enum":
+                        [
+                          "snapshot",
+                          "reading",
+                          "searching",
+                          "synthesizing",
+                          "checking",
+                        ],
+                    },
+                  "snapshotId": { "type": "string" },
+                  "revision": { "type": "string" },
+                  "done": { "type": "integer", "minimum": 0 },
+                  "total": { "type": "integer", "minimum": 0 },
+                  "coverage":
+                    { "$ref": "#/components/schemas/ResearchCoverage" },
+                  "error": { "type": "string" },
+                  "limitReason": { "type": "string" },
+                  "latestReportId": { "type": "string" },
+                  "updatedAt": { "type": "string" },
+                },
+              "required":
+                [
+                  "id",
+                  "topicId",
+                  "sessionId",
+                  "userMessageId",
+                  "status",
+                  "phase",
+                  "snapshotId",
+                  "revision",
+                  "done",
+                  "total",
+                  "coverage",
+                  "updatedAt",
+                ],
+            },
+          "ResearchControl":
+            {
+              "type": "object",
+              "properties":
+                {
+                  "requestId":
+                    { "type": "string", "pattern": "^[0-9a-f]{32}$" },
+                  "budget": { "$ref": "#/components/schemas/ResearchBudget" },
+                },
+              "required": ["requestId"],
+            },
+          "ResearchReport":
+            {
+              "type": "object",
+              "properties":
+                {
+                  "id": { "type": "string" },
+                  "topicId": { "type": "string" },
+                  "sessionId": { "type": "string" },
+                  "runId": { "type": "string" },
+                  "sourceRunId": { "type": "string" },
+                  "kind": { "type": "string" },
+                  "revision": { "type": "string" },
+                  "sourceRevision": { "type": "string" },
+                  "origin": { "type": "string", "enum": ["model", "user"] },
+                  "derivedFromId": { "type": "string" },
+                  "content": { "type": "string" },
+                  "sourceIds":
+                    { "type": "array", "items": { "type": "string" } },
+                  "coverage":
+                    { "$ref": "#/components/schemas/ResearchCoverage" },
+                  "stale": { "type": "boolean" },
+                  "createdAt": { "type": "string" },
+                },
+              "required":
+                [
+                  "id",
+                  "topicId",
+                  "sessionId",
+                  "kind",
+                  "revision",
+                  "sourceRevision",
+                  "origin",
+                  "content",
+                  "sourceIds",
+                  "coverage",
+                  "stale",
+                  "createdAt",
+                ],
+            },
+          "ResearchFact":
+            {
+              "type": "object",
+              "properties":
+                {
+                  "text": { "type": "string" },
+                  "evidenceIds":
+                    { "type": "array", "items": { "type": "string" } },
+                },
+              "required": ["text", "evidenceIds"],
+            },
+          "ResearchPaperCard":
+            {
+              "type": "object",
+              "properties":
+                {
+                  "cacheKey": { "type": "string" },
+                  "paperId": { "type": "string" },
+                  "documentId": { "type": "string" },
+                  "revision": { "type": "string" },
+                  "level":
+                    {
+                      "type": "string",
+                      "enum": ["fulltext", "abstract", "metadata"],
+                    },
+                  "problem": { "$ref": "#/components/schemas/ResearchFact" },
+                  "method": { "$ref": "#/components/schemas/ResearchFact" },
+                  "assumptions":
+                    { "$ref": "#/components/schemas/ResearchFact" },
+                  "dataAndEvaluation":
+                    { "$ref": "#/components/schemas/ResearchFact" },
+                  "findings": { "$ref": "#/components/schemas/ResearchFact" },
+                  "limitations":
+                    { "$ref": "#/components/schemas/ResearchFact" },
+                  "evidenceIds":
+                    { "type": "array", "items": { "type": "string" } },
+                  "readCoverage":
+                    { "$ref": "#/components/schemas/ResearchReadCoverage" },
+                },
+              "required":
+                [
+                  "cacheKey",
+                  "paperId",
+                  "revision",
+                  "level",
+                  "problem",
+                  "method",
+                  "assumptions",
+                  "dataAndEvaluation",
+                  "findings",
+                  "limitations",
+                  "evidenceIds",
+                  "readCoverage",
+                ],
+            },
+          "ResearchSearch":
+            {
+              "type": "object",
+              "properties":
+                {
+                  "id": { "type": "string" },
+                  "runId": { "type": "string" },
+                  "query": { "type": "string" },
+                  "source": { "type": "string" },
+                  "filters": {},
+                  "status":
+                    { "type": "string", "enum": ["ok", "failed", "limited"] },
+                  "candidateIds":
+                    { "type": "array", "items": { "type": "string" } },
+                  "fetchedAt": { "type": "string" },
+                  "error": { "type": "string" },
+                },
+              "required":
+                [
+                  "id",
+                  "runId",
+                  "query",
+                  "source",
+                  "filters",
+                  "status",
+                  "candidateIds",
+                  "fetchedAt",
+                ],
+            },
+          "ResearchCandidate":
+            {
+              "type": "object",
+              "properties":
+                {
+                  "id": { "type": "string" },
+                  "topicId": { "type": "string" },
+                  "identityKey": { "type": "string" },
+                  "title": { "type": "string" },
+                  "authors": { "type": "string" },
+                  "doi": { "type": "string" },
+                  "arxiv": { "type": "string" },
+                  "publishedAt": { "type": "string" },
+                  "updatedAt": { "type": "string" },
+                  "abstract": { "type": "string" },
+                  "landingUrl": { "type": "string" },
+                  "pdfUrl": { "type": "string" },
+                  "aliases": { "type": "array", "items": { "type": "string" } },
+                  "paperId": { "type": "string" },
+                  "documentId": { "type": "string" },
+                },
+              "required":
+                [
+                  "id",
+                  "topicId",
+                  "identityKey",
+                  "title",
+                  "authors",
+                  "doi",
+                  "arxiv",
+                  "publishedAt",
+                  "updatedAt",
+                  "abstract",
+                  "landingUrl",
+                  "pdfUrl",
+                  "aliases",
+                ],
+            },
+          "ResearchClaim":
+            {
+              "type": "object",
+              "properties":
+                {
+                  "id": { "type": "string" },
+                  "kind":
+                    {
+                      "type": "string",
+                      "enum": ["problem", "method", "experiment"],
+                    },
+                  "text": { "type": "string" },
+                },
+              "required": ["id", "kind", "text"],
+            },
+          "ResearchIdea":
+            {
+              "type": "object",
+              "properties":
+                {
+                  "id": { "type": "string" },
+                  "problem": { "type": "string" },
+                  "mechanism": { "type": "string" },
+                  "hypotheses":
+                    { "type": "array", "items": { "type": "string" } },
+                  "changes": { "type": "array", "items": { "type": "string" } },
+                  "nearestWorkIds":
+                    { "type": "array", "items": { "type": "string" } },
+                  "minimumExperiment": { "type": "string" },
+                  "baselines":
+                    { "type": "array", "items": { "type": "string" } },
+                  "ablations":
+                    { "type": "array", "items": { "type": "string" } },
+                  "falsification": { "type": "string" },
+                  "resources": { "type": "string" },
+                  "claims":
+                    {
+                      "type": "array",
+                      "items": { "$ref": "#/components/schemas/ResearchClaim" },
+                    },
+                },
+              "required":
+                [
+                  "id",
+                  "problem",
+                  "mechanism",
+                  "hypotheses",
+                  "changes",
+                  "nearestWorkIds",
+                  "minimumExperiment",
+                  "baselines",
+                  "ablations",
+                  "falsification",
+                  "resources",
+                  "claims",
+                ],
+            },
+          "NoveltyRow":
+            {
+              "type": "object",
+              "properties":
+                {
+                  "claimId": { "type": "string" },
+                  "status":
+                    {
+                      "type": "string",
+                      "enum":
+                        [
+                          "high_overlap",
+                          "partial_overlap",
+                          "not_found",
+                          "insufficient",
+                        ],
+                    },
+                  "relatedWorkIds":
+                    { "type": "array", "items": { "type": "string" } },
+                  "evidenceIds":
+                    { "type": "array", "items": { "type": "string" } },
+                  "overlap": { "type": "string" },
+                  "difference": { "type": "string" },
+                  "unverified": { "type": "string" },
+                },
+              "required":
+                [
+                  "claimId",
+                  "status",
+                  "relatedWorkIds",
+                  "evidenceIds",
+                  "overlap",
+                  "difference",
+                  "unverified",
+                ],
+            },
+          "NoveltyReport":
+            {
+              "type": "object",
+              "properties":
+                {
+                  "ideaId": { "type": "string" },
+                  "rows":
+                    {
+                      "type": "array",
+                      "items": { "$ref": "#/components/schemas/NoveltyRow" },
+                    },
+                  "queryIds":
+                    { "type": "array", "items": { "type": "string" } },
+                  "asOf": { "type": "string" },
+                  "coverage":
+                    { "$ref": "#/components/schemas/ResearchCoverage" },
+                  "caveats": { "type": "array", "items": { "type": "string" } },
+                },
+              "required":
+                ["ideaId", "rows", "queryIds", "asOf", "coverage", "caveats"],
+            },
+          "ResearchUnit":
+            {
+              "type": "object",
+              "properties":
+                {
+                  "runId": { "type": "string" },
+                  "unitKey": { "type": "string" },
+                  "kind": { "type": "string" },
+                  "status": { "type": "string" },
+                  "contentHash": { "type": "string" },
+                  "result": {},
+                  "createdAt": { "type": "string" },
+                  "updatedAt": { "type": "string" },
+                },
+              "required":
+                [
+                  "runId",
+                  "unitKey",
+                  "kind",
+                  "status",
+                  "contentHash",
+                  "result",
+                  "createdAt",
+                  "updatedAt",
+                ],
+            },
+          "ResearchConversation":
+            {
+              "type": "object",
+              "properties":
+                {
+                  "sessionId": { "type": "string" },
+                  "connectionKey": { "type": "string" },
+                  "revision": { "type": "string" },
+                  "messages": { "type": "array", "items": {} },
+                },
+              "required":
+                ["sessionId", "connectionKey", "revision", "messages"],
+            },
+          "ResearchMessage":
+            {
+              "type": "object",
+              "properties":
+                {
+                  "id": { "type": "string" },
+                  "sessionId": { "type": "string" },
+                  "runId": { "type": "string" },
+                  "role": { "type": "string", "enum": ["user", "assistant"] },
+                  "content": { "type": "string" },
+                  "createdAt": { "type": "string" },
+                },
+              "required": ["id", "sessionId", "role", "content", "createdAt"],
+            },
+          "ResearchTopicInput":
+            {
+              "type": "object",
+              "properties":
+                {
+                  "title":
+                    { "type": "string", "minLength": 1, "maxLength": 300 },
+                  "folder":
+                    { "type": "string", "minLength": 1, "maxLength": 40 },
+                  "includeChildren": { "type": "boolean" },
+                  "networkAllowed": { "type": "boolean" },
+                },
+              "required": ["title", "folder"],
+            },
+          "ResearchTopicPatch":
+            {
+              "type": "object",
+              "properties":
+                {
+                  "title":
+                    { "type": "string", "minLength": 1, "maxLength": 300 },
+                  "folder":
+                    { "type": "string", "minLength": 1, "maxLength": 40 },
+                  "includeChildren": { "type": "boolean" },
+                  "networkAllowed": { "type": "boolean" },
+                },
+              "required": [],
+            },
+          "ResearchSessionInput":
+            {
+              "type": "object",
+              "properties":
+                {
+                  "title":
+                    { "type": "string", "minLength": 1, "maxLength": 300 },
+                },
+              "required": ["title"],
             },
         },
     },
