@@ -76,9 +76,12 @@ func compactAPIConversation(ctx context.Context, c APIConnection, req completion
 	}
 	return next, err
 }
+func nativeConversationFits(messages []toolCompletionMessage, tools []any, inputLimit int) bool {
+	return conversationTokens(messages) < inputLimit-estimateDocumentTokens(jsonText(tools))-1024 && conversationImageBytes(messages) <= 32<<20
+}
 func compactNativeConversation(ctx context.Context, c APIConnection, req completionRequest, messages []toolCompletionMessage, tools []any, inputLimit int, force bool, sink func(UsageCall) error, reserve func() error) ([]toolCompletionMessage, string, error) {
 	limit := inputLimit - estimateDocumentTokens(jsonText(tools)) - 1024
-	if conversationTokens(messages) < limit && conversationImageBytes(messages) <= 32<<20 && !force {
+	if nativeConversationFits(messages, tools, inputLimit) && !force {
 		return messages, "", nil
 	}
 	if len(messages) < 3 {

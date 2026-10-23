@@ -1,9 +1,12 @@
 package reader
 
 import (
+	"archive/zip"
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
+	"html"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -15,6 +18,9 @@ import (
 	"time"
 )
 
+// Delete/trash must cancel an abstract-only paper's live HTTP and join its
+// owned analysis, while a different paper's HTTP stays alive. Holding one
+// additional registered source task makes the deletion's joining gate visible.
 func TestResearchCardsAbstractMutationCancelsOwnedModel(t *testing.T) {
 	for _, action := range []string{"delete", "trash"} {
 		t.Run(action, func(t *testing.T) {
@@ -159,7 +165,6 @@ func TestResearchCardsAbstractMutationCancelsOwnedModel(t *testing.T) {
 	}
 }
 
-
 func TestResearchCardsPaperMutationRollbackReleasesGate(t *testing.T) {
 	for _, action := range []string{"delete", "trash"} {
 		t.Run(action, func(t *testing.T) {
@@ -211,6 +216,150 @@ func TestResearchCardsPaperMutationRollbackReleasesGate(t *testing.T) {
 	}
 }
 
+func TestResearchCardsShortFragmentsSmallWindow(t *testing.T) {
+	s, topic, paper := researchFixture(t)
+	researchLongPDF(t, s, 20)
+	path := filepath.Join(s.analysisDir("doc"), "manifest.json")
+	raw, _ := os.ReadFile(path)
+	var layout layoutManifest
+	json.Unmarshal(raw, &layout)
+	for i := range layout.Blocks {
+		layout.Blocks[i].Text = strings.Repeat("x", 500)
+	}
+	os.WriteFile(path, []byte(jsonText(layout)), 0600)
+	researchSetLayoutSource(t, s, "doc", "short-fragments")
+	mode := "smallwindow"
+	calls := 0
+	researchCardModel(t, s, &mode, &calls)
+	run := researchRunFixture(t, s, topic)
+	card, err := s.analyzeResearchPaper(t.Context(), run.ID, paper)
+	if err != nil || len(card.EvidenceIDs) != 20 || card.ReadCoverage.ReadUnits != 1 || calls < 2 {
+		t.Fatal("20 short fragments should be cursor-readable at 4096", err, len(card.EvidenceIDs), calls)
+	}
+	seen := map[string]bool{}
+	for _, source := range card.EvidenceIDs {
+		if seen[source] {
+			t.Fatal("duplicate provided evidence", source)
+		}
+		seen[source] = true
+	}
+}
+
+func TestResearchCardsEPUBEncodedLocationsFitSmallWindow(t *testing.T) {
+	s, topic, _ := researchFixture(t)
+	original := sample(t, "the-art-of-reading.epub")
+	source, err := zip.NewReader(bytes.NewReader(original), int64(len(original)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var out bytes.Buffer
+	writer := zip.NewWriter(&out)
+	for _, file := range source.File {
+		input, err := file.Open()
+		if err != nil {
+			t.Fatal(err)
+		}
+		body, err := io.ReadAll(input)
+		input.Close()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if file.Name == "EPUB/chapter1.xhtml" {
+			text := strings.Repeat(`quote " and slash \ & < `, 15)
+			body = []byte(`<html xmlns="http://www.w3.org/1999/xhtml"><body>` + strings.Repeat("<p>"+html.EscapeString(text)+"</p>", 20) + `</body></html>`)
+		}
+		target, err := writer.Create(file.Name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err = target.Write(body); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err = writer.Close(); err != nil {
+		t.Fatal(err)
+	}
+	response := upload(t, s, "quoted.epub", out.Bytes())
+	if response.Code != 201 {
+		t.Fatal(response.Code, response.Body.String())
+	}
+	var doc Document
+	if err = json.Unmarshal(response.Body.Bytes(), &doc); err != nil {
+		t.Fatal(err)
+	}
+	paper := paperCreate(t, s, "EPUB quoted")
+	paperCall(t, s, "PATCH", "/api/papers/"+paper, `{"folders":["ML"]}`, 200)
+	paperCall(t, s, "PUT", "/api/papers/"+paper+"/attachments/"+doc.ID, `{"role":"original","primary":true}`, 200)
+	mode := "smallwindow"
+	calls := 0
+	researchCardModel(t, s, &mode, &calls)
+	run := researchRunFixture(t, s, topic)
+	scope, err := readResearchRunScope(t.Context(), s.Store.DB, run.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	member, err := scope.member(paper)
+	if err != nil {
+		t.Fatal(err)
+	}
+	st, err := s.prepareResearchRead(t.Context(), member)
+	if err != nil {
+		t.Fatal(err)
+	}
+	expected := len(st.Corpus.Passages)
+	st.Finish()
+	reserved := 0
+	ctx := context.WithValue(t.Context(), researchModelReservationKey{}, func(context.Context) error { reserved++; return nil })
+	card, err := s.analyzeResearchPaper(ctx, run.ID, paper)
+	if err != nil || len(card.EvidenceIDs) != expected || len(card.ReadCoverage.Ranges) != expected || calls < 2 || reserved != calls {
+		t.Fatal("encoded EPUB tail lost", err, len(card.EvidenceIDs), expected, calls, reserved)
+	}
+	for _, location := range card.ReadCoverage.Ranges {
+		if !bytes.Contains(location, []byte(`"locator"`)) || !bytes.Contains(location, []byte(`"href"`)) {
+			t.Fatal("native location lost", string(location))
+		}
+	}
+}
+
+func TestResearchCardsUnfitMinimumAndPartialNeverRetry(t *testing.T) {
+	for _, modeValue := range []string{"tinywindow", "smallwindow-partial"} {
+		t.Run(modeValue, func(t *testing.T) {
+			s, topic, paper := researchFixture(t)
+			researchLongPDF(t, s, 20)
+			mode := modeValue
+			calls := 0
+			researchCardModel(t, s, &mode, &calls)
+			run := researchRunFixture(t, s, topic)
+			reserved := 0
+			ctx := context.WithValue(t.Context(), researchModelReservationKey{}, func(context.Context) error { reserved++; return nil })
+			card, err := s.analyzeResearchPaper(ctx, run.ID, paper)
+			if err == nil || len(card.EvidenceIDs) != 0 {
+				t.Fatal("uncompleted card saved", card, err)
+			}
+			want := 1
+			if mode == "tinywindow" {
+				want = 0
+				if errorKind(err) != ErrorLimit || !strings.Contains(err.Error(), "更大窗口") {
+					t.Fatal("unfit minimum lacked actionable failure", err)
+				}
+			}
+			if calls != want || reserved != want {
+				t.Fatal("preflight charged or partial retried", calls, reserved, want)
+			}
+			var count int
+			s.Store.DB.QueryRow(`SELECT count(*) FROM research_cards WHERE paper_id=?`, paper).Scan(&count)
+			if count != 0 {
+				t.Fatal("incomplete card persisted")
+			}
+			if want == 0 {
+				s.Store.DB.QueryRow(`SELECT count(*) FROM research_evidence WHERE run_id=?`, run.ID).Scan(&count)
+				if count != 0 {
+					t.Fatal("unprovided minimum counted read")
+				}
+			}
+		})
+	}
+}
 
 func TestResearchCardsAbstractMutationCancelsCatalog(t *testing.T) {
 	s, topic, _ := researchFixture(t)
@@ -268,15 +417,16 @@ func TestResearchCardsAbstractMutationCancelsCatalog(t *testing.T) {
 
 // Only the paid HTTP boundary is a fixture. Parsing, scoped reads, SQLite
 // evidence, the native completion gate, and cross-run cache adoption are real.
-
-// Only the paid HTTP boundary is a fixture. Parsing, scoped reads, SQLite
-// evidence, the native completion gate, and cross-run cache adoption are real.
 func researchCardModel(t *testing.T, s *Server, mode *string, calls *int) *httptest.Server {
 	t.Helper()
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == "GET" {
-			if *mode == "smallwindow" {
+			if strings.HasPrefix(*mode, "smallwindow") {
 				fmt.Fprint(w, `{"data":[{"id":"model-a","context_window":4096}]}`)
+				return
+			}
+			if *mode == "tinywindow" {
+				fmt.Fprint(w, `{"data":[{"id":"model-a","context_window":1024}]}`)
 				return
 			}
 			fmt.Fprint(w, `{"data":[{"id":"model-a"},{"id":"model-b"}]}`)
@@ -284,17 +434,22 @@ func researchCardModel(t *testing.T, s *Server, mode *string, calls *int) *httpt
 		}
 		*calls++
 		var input struct {
-			Model    string          `json:"model"`
-			Tools    json.RawMessage `json:"tools"`
-			Messages []struct {
-				Content string `json:"content"`
-			} `json:"messages"`
+			Model    string                  `json:"model"`
+			Tools    json.RawMessage         `json:"tools"`
+			Messages []toolCompletionMessage `json:"messages"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
 			t.Error(err)
 			return
 		}
-		wire := input.Messages[len(input.Messages)-1].Content
+		if strings.HasPrefix(*mode, "smallwindow") && estimateDocumentTokens(jsonText(input.Messages)) >= 2046 {
+			t.Error("actual encoded system/user request exceeds 4096-window input guard")
+		}
+		wire, ok := input.Messages[len(input.Messages)-1].Content.(string)
+		if !ok {
+			t.Error("source message is not text")
+			return
+		}
 		marker := strings.Index(wire, "RESEARCH_EVIDENCE_JSON\n")
 		if marker < 0 {
 			t.Error("Reader did not prepare source text")
@@ -337,7 +492,7 @@ func researchCardModel(t *testing.T, s *Server, mode *string, calls *int) *httpt
 		text := jsonText(map[string]any{"problem": ResearchFact{Text: evidence[0].Text, EvidenceIDs: []string{source}}, "method": ResearchFact{}, "assumptions": ResearchFact{}, "dataAndEvaluation": ResearchFact{}, "findings": ResearchFact{}, "limitations": ResearchFact{}})
 		w.Header().Set("Content-Type", "text/event-stream")
 		fmt.Fprint(w, "data: "+jsonText(map[string]any{"choices": []any{map[string]any{"index": 0, "delta": map[string]any{"content": text}, "finish_reason": "stop"}}})+"\n\n")
-		if *mode != "partial" {
+		if *mode != "partial" && *mode != "smallwindow-partial" {
 			fmt.Fprint(w, "data: [DONE]\n\n")
 		}
 	}))

@@ -19,6 +19,7 @@ type researchToolset struct {
 	mu           sync.Mutex
 	vision       bool
 	passageBytes int
+	passageFits  func([]ResearchEvidence) bool
 }
 
 func (s *Server) researchTools(ctx context.Context, runID string) (nativeToolset, error) {
@@ -273,10 +274,17 @@ func (t *researchToolset) readPassage(ctx context.Context, args json.RawMessage)
 			next = c.Passages[i].ID
 			break
 		}
+		if t.passageFits != nil && !t.passageFits(append(append([]ResearchEvidence{}, evidence...), ev)) {
+			next = c.Passages[i].ID
+			break
+		}
 		items = append(items, item)
 		evidence = append(evidence, ev)
 	}
 	if len(items) == 0 {
+		if t.passageFits != nil {
+			return nativeToolResult{}, generationError(ErrorLimit, "模型窗口无法容纳最小原文片段及来源定位，请选择更大窗口模型")
+		}
 		return nativeToolResult{}, generationError(ErrorLimit, "下一段原文超过工具回包限制")
 	}
 	prior, err := t.priorEvidence(st.Context, st)

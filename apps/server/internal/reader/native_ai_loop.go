@@ -49,6 +49,16 @@ func nativeInputMessage(prompt string, in AIInput, vision bool) toolCompletionMe
 	}
 	return message
 }
+func nativeInitialMessages(snapshot nativeTaskSnapshot, in AIInput) []toolCompletionMessage {
+	return []toolCompletionMessage{{Role: "system", Content: readerSystemPrompt}, nativeInputMessage(in.Prompt, in, snapshot.Vision)}
+}
+func nativeInputLimit(snapshot nativeTaskSnapshot) int {
+	window := snapshot.ContextWindow
+	if window <= 0 {
+		window = defaultDocumentContextTokens
+	}
+	return documentSourceBudget(window)
+}
 func runNativeLoop(ctx context.Context, in nativeLoopRequest, emit func(ProviderEvent) error) (nativeLoopResult, error) {
 	fail := func(err error) (nativeLoopResult, error) { return nativeLoopResult{}, err }
 	b := in.Budget
@@ -70,7 +80,7 @@ func runNativeLoop(ctx context.Context, in nativeLoopRequest, emit func(Provider
 	window.Messages = append([]toolCompletionMessage(nil), window.Messages...)
 	window.Checkpoints = append([]string(nil), window.Checkpoints...)
 	if len(window.Messages) == 0 {
-		window.Messages = []toolCompletionMessage{{Role: "system", Content: readerSystemPrompt}, nativeInputMessage(in.Input.Prompt, in.Input, in.Snapshot.Vision)}
+		window.Messages = nativeInitialMessages(in.Snapshot, in.Input)
 	}
 	req := completionRequest{Model: in.Snapshot.Model, Effort: in.Snapshot.Effort, ContextWindow: in.Snapshot.ContextWindow, MaxOutputTokens: in.Snapshot.MaxOutputTokens, Vision: in.Snapshot.Vision, Tools: in.Snapshot.Tools}
 	req.NativeImageData = func(image nativeToolImage) ([]byte, error) {
@@ -97,10 +107,7 @@ func runNativeLoop(ctx context.Context, in nativeLoopRequest, emit func(Provider
 		}
 		return nil, generationError(ErrorProtocol, "已读图片不可用，请重新读取")
 	}
-	limit := documentSourceBudget(defaultDocumentContextTokens)
-	if req.ContextWindow > 0 {
-		limit = documentSourceBudget(req.ContextWindow)
-	}
+	limit := nativeInputLimit(in.Snapshot)
 	var doc *documentAgent
 	if t, ok := in.Tools.(documentToolset); ok {
 		doc = t.agent
