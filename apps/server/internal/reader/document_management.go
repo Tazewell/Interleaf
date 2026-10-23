@@ -35,16 +35,9 @@ type documentTask struct {
 // registered work, and prevents a queued task from starting during cleanup.
 func (s *Server) beginDocumentTask(parent context.Context, id string) (context.Context, func(), error) {
 	s.documentMu.Lock()
-	defer s.documentMu.Unlock()
 	if s.documentClosed || s.deletingDocuments[id] {
+		s.documentMu.Unlock()
 		return nil, nil, errors.New("document is being deleted")
-	}
-	d, err := s.Store.Document(id)
-	if err != nil {
-		return nil, nil, err
-	}
-	if d.DeletedAt != "" {
-		return nil, nil, errors.New("document is in the trash")
 	}
 	if s.documentTasks == nil {
 		s.documentTasks = make(map[string]map[*documentTask]struct{})
@@ -55,7 +48,8 @@ func (s *Server) beginDocumentTask(parent context.Context, id string) (context.C
 	ctx, cancel := context.WithCancel(parent)
 	task := &documentTask{cancel, make(chan struct{})}
 	s.documentTasks[id][task] = struct{}{}
-	return ctx, func() {
+	s.documentMu.Unlock()
+	finish := func() {
 		cancel()
 		s.documentMu.Lock()
 		defer s.documentMu.Unlock()
@@ -64,7 +58,18 @@ func (s *Server) beginDocumentTask(parent context.Context, id string) (context.C
 			delete(s.documentTasks, id)
 		}
 		close(task.done)
-	}, nil
+	}
+	// Never hold the lifecycle mutex while waiting for the sole DB connection:
+	// a final transaction may need cancellation before it can release the DB.
+	d, err := s.Store.Document(id)
+	if err != nil || d.DeletedAt != "" || ctx.Err() != nil {
+		finish()
+		if err != nil {
+			return nil, nil, err
+		}
+		return nil, nil, errors.New("document is unavailable")
+	}
+	return ctx, finish, nil
 }
 
 func (s *Server) deleteDocument(w http.ResponseWriter, r *http.Request) {
@@ -86,15 +91,6 @@ func (s *Server) purgeDocument(ctx context.Context, id string) (int, string) {
 		s.documentMu.Unlock()
 		return 409, "文档正在删除"
 	}
-	d, err := s.Store.Document(id)
-	if errors.Is(err, sql.ErrNoRows) {
-		s.documentMu.Unlock()
-		return 204, ""
-	}
-	if err != nil {
-		s.documentMu.Unlock()
-		return 500, "无法读取文档"
-	}
 	if s.deletingDocuments == nil {
 		s.deletingDocuments = make(map[string]bool)
 	}
@@ -106,12 +102,22 @@ func (s *Server) purgeDocument(ctx context.Context, id string) (int, string) {
 	}
 	s.documentMu.Unlock()
 	defer func() { s.documentMu.Lock(); delete(s.deletingDocuments, id); s.documentMu.Unlock() }()
+	if err := s.cancelResearchForDocument(ctx, id); err != nil {
+		return 408, "等待研究任务停止超时，请重试"
+	}
 	for _, task := range tasks {
 		select {
 		case <-task.done:
 		case <-ctx.Done():
 			return 408, "等待后台任务停止超时，请重试"
 		}
+	}
+	d, err := s.Store.Document(id)
+	if errors.Is(err, sql.ErrNoRows) {
+		return 204, ""
+	}
+	if err != nil {
+		return 500, "无法读取文档"
 	}
 	tx, err := s.Store.DB.Begin()
 	if err != nil {

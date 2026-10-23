@@ -4,6 +4,371 @@
   "security": [{ "session": [] }],
   "paths":
     {
+      "/api/research/topics/{topic}/sessions/{session}/runs":
+        {
+          "post":
+            {
+              "parameters":
+                [
+                  {
+                    "name": "topic",
+                    "in": "path",
+                    "required": true,
+                    "schema": { "type": "string" },
+                  },
+                  {
+                    "name": "session",
+                    "in": "path",
+                    "required": true,
+                    "schema": { "type": "string" },
+                  },
+                ],
+              "requestBody":
+                {
+                  "required": true,
+                  "content":
+                    {
+                      "application/json":
+                        {
+                          "schema":
+                            { "$ref": "#/components/schemas/ResearchRunInput" },
+                        },
+                    },
+                },
+              "responses":
+                {
+                  "201":
+                    {
+                      "description": "Durable run and user question; no external request",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                { "$ref": "#/components/schemas/ResearchRun" },
+                            },
+                        },
+                    },
+                  "409": { "description": "Idempotency input conflict" },
+                },
+            },
+        },
+      "/api/research/runs/{run}":
+        {
+          "get":
+            {
+              "parameters":
+                [
+                  {
+                    "name": "run",
+                    "in": "path",
+                    "required": true,
+                    "schema": { "type": "string" },
+                  },
+                ],
+              "responses":
+                {
+                  "200":
+                    {
+                      "description": "Current durable snapshot",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                { "$ref": "#/components/schemas/ResearchRun" },
+                            },
+                        },
+                    },
+                },
+            },
+        },
+      "/api/research/runs/{run}/{action}":
+        {
+          "post":
+            {
+              "parameters":
+                [
+                  {
+                    "name": "run",
+                    "in": "path",
+                    "required": true,
+                    "schema": { "type": "string" },
+                  },
+                  {
+                    "name": "action",
+                    "in": "path",
+                    "required": true,
+                    "schema":
+                      {
+                        "type": "string",
+                        "enum": ["start", "pause", "resume", "cancel"],
+                      },
+                  },
+                ],
+              "requestBody":
+                {
+                  "required": true,
+                  "content":
+                    {
+                      "application/json":
+                        {
+                          "schema":
+                            { "$ref": "#/components/schemas/ResearchControl" },
+                        },
+                    },
+                },
+              "responses":
+                {
+                  "200":
+                    {
+                      "description": "Terminal or idempotent accepted result",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                { "$ref": "#/components/schemas/ResearchRun" },
+                            },
+                        },
+                    },
+                  "202":
+                    {
+                      "description": "Explicit background attempt accepted",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                { "$ref": "#/components/schemas/ResearchRun" },
+                            },
+                        },
+                    },
+                  "409":
+                    {
+                      "description": "Changed control input, source, model or active topic conflict",
+                    },
+                },
+            },
+        },
+      "/api/research/runs/{run}/events":
+        {
+          "get":
+            {
+              "parameters":
+                [
+                  {
+                    "name": "run",
+                    "in": "path",
+                    "required": true,
+                    "schema": { "type": "string" },
+                  },
+                  {
+                    "name": "after",
+                    "in": "query",
+                    "schema": { "type": "integer", "minimum": 0 },
+                  },
+                ],
+              "responses":
+                {
+                  "200":
+                    {
+                      "description": "Read-only SSE replay; reset instructs client to read durable run/report. Disconnect never cancels run.",
+                      "content":
+                        {
+                          "text/event-stream":
+                            { "schema": { "type": "string" } },
+                        },
+                    },
+                },
+            },
+        },
+      "/api/research/sessions/{session}/messages":
+        {
+          "get":
+            {
+              "parameters":
+                [
+                  {
+                    "name": "session",
+                    "in": "path",
+                    "required": true,
+                    "schema": { "type": "string" },
+                  },
+                ],
+              "responses":
+                {
+                  "200":
+                    {
+                      "description": "Full saved visible history including unanswered questions",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                {
+                                  "type": "array",
+                                  "items":
+                                    {
+                                      "$ref": "#/components/schemas/ResearchMessage",
+                                    },
+                                },
+                            },
+                        },
+                    },
+                },
+            },
+        },
+      "/api/research/topics/{topic}/reports":
+        {
+          "get":
+            {
+              "parameters":
+                [
+                  {
+                    "name": "topic",
+                    "in": "path",
+                    "required": true,
+                    "schema": { "type": "string" },
+                  },
+                ],
+              "responses":
+                {
+                  "200":
+                    {
+                      "description": "Immutable report revisions",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                {
+                                  "type": "array",
+                                  "items":
+                                    {
+                                      "$ref": "#/components/schemas/ResearchReport",
+                                    },
+                                },
+                            },
+                        },
+                    },
+                },
+            },
+        },
+      "/api/research/reports/{report}":
+        {
+          "get":
+            {
+              "parameters":
+                [
+                  {
+                    "name": "report",
+                    "in": "path",
+                    "required": true,
+                    "schema": { "type": "string" },
+                  },
+                ],
+              "responses":
+                {
+                  "200":
+                    {
+                      "description": "Saved report",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                {
+                                  "$ref": "#/components/schemas/ResearchReport",
+                                },
+                            },
+                        },
+                    },
+                },
+            },
+        },
+      "/api/research/reports/{report}/markdown":
+        {
+          "get":
+            {
+              "parameters":
+                [
+                  {
+                    "name": "report",
+                    "in": "path",
+                    "required": true,
+                    "schema": { "type": "string" },
+                  },
+                ],
+              "responses":
+                {
+                  "200":
+                    {
+                      "description": "Inert Markdown export; never fetches external resources",
+                      "content":
+                        { "text/markdown": { "schema": { "type": "string" } } },
+                    },
+                },
+            },
+        },
+      "/api/research/reports/{report}/revisions":
+        {
+          "post":
+            {
+              "parameters":
+                [
+                  {
+                    "name": "report",
+                    "in": "path",
+                    "required": true,
+                    "schema": { "type": "string" },
+                  },
+                ],
+              "requestBody":
+                {
+                  "required": true,
+                  "content":
+                    {
+                      "application/json":
+                        {
+                          "schema":
+                            {
+                              "type": "object",
+                              "properties":
+                                {
+                                  "requestId":
+                                    {
+                                      "type": "string",
+                                      "pattern": "^[0-9a-f]{32}$",
+                                    },
+                                  "content":
+                                    { "type": "string", "maxLength": 4194304 },
+                                },
+                              "required": ["requestId", "content"],
+                            },
+                        },
+                    },
+                },
+              "responses":
+                {
+                  "201":
+                    {
+                      "description": "Idempotent user-authored revision; inherited source IDs only",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                {
+                                  "$ref": "#/components/schemas/ResearchReport",
+                                },
+                            },
+                        },
+                    },
+                  "409": { "description": "Revision idempotency conflict" },
+                },
+            },
+        },
       "/api/research/sources/{source}":
         {
           "get":
@@ -8707,7 +9072,7 @@
                       "type": "integer",
                       "minimum": 1,
                       "maximum": 3,
-                      "default": 3,
+                      "description": "Omitted input defaults to 3 on the server.",
                     },
                 },
               "required":
@@ -8801,6 +9166,7 @@
                   "error": { "type": "string" },
                   "limitReason": { "type": "string" },
                   "latestReportId": { "type": "string" },
+                  "usage": { "$ref": "#/components/schemas/ResearchUsage" },
                   "updatedAt": { "type": "string" },
                 },
               "required":
@@ -8817,6 +9183,31 @@
                   "total",
                   "coverage",
                   "updatedAt",
+                ],
+            },
+          "ResearchUsage":
+            {
+              "type": "object",
+              "properties":
+                {
+                  "attempt": { "type": "integer", "minimum": 0 },
+                  "attemptBudget":
+                    { "$ref": "#/components/schemas/ResearchBudget" },
+                  "attemptRequests": { "type": "integer", "minimum": 0 },
+                  "modelRequests": { "type": "integer", "minimum": 0 },
+                  "calls":
+                    {
+                      "type": "array",
+                      "items": { "$ref": "#/components/schemas/UsageCall" },
+                    },
+                },
+              "required":
+                [
+                  "attempt",
+                  "attemptBudget",
+                  "attemptRequests",
+                  "modelRequests",
+                  "calls",
                 ],
             },
           "ResearchControl":

@@ -87,6 +87,7 @@ type ResearchCoverage struct {
 	ReadCoverage       map[string]ResearchReadCoverage `json:"readCoverage"`
 }
 type ResearchRun struct {
+	Usage          *ResearchUsage   `json:"usage,omitempty"`
 	ID             string           `json:"id"`
 	TopicID        string           `json:"topicId"`
 	SessionID      string           `json:"sessionId"`
@@ -102,6 +103,13 @@ type ResearchRun struct {
 	LimitReason    string           `json:"limitReason,omitempty"`
 	LatestReportID string           `json:"latestReportId,omitempty"`
 	UpdatedAt      string           `json:"updatedAt"`
+}
+type ResearchUsage struct {
+	Attempt         int            `json:"attempt"`
+	AttemptBudget   ResearchBudget `json:"attemptBudget"`
+	AttemptRequests int            `json:"attemptRequests"`
+	ModelRequests   int            `json:"modelRequests"`
+	Calls           []UsageCall    `json:"calls"`
 }
 type ResearchControl struct {
 	RequestID string          `json:"requestId"`

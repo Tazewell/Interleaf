@@ -5,13 +5,75 @@ import type {
   ResearchSession,
   ResearchSessionInput,
   ResearchEvidence,
+  ResearchRun,
+  ResearchRunInput,
+  ResearchControl,
+  ResearchReport,
+  ResearchMessage,
 } from "@reader/core";
-import { request } from "./transport";
+import { request, requestResponse } from "./transport";
 
 const topicPath = (id: string) =>
   `/api/research/topics/${encodeURIComponent(id)}`;
 
 export const researchAPI = {
+  createRun: (
+    topicId: string,
+    sessionId: string,
+    input: ResearchRunInput,
+    signal?: AbortSignal,
+  ) =>
+    request<ResearchRun>(
+      `${topicPath(topicId)}/sessions/${encodeURIComponent(sessionId)}/runs`,
+      { method: "POST", body: JSON.stringify(input), signal },
+    ),
+  getRun: (runId: string, signal?: AbortSignal) =>
+    request<ResearchRun>(`/api/research/runs/${encodeURIComponent(runId)}`, {
+      signal,
+    }),
+  controlRun: (
+    runId: string,
+    action: "start" | "pause" | "resume" | "cancel",
+    input: ResearchControl,
+    signal?: AbortSignal,
+  ) =>
+    request<ResearchRun>(
+      `/api/research/runs/${encodeURIComponent(runId)}/${action}`,
+      { method: "POST", body: JSON.stringify(input), signal },
+    ),
+  events: (runId: string, after = 0, signal?: AbortSignal) =>
+    requestResponse(
+      `/api/research/runs/${encodeURIComponent(runId)}/events?after=${after}`,
+      { signal },
+    ),
+  listMessages: (sessionId: string, signal?: AbortSignal) =>
+    request<ResearchMessage[]>(
+      `/api/research/sessions/${encodeURIComponent(sessionId)}/messages`,
+      { signal },
+    ),
+  listReports: (topicId: string, signal?: AbortSignal) =>
+    request<ResearchReport[]>(`${topicPath(topicId)}/reports`, { signal }),
+  getReport: (reportId: string, signal?: AbortSignal) =>
+    request<ResearchReport>(
+      `/api/research/reports/${encodeURIComponent(reportId)}`,
+      { signal },
+    ),
+  reviseReport: (
+    reportId: string,
+    input: { requestId: string; content: string },
+    signal?: AbortSignal,
+  ) =>
+    request<ResearchReport>(
+      `/api/research/reports/${encodeURIComponent(reportId)}/revisions`,
+      { method: "POST", body: JSON.stringify(input), signal },
+    ),
+  markdown: async (reportId: string, signal?: AbortSignal) =>
+    (
+      await requestResponse(
+        `/api/research/reports/${encodeURIComponent(reportId)}/markdown`,
+        { signal },
+      )
+    ).text(),
   getSource: (sourceId: string, signal?: AbortSignal) =>
     request<ResearchEvidence>(
       `/api/research/sources/${encodeURIComponent(sourceId)}`,

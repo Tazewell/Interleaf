@@ -30,6 +30,14 @@ import (
 )
 
 type Server struct {
+	researchMu             sync.Mutex
+	researchControlLocks   sync.Map
+	researchWorkers        map[string]*researchWorker
+	researchSlots          chan struct{}
+	researchClosed         bool
+	researchEventsMu       sync.Mutex
+	researchEvents         map[string]*researchEventLog
+	researchRecoveryErr    error
 	aiTasks                map[*documentTask]struct{}
 	paperTasks             map[string]map[*documentTask]struct{}
 	deletingPapers         map[string]bool
@@ -86,6 +94,7 @@ func NewServer(s *Store, token, web string) *Server {
 	// Only dedicated, recognizable export sessions are recovered on restart.
 	// A filesystem error is reported when an export is requested.
 	_ = server.initBilingualPDF()
+	server.researchRecoveryErr = server.recoverResearch()
 	return server
 }
 func id() string { b := make([]byte, 16); _, _ = rand.Read(b); return hex.EncodeToString(b) }

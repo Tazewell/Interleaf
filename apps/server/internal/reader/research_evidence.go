@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 )
 
 // The opaque evidence ID is global. A block ID is only meaningful within this
@@ -213,6 +214,28 @@ func researchPassageEvidence(scope researchScope, m ResearchMember, p documentPa
 	return ResearchEvidence{ID: id(), TopicID: scope.Run.TopicID, SnapshotID: scope.Snapshot.ID, RunID: scope.Run.ID, PaperID: m.PaperID, DocumentID: m.DocumentID, Kind: "local-passage", Revision: revision, ContentHash: sourceKey(p.Text), Location: researchPassageLocation(p), Excerpt: p.Text, ReadAt: now(), Availability: "valid"}
 }
 func writeResearchEvidence(ctx context.Context, tx *sql.Tx, ev ResearchEvidence) error {
+	scope, ownerErr := readResearchRunScope(ctx, tx, ev.RunID)
+	if ownerErr != nil {
+		return ownerErr
+	}
+	if scope.Run.TopicID != ev.TopicID || scope.Snapshot.ID != ev.SnapshotID {
+		return errResearchScopeChanged
+	}
+	if ev.PaperID == "" && (ev.DocumentID != "" || strings.HasPrefix(ev.Kind, "local-")) {
+		return errResearchScopeChanged
+	}
+	if ev.PaperID != "" {
+		m, err := scope.member(ev.PaperID)
+		if err != nil || m.DocumentID != ev.DocumentID {
+			return errResearchScopeChanged
+		}
+	}
+	if ev.CandidateID != "" {
+		var topic string
+		if err := tx.QueryRowContext(ctx, `SELECT topic_id FROM research_candidates WHERE id=?`, ev.CandidateID).Scan(&topic); err != nil || topic != ev.TopicID {
+			return errResearchScopeChanged
+		}
+	}
 	_, err := tx.ExecContext(ctx, `INSERT INTO research_evidence(id,topic_id,snapshot_id,run_id,paper_id,document_id,candidate_id,availability,body,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?)`, ev.ID, ev.TopicID, ev.SnapshotID, ev.RunID, ev.PaperID, nullResearchString(ev.DocumentID), nullResearchString(ev.CandidateID), ev.Availability, jsonText(ev), ev.ReadAt, ev.ReadAt)
 	return err
 }
@@ -278,7 +301,7 @@ func researchCoverageFor(st *researchReadState, evidence []ResearchEvidence) Res
 	}
 	return coverage
 }
-func readResearchEvidence(ctx context.Context, db *sql.DB, sourceID string) (ResearchEvidence, error) {
+func readResearchEvidence(ctx context.Context, db researchRowQuery, sourceID string) (ResearchEvidence, error) {
 	var ev ResearchEvidence
 	var raw, topic, snapshot, run, paper, document, candidate, availability string
 	err := db.QueryRowContext(ctx, `SELECT body,topic_id,snapshot_id,run_id,COALESCE(paper_id,''),COALESCE(document_id,''),COALESCE(candidate_id,''),availability FROM research_evidence WHERE id=?`, sourceID).Scan(&raw, &topic, &snapshot, &run, &paper, &document, &candidate, &availability)

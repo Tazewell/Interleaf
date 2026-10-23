@@ -44,24 +44,36 @@ func (s *Server) moveToTrash(ctx context.Context, id string) (Document, int, str
 		s.documentMu.Unlock()
 		return Document{}, 409, "文档正在删除"
 	}
+	// Block new work and cancel before waiting for the single DB connection:
+	// a running research worker may hold it in its final commit barrier.
+	if s.deletingDocuments == nil {
+		s.deletingDocuments = make(map[string]bool)
+	}
+	s.deletingDocuments[id] = true
+	tasks := []*documentTask{}
+	for task := range s.documentTasks[id] {
+		tasks = append(tasks, task)
+	}
+	s.documentMu.Unlock()
+	defer func() { s.documentMu.Lock(); delete(s.deletingDocuments, id); s.documentMu.Unlock() }()
+	if err := s.cancelResearchForDocument(ctx, id); err != nil {
+		return Document{}, 408, "研究任务仍在停止"
+	}
 	d, err := s.Store.Document(id)
 	if errors.Is(err, sql.ErrNoRows) {
-		s.documentMu.Unlock()
 		return Document{}, 404, "文档不存在"
 	}
 	if err != nil {
-		s.documentMu.Unlock()
 		return Document{}, 500, "无法读取文档"
 	}
 	if d.DeletedAt != "" {
-		s.documentMu.Unlock()
 		return d, 0, ""
 	}
 	interrupted := false
 	if p, e := s.Store.processing(id); e == nil {
 		interrupted = p.Status == "running" || (p.Translating != nil && p.Translating.Status == "running")
 	}
-	// Marking first rejects new work; running work is then cancelled and joined.
+	// The in-memory gate remains held until durable deletion is recorded.
 	tx, err := s.Store.DB.BeginTx(ctx, nil)
 	if err == nil {
 		defer tx.Rollback()
@@ -74,20 +86,15 @@ func (s *Server) moveToTrash(ctx context.Context, id string) (Document, int, str
 		}
 	}
 	if err != nil {
-		s.documentMu.Unlock()
 		return Document{}, 500, "无法移到回收站"
 	}
-	tasks := []*documentTask{}
-	for task := range s.documentTasks[id] {
+	for _, task := range tasks {
 		task.cancel()
-		tasks = append(tasks, task)
 	}
-	s.documentMu.Unlock()
 	for _, task := range tasks {
 		select {
 		case <-task.done:
 		case <-ctx.Done():
-			// The document is already in the trash; the task stops on its own.
 			return Document{}, 408, "已移到回收站，后台任务仍在停止"
 		}
 	}

@@ -142,13 +142,18 @@ func (s *Server) analyzeResearchPaper(parent context.Context, runID, paperID str
 	defer st.Finish()
 	ctx = st.Context
 	// Resolve once; neither batches nor a mid-analysis settings edit change model.
-	config, err := s.nativeAIConfig()
-	if err != nil {
-		return ResearchPaperCard{}, err
-	}
-	snapshot, err := s.resolveNativeTask(ctx, config, taskResearch)
-	if err != nil {
-		return ResearchPaperCard{}, err
+	var snapshot nativeTaskSnapshot
+	if attempt, ok := parent.Value(researchAttemptKey{}).(*researchAttempt); ok {
+		snapshot = attempt.snapshot
+	} else {
+		config, e := s.nativeAIConfig()
+		if e != nil {
+			return ResearchPaperCard{}, e
+		}
+		snapshot, err = s.resolveNativeTask(ctx, config, taskResearch)
+		if err != nil {
+			return ResearchPaperCard{}, err
+		}
 	}
 	card := ResearchPaperCard{CacheKey: researchCardKey(m, snapshot, researchCardProtocol, researchCardPrompt), PaperID: m.PaperID, DocumentID: m.DocumentID, Revision: m.CorpusRevision, Level: m.Coverage, EvidenceIDs: []string{}, ReadCoverage: ResearchReadCoverage{Ranges: []json.RawMessage{}}}
 	if card.Revision == "" {
@@ -211,7 +216,12 @@ func (s *Server) analyzeResearchPaper(parent context.Context, runID, paperID str
 			evidence = append(evidence, ev)
 			card.EvidenceIDs = append(card.EvidenceIDs, ev.ID)
 		}
-		extracted, e := runNativeLoop(ctx, nativeLoopRequest{Snapshot: extractSnapshot, Input: researchCardInput(m.Title, batchEvidence), Tools: researchCardValidator{tools, allowed}, Budget: nativeLoopBudget{MaxOutputBytes: 256 << 10, Timeout: 3 * time.Minute, ReserveCall: reserve}}, nil)
+		input := researchCardInput(m.Title, batchEvidence)
+		if attempt, ok := parent.Value(researchAttemptKey{}).(*researchAttempt); ok {
+			input.UsageSink = attempt.usage
+			input.UsageProvider = "api"
+		}
+		extracted, e := runNativeLoop(ctx, nativeLoopRequest{Snapshot: extractSnapshot, Input: input, Tools: researchCardValidator{tools, allowed}, Budget: nativeLoopBudget{MaxOutputBytes: 256 << 10, Timeout: 3 * time.Minute, ReserveCall: reserve}}, nil)
 		if e != nil {
 			return ResearchPaperCard{}, e
 		}
@@ -347,7 +357,10 @@ func (s *Server) readResearchCard(ctx context.Context, scope researchScope, st *
 				return e
 			}
 		}
-		return writeResearchCard(ctx, tx, card)
+		if err := writeResearchCard(ctx, tx, card); err != nil {
+			return err
+		}
+		return writeResearchUnit(ctx, tx, ResearchUnit{RunID: scope.Run.ID, UnitKey: "paper:" + card.PaperID, Kind: "paper", Status: "complete", Result: json.RawMessage(jsonText(card))})
 	})
 	return card, err == nil, err
 }
@@ -392,6 +405,9 @@ func (s *Server) saveResearchCard(ctx context.Context, scope researchScope, card
 				return errResearchScopeChanged
 			}
 		}
-		return writeResearchCard(ctx, tx, card)
+		if err := writeResearchCard(ctx, tx, card); err != nil {
+			return err
+		}
+		return writeResearchUnit(ctx, tx, ResearchUnit{RunID: scope.Run.ID, UnitKey: "paper:" + card.PaperID, Kind: "paper", Status: "complete", Result: json.RawMessage(jsonText(card))})
 	})
 }

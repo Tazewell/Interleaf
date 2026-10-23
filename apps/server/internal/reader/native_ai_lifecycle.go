@@ -96,6 +96,7 @@ func (s *Server) stopResearchPaperTasks(paperID string) func() {
 }
 
 func (s *Server) Close() {
+	_ = s.stopResearch(context.Background())
 	s.documentMu.Lock()
 	s.documentClosed = true
 	var tasks []*documentTask

@@ -1,4 +1,5 @@
 // Shared research storage/wire entities. Keep synchronized with research_types.go.
+import type { UsageCall } from "./index";
 export interface ResearchTopic {
   id: string;
   title: string;
@@ -99,6 +100,7 @@ export interface ResearchCoverage {
 }
 
 export interface ResearchRun {
+  usage?: ResearchUsage;
   id: string;
   topicId: string;
   sessionId: string;
@@ -122,6 +124,13 @@ export interface ResearchRun {
   limitReason?: string;
   latestReportId?: string;
   updatedAt: string;
+}
+export interface ResearchUsage {
+  attempt: number;
+  attemptBudget: ResearchBudget;
+  attemptRequests: number;
+  modelRequests: number;
+  calls: UsageCall[];
 }
 
 export interface ResearchControl {

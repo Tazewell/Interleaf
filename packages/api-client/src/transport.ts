@@ -17,6 +17,15 @@ export async function request<T>(
   path: string,
   init: RequestInit = {},
 ): Promise<T> {
+  const response = await requestResponse(path, init);
+  return response.status === 204 ? (undefined as T) : response.json();
+}
+
+/** Authenticated raw transport for SSE and inert text exports. */
+export async function requestResponse(
+  path: string,
+  init: RequestInit = {},
+): Promise<Response> {
   const response = await diagnosticFetch(path, {
     ...init,
     headers: {
@@ -35,5 +44,5 @@ export async function request<T>(
       data.pages,
     );
   }
-  return response.status === 204 ? (undefined as T) : response.json();
+  return response;
 }
