@@ -1054,9 +1054,6 @@ export function Workspace({
               返回阅读位置
             </Button>
           )}
-          <IconButton label="文档概要" onClick={() => setOverviewOpen(true)}>
-            <BookOpen />
-          </IconButton>
           <div ref={setReadingToolbar} />
           <span className="toolbar-divider" />
           <div ref={setSourceAutoCenterToolbar} />
@@ -1552,7 +1549,7 @@ export function Workspace({
               <TabsList className="panel-tabs">
                 <TabsTrigger value="ai">
                   <Sparkles className="size-3.5" />
-                  Agent
+                  对话
                 </TabsTrigger>
                 <TabsTrigger value="notes">
                   <StickyNote className="size-3.5" />
@@ -1566,6 +1563,15 @@ export function Workspace({
                   onClick={() => setUsageOpen(true)}
                 >
                   <ChartColumn />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon-xs"
+                  title="文档概要"
+                  aria-label="文档概要"
+                  onClick={() => setOverviewOpen(true)}
+                >
+                  <BookOpen />
                 </Button>
                 {rightTab === "ai" && provider === "codex" && (
                   <CodexHandoffButton

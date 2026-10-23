@@ -348,6 +348,8 @@ export function EPUBReadingView({
         mode={mode}
         swapped={swapped}
         onSwap={() => setSwapped((v) => !v)}
+        sourceLabel="原文"
+        translationLabel="译文"
         source={
           <div className="translation-source">
             <ReaderView

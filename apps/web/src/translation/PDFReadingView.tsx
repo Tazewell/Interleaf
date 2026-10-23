@@ -795,6 +795,8 @@ export function PDFReadingView({
     input(value === "translation" ? "translation" : "source");
     setPopup(undefined);
     setMode(value);
+    // A half-width source pane needs fit-width; a 100% page would be clipped.
+    if (value === "parallel") events.zoom?.("width");
   };
   const activePopup = popup && byId.get(popup.block.id);
   const toggleSync = () => {
@@ -879,6 +881,8 @@ export function PDFReadingView({
         mode={mode}
         swapped={swapped}
         onSwap={() => setSwapped((value) => !value)}
+        sourceLabel="原页"
+        translationLabel="译文"
         source={
           <div
             className="translation-source"
