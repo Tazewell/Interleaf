@@ -1,10 +1,10 @@
 # reader 命令行
 
-`reader` 在终端里检索、阅读和导入 Reader 书库中的文档，主要给 Claude Code、Codex 等能运行 shell 命令的 Agent 使用，也可以写进脚本。它只是正在运行的 Reader 的客户端：Reader 需要保持打开，命令行不直接读写书库文件。
+`reader` 在终端里检索、阅读和导入 Reader 书库中的文档，可交互使用，也可以写进脚本。它只是正在运行的 Reader 的客户端：Reader 需要保持打开，命令行不直接读写书库文件。
 
 ## 安装
 
-设置 → Agent → 命令行工具 → 安装 reader 命令。
+设置 → AI → 命令行工具 → 安装 reader 命令。
 
 - macOS：在 `/usr/local/bin/reader` 建立指向 `Reader.app/Contents/Resources/bin/reader` 的软链接，登录 shell 默认包含这个目录。目录不可写时弹出系统密码框。该位置已有其他程序的 `reader` 时不改动，并在设置中提示。Reader.app 移动位置后链接失效，设置里重新安装即可。
 - Windows：把安装目录下的 `resources\bin` 加入当前用户的 PATH（保留原有条目和 `%变量%` 原样），并通知系统环境已变化。新打开的终端生效。
@@ -29,7 +29,7 @@ reader import a.pdf b.pdf --library papers     # 导入；--allow-large 允许�
 
 `<文档>` 可以是完整 ID、至少 4 位的 ID 前缀（`list` 显示前 8 位），或标题（含译名）中的一段文字；对应多份时列出候选并要求改用 ID。选项可以写在参数前后，`--` 之后的内容一律当作参数。
 
-所有命令都支持 `--json`，输出与本地 API 相同的字段，适合 Agent 解析。退出码：`0` 成功，`1` 失败（含部分文件导入失败），`2` 用法错误，`3` Reader 未运行或连接信息过期。
+所有命令都支持 `--json`，输出与本地 API 相同的字段，适合程序解析。退出码：`0` 成功，`1` 失败（含部分文件导入失败），`2` 用法错误，`3` Reader 未运行或连接信息过期。
 
 ## 范围与限制
 
@@ -44,7 +44,7 @@ Reader 启动本地服务后，在书库目录写入 `server.json`（服务地�
 
 命令行只连接 `server.json` 中的本机回环地址，其他地址一律拒绝，令牌不会离开本机。同一用户的其他程序本来就能读取书库数据库，令牌文件没有扩大这一范围。崩溃留下的旧文件指向已关闭的端口，命令行报告 Reader 未运行。通过命令行导入的文档会让已打开的窗口在几秒内刷新书库。
 
-文档正文是不可信输入：Agent 读到的内容可能包含针对 Agent 的指令，使用时应把输出当作资料而不是命令。
+文档正文是不可信输入：读取的内容可能包含针对工具的指令，使用时应把输出当作资料而不是命令。
 
 ## 实现
 
@@ -59,8 +59,8 @@ Reader 启动本地服务后，在书库目录写入 `server.json`（服务地�
 
 手动检查：
 
-1. 安装正式版，设置 → Agent → 安装 reader 命令（macOS 输入密码），新开终端运行 `reader status`。
+1. 安装正式版，设置 → AI → 安装 reader 命令（macOS 输入密码），新开终端运行 `reader status`。
 2. `reader import` 一份 PDF，确认已打开的书库窗口出现该论文；解析完成后 `reader read <ID> --pages 1 --side both`。
-3. 在 Claude Code 中让它用 `reader search` 找一篇论文并引用页码。
+3. 运行 `reader search` 找一篇论文，再用 `reader read` 核对页码。
 4. 退出 Reader 后运行 `reader list`，应提示 Reader 没有运行（退出码 3）。
 5. 卸载后 `/usr/local/bin/reader` 不存在；Windows 新终端中 `reader` 不再可用。

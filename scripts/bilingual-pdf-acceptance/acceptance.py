@@ -128,7 +128,7 @@ try:
             return json.loads(raw) if raw and response.headers.get_content_type() == "application/json" else raw
 
     api("PUT", "/api/settings", {"autoTranslateMaxPages": 0, "autoGenerateOverview": False})
-    api("PUT", "/api/ai/config", {"primary": "api", "api": {"url": f"http://127.0.0.1:{mock.server_port}", "key": KEY, "protocol": "openai"}, "translationModels": {"api": MODEL}, "models": {"api": MODEL}, "apiModels": [MODEL]})
+    api("PUT", "/api/ai/config", {"version": 2, "connection": {"url": f"http://127.0.0.1:{mock.server_port}", "key": KEY, "protocol": "openai"}, "models": {"chat": MODEL, "translation": MODEL}, "apiModels": [MODEL]})
 
     def imported(name):
         boundary = "ReaderAcceptanceBoundary"
@@ -295,9 +295,9 @@ try:
     results["checks"].append("delete during API request joins worker; no late ready file/attachment")
     assert not STATE["errors"], STATE["errors"]
     # Final preview must not retain a dead endpoint/test key.
-    api("PUT", "/api/ai/config", {"primary": "codex", "api": {"url": "", "key": "", "protocol": "openai"}, "translationModels": {}, "models": {}, "apiModels": []})
+    api("PUT", "/api/ai/config", {"version": 2, "connection": {"url": "", "key": None, "protocol": "openai"}, "models": {}, "apiModels": []})
     cleared = api("GET", "/api/ai/config")
-    assert not cleared["api"]["url"] and not cleared["api"]["hasKey"]
+    assert not cleared["connection"]["url"] and not cleared["connection"]["hasKey"]
     results["mockCalls"] = STATE["calls"]
     results["passed"] = True
     results["preservation"] = {"sha256": baseline["sha256"], "nonemptyRows": {k: len(v) for k, v in baseline["rows"].items()}, "unchanged": True}
