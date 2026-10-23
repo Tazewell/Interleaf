@@ -898,10 +898,28 @@ kbd {
   padding: 0 18px;
 }
 .chat-empty > p:first-child {
-  font-size: 11px;
-  line-height: 1.9;
+  font-size: 12px;
+  line-height: 1.7;
   color: var(--muted-foreground);
-  padding: 8px 0 22px;
+  padding: 4px 0 10px;
+}
+.chat-empty-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.chat-empty-actions .suggestion {
+  width: auto;
+  height: 28px;
+  margin: 0;
+  padding-inline: 9px;
+  font-size: 11.5px;
+  font-weight: 400;
+  gap: 6px;
+  color: var(--muted-foreground);
+}
+.chat-empty-actions .suggestion:hover {
+  color: var(--foreground);
 }
 .suggestion {
   width: 100%;
@@ -919,7 +937,7 @@ kbd {
   font-size: 10px;
   line-height: 1.9;
   color: var(--muted-foreground);
-  margin-top: 25px;
+  margin-top: 18px;
 }
 .chat-message {
   font-size: calc(12px * var(--assistant-font-scale, 1));
@@ -3661,4 +3679,29 @@ textarea.paper-title-input {
 }
 .library-main:not(.paper-library) .library-filter-bar {
   margin-bottom: 18px;
+}
+
+/* The session picker is a quiet label, not a full-width form control. */
+.session-picker-trigger {
+  flex: 0 1 auto;
+  min-width: 0;
+  height: 28px;
+  padding-inline: 5px;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  color: var(--muted-foreground);
+  font-size: 12px;
+}
+.session-picker-trigger:hover,
+.session-picker-trigger[data-popup-open] {
+  background: var(--muted);
+  color: var(--foreground);
+}
+.session-picker-action {
+  opacity: 0.55;
+}
+.session-picker:hover .session-picker-action,
+.session-picker:focus-within .session-picker-action {
+  opacity: 1;
 }

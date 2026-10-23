@@ -1664,44 +1664,45 @@ export function Workspace({
                   empty={
                     <div className="chat-empty">
                       <p>
-                        选中原文，可以翻译、解释，
-                        <br />
-                        或引用多段文字一起讨论。
+                        选中文字提问，或直接问这一
+                        {doc.type === "epub" ? "章" : "页"}。
                       </p>
-                      <Button
-                        variant="outline"
-                        className="suggestion"
-                        disabled={!adapter}
-                        onClick={() =>
-                          void send(
-                            doc.type === "epub"
-                              ? "请总结当前章节的核心内容，并列出值得思考的问题。"
-                              : "请总结当前 PDF 页的主要内容，保留重要术语。",
-                            [],
-                            true,
-                          )
-                        }
-                      >
-                        <BookOpen />
-                        总结当前{doc.type === "epub" ? "章节" : "页面"}
-                        <ArrowLeft className="ml-auto rotate-180" />
-                      </Button>
-                      <Button
-                        variant="outline"
-                        className="suggestion"
-                        disabled={!adapter}
-                        onClick={() =>
-                          void send(
-                            "请找出当前内容的核心概念，并用简明的语言解释。",
-                            [],
-                            true,
-                          )
-                        }
-                      >
-                        <MessageSquare />
-                        解释核心概念
-                        <ArrowLeft className="ml-auto rotate-180" />
-                      </Button>
+                      <div className="chat-empty-actions">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="suggestion"
+                          disabled={!adapter}
+                          onClick={() =>
+                            void send(
+                              doc.type === "epub"
+                                ? "请总结当前章节的核心内容，并列出值得思考的问题。"
+                                : "请总结当前 PDF 页的主要内容，保留重要术语。",
+                              [],
+                              true,
+                            )
+                          }
+                        >
+                          <BookOpen />
+                          总结当前{doc.type === "epub" ? "章节" : "页面"}
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="suggestion"
+                          disabled={!adapter}
+                          onClick={() =>
+                            void send(
+                              "请找出当前内容的核心概念，并用简明的语言解释。",
+                              [],
+                              true,
+                            )
+                          }
+                        >
+                          <MessageSquare />
+                          解释概念
+                        </Button>
+                      </div>
                       <p className="privacy-note">
                         主动引用的文字和图片随问题发送；文档 Agent
                         按需检索、读取原文。
@@ -1782,6 +1783,7 @@ export function Workspace({
                       key={provider}
                       disabled={sending || !currentSession}
                       onSettings={onSettings}
+                      modelsOnly
                     />
                     {sending ? (
                       <Button

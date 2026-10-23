@@ -80,7 +80,7 @@ export function SessionPicker({
     }
   };
   return (
-    <div className="flex min-w-0 flex-col gap-1 border-b px-3 py-2">
+    <div className="session-picker flex min-w-0 flex-col gap-1 border-b px-3 py-2">
       <div className="flex min-w-0 items-center gap-1">
         <Select
           value={current?.id ?? null}
@@ -88,7 +88,10 @@ export function SessionPicker({
             if (id) onChange(id);
           }}
         >
-          <SelectTrigger className="h-8 min-w-0 flex-1" aria-label="选择会话">
+          <SelectTrigger
+            className="session-picker-trigger"
+            aria-label="选择会话"
+          >
             <SelectValue className="truncate">
               {current?.title ?? "加载会话…"}
             </SelectValue>
@@ -107,6 +110,7 @@ export function SessionPicker({
         <Button
           variant="ghost"
           size="icon-xs"
+          className="session-picker-action"
           aria-label="重命名会话"
           disabled={!current || saving}
           onClick={() => {
@@ -119,6 +123,7 @@ export function SessionPicker({
         <Button
           variant="ghost"
           size="icon-xs"
+          className="session-picker-action"
           aria-label="新建会话"
           disabled={saving}
           onClick={() => void create()}

@@ -64,9 +64,11 @@ export function selectedAgentModel(
 export function ModelSelector({
   disabled,
   onSettings,
+  modelsOnly = false,
 }: {
   disabled: boolean;
   onSettings: () => void;
+  modelsOnly?: boolean;
 }) {
   const {
     aiConfig: config,
@@ -221,6 +223,56 @@ export function ModelSelector({
       >
         选择模型
       </Button>
+    );
+  if (modelsOnly)
+    return (
+      <Select
+        value={current?.id ?? null}
+        disabled={disabled || saving}
+        onValueChange={(value) => void choose(value)}
+      >
+        <SelectTrigger
+          className="model-select-trigger"
+          aria-label="选择模型"
+          aria-busy={loading || saving}
+        >
+          <ProviderIcon provider={provider} size={20} />
+          <span className="model-trigger-name">
+            {current?.name ?? (loading ? "加载模型…" : "选择模型")}
+          </span>
+        </SelectTrigger>
+        <SelectContent
+          className="model-select-menu"
+          side="top"
+          align="start"
+          sideOffset={8}
+          alignItemWithTrigger={false}
+        >
+          {options.map((model) => (
+            <SelectItem
+              key={model.id}
+              value={model.id}
+              label={model.name}
+              className="model-select-option"
+            >
+              <span className="model-select-name">{model.name}</span>
+            </SelectItem>
+          ))}
+          {loading && (
+            <div className="model-select-status" role="status">
+              正在获取模型…
+            </div>
+          )}
+          {!loading && error && (
+            <div className="model-select-status" role="alert">
+              {error}。关闭后重新打开可重试。
+            </div>
+          )}
+          {!loading && !error && options.length === 0 && (
+            <div className="model-select-status">暂无可用模型</div>
+          )}
+        </SelectContent>
+      </Select>
     );
   return (
     <Popover
