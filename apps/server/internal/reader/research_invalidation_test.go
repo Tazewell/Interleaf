@@ -125,6 +125,11 @@ func TestResearchPaperOnlyMutationInvalidation(t *testing.T) {
 			snap := researchSnapshot(t, s, topic)
 			seedResearchResult(t, s, topic, snap, paper, "", "paper-only")
 			seedResearchActiveState(t, s, "paper-only")
+			if action == "trash" {
+				if _, err := s.Store.DB.Exec(`UPDATE research_runs SET status='queued',body=json_set(body,'$.status','queued') WHERE id='paper-only'`); err != nil {
+					t.Fatal(err)
+				}
+			}
 			switch action {
 			case "update":
 				paperCall(t, s, "PATCH", "/api/papers/"+paper, `{"metadata":{"abstract":"changed abstract"}}`, 200)
@@ -201,6 +206,10 @@ func TestResearchCandidateOnlyPurgeAndRollback(t *testing.T) {
 	paperCall(t, s, "DELETE", "/api/documents/doc", "", 500)
 	assertResearchSourceState(t, s, "candidate-linked", "valid")
 	assertResearchSourceState(t, s, "candidate-unrelated", "valid")
+	var before string
+	if err := s.Store.DB.QueryRow(`SELECT body FROM research_candidates WHERE id='candidate-linked'`).Scan(&before); err != nil || !strings.Contains(before, "candidate payload") {
+		t.Fatal("candidate rollback lost payload", before, err)
+	}
 	s.Store.DB.Exec(`DROP TRIGGER reject_candidate_purge`)
 	paperCall(t, s, "DELETE", "/api/documents/doc", "", 204)
 	assertResearchSourceState(t, s, "candidate-linked", "removed")
@@ -208,5 +217,8 @@ func TestResearchCandidateOnlyPurgeAndRollback(t *testing.T) {
 	var raw string
 	if err := s.Store.DB.QueryRow(`SELECT body FROM research_candidates WHERE id='candidate-linked'`).Scan(&raw); err != nil || strings.Contains(raw, "candidate payload") || !strings.Contains(raw, `"removed"`) {
 		t.Fatal(raw, err)
+	}
+	if err := s.Store.DB.QueryRow(`SELECT body FROM research_candidates WHERE id='candidate-unrelated'`).Scan(&raw); err != nil || !strings.Contains(raw, "candidate payload") || strings.Contains(raw, `"removed"`) {
+		t.Fatal("unrelated candidate changed", raw, err)
 	}
 }
