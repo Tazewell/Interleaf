@@ -425,7 +425,7 @@ func (s *Server) deletePaper(w http.ResponseWriter, r *http.Request) {
 	tx, err := s.Store.DB.BeginTx(r.Context(), nil)
 	if err == nil {
 		defer tx.Rollback()
-		err = s.Store.invalidateResearchPaperTx(r.Context(), tx, p, "文献已永久删除")
+		err = s.Store.invalidateResearchPaperStateTx(r.Context(), tx, p, researchSourceRemoved, "文献已永久删除")
 		if err == nil {
 			_, err = tx.Exec(`DELETE FROM paper_items WHERE id=?`, p.ID)
 		}

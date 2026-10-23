@@ -287,57 +287,97 @@ func (s *Store) invalidateResearchDocument(ctx context.Context, documentID, reas
 	}
 	return tx.Commit()
 }
+
+type researchSourceState string
+
+const researchSourceStale researchSourceState = "stale"
+const researchSourceRemoved researchSourceState = "removed"
+
 func (s *Store) invalidateResearchPaperTx(ctx context.Context, tx *sql.Tx, p PaperItem, reason string) error {
-	// Metadata-only members have no evidence/document row to follow. Their
-	// historical reports are located through the immutable scope membership.
-	const runs = `SELECT r.id FROM research_runs r JOIN research_snapshots s ON s.id=json_extract(r.body,'$.snapshotId'),json_each(s.body,'$.members') m WHERE json_extract(m.value,'$.paperId')=?`
-	_, err := tx.ExecContext(ctx, `UPDATE research_reports SET body=json_set(body,'$.stale',json('true')),updated_at=? WHERE run_id IN (`+runs+`) OR json_extract(body,'$.sourceRunId') IN (`+runs+`)`, now(), p.ID, p.ID)
-	if err != nil {
-		return err
-	}
-	if _, err = tx.ExecContext(ctx, `DELETE FROM research_cards WHERE paper_id=?`, p.ID); err != nil {
-		return err
-	}
-	if _, err = tx.ExecContext(ctx, `UPDATE research_evidence SET availability='stale',body=json_set(body,'$.availability','stale'),updated_at=? WHERE paper_id=? AND availability!='removed'`, now(), p.ID); err != nil {
+	return s.invalidateResearchPaperStateTx(ctx, tx, p, researchSourceStale, reason)
+}
+func (s *Store) invalidateResearchPaperStateTx(ctx context.Context, tx *sql.Tx, p PaperItem, state researchSourceState, reason string) error {
+	if err := s.invalidateResearchSourceTx(ctx, tx, p.ID, "", state, reason); err != nil {
 		return err
 	}
 	for _, a := range p.Attachments {
-		if err = s.invalidateResearchDocumentTx(ctx, tx, a.DocumentID, reason); err != nil {
+		if err := s.invalidateResearchSourceTx(ctx, tx, "", a.DocumentID, state, reason); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 func (s *Store) invalidateResearchDocumentTx(ctx context.Context, tx *sql.Tx, documentID, reason string) error {
-	state := "stale"
+	state := researchSourceStale
 	if reason == "removed" {
-		state = "removed"
+		state = researchSourceRemoved
+	}
+	return s.invalidateResearchSourceTx(ctx, tx, "", documentID, state, reason)
+}
+func researchIDs(ctx context.Context, tx *sql.Tx, query string, args ...any) (string, error) {
+	rows, err := tx.QueryContext(ctx, query, args...)
+	if err != nil {
+		return "", err
+	}
+	ids := []string{}
+	for rows.Next() {
+		var id string
+		if err = rows.Scan(&id); err != nil {
+			rows.Close()
+			return "", err
+		}
+		ids = append(ids, id)
+	}
+	err = rows.Err()
+	rows.Close()
+	if err != nil {
+		return "", err
+	}
+	raw, err := json.Marshal(ids)
+	return string(raw), err
+}
+
+// Resolve the entire source closure before changing payloads. Paper-only and
+// candidate-only evidence share exactly the same transaction state transition.
+func (s *Store) invalidateResearchSourceTx(ctx context.Context, tx *sql.Tx, paperID, documentID string, state researchSourceState, reason string) error {
+	candidateIDs, err := researchIDs(ctx, tx, `SELECT id FROM research_candidates WHERE (?!='' AND json_extract(body,'$.paperId')=?) OR (?!='' AND json_extract(body,'$.documentId')=?)`, paperID, paperID, documentID, documentID)
+	if err != nil {
+		return err
+	}
+	evidenceIDs, err := researchIDs(ctx, tx, `SELECT id FROM research_evidence WHERE (?!='' AND paper_id=?) OR (?!='' AND document_id=?) OR candidate_id IN (SELECT value FROM json_each(?))`, paperID, paperID, documentID, documentID, candidateIDs)
+	if err != nil {
+		return err
+	}
+	runIDs, err := researchIDs(ctx, tx, `SELECT r.id FROM research_runs r WHERE id IN (SELECT run_id FROM research_evidence WHERE id IN (SELECT value FROM json_each(?))) OR EXISTS(SELECT 1 FROM research_snapshots s,json_each(s.body,'$.members') m WHERE s.id=json_extract(r.body,'$.snapshotId') AND ((?!='' AND json_extract(m.value,'$.paperId')=?) OR (?!='' AND json_extract(m.value,'$.documentId')=?)))`, evidenceIDs, paperID, paperID, documentID, documentID)
+	if err != nil {
+		return err
 	}
 	stamp := now()
-	const runs = `SELECT r.id FROM research_runs r WHERE r.id IN (SELECT run_id FROM research_evidence WHERE document_id=?) OR EXISTS(SELECT 1 FROM research_snapshots s,json_each(s.body,'$.members') m WHERE s.id=json_extract(r.body,'$.snapshotId') AND json_extract(m.value,'$.documentId')=?)`
-	if _, err := tx.ExecContext(ctx, `UPDATE research_reports SET body=json_set(body,'$.stale',json('true')),updated_at=? WHERE run_id IN (`+runs+`) OR id IN (SELECT r.id FROM research_reports r,json_each(r.body,'$.sourceIds') src JOIN research_evidence e ON e.id=src.value WHERE e.document_id=?) OR json_extract(body,'$.sourceRunId') IN (`+runs+`)`, stamp, documentID, documentID, documentID, documentID, documentID); err != nil {
-		return err
+	statements := []struct {
+		query string
+		args  []any
+	}{
+		{`UPDATE research_reports SET body=json_set(body,'$.stale',json('true')),updated_at=? WHERE run_id IN (SELECT value FROM json_each(?)) OR json_extract(body,'$.sourceRunId') IN (SELECT value FROM json_each(?)) OR EXISTS(SELECT 1 FROM json_each(research_reports.body,'$.sourceIds') src WHERE src.value IN (SELECT value FROM json_each(?)))`, []any{stamp, runIDs, runIDs, evidenceIDs}},
+		{`DELETE FROM research_cards WHERE (?!='' AND paper_id=?) OR (?!='' AND document_id=?) OR EXISTS(SELECT 1 FROM json_each(research_cards.body,'$.evidenceIds') e WHERE e.value IN (SELECT value FROM json_each(?)))`, []any{paperID, paperID, documentID, documentID, evidenceIDs}},
+		{`DELETE FROM research_conversations WHERE session_id IN (SELECT session_id FROM research_runs WHERE id IN (SELECT value FROM json_each(?)))`, []any{runIDs}},
+		{`UPDATE research_units SET status='stale',body=json_set(json_remove(body,'$.result'),'$.status','stale','$.updatedAt',?),updated_at=? WHERE kind!='control' AND run_id IN (SELECT value FROM json_each(?))`, []any{stamp, stamp, runIDs}},
+		{`UPDATE research_runs SET status='interrupted',body=json_set(body,'$.status','interrupted','$.error',?,'$.updatedAt',?),updated_at=? WHERE status IN ('preparing','queued','running') AND id IN (SELECT value FROM json_each(?))`, []any{reason, stamp, stamp, runIDs}},
+		{`UPDATE research_evidence SET availability=CASE WHEN availability='removed' THEN 'removed' ELSE ? END,body=json_set(body,'$.availability',CASE WHEN availability='removed' THEN 'removed' ELSE ? END),updated_at=? WHERE id IN (SELECT value FROM json_each(?))`, []any{state, state, stamp, evidenceIDs}},
 	}
-	if _, err := tx.ExecContext(ctx, `DELETE FROM research_cards WHERE document_id=?`, documentID); err != nil {
-		return err
+	if state == researchSourceRemoved {
+		statements = append(statements,
+			struct {
+				query string
+				args  []any
+			}{`UPDATE research_evidence SET body=json_set(body,'$.excerpt','','$.location',json('null')),updated_at=? WHERE id IN (SELECT value FROM json_each(?))`, []any{stamp, evidenceIDs}},
+			struct {
+				query string
+				args  []any
+			}{`UPDATE research_candidates SET body=json_set(body,'$.availability','removed','$.abstract',''),updated_at=? WHERE id IN (SELECT value FROM json_each(?))`, []any{stamp, candidateIDs}},
+		)
 	}
-	if _, err := tx.ExecContext(ctx, `DELETE FROM research_conversations WHERE session_id IN (SELECT session_id FROM research_runs WHERE id IN (`+runs+`))`, documentID, documentID); err != nil {
-		return err
-	}
-	if _, err := tx.ExecContext(ctx, `UPDATE research_units SET status='stale',body=json_set(json_remove(body,'$.result'),'$.status','stale','$.updatedAt',?),updated_at=? WHERE kind!='control' AND run_id IN (`+runs+`)`, stamp, stamp, documentID, documentID); err != nil {
-		return err
-	}
-	if _, err := tx.ExecContext(ctx, `UPDATE research_runs SET status='interrupted',body=json_set(body,'$.status','interrupted','$.error',?,'$.updatedAt',?),updated_at=? WHERE status IN ('preparing','queued','running') AND id IN (`+runs+`)`, reason, stamp, stamp, documentID, documentID); err != nil {
-		return err
-	}
-	if _, err := tx.ExecContext(ctx, `UPDATE research_evidence SET availability=CASE WHEN availability='removed' THEN 'removed' ELSE ? END,body=json_set(body,'$.availability',CASE WHEN availability='removed' THEN 'removed' ELSE ? END),updated_at=? WHERE document_id=?`, state, state, stamp, documentID); err != nil {
-		return err
-	}
-	if state == "removed" {
-		if _, err := tx.ExecContext(ctx, `UPDATE research_evidence SET body=json_set(body,'$.excerpt','','$.location',json('null')),updated_at=? WHERE document_id=?`, stamp, documentID); err != nil {
-			return err
-		}
-		if _, err := tx.ExecContext(ctx, `UPDATE research_candidates SET body=json_set(body,'$.availability','removed','$.abstract',''),updated_at=? WHERE json_extract(body,'$.documentId')=?`, stamp, documentID); err != nil {
+	for _, statement := range statements {
+		if _, err = tx.ExecContext(ctx, statement.query, statement.args...); err != nil {
 			return err
 		}
 	}
