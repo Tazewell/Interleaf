@@ -1,6 +1,7 @@
 package reader
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"encoding/json"
@@ -229,7 +230,9 @@ func TestNativeCloseDocumentIO(t *testing.T) {
 					}
 					defer reopened.DB.Close()
 					var n int
-					reopened.DB.QueryRow("SELECT count(*) FROM messages WHERE role='assistant'").Scan(&n)
+					if err := reopened.DB.QueryRow("SELECT count(*) FROM messages WHERE json_extract(body, '$.role')='assistant'").Scan(&n); err != nil {
+						t.Fatal(err)
+					}
 					if n != 0 {
 						t.Fatal("late answer survived migration", n)
 					}
@@ -375,5 +378,196 @@ func TestNativeCloseBackgroundCatalog(t *testing.T) {
 				t.Fatal("document survived delete")
 			}
 		})
+	}
+}
+
+func TestNativeRetranslationDeleteJoinsCatalog(t *testing.T) {
+	s, _, _ := completedTranslationFixture(t)
+	entered, canceled, release := make(chan struct{}), make(chan struct{}), make(chan struct{})
+	api := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		close(entered)
+		select {
+		case <-r.Context().Done():
+			close(canceled)
+		case <-release:
+		}
+	}))
+	defer api.Close()
+	defer close(release)
+	configureNativeTest(t, s, api.URL, "test", false)
+	response := make(chan *httptest.ResponseRecorder, 1)
+	go func() {
+		response <- request(t, s, "POST", "/api/documents/doc/assistance", strings.NewReader(`{"action":"retranslate"}`))
+	}()
+	select {
+	case <-entered:
+	case <-time.After(time.Second):
+		t.Fatal("catalog not reached")
+	}
+	s.documentMu.Lock()
+	registered := len(s.documentTasks["doc"])
+	s.documentMu.Unlock()
+	if registered == 0 {
+		t.Error("retranslation catalog has no document registration")
+	}
+	deleted := make(chan *httptest.ResponseRecorder, 1)
+	go func() { deleted <- request(t, s, "DELETE", "/api/documents/doc", nil) }()
+	select {
+	case w := <-deleted:
+		if w.Code != 204 {
+			t.Fatal(w.Code, w.Body.String())
+		}
+	case <-time.After(time.Second):
+		t.Fatal("delete did not join catalog")
+	}
+	select {
+	case <-canceled:
+	case <-time.After(time.Second):
+		t.Fatal("delete left catalog HTTP running")
+	}
+	select {
+	case w := <-response:
+		if w.Code == 200 {
+			t.Fatal("canceled retranslation accepted")
+		}
+	case <-time.After(time.Second):
+		t.Fatal("retranslation did not return")
+	}
+	for _, table := range []string{"translation_restarts", "translation_previous", "translations"} {
+		var n int
+		if err := s.Store.DB.QueryRow("SELECT count(*) FROM " + table + " WHERE document_id='doc'").Scan(&n); err != nil {
+			t.Fatal(err)
+		}
+		if n != 0 {
+			t.Fatalf("late %s rows: %d", table, n)
+		}
+	}
+}
+
+// Exercise the production persistence caller, not only GenerationService. The
+// old history and translation must survive closing/reopening the library while
+// an unconfirmed response must never become an assistant row.
+func TestNativeChatCloseReopenPreservesPublishedResults(t *testing.T) {
+	s, _, m := completedTranslationFixture(t)
+	if err := s.Store.saveMessage(Message{ID: "old-answer", DocumentID: "doc", Role: "assistant", Content: "published history"}); err != nil {
+		t.Fatal(err)
+	}
+	var historyBefore string
+	if err := s.Store.DB.QueryRow("SELECT body FROM messages WHERE id='old-answer'").Scan(&historyBefore); err != nil {
+		t.Fatal(err)
+	}
+	translationsBefore, err := s.translations("doc", m)
+	if err != nil {
+		t.Fatal(err)
+	}
+	entered, release := make(chan struct{}), make(chan struct{})
+	api := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "GET" {
+			fmt.Fprint(w, `{"data":[]}`)
+			return
+		}
+		w.Header().Set("Content-Type", "text/event-stream")
+		sendTranslationDelta(w, "unconfirmed answer")
+		close(entered)
+		select {
+		case <-r.Context().Done():
+		case <-release:
+		}
+		// Simulate a provider that tries to finish even after the caller canceled.
+		finishTranslationStream(w)
+	}))
+	defer api.Close()
+	defer close(release)
+	configureNativeTest(t, s, api.URL, "test", false)
+	readerHTTP := httptest.NewServer(s.Handler())
+	defer readerHTTP.Close()
+	response := make(chan string, 1)
+	draft := make(chan struct{}, 1)
+	go func() {
+		req, err := http.NewRequest("POST", readerHTTP.URL+"/api/documents/doc/chat", strings.NewReader(`{"provider":"api","prompt":"new question","context":"source"}`))
+		if err != nil {
+			t.Error(err)
+			response <- ""
+			return
+		}
+		req.Header.Set("Authorization", "Bearer test-secret")
+		res, err := (&http.Client{Timeout: 3 * time.Second}).Do(req)
+		if err != nil {
+			t.Error(err)
+			response <- ""
+			return
+		}
+		defer res.Body.Close()
+		var body strings.Builder
+		scan := bufio.NewScanner(res.Body)
+		for scan.Scan() {
+			line := scan.Text()
+			body.WriteString(line + "\n")
+			if strings.Contains(line, "unconfirmed answer") {
+				select {
+				case draft <- struct{}{}:
+				default:
+				}
+			}
+		}
+		if err := scan.Err(); err != nil {
+			t.Error(err)
+		}
+		response <- body.String()
+	}()
+	select {
+	case <-entered:
+	case <-time.After(time.Second):
+		t.Fatal("chat API not reached")
+	}
+	select {
+	case <-draft:
+	case <-time.After(time.Second):
+		t.Fatal("unconfirmed draft never reached client")
+	}
+	var n int
+	if err := s.Store.DB.QueryRow("SELECT count(*) FROM messages WHERE json_extract(body,'$.role')='assistant'").Scan(&n); err != nil {
+		t.Fatal(err)
+	}
+	if n != 1 {
+		t.Fatal("unconfirmed response saved", n)
+	}
+	s.Close()
+	select {
+	case body := <-response:
+		if strings.Contains(body, "event: done") {
+			t.Fatal("canceled chat reported success", body)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("close failed to join persistence caller")
+	}
+	if err := s.Store.DB.Close(); err != nil {
+		t.Fatal(err)
+	}
+	reopened, err := OpenStore(s.Store.Root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer reopened.DB.Close()
+	if err := reopened.DB.QueryRow("SELECT count(*) FROM messages WHERE json_extract(body,'$.role')='assistant'").Scan(&n); err != nil {
+		t.Fatal(err)
+	}
+	if n != 1 {
+		t.Fatal("late assistant survived reopen", n)
+	}
+	var historyAfter string
+	if err := reopened.DB.QueryRow("SELECT body FROM messages WHERE id='old-answer'").Scan(&historyAfter); err != nil {
+		t.Fatal(err)
+	}
+	if historyAfter != historyBefore {
+		t.Fatal("published history changed")
+	}
+	reopenedServer := &Server{Store: reopened}
+	translationsAfter, err := reopenedServer.translations("doc", m)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if jsonText(translationsAfter) != jsonText(translationsBefore) {
+		t.Fatal("published translations changed")
 	}
 }

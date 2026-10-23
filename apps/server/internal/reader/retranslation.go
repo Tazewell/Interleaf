@@ -83,6 +83,13 @@ func (s *Server) translationPrevious(documentID string) (map[string]bool, error)
 }
 
 func (s *Server) requestRetranslation(w http.ResponseWriter, r *http.Request) {
+	ctx, finish, err := s.beginDocumentTask(r.Context(), r.PathValue("id"))
+	if err != nil {
+		fail(w, 404, "文档不可用")
+		return
+	}
+	defer finish()
+	r = r.WithContext(ctx)
 	lock := s.annotationRecoveryLock(r.PathValue("id"))
 	if !lock.TryLock() {
 		fail(w, 409, "正在检查批注，请稍后重新翻译")
@@ -133,6 +140,10 @@ func (s *Server) requestRetranslation(w http.ResponseWriter, r *http.Request) {
 	defer s.processingMu.Unlock()
 	defer delete(s.blockedProcessing, d.ID)
 	// Joining prevents a previous worker's delayed results from replacing this run.
+	if ctx.Err() != nil {
+		fail(w, 409, "重新翻译已取消")
+		return
+	}
 	p, err = s.Store.processing(d.ID)
 	if err == nil {
 		err = s.queueRetranslation(p, m, snapshotTranslationOptions(config))
