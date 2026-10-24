@@ -312,3 +312,59 @@ func TestResearchIdeasSelectedOwnership(t *testing.T) {
 		t.Fatal("foreign session idea accepted", out, err)
 	}
 }
+
+func TestResearchIdeasSelectedInlineCitationRemapsAllText(t *testing.T) {
+	for _, mode := range []string{"ideas", "novelty"} {
+		t.Run(mode, func(t *testing.T) {
+			s, topic, _ := researchFixture(t)
+			var calls atomic.Int32
+			ideasModel(t, s, &calls, func(v *ResearchIdea) {
+				ref := " [" + v.Basis[0].EvidenceIDs[0] + "]"
+				v.Basis[0].Text += ref
+				v.Problem += ref
+				v.Mechanism += ref
+				v.MinimumExperiment += ref
+				v.Falsification += ref
+				v.Resources += ref
+				v.Hypotheses[0] += ref
+				v.Changes[0] += ref
+				v.Baselines[0] += ref
+				v.Ablations[0] += ref
+				v.Claims[0].Text += ref
+			})
+			first := ideasRun(t, s, topic, "", ResearchRunInput{IdeaCount: 1})
+			researchWaitJob(t, s, first, "completed")
+			record, err := readResearchRecord(t.Context(), s.Store.DB, first)
+			if err != nil {
+				t.Fatal(err)
+			}
+			original, err := s.getResearchResults(t.Context(), first)
+			if err != nil {
+				t.Fatal(err)
+			}
+			oldText := jsonText(original.Ideas[0])
+			oldID := original.Ideas[0].Basis[0].EvidenceIDs[0]
+			second := ideasRun(t, s, topic, record.SessionID, ResearchRunInput{Mode: mode, IdeaID: original.Ideas[0].ID})
+			researchWaitJob(t, s, second, "completed")
+			current, err := s.getResearchResults(t.Context(), second)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if strings.Contains(jsonText(current.Ideas[0]), "["+oldID+"]") {
+				t.Fatal("old inline token survived")
+			}
+			for _, f := range current.Ideas[0].Basis {
+				for _, sid := range f.EvidenceIDs {
+					ev, e := s.resolveResearchSource(t.Context(), sid)
+					if e != nil || ev.RunID != second {
+						t.Fatal("citation not rebound", ev, e)
+					}
+				}
+			}
+			history, err := s.getResearchResults(t.Context(), first)
+			if err != nil || jsonText(history.Ideas[0]) != oldText {
+				t.Fatal("historical idea mutated", err)
+			}
+		})
+	}
+}

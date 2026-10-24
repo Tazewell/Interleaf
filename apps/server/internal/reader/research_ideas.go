@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"regexp"
 	"strings"
 )
 
@@ -258,6 +259,7 @@ func (s *Server) selectedResearchIdea(ctx context.Context, r researchRunRecord, 
 			}
 			idea = v
 			// Only exact currently verified content can replace an old source ID.
+			adopted := map[string]string{}
 			for i, f := range idea.Basis {
 				for j, sid := range f.EvidenceIDs {
 					old, e := s.resolveResearchSource(ctx, sid)
@@ -275,8 +277,10 @@ func (s *Server) selectedResearchIdea(ctx context.Context, r researchRunRecord, 
 						return idea, fmt.Errorf("所选idea的证据尚未在本次研究重验")
 					}
 					idea.Basis[i].EvidenceIDs[j] = matched
+					adopted[sid] = matched
 				}
 			}
+			remapResearchIdeaInlineSources(&idea, adopted)
 			return idea, validateResearchIdea(idea, evidence)
 		}
 	}
@@ -362,4 +366,33 @@ func validateResearchInlineSources(text string, refs []string) error {
 	}
 	_, err := parseResearchSection(jsonText(researchReportSection{Content: text, SourceIDs: refs}), allowed)
 	return err
+}
+
+var researchInlineSourceToken = regexp.MustCompile(`\[[0-9a-f]{32}\]`)
+
+// Rewrite only supported citation tokens after all old sources were verified.
+// IDs in prose, claim identities and unknown references never gain authority.
+func remapResearchIdeaInlineSources(idea *ResearchIdea, adopted map[string]string) {
+	rewrite := func(text string) string {
+		return researchInlineSourceToken.ReplaceAllStringFunc(text, func(token string) string {
+			if sid, ok := adopted[token[1:len(token)-1]]; ok {
+				return "[" + sid + "]"
+			}
+			return token
+		})
+	}
+	for _, p := range []*string{&idea.Problem, &idea.Mechanism, &idea.MinimumExperiment, &idea.Falsification, &idea.Resources} {
+		*p = rewrite(*p)
+	}
+	for _, list := range [][]string{idea.Hypotheses, idea.Changes, idea.Baselines, idea.Ablations} {
+		for i := range list {
+			list[i] = rewrite(list[i])
+		}
+	}
+	for i := range idea.Basis {
+		idea.Basis[i].Text = rewrite(idea.Basis[i].Text)
+	}
+	for i := range idea.Claims {
+		idea.Claims[i].Text = rewrite(idea.Claims[i].Text)
+	}
 }
