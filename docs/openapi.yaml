@@ -6600,6 +6600,193 @@
                 ],
             },
         },
+      "/api/research/sessions/{session}/network":
+        {
+          "patch":
+            {
+              "summary": "Set session network permission; increments generation and cancels/joins active network owners. Old task grants remain revoked.",
+              "parameters":
+                [
+                  {
+                    "name": "session",
+                    "in": "path",
+                    "required": true,
+                    "schema": { "type": "string" },
+                  },
+                ],
+              "requestBody":
+                {
+                  "required": true,
+                  "content":
+                    {
+                      "application/json":
+                        {
+                          "schema":
+                            {
+                              "type": "object",
+                              "additionalProperties": false,
+                              "required": ["allowed"],
+                              "properties":
+                                { "allowed": { "type": "boolean" } },
+                            },
+                        },
+                    },
+                },
+              "responses":
+                {
+                  "204":
+                    {
+                      "description": "Setting persisted and network owners joined",
+                    },
+                  "404": { "description": "Unknown session" },
+                },
+            },
+        },
+      "/api/research/topics/{topic}/candidates":
+        {
+          "get":
+            {
+              "summary": "List candidates without remote I/O or importing documents; URLs are safe display links",
+              "parameters":
+                [
+                  {
+                    "name": "topic",
+                    "in": "path",
+                    "required": true,
+                    "schema": { "type": "string" },
+                  },
+                ],
+              "responses":
+                {
+                  "200":
+                    {
+                      "description": "ResearchCandidate",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                {
+                                  "type": "array",
+                                  "items":
+                                    {
+                                      "$ref": "#/components/schemas/ResearchCandidate",
+                                    },
+                                },
+                            },
+                        },
+                    },
+                  "404": { "description": "Unknown topic" },
+                  "409": { "description": "Invalid ownership" },
+                },
+            },
+        },
+      "/api/research/topics/{topic}/searches":
+        {
+          "get":
+            {
+              "summary": "List searches without remote I/O or importing documents; URLs are safe display links",
+              "parameters":
+                [
+                  {
+                    "name": "topic",
+                    "in": "path",
+                    "required": true,
+                    "schema": { "type": "string" },
+                  },
+                ],
+              "responses":
+                {
+                  "200":
+                    {
+                      "description": "ResearchSearch",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                {
+                                  "type": "array",
+                                  "items":
+                                    {
+                                      "$ref": "#/components/schemas/ResearchSearch",
+                                    },
+                                },
+                            },
+                        },
+                    },
+                  "404": { "description": "Unknown topic" },
+                  "409": { "description": "Invalid ownership" },
+                },
+            },
+        },
+      "/api/research/topics/{topic}/candidates/{candidate}/import":
+        {
+          "post":
+            {
+              "summary": "Explicit user-only single import grant, including completed runs and disabled sessions. Atomic requestId/result; duplicate retry performs no download; removed originals cannot be revived.",
+              "parameters":
+                [
+                  {
+                    "name": "topic",
+                    "in": "path",
+                    "required": true,
+                    "schema": { "type": "string" },
+                  },
+                  {
+                    "name": "candidate",
+                    "in": "path",
+                    "required": true,
+                    "schema": { "type": "string" },
+                  },
+                ],
+              "requestBody":
+                {
+                  "required": true,
+                  "content":
+                    {
+                      "application/json":
+                        {
+                          "schema":
+                            {
+                              "type": "object",
+                              "additionalProperties": false,
+                              "required": ["requestId"],
+                              "properties":
+                                {
+                                  "requestId":
+                                    {
+                                      "type": "string",
+                                      "pattern": "^[0-9a-f]{32}$",
+                                    },
+                                },
+                            },
+                        },
+                    },
+                },
+              "responses":
+                {
+                  "200":
+                    {
+                      "description": "Document",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                { "$ref": "#/components/schemas/Document" },
+                            },
+                        },
+                    },
+                  "400": { "description": "Invalid PDF or input" },
+                  "404": { "description": "Unknown candidate" },
+                  "409":
+                    {
+                      "description": "Request conflict, foreign/removed source or canceled import",
+                    },
+                },
+            },
+        },
     },
   "components":
     {
@@ -8940,6 +9127,12 @@
                   "networkAllowed": { "type": "boolean" },
                   "createdAt": { "type": "string" },
                   "updatedAt": { "type": "string" },
+                  "networkGeneration":
+                    {
+                      "type": "integer",
+                      "minimum": 0,
+                      "description": "Monotonic permission generation; absence means initial generation zero.",
+                    },
                 },
               "required":
                 [

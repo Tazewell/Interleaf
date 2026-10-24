@@ -10,6 +10,9 @@ import type {
   ResearchControl,
   ResearchReport,
   ResearchMessage,
+  ResearchCandidate,
+  ResearchSearch,
+  Document,
 } from "@reader/core";
 import { request, requestResponse } from "./transport";
 
@@ -17,6 +20,27 @@ const topicPath = (id: string) =>
   `/api/research/topics/${encodeURIComponent(id)}`;
 
 export const researchAPI = {
+  setNetwork: (sessionId: string, allowed: boolean, signal?: AbortSignal) =>
+    request<void>(
+      `/api/research/sessions/${encodeURIComponent(sessionId)}/network`,
+      { method: "PATCH", body: JSON.stringify({ allowed }), signal },
+    ),
+  listCandidates: (topicId: string, signal?: AbortSignal) =>
+    request<ResearchCandidate[]>(`${topicPath(topicId)}/candidates`, {
+      signal,
+    }),
+  listSearches: (topicId: string, signal?: AbortSignal) =>
+    request<ResearchSearch[]>(`${topicPath(topicId)}/searches`, { signal }),
+  importCandidate: (
+    topicId: string,
+    candidateId: string,
+    requestId: string,
+    signal?: AbortSignal,
+  ) =>
+    request<Document>(
+      `${topicPath(topicId)}/candidates/${encodeURIComponent(candidateId)}/import`,
+      { method: "POST", body: JSON.stringify({ requestId }), signal },
+    ),
   createRun: (
     topicId: string,
     sessionId: string,

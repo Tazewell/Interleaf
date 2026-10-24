@@ -6353,6 +6353,225 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/research/sessions/{session}/network": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Set session network permission; increments generation and cancels/joins active network owners. Old task grants remain revoked. */
+        patch: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    session: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        allowed: boolean;
+                    };
+                };
+            };
+            responses: {
+                /** @description Setting persisted and network owners joined */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Unknown session */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        trace?: never;
+    };
+    "/api/research/topics/{topic}/candidates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List candidates without remote I/O or importing documents; URLs are safe display links */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    topic: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description ResearchCandidate */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ResearchCandidate"][];
+                    };
+                };
+                /** @description Unknown topic */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Invalid ownership */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/research/topics/{topic}/searches": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List searches without remote I/O or importing documents; URLs are safe display links */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    topic: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description ResearchSearch */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ResearchSearch"][];
+                    };
+                };
+                /** @description Unknown topic */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Invalid ownership */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/research/topics/{topic}/candidates/{candidate}/import": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Explicit user-only single import grant, including completed runs and disabled sessions. Atomic requestId/result; duplicate retry performs no download; removed originals cannot be revived. */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    topic: string;
+                    candidate: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        requestId: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description Document */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Document"];
+                    };
+                };
+                /** @description Invalid PDF or input */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Unknown candidate */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Request conflict, foreign/removed source or canceled import */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -7279,6 +7498,8 @@ export interface components {
             networkAllowed: boolean;
             createdAt: string;
             updatedAt: string;
+            /** @description Monotonic permission generation; absence means initial generation zero. */
+            networkGeneration?: number;
         };
         ResearchEvidence: {
             id: string;

@@ -26,6 +26,13 @@ func candidatePaperIdentity(c ResearchCandidate, p PaperItem) bool {
 	if c.PaperID != "" && c.PaperID != p.ID {
 		return false
 	}
+	if c.PaperID == p.ID && c.DocumentID != "" {
+		for _, a := range p.Attachments {
+			if a.DocumentID == c.DocumentID && a.Role == "original" {
+				return true
+			}
+		}
+	}
 	return c.DOI != "" && strings.EqualFold(strings.TrimSpace(c.DOI), strings.TrimSpace(p.Metadata.DOI)) || scholar.SameArXiv(c.ArXiv, p.Metadata.ArXiv)
 }
 func readCandidateLocalCache(ctx context.Context, q researchRowQuery, scope researchScope, c ResearchCandidate, version string) (researchCandidateLocalCache, error) {

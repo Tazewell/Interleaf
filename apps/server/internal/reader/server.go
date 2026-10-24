@@ -30,6 +30,9 @@ import (
 )
 
 type Server struct {
+	researchNetworkMu      sync.Mutex
+	researchNetworkOwners  map[*researchNetworkLease]struct{}
+	researchImportLocks    sync.Map
 	researchMu             sync.Mutex
 	researchControlLocks   sync.Map
 	researchWorkers        map[string]*researchWorker
@@ -412,7 +415,15 @@ func (s *Server) importFile(ctx context.Context, temp, filename, library string,
 }
 
 func (s *Server) importFileToCategory(ctx context.Context, temp, filename, library string, allowLarge bool, folder, smartCategory string) (Document, int, error) {
-	s.importMu.Lock()
+	return s.importFileToCategoryWithCommit(ctx, temp, filename, library, allowLarge, folder, smartCategory, nil)
+}
+
+// The optional callback joins a user action's durable result to the original
+// file/Document transaction. It must use tx only, never re-enter Store.DB.
+func (s *Server) importFileToCategoryWithCommit(ctx context.Context, temp, filename, library string, allowLarge bool, folder, smartCategory string, commit func(*sql.Tx, Document, bool) error) (Document, int, error) {
+	if err := lockImportContext(ctx, &s.importMu); err != nil {
+		return Document{}, 409, err
+	}
 	defer s.importMu.Unlock()
 	kind := strings.TrimPrefix(strings.ToLower(filepath.Ext(filename)), ".")
 	failure := func(status int, message string) (Document, int, error) {
@@ -436,13 +447,35 @@ func (s *Server) importFileToCategory(ctx context.Context, temp, filename, libra
 		return failure(400, "文件超过 512 MB")
 	}
 	hash := sha256.New()
-	size, err := io.Copy(hash, f)
+	size, err := io.Copy(hash, contextImportReader{ctx, f})
 	f.Close()
 	if err != nil {
 		return failure(500, "无法验证文件")
 	}
 	docID := hex.EncodeToString(hash.Sum(nil))[:32]
 	if d, e := s.Store.Document(docID); e == nil {
+		if commit != nil {
+			if d.DeletedAt != "" {
+				return Document{}, 409, errResearchScopeChanged
+			}
+			if _, err = os.Stat(s.Store.File(d)); err != nil {
+				return Document{}, 409, errResearchScopeChanged
+			}
+			s.researchNetworkMu.Lock()
+			defer s.researchNetworkMu.Unlock()
+			tx, e := s.Store.DB.BeginTx(ctx, nil)
+			if e != nil {
+				return Document{}, 500, e
+			}
+			defer tx.Rollback()
+			if e = commit(tx, d, false); e == nil {
+				e = ctx.Err()
+			}
+			if e == nil {
+				e = tx.Commit()
+			}
+			return d, 200, e
+		}
 		// Importing a file again brings it back from the trash.
 		if d, err = s.restore(docID); err != nil {
 			return failure(500, "无法恢复回收站中的文档")
@@ -520,11 +553,20 @@ func (s *Server) importFileToCategory(ctx context.Context, temp, filename, libra
 			}
 		}
 	}
+	// Publication is serialized with session revoke, after all cancellable
+	// preparation. A revoke that wins this lock leaves no library record/file.
+	if commit != nil {
+		s.researchNetworkMu.Lock()
+		defer s.researchNetworkMu.Unlock()
+	}
+	if err = ctx.Err(); err != nil {
+		return Document{}, 409, err
+	}
 	dest := s.Store.File(d)
 	if err = os.Rename(temp, dest); err != nil {
 		return failure(500, "无法保存原文件")
 	}
-	tx, err := s.Store.DB.Begin()
+	tx, err := s.Store.DB.BeginTx(ctx, nil)
 	if err != nil {
 		_ = os.Remove(dest)
 		return failure(500, "无法写入书库")
@@ -558,6 +600,14 @@ func (s *Server) importFileToCategory(ctx context.Context, temp, filename, libra
 	}
 	if err == nil {
 		_, err = tx.Exec("INSERT INTO document_corpus_jobs(document_id,status) VALUES(?,'queued')", d.ID)
+	}
+	if err == nil {
+		if commit != nil {
+			err = commit(tx, d, true)
+		}
+	}
+	if err == nil {
+		err = ctx.Err()
 	}
 	if err == nil {
 		err = tx.Commit()

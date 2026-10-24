@@ -18,10 +18,11 @@ var errResearchBudget = errors.New("本次研究预算已耗尽，可显式继�
 // Only safe immutable identities are persisted. The private native snapshot,
 // including the API key, belongs exclusively to the in-memory attempt.
 type researchRunRecord struct {
-	AttemptSearchRequests int `json:"attemptSearchRequests"`
-	SearchRequests        int `json:"searchRequests"`
-	AttemptRemoteReads    int `json:"attemptRemoteReads"`
-	RemoteReads           int `json:"remoteReads"`
+	NetworkGeneration     uint64 `json:"networkGeneration"`
+	AttemptSearchRequests int    `json:"attemptSearchRequests"`
+	SearchRequests        int    `json:"searchRequests"`
+	AttemptRemoteReads    int    `json:"attemptRemoteReads"`
+	RemoteReads           int    `json:"remoteReads"`
 	ResearchRun
 	Input           ResearchRunInput `json:"input"`
 	ConfigHash      string           `json:"configHash"`
@@ -244,6 +245,14 @@ func (s *Server) createResearchRun(ctx context.Context, topicID, sessionID strin
 	if err = tx.QueryRowContext(ctx, `SELECT topic_id FROM research_sessions WHERE id=?`, sessionID).Scan(&owner); err != nil || owner != topicID {
 		return r.ResearchRun, errResearchScopeChanged
 	}
+	var sessionRaw string
+	if err = tx.QueryRowContext(ctx, `SELECT body FROM research_sessions WHERE id=?`, sessionID).Scan(&sessionRaw); err != nil {
+		return r.ResearchRun, err
+	}
+	if json.Unmarshal([]byte(sessionRaw), &session) != nil || session.ID != sessionID || session.TopicID != topicID {
+		return r.ResearchRun, errResearchScopeChanged
+	}
+	r.NetworkGeneration = session.NetworkGeneration
 	_, err = tx.ExecContext(ctx, `INSERT INTO research_runs(id,topic_id,session_id,user_message_id,status,request_hash,body,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?)`, r.ID, topicID, sessionID, in.UserMessageID, r.Status, hash, jsonText(r), r.UpdatedAt, r.UpdatedAt)
 	if err == nil {
 		err = writeResearchMessage(ctx, tx, ResearchMessage{ID: id(), SessionID: sessionID, RunID: r.ID, Role: "user", Content: in.Question, CreatedAt: r.UpdatedAt})
@@ -534,7 +543,7 @@ func (s *Server) executeResearch(w *researchWorker, a *researchAttempt) {
 		var r researchRunRecord
 		r, err = readResearchRecord(ctx, s.Store.DB, a.runID)
 		if err == nil {
-			if r.Input.Mode == "ideas" || r.Input.Mode == "novelty" || len(r.Input.URLs) > 0 {
+			if r.Input.Mode == "ideas" || r.Input.Mode == "novelty" {
 				err = fmt.Errorf("该研究阶段尚未启用")
 			}
 			var scope researchScope
@@ -560,6 +569,9 @@ func (s *Server) executeResearch(w *researchWorker, a *researchAttempt) {
 				if err == nil {
 					err = s.refreshResearchProgress(ctx, a.runID)
 				}
+			}
+			if err == nil {
+				err = s.acquireResearchOnline(ctx, a.runID)
 			}
 			if err == nil {
 				_, err = s.composeResearchReport(ctx, a.runID)

@@ -42,6 +42,8 @@ func (t *researchToolset) Definitions(vision bool) []any {
 		defs = append(defs, map[string]any{"type": "function", "function": map[string]any{"name": name, "description": description, "parameters": map[string]any{"type": "object", "properties": props, "required": required, "additionalProperties": false}}})
 	}
 	add("list_papers", "List only papers in this immutable research snapshot. Follow nextCursor.", map[string]any{"cursor": property("string")})
+	add("search_papers_online", "Search registered scholarly sources only when user permission permits. query: 1-8 topic keywords only, never source text, notes, keys or URLs. Candidates are not imported.", map[string]any{"source": property("string"), "query": property("string"), "fromYear": property("integer"), "toYear": property("integer"), "limit": property("integer"), "cursor": property("string")}, "source", "query")
+	add("read_online_paper", "Read a registered candidate only. Cite sourceId and preserve the returned evidence kind/location. Follow nextCursor. No arbitrary URL.", map[string]any{"candidateId": property("string"), "cursor": property("string")}, "candidateId")
 	add("get_paper_outline", "Locate sections; an outline is not read evidence.", map[string]any{"paperId": property("string"), "cursor": property("string")}, "paperId")
 	add("search_papers", "Search original text fairly across scoped papers. Results are navigation, not evidence. Follow nextCursor.", map[string]any{"paperId": property("string"), "query": property("string"), "limit": property("integer"), "cursor": property("string")}, "query")
 	props := map[string]any{"paperId": property("string"), "blockId": property("string"), "sectionId": property("string"), "full": property("boolean"), "fromPage": property("integer"), "toPage": property("integer"), "before": property("integer"), "after": property("integer"), "cursor": property("string")}
@@ -131,7 +133,7 @@ func researchPassages(st *researchReadState) []documentPassage {
 	return c.Passages
 }
 func modelResearchEvidence(ev ResearchEvidence) any {
-	return map[string]any{"sourceId": ev.ID, "paperId": ev.PaperID, "documentId": ev.DocumentID, "text": ev.Excerpt, "location": ev.Location, "revision": ev.Revision, "contentHash": ev.ContentHash}
+	return map[string]any{"sourceId": ev.ID, "paperId": ev.PaperID, "documentId": ev.DocumentID, "candidateId": ev.CandidateID, "kind": ev.Kind, "text": ev.Excerpt, "location": ev.Location, "revision": ev.Revision, "contentHash": ev.ContentHash}
 }
 func (t *researchToolset) Call(ctx context.Context, name string, args json.RawMessage) (nativeToolResult, error) {
 	t.mu.Lock()
@@ -140,6 +142,10 @@ func (t *researchToolset) Call(ctx context.Context, name string, args json.RawMe
 		return nativeToolResult{}, err
 	}
 	switch name {
+	case "search_papers_online":
+		return t.searchOnline(ctx, args)
+	case "read_online_paper":
+		return t.readOnline(ctx, args)
 	case "list_papers":
 		var q struct {
 			Cursor string `json:"cursor"`

@@ -252,6 +252,14 @@ func (s *Server) composeResearchReport(ctx context.Context, runID string) (Resea
 			}
 		}
 	}
+	online, onlineIDs, err := s.researchOnlineComposition(ctx, scope)
+	if err != nil {
+		return empty, err
+	}
+	items = append(items, online...)
+	for _, source := range onlineIDs {
+		allowed[source] = true
+	}
 	snapshot := a.snapshot
 	snapshot.Tools = false
 	snapshot.Vision = false
@@ -360,6 +368,13 @@ func (s *Server) composeResearchReport(ctx context.Context, runID string) (Resea
 	}
 	content = append(content, fmt.Sprintf("\n资料覆盖：完成分析 %d/%d 篇；实际读取原生单元 %d/%d；仅摘要 %d 篇；不可用 %d 篇。未读取的页面、章节或图表不属于已验证证据。", r.Coverage.AnalyzedPapers, r.Coverage.TotalPapers, r.Coverage.ReadUnits, r.Coverage.TotalUnits, r.Coverage.AbstractOnlyPapers, r.Coverage.UnavailablePapers))
 	report := ResearchReport{ID: id(), TopicID: r.TopicID, SessionID: r.SessionID, RunID: runID, SourceRunID: runID, Kind: r.Input.Mode, Origin: "model", SourceRevision: r.Revision, Content: strings.Join(content, "\n\n"), SourceIDs: sources, Coverage: r.Coverage, CreatedAt: now()}
+	caveats, err := s.researchSearchCaveats(ctx, runID)
+	if err != nil {
+		return empty, err
+	}
+	if caveats != "" {
+		report.Content += "\n\n" + caveats
+	}
 	report.Revision = sourceKey(report.Content)
 	if len(report.Content) > researchReportBytes {
 		return empty, generationError(ErrorLimit, "研究报告超过 4 MiB")

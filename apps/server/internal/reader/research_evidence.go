@@ -149,6 +149,10 @@ func (s *Server) prepareResearchRead(ctx context.Context, m ResearchMember) (*re
 // Hash and parser validation happen before this short transaction. Publication
 // uses the existing lock order (parser RLock -> DB), matching snapshot commits.
 func (s *Server) commitResearchRead(ctx context.Context, scope researchScope, states []*researchReadState, requireRunning bool, write func(*sql.Tx) error) error {
+	if _, ok := ctx.Value(researchNetworkKey{}).(*researchNetworkLease); ok {
+		s.researchNetworkMu.Lock()
+		defer s.researchNetworkMu.Unlock()
+	}
 	if err := ctx.Err(); err != nil {
 		return err
 	}
@@ -159,6 +163,9 @@ func (s *Server) commitResearchRead(ctx context.Context, scope researchScope, st
 		return err
 	}
 	defer tx.Rollback()
+	if err = checkResearchNetworkLease(ctx, tx, scope.Run.ID); err != nil {
+		return err
+	}
 	current, err := readResearchRunScope(ctx, tx, scope.Run.ID)
 	if err != nil {
 		return err

@@ -30,12 +30,13 @@ type ResearchSnapshot struct {
 	CreatedAt string           `json:"createdAt"`
 }
 type ResearchSession struct {
-	ID             string `json:"id"`
-	TopicID        string `json:"topicId"`
-	Title          string `json:"title"`
-	NetworkAllowed bool   `json:"networkAllowed"`
-	CreatedAt      string `json:"createdAt"`
-	UpdatedAt      string `json:"updatedAt"`
+	NetworkGeneration uint64 `json:"networkGeneration,omitempty"`
+	ID                string `json:"id"`
+	TopicID           string `json:"topicId"`
+	Title             string `json:"title"`
+	NetworkAllowed    bool   `json:"networkAllowed"`
+	CreatedAt         string `json:"createdAt"`
+	UpdatedAt         string `json:"updatedAt"`
 }
 type ResearchEvidence struct {
 	ID           string          `json:"id"`

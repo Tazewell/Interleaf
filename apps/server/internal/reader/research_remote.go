@@ -50,6 +50,13 @@ func reserveResearchRemoteWork(run string) (func(), error) {
 	}, nil
 }
 func researchCandidateVersion(raw string) string {
+	// Import mapping is provenance for future local reads, not a change to the
+	// already-read public resource. All scholarly metadata still versions it.
+	var candidate ResearchCandidate
+	if json.Unmarshal([]byte(raw), &candidate) == nil && (candidate.PaperID != "" || candidate.DocumentID != "") {
+		candidate.PaperID, candidate.DocumentID = "", ""
+		raw = jsonText(candidate)
+	}
 	return sourceKey(researchRemoteProtocol + "\n" + raw)
 }
 
@@ -109,6 +116,8 @@ func readResearchRegisteredCandidate(ctx context.Context, q researchRowQuery, sc
 }
 
 func (s *Server) reserveResearchNetwork(ctx context.Context, runID, kind string) error {
+	s.researchNetworkMu.Lock()
+	defer s.researchNetworkMu.Unlock()
 	if err := ctx.Err(); err != nil {
 		return err
 	}
@@ -117,6 +126,12 @@ func (s *Server) reserveResearchNetwork(ctx context.Context, runID, kind string)
 		return err
 	}
 	defer tx.Rollback()
+	if _, _, err = researchNetworkPermission(ctx, tx, runID); err != nil {
+		return err
+	}
+	if err = checkResearchNetworkLease(ctx, tx, runID); err != nil {
+		return err
+	}
 	r, err := readResearchRecord(ctx, tx, runID)
 	if err != nil {
 		return err
@@ -288,7 +303,7 @@ func validateResearchRemoteEvidence(ctx context.Context, q researchRowQuery, sco
 }
 
 func (s *Server) readResearchRemote(ctx context.Context, runID, candidateID string) ([]ResearchEvidence, error) {
-	ctx, finish, err := s.beginAIIO(ctx)
+	ctx, finish, err := s.beginResearchNetwork(ctx, runID)
 	if err != nil {
 		return nil, err
 	}
@@ -313,6 +328,9 @@ func (s *Server) readResearchRemote(ctx context.Context, runID, candidateID stri
 			if _, err = s.resolveResearchSource(ctx, ev.ID); err != nil {
 				return nil, err
 			}
+		}
+		if err = ctx.Err(); err != nil {
+			return nil, err
 		}
 		return cache.Evidence, nil
 	}

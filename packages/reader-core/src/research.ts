@@ -31,6 +31,7 @@ export interface ResearchSnapshot {
 }
 
 export interface ResearchSession {
+  networkGeneration?: number;
   id: string;
   topicId: string;
   title: string;

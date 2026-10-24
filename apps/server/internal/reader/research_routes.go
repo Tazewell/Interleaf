@@ -9,6 +9,10 @@ import (
 )
 
 func (s *Server) registerResearchRoutes(mux *http.ServeMux) {
+	mux.HandleFunc("PATCH /api/research/sessions/{session}/network", s.researchNetworkSettingHTTP)
+	mux.HandleFunc("GET /api/research/topics/{topic}/candidates", s.researchCandidatesHTTP)
+	mux.HandleFunc("GET /api/research/topics/{topic}/searches", s.researchSearchesHTTP)
+	mux.HandleFunc("POST /api/research/topics/{topic}/candidates/{candidate}/import", s.researchCandidateImportHTTP)
 	mux.HandleFunc("POST /api/research/topics/{topic}/sessions/{session}/runs", func(w http.ResponseWriter, r *http.Request) {
 		var in ResearchRunInput
 		if !decode(w, r, &in) {
