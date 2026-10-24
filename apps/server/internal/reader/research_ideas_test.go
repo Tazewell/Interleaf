@@ -1,6 +1,7 @@
 package reader
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -15,6 +16,13 @@ func ideasModel(t *testing.T, s *Server, calls *atomic.Int32, mutate func(*Resea
 	ideasModelObserved(t, s, calls, mutate, nil, mutateRow...)
 }
 func ideasModelObserved(t *testing.T, s *Server, calls *atomic.Int32, mutate func(*ResearchIdea), observe func(string), mutateRow ...func(*NoveltyRow)) {
+	ideasModelRequestObserved(t, s, calls, mutate, func(_ context.Context, text string) {
+		if observe != nil {
+			observe(text)
+		}
+	}, mutateRow...)
+}
+func ideasModelRequestObserved(t *testing.T, s *Server, calls *atomic.Int32, mutate func(*ResearchIdea), observe func(context.Context, string), mutateRow ...func(*NoveltyRow)) {
 	t.Helper()
 	endpoint := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == "GET" {
@@ -37,7 +45,7 @@ func ideasModelObserved(t *testing.T, s *Server, calls *atomic.Int32, mutate fun
 				continue
 			}
 			if observe != nil {
-				observe(text)
+				observe(r.Context(), text)
 			}
 			if at := strings.Index(text, "RESEARCH_EVIDENCE_JSON\n"); at >= 0 {
 				var ev []struct {

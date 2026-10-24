@@ -348,6 +348,21 @@ func (s *Server) exploreResearchIdeas(ctx context.Context, runID string) ([]Rese
 		}
 		count = 1
 	}
+	// Acquisition's lease ends before this stage. Remote evidence needs a fresh
+	// generation check and an owner spanning model work and both checkpoint
+	// writes, so revocation cancels and joins late responses before returning.
+	// Purely local ideas remain usable with scholarly networking disabled.
+	for _, ev := range evidence {
+		if strings.HasPrefix(ev.Kind, "remote-") {
+			var finish func()
+			ctx, finish, err = s.beginResearchNetwork(ctx, runID)
+			if err != nil {
+				return nil, err
+			}
+			defer finish()
+			break
+		}
+	}
 	ideas := []ResearchIdea{}
 	if r.Input.Mode == "novelty" {
 		ideas = append(ideas, selected)
