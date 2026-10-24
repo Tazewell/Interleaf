@@ -282,10 +282,82 @@ func (s *Server) researchSearchCaveats(ctx context.Context, runID string) (strin
 	if err = rows.Err(); err != nil {
 		return "", err
 	}
-	if len(lines) == 0 {
-		return "", nil
+	rows.Close()
+	searches := ""
+	if len(lines) > 0 {
+		searches = "联网检索记录（失败或限流来源覆盖不足；候选不代表已读全文，只有报告引用的来源属于已验证证据）：\n" + strings.Join(lines, "\n")
 	}
-	return "联网检索记录（失败或限流来源覆盖不足；候选不代表已读全文，只有报告引用的来源属于已验证证据）：\n" + strings.Join(lines, "\n"), nil
+	scope, err := readResearchRunScope(ctx, s.Store.DB, runID)
+	if err != nil {
+		return "", err
+	}
+	rows, err = s.Store.DB.QueryContext(ctx, `SELECT unit_key FROM research_units WHERE run_id=? AND kind='remote-read' AND status='complete' ORDER BY created_at,unit_key`, runID)
+	if err != nil {
+		return "", err
+	}
+	keys := []string{}
+	for rows.Next() {
+		var key string
+		if err = rows.Scan(&key); err != nil {
+			rows.Close()
+			return "", err
+		}
+		keys = append(keys, key)
+	}
+	err = rows.Err()
+	rows.Close()
+	if err != nil {
+		return "", err
+	}
+	missing := []string{}
+	for _, key := range keys {
+		unit, e := readResearchUnit(ctx, s.Store.DB, runID, key)
+		if e != nil {
+			return "", e
+		}
+		var saved researchMissingRead
+		if json.Unmarshal(unit.Result, &saved) != nil {
+			return "", errResearchScopeChanged
+		}
+		_, version, e := readResearchRegisteredCandidate(ctx, s.Store.DB, scope, saved.CandidateID)
+		if e != nil {
+			return "", e
+		}
+		// Old failures remain history, not a claim about a changed candidate.
+		if saved.Version != version {
+			continue
+		}
+		if e = saved.validate(scope, unit); e != nil {
+			return "", e
+		}
+		missing = append(missing, fmt.Sprintf("%s（候选 %s）：%s，时间 %s。", saved.URL, saved.CandidateID, saved.Reason, saved.ReadAt))
+	}
+	if len(missing) > 0 {
+		if searches != "" {
+			searches += "\n\n"
+		}
+		searches += "在线读取不足（未作为已读证据）：\n" + strings.Join(missing, "\n")
+	}
+	return searches, nil
+}
+
+type researchMissingRead struct {
+	RunID, SnapshotID, TopicID, CandidateID, Version string
+	URL, Reason, ReadAt                              string
+}
+
+func missingResearchReadKey(candidate, version string) string {
+	return "remote-read:" + candidate + ":" + version
+}
+func (m researchMissingRead) validate(scope researchScope, u ResearchUnit) error {
+	if u.Kind != "remote-read" || u.Status != "complete" || u.ContentHash != sourceKey(string(u.Result)) || u.UnitKey != missingResearchReadKey(m.CandidateID, m.Version) || m.RunID != scope.Run.ID || m.SnapshotID != scope.Snapshot.ID || m.TopicID != scope.Run.TopicID || m.URL != scholar.PublicDisplayURL(m.URL) || m.Reason != "未获取可读正文或摘要" || m.ReadAt == "" {
+		return errResearchScopeChanged
+	}
+	return nil
+}
+
+func missingResearchReadResult(m researchMissingRead) nativeToolResult {
+	return nativeToolResult{Content: json.RawMessage(jsonText(map[string]any{"items": []any{}, "nextCursor": "", "unavailable": true, "candidateId": m.CandidateID, "url": m.URL, "reason": m.Reason, "readAt": m.ReadAt}))}
 }
 
 type researchOnlineQuery struct {
@@ -577,9 +649,56 @@ func (t *researchToolset) readOnline(ctx context.Context, args json.RawMessage) 
 	if err != nil {
 		return researchInvalid()
 	}
-	ev, err := t.server.readResearchRemote(ctx, t.scope.Run.ID, q.CandidateID)
+	ctx, finish, err := t.server.beginResearchNetwork(ctx, t.scope.Run.ID)
 	if err != nil {
 		return nativeToolResult{}, err
+	}
+	defer finish()
+	candidate, version, err := readResearchRegisteredCandidate(ctx, t.server.Store.DB, t.scope, q.CandidateID)
+	if err != nil {
+		return nativeToolResult{}, err
+	}
+	key := missingResearchReadKey(candidate.ID, version)
+	if u, e := readResearchUnit(ctx, t.server.Store.DB, t.scope.Run.ID, key); e == nil {
+		var missing researchMissingRead
+		if json.Unmarshal(u.Result, &missing) != nil || missing.CandidateID != candidate.ID || missing.Version != version {
+			return nativeToolResult{}, errResearchScopeChanged
+		}
+		if e = missing.validate(t.scope, u); e != nil {
+			return nativeToolResult{}, e
+		}
+		if e = ctx.Err(); e != nil {
+			return nativeToolResult{}, e
+		}
+		return missingResearchReadResult(missing), nil
+	} else if !errors.Is(e, sql.ErrNoRows) {
+		return nativeToolResult{}, e
+	}
+	ev, err := t.server.readResearchRemote(ctx, t.scope.Run.ID, q.CandidateID)
+	if err != nil {
+		var unreadable *researchUnreadableCandidate
+		if !errors.As(err, &unreadable) || ctx.Err() != nil {
+			return nativeToolResult{}, err
+		}
+		missing := researchMissingRead{RunID: t.scope.Run.ID, SnapshotID: t.scope.Snapshot.ID, TopicID: t.scope.Run.TopicID, CandidateID: candidate.ID, Version: version, URL: scholar.PublicDisplayURL(candidate.LandingURL), Reason: "未获取可读正文或摘要", ReadAt: now()}
+		if missing.URL == "" {
+			missing.URL = scholar.PublicDisplayURL(candidate.PDFURL)
+		}
+		err = t.server.commitResearchRead(ctx, t.scope, nil, true, func(tx *sql.Tx) error {
+			_, currentVersion, e := readResearchRegisteredCandidate(ctx, tx, t.scope, q.CandidateID)
+			if e != nil {
+				return e
+			}
+			if currentVersion != version || unreadable.Version != version || unreadable.CandidateID != candidate.ID {
+				return errResearchScopeChanged
+			}
+			payload := json.RawMessage(jsonText(missing))
+			return writeResearchUnit(ctx, tx, ResearchUnit{RunID: t.scope.Run.ID, UnitKey: key, Kind: "remote-read", Status: "complete", ContentHash: sourceKey(string(payload)), Result: payload})
+		})
+		if err != nil {
+			return nativeToolResult{}, err
+		}
+		return missingResearchReadResult(missing), nil
 	}
 	if start > len(ev) {
 		return researchInvalid()

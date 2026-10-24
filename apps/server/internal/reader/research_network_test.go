@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -12,6 +13,7 @@ import (
 	"path/filepath"
 	"reader.local/server/internal/scholar"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -92,6 +94,200 @@ func TestResearchRemoteEvidenceMetadataUpdateKeepsUnrelatedCandidate(t *testing.
 				t.Fatal("A could not be reread at new version", err)
 			}
 		})
+	}
+}
+
+// A missing candidate between two readable user URLs must not discard either
+// successful source or prevent the accepted worker from committing its report.
+func TestResearchNetworkRunMixedReadFailureCompletesReport(t *testing.T) {
+	s, _, _, hits := remoteFixture(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/bad" {
+			http.Error(w, "private upstream detail", 404)
+			return
+		}
+		fmt.Fprint(w, "<p>Available "+r.URL.Path+" evidence.</p>")
+	})
+	var calls atomic.Int32
+	researchJobModel(t, s, &calls, nil)
+	// Only remote evidence is in this run, so the final report must cite it.
+	topic := paperCall(t, s, "POST", "/api/research/topics", `{"title":"Remote only","folder":"empty-online"}`, 201)["id"].(string)
+	session := paperCall(t, s, "POST", "/api/research/topics/"+topic+"/sessions", `{"title":"Mixed"}`, 201)["id"].(string)
+	urls := []string{"http://paper.example/good", "http://paper.example/bad?signature=PRIVATE_SECRET", "http://paper.example/after"}
+	body := jsonText(ResearchRunInput{UserMessageID: id(), Question: "Compare available evidence", Mode: "question", Network: "allow-task", URLs: urls})
+	run := paperCall(t, s, "POST", "/api/research/topics/"+topic+"/sessions/"+session+"/runs", body, 201)["id"].(string)
+	paperCall(t, s, "POST", "/api/research/runs/"+run+"/start", `{"requestId":"`+id()+`"}`, 202)
+	done := researchWaitJob(t, s, run, "completed")
+	report := paperCall(t, s, "GET", "/api/research/reports/"+done["latestReportId"].(string), "", 200)
+	if len(report["sourceIds"].([]any)) == 0 {
+		t.Fatal("successful evidence omitted from report")
+	}
+	content := report["content"].(string)
+	if !strings.Contains(content, "http://paper.example/bad") || !strings.Contains(content, "不足") || strings.Contains(content, "PRIVATE_SECRET") || strings.Contains(content, "private upstream") {
+		t.Fatal("missing or unsafe read caveat", content)
+	}
+	var valid, failures int
+	if err := s.Store.DB.QueryRow(`SELECT count(*) FROM research_evidence WHERE run_id=? AND availability='valid'`, run).Scan(&valid); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Store.DB.QueryRow(`SELECT count(*) FROM research_units WHERE run_id=? AND kind='remote-read' AND status='complete'`, run).Scan(&failures); err != nil {
+		t.Fatal(err)
+	}
+	if valid != 2 || failures != 1 || hits.Load() != 3 {
+		t.Fatal("mixed read state", valid, failures, hits.Load())
+	}
+	var raw string
+	if err := s.Store.DB.QueryRow(`SELECT body FROM research_units WHERE run_id=? AND kind='remote-read'`, run).Scan(&raw); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(raw, "PRIVATE_SECRET") || strings.Contains(raw, "private upstream") {
+		t.Fatal("unsafe durable read failure", raw)
+	}
+	// Replaying acquisition in the same run uses the durable missing-read
+	// checkpoint and successful caches, rather than repeating a 404 download.
+	if _, err := s.Store.DB.Exec(`UPDATE research_runs SET status='running',body=json_set(body,'$.status','running') WHERE id=?`, run); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.acquireResearchOnline(t.Context(), run); err != nil {
+		t.Fatal(err)
+	}
+	if hits.Load() != 3 {
+		t.Fatal("resume repeated unavailable read", hits.Load())
+	}
+}
+
+func TestResearchNetworkReadFailureDoesNotHideStopConditions(t *testing.T) {
+	for _, action := range []string{"budget", "owner", "revoke", "cancel"} {
+		t.Run(action, func(t *testing.T) {
+			entered, release := make(chan struct{}), make(chan struct{})
+			s, run, _, hits := remoteFixture(t, func(w http.ResponseWriter, r *http.Request) {
+				close(entered)
+				select {
+				case <-release:
+				case <-r.Context().Done():
+				}
+				http.Error(w, "unavailable", 404)
+			})
+			ctx, cancel := context.WithCancel(t.Context())
+			defer cancel()
+			if _, err := s.Store.DB.Exec(`UPDATE research_runs SET body=json_set(body,'$.input.urls',json('["http://paper.example/bad","http://paper.example/after"]')) WHERE id=?`, run.ID); err != nil {
+				t.Fatal(err)
+			}
+			if action == "budget" {
+				if _, err := s.Store.DB.Exec(`UPDATE research_runs SET body=json_set(body,'$.attemptRemoteReads',8) WHERE id=?`, run.ID); err != nil {
+					t.Fatal(err)
+				}
+				close(release)
+			}
+			done := make(chan error, 1)
+			go func() { done <- s.acquireResearchOnline(ctx, run.ID) }()
+			if action != "budget" {
+				select {
+				case <-entered:
+				case <-time.After(3 * time.Second):
+					t.Fatal("read did not start")
+				}
+				switch action {
+				case "owner":
+					if _, err := s.Store.DB.Exec(`UPDATE research_candidates SET body=json_set(body,'$.topicId','foreign') WHERE json_extract(body,'$.landingUrl')='http://paper.example/bad'`); err != nil {
+						t.Fatal(err)
+					}
+				case "revoke":
+					if err := s.setResearchNetwork(t.Context(), run.SessionID, false); err != nil {
+						t.Fatal(err)
+					}
+				case "cancel":
+					cancel()
+				}
+				close(release)
+			}
+			select {
+			case err := <-done:
+				if err == nil {
+					t.Fatal("stop condition swallowed")
+				}
+				if action == "budget" && !errors.Is(err, errResearchBudget) {
+					t.Fatal(err)
+				}
+				if action == "owner" && !errors.Is(err, errResearchScopeChanged) {
+					t.Fatal(err)
+				}
+			case <-time.After(3 * time.Second):
+				t.Fatal("read did not stop")
+			}
+			var failures int
+			if err := s.Store.DB.QueryRow(`SELECT count(*) FROM research_units WHERE run_id=? AND kind='remote-read'`, run.ID).Scan(&failures); err != nil {
+				t.Fatal(err)
+			}
+			if failures != 0 || hits.Load() > 1 {
+				t.Fatal("stop persisted as ordinary absence/continued", failures, hits.Load())
+			}
+		})
+	}
+}
+
+func TestResearchNetworkReadFailureCheckpointUsesRunAndVersion(t *testing.T) {
+	s, run, candidate, hits := remoteFixture(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/missing" {
+			http.Error(w, "unavailable", 404)
+			return
+		}
+		fmt.Fprint(w, "<p>Newly available evidence.</p>")
+	})
+	candidate.Abstract, candidate.LandingURL = "", "http://paper.example/missing"
+	remoteRegister(t, s, run, candidate)
+	tools, err := s.researchTools(t.Context(), run.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	args := json.RawMessage(jsonText(map[string]string{"candidateId": candidate.ID}))
+	for i := 0; i < 2; i++ {
+		result, e := tools.Call(t.Context(), "read_online_paper", args)
+		if e != nil || !strings.Contains(string(result.Content), `"unavailable":true`) {
+			t.Fatal(string(result.Content), e)
+		}
+	}
+	if hits.Load() != 1 {
+		t.Fatal("failure checkpoint repeated HTTP")
+	}
+	// Same candidate and version in another run requires its own actual attempt.
+	other := researchRunFixture(t, s, run.TopicID)
+	record, err := readResearchRecord(t.Context(), s.Store.DB, run.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	record.ResearchRun = other
+	if _, err = s.Store.DB.Exec(`UPDATE research_runs SET body=? WHERE id=?`, jsonText(record), other.ID); err != nil {
+		t.Fatal(err)
+	}
+	remoteRegister(t, s, other, candidate)
+	otherTools, err := s.researchTools(t.Context(), other.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = otherTools.Call(t.Context(), "read_online_paper", args); err != nil {
+		t.Fatal(err)
+	}
+	if hits.Load() != 2 {
+		t.Fatal("failure checkpoint crossed runs", hits.Load())
+	}
+	// New metadata/version allows a fresh read and excludes the historical
+	// missing-read entry from current report caveats, without deleting history.
+	scope, err := readResearchRunScope(t.Context(), s.Store.DB, run.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	candidate.LandingURL = "http://paper.example/available"
+	err = s.commitResearchRead(t.Context(), scope, nil, true, func(tx *sql.Tx) error { _, e := writeResearchCandidate(t.Context(), tx, scope, candidate); return e })
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, err := tools.Call(t.Context(), "read_online_paper", args)
+	if err != nil || !strings.Contains(string(result.Content), "Newly available evidence.") || hits.Load() != 3 {
+		t.Fatal(string(result.Content), err, hits.Load())
+	}
+	caveats, err := s.researchSearchCaveats(t.Context(), run.ID)
+	if err != nil || strings.Contains(caveats, "在线读取不足") {
+		t.Fatal("obsolete failure shown as current", caveats, err)
 	}
 }
 

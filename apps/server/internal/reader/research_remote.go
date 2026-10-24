@@ -17,6 +17,18 @@ import (
 
 const researchRemoteProtocol = "public-evidence-v2"
 
+// Only failures at the public content boundary are ordinary missing reads.
+// Permission, budget, local identity, cache and publication errors stay fatal.
+type researchUnreadableCandidate struct {
+	CandidateID, Version string
+	cause                error
+}
+
+func (e *researchUnreadableCandidate) Error() string {
+	return "公开资料没有可读正文或摘要"
+}
+func (e *researchUnreadableCandidate) Unwrap() error { return e.cause }
+
 type researchRemoteCache struct {
 	RunID, SnapshotID, TopicID, CandidateID, Version, ResourceHash, FinalURL, FetchedAt, Protocol string
 	Evidence                                                                                      []ResearchEvidence
@@ -410,9 +422,13 @@ func (s *Server) readResearchRemote(ctx context.Context, runID, candidateID stri
 		abstract := scholar.PublicText(c.Abstract)
 		if abstract == "" {
 			if fetchErr != nil {
-				return nil, fetchErr
+				var generation *GenerationError
+				if errors.As(fetchErr, &generation) {
+					return nil, fetchErr
+				}
+				return nil, &researchUnreadableCandidate{CandidateID: c.ID, Version: version, cause: fetchErr}
 			}
-			return nil, fmt.Errorf("公开资料没有可读正文或摘要")
+			return nil, &researchUnreadableCandidate{CandidateID: c.ID, Version: version}
 		}
 		cache.FinalURL = scholar.PublicDisplayURL(c.LandingURL)
 		cache.ResourceHash = sourceKey(abstract)
