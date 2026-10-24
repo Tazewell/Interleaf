@@ -77,6 +77,19 @@ func (s *Server) researchNetworkPlan(ctx context.Context, scope researchScope, k
 // The accepted worker owns this structured acquisition stage. It works with
 // text-only compatible models as well as tool-capable ones, and dispatches
 // through the same registered read tools; no separate scheduler is involved.
+// Explicit-link acquisition uses the existing registered read path. The guard
+// is essential: an empty URL list must not trigger the generic search planner.
+func (s *Server) acquireResearchUserURLs(ctx context.Context, runID string) error {
+	record, err := readResearchRecord(ctx, s.Store.DB, runID)
+	if err != nil {
+		return err
+	}
+	if len(record.Input.URLs) == 0 {
+		return nil
+	}
+	return s.acquireResearchOnline(ctx, runID)
+}
+
 func (s *Server) acquireResearchOnline(parent context.Context, runID string) error {
 	ctx, finish, err := s.beginResearchNetwork(parent, runID)
 	if errors.Is(err, errResearchNetworkDenied) {
@@ -899,4 +912,30 @@ func (s *Server) researchNetworkSettingHTTP(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	w.WriteHeader(204)
+}
+
+// Explicit URLs are part of the requested comparison scope even when searches
+// find other full texts. Missing/abstract-only requested work cannot be cleared.
+func (s *Server) researchUserURLGaps(ctx context.Context, runID string, evidence []ResearchEvidence) ([]string, error) {
+	r, err := readResearchRecord(ctx, s.Store.DB, runID)
+	if err != nil {
+		return nil, err
+	}
+	gaps := []string{}
+	for _, raw := range r.Input.URLs {
+		var cid string
+		if err = s.Store.DB.QueryRowContext(ctx, `SELECT id FROM research_candidates WHERE topic_id=? AND identity_key=?`, r.TopicID, "url:"+sourceKey(raw)).Scan(&cid); err != nil {
+			return nil, err
+		}
+		full := false
+		for _, ev := range evidence {
+			if ev.CandidateID == cid && researchFulltext(ev) {
+				full = true
+			}
+		}
+		if !full {
+			gaps = append(gaps, "用户指定论文尚无已读全文："+scholar.PublicDisplayURL(raw))
+		}
+	}
+	return gaps, nil
 }

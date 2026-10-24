@@ -270,7 +270,12 @@ func (s *Server) checkResearchNovelty(parent context.Context, runID, ideaID stri
 	for _, ev := range evidence {
 		hasFulltext = hasFulltext || researchFulltext(ev)
 	}
-	complete := !local && hasFulltext
+	urlGaps, e := s.researchUserURLGaps(ctx, runID, evidence)
+	if e != nil {
+		return empty, e
+	}
+	report.Caveats = append(report.Caveats, urlGaps...)
+	complete := !local && hasFulltext && len(urlGaps) == 0
 	for _, q := range queries {
 		if q.SearchID != "" && !containsResearchID(report.QueryIDs, q.SearchID) {
 			report.QueryIDs = append(report.QueryIDs, q.SearchID)
@@ -329,7 +334,7 @@ func (s *Server) checkResearchNovelty(parent context.Context, runID, ideaID stri
 		// Preserve local overlap analysis; no synthetic no-overlap verdict is emitted.
 		report.QueryIDs = []string{}
 	}
-	prompt := researchNoveltyPrompt + "\nRESEARCH_NOVELTY_INPUT_JSON\n" + jsonText(map[string]any{"idea": idea, "evidence": evidence, "queries": queries, "coverageComplete": complete, "localOnly": local})
+	prompt := researchNoveltyPrompt + "\nRESEARCH_NOVELTY_INPUT_JSON\n" + jsonText(map[string]any{"idea": idea, "evidence": evidence, "queries": queries, "coverageComplete": complete, "localOnly": local, "requestedSourceGaps": urlGaps})
 	if _, err = s.researchNetworkPlan(ctx, scope, "novelty-model:"+idea.ID, prompt, validate); err != nil {
 		return empty, err
 	}

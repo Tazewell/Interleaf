@@ -570,7 +570,10 @@ func (s *Server) executeResearch(w *researchWorker, a *researchAttempt) {
 			if err == nil {
 				if r.Input.Mode == "ideas" || r.Input.Mode == "novelty" {
 					var ideas []ResearchIdea
-					ideas, err = s.exploreResearchIdeas(ctx, a.runID)
+					err = s.acquireResearchUserURLs(ctx, a.runID)
+					if err == nil {
+						ideas, err = s.exploreResearchIdeas(ctx, a.runID)
+					}
 					for _, idea := range ideas {
 						if err != nil {
 							break

@@ -41,6 +41,10 @@ func noveltyFixture(t *testing.T, mode string) (*Server, string, *atomic.Int32) 
 		case "/works":
 			w.Header().Set("Content-Type", "application/json")
 			fmt.Fprint(w, `{"status":"ok","message-type":"work-list","message":{"items-per-page":5,"total-results":1,"items":[{"DOI":"10.1000/overlap","title":["Different title B"],"abstract":"Only a summary","URL":"http://paper.example/full"}]}}`)
+		case "/missing":
+			http.Error(w, "private upstream", 404)
+		case "/explicit":
+			fmt.Fprint(w, "<p>Explicit user paper uses uncertainty weighted graph propagation.</p>")
 		case "/full":
 			if mode == "abstract" {
 				http.Error(w, "not available", 404)
@@ -237,5 +241,79 @@ func TestResearchNoveltyInvalidModelDoesNotPublish(t *testing.T) {
 				t.Fatal("invalid report saved", n, err)
 			}
 		})
+	}
+}
+
+func TestResearchNoveltyExplicitUserURLs(t *testing.T) {
+	for _, mode := range []string{"ideas", "novelty"} {
+		for _, missing := range []bool{false, true} {
+			t.Run(fmt.Sprintf("%s/missing=%v", mode, missing), func(t *testing.T) {
+				s, topic, _ := noveltyFixture(t, "full")
+				var calls atomic.Int32
+				ideasModel(t, s, &calls, nil)
+				first := ideasRun(t, s, topic, "", ResearchRunInput{IdeaCount: 1})
+				researchWaitJob(t, s, first, "completed")
+				r, _ := readResearchRecord(t.Context(), s.Store.DB, first)
+				prior, _ := s.getResearchResults(t.Context(), first)
+				raw := "http://paper.example/explicit"
+				if missing {
+					raw = "http://paper.example/missing?signature=PRIVATE"
+				}
+				input := ResearchRunInput{Mode: mode, IdeaCount: 1, Network: "allow-task", URLs: []string{raw}}
+				if mode == "novelty" {
+					input.IdeaID = prior.Ideas[0].ID
+				}
+				run := ideasRun(t, s, topic, r.SessionID, input)
+				done := researchWaitJob(t, s, run, "completed")
+				var cid string
+				if err := s.Store.DB.QueryRow(`SELECT id FROM research_candidates WHERE topic_id=? AND identity_key=?`, topic, "url:"+sourceKey(raw)).Scan(&cid); err != nil {
+					t.Fatal("explicit authorized URL ignored", err)
+				}
+				var count int
+				s.Store.DB.QueryRow(`SELECT count(*) FROM research_evidence WHERE run_id=? AND candidate_id=?`, run, cid).Scan(&count)
+				result, _ := s.getResearchResults(t.Context(), run)
+				if !missing && count == 0 {
+					t.Fatal("explicit candidate was not read")
+				}
+				if missing {
+					if !strings.Contains(strings.Join(result.Novelty[0].Caveats, " "), "用户指定") {
+						t.Fatal("explicit failure hidden", result)
+					}
+					report := paperCall(t, s, "GET", "/api/research/reports/"+done["latestReportId"].(string), "", 200)
+					if strings.Contains(report["content"].(string), "PRIVATE") {
+						t.Fatal("private URL leaked")
+					}
+				}
+				var searches int
+				s.Store.DB.QueryRow(`SELECT count(*) FROM research_searches WHERE run_id=?`, run).Scan(&searches)
+				if searches != 6 {
+					t.Fatal("extra generic search", searches)
+				}
+				before := calls.Load()
+				input.UserMessageID = id()
+				input.Network = "deny"
+				paperCall(t, s, "POST", "/api/research/topics/"+topic+"/sessions/"+r.SessionID+"/runs", jsonText(input), 400)
+				if calls.Load() != before {
+					t.Fatal("denied URL made model request")
+				}
+			})
+		}
+	}
+}
+
+func TestResearchNoveltyExplicitURLBudgetDoesNotSkip(t *testing.T) {
+	s, topic, hits := noveltyFixture(t, "full")
+	var calls atomic.Int32
+	ideasModel(t, s, &calls, nil)
+	run := ideasRun(t, s, topic, "", ResearchRunInput{Network: "allow-task", IdeaCount: 1, URLs: []string{"http://paper.example/explicit", "http://paper.example/full"}, Budget: ResearchBudget{MaxRemoteReads: 1}})
+	researchWaitJob(t, s, run, "paused")
+	out, _ := s.getResearchResults(t.Context(), run)
+	if len(out.Ideas) != 0 || hits.Load() != 1 {
+		t.Fatal("budget skipped explicit read", out, hits.Load())
+	}
+	paperCall(t, s, "POST", "/api/research/runs/"+run+"/resume", `{"requestId":"`+id()+`","budget":{"maxModelRequests":200,"maxSearchRequests":24,"maxRemoteReads":8,"maxMinutes":30}}`, 202)
+	researchWaitJob(t, s, run, "completed")
+	if hits.Load() != 9 {
+		t.Fatal("resume repeated explicit successful read", hits.Load())
 	}
 }
