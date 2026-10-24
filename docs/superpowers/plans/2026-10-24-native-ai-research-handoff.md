@@ -13,7 +13,7 @@
 - 完成证据：同目录 `completion-evidence.md`。该目录被 Git 忽略，当前机器保留；切换机器时不能假设它存在。
 - Task 8 当前提交、审查结论及接续位置：见本文件末尾。
 
-开始新对话时先核对 `git status --short --branch`、`git log`、`AGENTS.md` 和可能存在的 `AGENTS.local.md`；台账和实际源码优先于旧摘要。不要重派已完成的 Tasks 1～7；Task 8 先核对复审状态及修复提交，避免重做主体实现。不要把本文件当成后三项已完成的证据。
+开始新对话时先核对 `git status --short --branch`、`git log`、`AGENTS.md` 和可能存在的 `AGENTS.local.md`；台账和实际源码优先于旧摘要。Tasks 1～8 已完成阶段实施与审查，不要重派；从第 9 项接续。不要把本文件当成后三项或最终整体验收已完成的证据。
 
 ## 全程约束
 
@@ -131,13 +131,14 @@
 
 ## 可复制给新对话的接续指令
 
-请继续 Reader 的“内置 API AI + 文件夹研究 + 论文搜索/查新”，按项子代理实施与独立审查。先读 `C:/Users/Administrator/.codex/worktrees/native-ai-research/reader/docs/superpowers/plans/2026-10-24-native-ai-research-handoff.md`，核对该 worktree 的分支、Git 状态与台账。Tasks 1～7 已完成；先核对并完成 Task 8 的修复复审，再依次完成 Tasks 9、10、11 及全分支独立审查。保留 `D:/work/myreader/reader`，不推送/合并/发布，不读外部凭据，不动真实书库；WSL 使用现有专用镜像。不要重复已经通过且源码未变的套件，不把阶段通过当成全部完成。
+请继续 Reader 的“内置 API AI + 文件夹研究 + 论文搜索/查新”，按项子代理实施与独立审查。先读 `C:/Users/Administrator/.codex/worktrees/native-ai-research/reader/docs/superpowers/plans/2026-10-24-native-ai-research-handoff.md`，核对该 worktree 的分支、Git 状态与台账。Tasks 1～8 已完成阶段实施与审查，从 Task 9 开始，依次完成 Tasks 9、10、11 及全分支独立审查。保留 `D:/work/myreader/reader`，不推送/合并/发布，不读外部凭据，不动真实书库；WSL 使用现有专用镜像。不要重复已经通过且源码未变的套件，不把阶段通过当成全部完成。
 
 ## 当前接续记录（2026-10-24）
 
 - Task 8 主体：`2d18346`，接通授权联网证据和显式候选导入。
 - 第一轮修复：`11fc12c` 精确限制候选元数据失效范围；`be69ee4` 在普通候选读取失败时保留成功证据并继续报告。相关集成 race 的历史实际结果为 exit 0、68.351 秒。
 - 原实施会话在第二个修复提交后、追加最终修复报告前中断。新会话已从原工具输出恢复 `task-8-fix-1-recovery.md`，并派独立限定复审。
-- 本次复审已动态复现一个新增边界问题：候选先产生读取失败检查点，随后显式导入可读本地原件，候选的纯映射不改变版本；旧失败检查点仍早于本地来源读取返回，导致工具继续报告不可读。须补充正式回归、修复并复审，不能将第一轮修复直接视为 Task 8 已接受。
-- 当前产品提交仍为 `be69ee4`；Task 9～11 及最终完整应用检查、实际产物和隔离预览尚未完成。
+- 第一轮复审另复现负检查点遮住后来导入本地原件的问题；第二轮修复 `529f8bc` 已补入正式回归，读取失败后导入可读原件可以在同 run 使用本地证据，当前不足说明随成功验证更新，历史记录与远程证据版本保留。
+- 第二轮正式回归经历 RED→GREEN；最终相关 Network/Candidates/Remote race exit 0、44.954 秒，318/318 源/镜像原始字节及更改的 HEAD blob 由独立复审再次核对。`task-8-rereview-2.md` 判定唯一新增 Important 已解决且无新问题，Task 8 阶段审查完成。
+- 当前产品提交为 `529f8bc`。Task 9～11 及最终完整应用检查、实际产物和隔离预览尚未完成；导入计页与桌面迁移组合等既有覆盖限制仍须在 Task 11 实测。
 - 详细进度、实际命令和审查结论以当前机器的 `.superpowers/sdd/2026-10-22-native-ai-research/progress.md` 及对应报告为准。
