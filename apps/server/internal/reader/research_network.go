@@ -405,7 +405,11 @@ func writeResearchCandidate(ctx context.Context, tx *sql.Tx, scope researchScope
 		if _, err = tx.ExecContext(ctx, `UPDATE research_evidence SET availability=CASE WHEN availability='removed' THEN 'removed' ELSE 'stale' END,body=json_set(body,'$.availability',CASE WHEN availability='removed' THEN 'removed' ELSE 'stale' END),updated_at=? WHERE candidate_id=? AND topic_id=?`, stamp, c.ID, c.TopicID); err != nil {
 			return c, err
 		}
-		if _, err = tx.ExecContext(ctx, `UPDATE research_units SET status='stale',body=json_set(body,'$.status','stale'),updated_at=? WHERE kind IN ('remote','candidate-local','section') AND run_id IN(SELECT run_id FROM research_evidence WHERE candidate_id=? AND topic_id=?)`, stamp, c.ID, c.TopicID); err != nil {
+		if _, err = tx.ExecContext(ctx, `UPDATE research_units SET status='stale',body=json_set(body,'$.status','stale'),updated_at=?
+ WHERE run_id IN(SELECT id FROM research_runs WHERE topic_id=?) AND (
+ (kind='remote' AND unit_key LIKE ?) OR (kind='candidate-local' AND unit_key LIKE ?) OR
+ (kind='section' AND EXISTS(SELECT 1 FROM json_each(research_units.body,'$.result.section.sourceIds') ref
+ JOIN research_evidence e ON e.id=ref.value WHERE e.run_id=research_units.run_id AND e.candidate_id=? AND e.topic_id=?)))`, stamp, c.TopicID, "remote:"+c.ID+":%", "candidate-local:"+c.ID+":%", c.ID, c.TopicID); err != nil {
 			return c, err
 		}
 		_, err = tx.ExecContext(ctx, `UPDATE research_candidates SET body=?,updated_at=? WHERE id=? AND topic_id=?`, jsonText(c), stamp, c.ID, c.TopicID)

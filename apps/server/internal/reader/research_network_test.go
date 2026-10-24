@@ -16,6 +16,85 @@ import (
 	"time"
 )
 
+// A run is not a candidate identity: changing A must not invalidate B's
+// remote/local cache, source, report or independent section checkpoint.
+func TestResearchRemoteEvidenceMetadataUpdateKeepsUnrelatedCandidate(t *testing.T) {
+	for _, local := range []bool{false, true} {
+		t.Run(fmt.Sprint(local), func(t *testing.T) {
+			s, run, first, hits := remoteFixture(t, func(w http.ResponseWriter, r *http.Request) { fmt.Fprint(w, "<p>Independent evidence.</p>") })
+			second := first
+			second.ID, second.IdentityKey, second.DOI = id(), "doi:10.1234/second", "10.1234/second"
+			second.LandingURL = "http://paper.example/second"
+			if local {
+				d, err := s.Store.Document("doc")
+				if err != nil {
+					t.Fatal(err)
+				}
+				second.PaperID, second.DocumentID = d.PaperID, d.ID
+			}
+			remoteRegister(t, s, run, second)
+			a, err := s.readResearchRemote(t.Context(), run.ID, first.ID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			b, err := s.readResearchRemote(t.Context(), run.ID, second.ID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			report := ResearchReport{ID: id(), TopicID: run.TopicID, SessionID: run.SessionID, RunID: run.ID, SourceRunID: run.ID, Origin: "model", Content: "B history", SourceIDs: []string{b[0].ID}, Revision: "old", CreatedAt: now()}
+			if _, err = s.Store.DB.Exec(`INSERT INTO research_reports(id,topic_id,session_id,run_id,revision,body,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?)`, report.ID, report.TopicID, report.SessionID, report.RunID, report.Revision, jsonText(report), now(), now()); err != nil {
+				t.Fatal(err)
+			}
+			scope, err := readResearchRunScope(t.Context(), s.Store.DB, run.ID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			err = s.commitResearchRead(t.Context(), scope, nil, true, func(tx *sql.Tx) error {
+				for i, ev := range []ResearchEvidence{a[0], b[0]} {
+					payload := json.RawMessage(jsonText(researchSectionCheckpoint{Section: researchReportSection{SourceIDs: []string{ev.ID}}}))
+					if e := writeResearchUnit(t.Context(), tx, ResearchUnit{RunID: run.ID, UnitKey: fmt.Sprintf("section:%d", i), Kind: "section", Status: "complete", Result: payload}); e != nil {
+						return e
+					}
+				}
+				return nil
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			first.Abstract = "Changed A metadata"
+			err = s.commitResearchRead(t.Context(), scope, nil, true, func(tx *sql.Tx) error { _, e := writeResearchCandidate(t.Context(), tx, scope, first); return e })
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err = s.resolveResearchSource(t.Context(), a[0].ID); err == nil {
+				t.Fatal("changed A source stayed valid")
+			}
+			if _, err = s.resolveResearchSource(t.Context(), b[0].ID); err != nil {
+				t.Fatal("unrelated B source invalidated", err)
+			}
+			current, err := readResearchReport(t.Context(), s.Store.DB, report.ID)
+			if err != nil || current.Stale || current.Content != report.Content {
+				t.Fatal("B history changed", current, err)
+			}
+			before := hits.Load()
+			again, err := s.readResearchRemote(t.Context(), run.ID, second.ID)
+			if err != nil || again[0].ID != b[0].ID || hits.Load() != before {
+				t.Fatal("B cache cannot be reused", err)
+			}
+			for i, want := range []string{"stale", "complete"} {
+				u, e := readResearchUnit(t.Context(), s.Store.DB, run.ID, fmt.Sprintf("section:%d", i))
+				if e != nil || u.Status != want {
+					t.Fatal("section dependency invalidation", i, u.Status, e)
+				}
+			}
+			fresh, err := s.readResearchRemote(t.Context(), run.ID, first.ID)
+			if err != nil || fresh[0].ID == a[0].ID {
+				t.Fatal("A could not be reread at new version", err)
+			}
+		})
+	}
+}
+
 type researchQueuedClock struct{ entered chan struct{} }
 
 func (c researchQueuedClock) Now() time.Time { return time.Unix(1000, 0) }
