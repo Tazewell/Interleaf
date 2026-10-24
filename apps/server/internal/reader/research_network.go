@@ -319,7 +319,7 @@ func (s *Server) researchSearchCaveats(ctx context.Context, runID string) (strin
 		if json.Unmarshal(unit.Result, &saved) != nil {
 			return "", errResearchScopeChanged
 		}
-		_, version, e := readResearchRegisteredCandidate(ctx, s.Store.DB, scope, saved.CandidateID)
+		candidate, version, e := readResearchRegisteredCandidate(ctx, s.Store.DB, scope, saved.CandidateID)
 		if e != nil {
 			return "", e
 		}
@@ -328,6 +328,20 @@ func (s *Server) researchSearchCaveats(ctx context.Context, runID string) (strin
 			continue
 		}
 		if e = saved.validate(scope, unit); e != nil {
+			return "", e
+		}
+		// A verified local read supersedes the public failure for the current
+		// report. Keep the historical checkpoint and remote version unchanged.
+		if local, e := readCandidateLocalCache(ctx, s.Store.DB, scope, candidate, version); e == nil {
+			for _, ev := range local.Evidence {
+				if _, e = s.resolveCandidateLocalSource(ctx, scope, ev); e != nil {
+					return "", e
+				}
+			}
+			if len(local.Evidence) > 0 {
+				continue
+			}
+		} else if !errors.Is(e, sql.ErrNoRows) {
 			return "", e
 		}
 		missing = append(missing, fmt.Sprintf("%s（候选 %s）：%s，时间 %s。", saved.URL, saved.CandidateID, saved.Reason, saved.ReadAt))
@@ -659,6 +673,7 @@ func (t *researchToolset) readOnline(ctx context.Context, args json.RawMessage) 
 		return nativeToolResult{}, err
 	}
 	key := missingResearchReadKey(candidate.ID, version)
+	var ev []ResearchEvidence
 	if u, e := readResearchUnit(ctx, t.server.Store.DB, t.scope.Run.ID, key); e == nil {
 		var missing researchMissingRead
 		if json.Unmarshal(u.Result, &missing) != nil || missing.CandidateID != candidate.ID || missing.Version != version {
@@ -670,11 +685,23 @@ func (t *researchToolset) readOnline(ctx context.Context, args json.RawMessage) 
 		if e = ctx.Err(); e != nil {
 			return nativeToolResult{}, e
 		}
-		return missingResearchReadResult(missing), nil
+		// Import mapping deliberately does not version successful public
+		// evidence. Before reusing its negative checkpoint, run the same local
+		// preference and current-source validation as an uncached remote read.
+		var found bool
+		ev, found, e = t.server.researchRemoteLocal(ctx, t.scope, candidate)
+		if e != nil {
+			return nativeToolResult{}, e
+		}
+		if !found {
+			return missingResearchReadResult(missing), nil
+		}
 	} else if !errors.Is(e, sql.ErrNoRows) {
 		return nativeToolResult{}, e
 	}
-	ev, err := t.server.readResearchRemote(ctx, t.scope.Run.ID, q.CandidateID)
+	if ev == nil {
+		ev, err = t.server.readResearchRemote(ctx, t.scope.Run.ID, q.CandidateID)
+	}
 	if err != nil {
 		var unreadable *researchUnreadableCandidate
 		if !errors.As(err, &unreadable) || ctx.Err() != nil {
