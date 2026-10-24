@@ -6,6 +6,7 @@ import type {
   ResearchSessionInput,
   ResearchEvidence,
   ResearchRun,
+  ResearchResults,
   ResearchRunInput,
   ResearchControl,
   ResearchReport,
@@ -55,6 +56,11 @@ export const researchAPI = {
     request<ResearchRun>(`/api/research/runs/${encodeURIComponent(runId)}`, {
       signal,
     }),
+  getResults: (runId: string, signal?: AbortSignal) =>
+    request<ResearchResults>(
+      `/api/research/runs/${encodeURIComponent(runId)}/results`,
+      { signal },
+    ),
   controlRun: (
     runId: string,
     action: "start" | "pause" | "resume" | "cancel",

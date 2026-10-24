@@ -543,9 +543,6 @@ func (s *Server) executeResearch(w *researchWorker, a *researchAttempt) {
 		var r researchRunRecord
 		r, err = readResearchRecord(ctx, s.Store.DB, a.runID)
 		if err == nil {
-			if r.Input.Mode == "ideas" || r.Input.Mode == "novelty" {
-				err = fmt.Errorf("该研究阶段尚未启用")
-			}
 			var scope researchScope
 			if err == nil {
 				scope, err = readResearchRunScope(ctx, s.Store.DB, a.runID)
@@ -571,7 +568,18 @@ func (s *Server) executeResearch(w *researchWorker, a *researchAttempt) {
 				}
 			}
 			if err == nil {
-				err = s.acquireResearchOnline(ctx, a.runID)
+				if r.Input.Mode == "ideas" || r.Input.Mode == "novelty" {
+					var ideas []ResearchIdea
+					ideas, err = s.exploreResearchIdeas(ctx, a.runID)
+					for _, idea := range ideas {
+						if err != nil {
+							break
+						}
+						_, err = s.checkResearchNovelty(ctx, a.runID, idea.ID)
+					}
+				} else {
+					err = s.acquireResearchOnline(ctx, a.runID)
+				}
 			}
 			if err == nil {
 				_, err = s.composeResearchReport(ctx, a.runID)

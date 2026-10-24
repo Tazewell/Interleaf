@@ -83,6 +83,38 @@
                 },
             },
         },
+      "/api/research/runs/{run}/results":
+        {
+          "get":
+            {
+              "parameters":
+                [
+                  {
+                    "name": "run",
+                    "in": "path",
+                    "required": true,
+                    "schema": { "type": "string" },
+                  },
+                ],
+              "responses":
+                {
+                  "200":
+                    {
+                      "description": "Durable typed results, including incomplete ideas and query coverage; read only",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                {
+                                  "$ref": "#/components/schemas/ResearchResults",
+                                },
+                            },
+                        },
+                    },
+                },
+            },
+        },
       "/api/research/runs/{run}/{action}":
         {
           "post":
@@ -9590,11 +9622,74 @@
                 },
               "required": ["id", "kind", "text"],
             },
+          "ResearchNoveltyQuery":
+            {
+              "type": "object",
+              "properties":
+                {
+                  "ideaId": { "type": "string" },
+                  "kind": { "enum": ["synonym", "mechanism", "adjacent"] },
+                  "query": { "type": "string" },
+                  "source": { "enum": ["arxiv", "crossref"] },
+                  "fromYear": { "type": "integer" },
+                  "toYear": { "type": "integer" },
+                  "searchId": { "type": "string" },
+                  "status": { "enum": ["pending", "ok", "failed", "limited"] },
+                  "fetchedAt": { "type": "string" },
+                  "exclusions":
+                    { "type": "array", "items": { "type": "string" } },
+                },
+              "required":
+                [
+                  "ideaId",
+                  "kind",
+                  "query",
+                  "source",
+                  "fromYear",
+                  "toYear",
+                  "status",
+                  "exclusions",
+                ],
+            },
+          "ResearchResults":
+            {
+              "type": "object",
+              "properties":
+                {
+                  "ideas":
+                    {
+                      "type": "array",
+                      "items": { "$ref": "#/components/schemas/ResearchIdea" },
+                    },
+                  "novelty":
+                    {
+                      "type": "array",
+                      "items": { "$ref": "#/components/schemas/NoveltyReport" },
+                    },
+                  "queries":
+                    {
+                      "type": "array",
+                      "items":
+                        { "$ref": "#/components/schemas/ResearchNoveltyQuery" },
+                    },
+                  "pendingIdeaIds":
+                    { "type": "array", "items": { "type": "string" } },
+                  "capability": { "const": "text-search-assistance" },
+                },
+              "required":
+                ["ideas", "novelty", "queries", "pendingIdeaIds", "capability"],
+            },
           "ResearchIdea":
             {
               "type": "object",
               "properties":
                 {
+                  "basis":
+                    {
+                      "type": "array",
+                      "items": { "$ref": "#/components/schemas/ResearchFact" },
+                    },
+                  "derivedFromId": { "type": "string" },
                   "id": { "type": "string" },
                   "problem": { "type": "string" },
                   "mechanism": { "type": "string" },
@@ -9618,6 +9713,7 @@
                 },
               "required":
                 [
+                  "basis",
                   "id",
                   "problem",
                   "mechanism",

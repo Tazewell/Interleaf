@@ -189,6 +189,8 @@ type ResearchClaim struct {
 	Text string `json:"text"`
 }
 type ResearchIdea struct {
+	Basis             []ResearchFact  `json:"basis"`
+	DerivedFromID     string          `json:"derivedFromId,omitempty"`
 	ID                string          `json:"id"`
 	Problem           string          `json:"problem"`
 	Mechanism         string          `json:"mechanism"`
@@ -242,4 +244,26 @@ type ResearchMessage struct {
 	Role      string `json:"role"`
 	Content   string `json:"content"`
 	CreatedAt string `json:"createdAt"`
+}
+
+// Only public, typed successful research output; private control/model units
+// never cross this boundary. Queries remain visible when a budget pauses work.
+type ResearchResults struct {
+	Ideas          []ResearchIdea         `json:"ideas"`
+	Novelty        []NoveltyReport        `json:"novelty"`
+	Queries        []ResearchNoveltyQuery `json:"queries"`
+	PendingIdeaIDs []string               `json:"pendingIdeaIds"`
+	Capability     string                 `json:"capability"`
+}
+type ResearchNoveltyQuery struct {
+	IdeaID     string   `json:"ideaId"`
+	Kind       string   `json:"kind"`
+	Query      string   `json:"query"`
+	Source     string   `json:"source"`
+	FromYear   int      `json:"fromYear"`
+	ToYear     int      `json:"toYear"`
+	SearchID   string   `json:"searchId,omitempty"`
+	Status     string   `json:"status"`
+	FetchedAt  string   `json:"fetchedAt,omitempty"`
+	Exclusions []string `json:"exclusions"`
 }

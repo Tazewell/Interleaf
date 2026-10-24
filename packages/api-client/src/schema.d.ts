@@ -90,6 +90,43 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/research/runs/{run}/results": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    run: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Durable typed results, including incomplete ideas and query coverage; read only */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ResearchResults"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/research/runs/{run}/{action}": {
         parameters: {
             query?: never;
@@ -7664,7 +7701,32 @@ export interface components {
             kind: "problem" | "method" | "experiment";
             text: string;
         };
+        ResearchNoveltyQuery: {
+            ideaId: string;
+            /** @enum {unknown} */
+            kind: "synonym" | "mechanism" | "adjacent";
+            query: string;
+            /** @enum {unknown} */
+            source: "arxiv" | "crossref";
+            fromYear: number;
+            toYear: number;
+            searchId?: string;
+            /** @enum {unknown} */
+            status: "pending" | "ok" | "failed" | "limited";
+            fetchedAt?: string;
+            exclusions: string[];
+        };
+        ResearchResults: {
+            ideas: components["schemas"]["ResearchIdea"][];
+            novelty: components["schemas"]["NoveltyReport"][];
+            queries: components["schemas"]["ResearchNoveltyQuery"][];
+            pendingIdeaIds: string[];
+            /** @constant */
+            capability: "text-search-assistance";
+        };
         ResearchIdea: {
+            basis: components["schemas"]["ResearchFact"][];
+            derivedFromId?: string;
             id: string;
             problem: string;
             mechanism: string;

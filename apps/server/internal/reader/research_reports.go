@@ -289,6 +289,17 @@ func (s *Server) composeResearchReport(ctx context.Context, runID string) (Resea
 	if err != nil {
 		return empty, err
 	}
+	if r.Input.Mode == "ideas" || r.Input.Mode == "novelty" {
+		structured, e := s.researchIdeaSection(ctx, runID)
+		if e != nil {
+			return empty, e
+		}
+		if _, e = parseResearchSection(jsonText(structured), allowed); e != nil {
+			return empty, e
+		}
+		sections = append(sections, structured)
+		batches = nil
+	}
 	for i, b := range batches {
 		key := fmt.Sprintf("section:%d", i)
 		input := researchReportInput(r, b)
@@ -575,4 +586,50 @@ func researchMarkdown(r ResearchReport) string {
 	text = strings.ReplaceAll(text, "](", "]\\(")
 	text = strings.ReplaceAll(text, "![", "\\![")
 	return fmt.Sprintf("# 研究报告\n\n来源：%s；修订：%s\n\n%s\n", r.Origin, r.Revision, text)
+}
+
+// Render the validated structure directly: a second free-form model cannot
+// rewrite a scoped insufficient verdict into an originality claim.
+func (s *Server) researchIdeaSection(ctx context.Context, runID string) (researchReportSection, error) {
+	result, err := s.getResearchResults(ctx, runID)
+	if err != nil {
+		return researchReportSection{}, err
+	}
+	if len(result.PendingIdeaIDs) > 0 {
+		return researchReportSection{}, fmt.Errorf("仍有未核查idea")
+	}
+	part := researchReportSection{SourceIDs: []string{}}
+	lines := []string{}
+	add := func(ids []string) string {
+		refs := []string{}
+		for _, sid := range ids {
+			if !containsResearchID(part.SourceIDs, sid) {
+				part.SourceIDs = append(part.SourceIDs, sid)
+			}
+			refs = append(refs, "["+sid+"]")
+		}
+		return strings.Join(refs, " ")
+	}
+	for _, idea := range result.Ideas {
+		lines = append(lines, "## 候选 "+idea.ID, "问题："+idea.Problem, "拟议机制（推断）："+idea.Mechanism)
+		for _, f := range idea.Basis {
+			lines = append(lines, "论文事实："+f.Text+" "+add(f.EvidenceIDs))
+		}
+		lines = append(lines, "待验假设："+strings.Join(idea.Hypotheses, "；"), "改动："+strings.Join(idea.Changes, "；"), "最小实验："+idea.MinimumExperiment, "基线："+strings.Join(idea.Baselines, "；"), "消融："+strings.Join(idea.Ablations, "；"), "证伪条件："+idea.Falsification, "资源："+idea.Resources)
+		for _, n := range result.Novelty {
+			if n.IdeaID != idea.ID {
+				continue
+			}
+			lines = append(lines, "查新截至："+n.AsOf)
+			for _, row := range n.Rows {
+				lines = append(lines, fmt.Sprintf("主张 %s：%s；重合：%s；区别：%s；未验证：%s %s", row.ClaimID, row.Status, row.Overlap, row.Difference, row.Unverified, add(row.EvidenceIDs)))
+			}
+			lines = append(lines, n.Caveats...)
+		}
+	}
+	for _, q := range result.Queries {
+		lines = append(lines, fmt.Sprintf("查询 %s / %s：%s；状态 %s；日期 %s；过滤 %d–%d；排除 %s", q.Kind, q.Source, q.Query, q.Status, q.FetchedAt, q.FromYear, q.ToYear, strings.Join(q.Exclusions, "；")))
+	}
+	part.Content = strings.Join(lines, "\n\n")
+	return part, nil
 }

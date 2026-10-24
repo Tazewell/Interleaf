@@ -215,6 +215,8 @@ export interface ResearchClaim {
 }
 
 export interface ResearchIdea {
+  basis: ResearchFact[];
+  derivedFromId?: string;
   id: string;
   problem: string;
   mechanism: string;
@@ -291,4 +293,24 @@ export interface ResearchTopicPatch {
 
 export interface ResearchSessionInput {
   title: string;
+}
+
+export interface ResearchNoveltyQuery {
+  ideaId: string;
+  kind: "synonym" | "mechanism" | "adjacent";
+  query: string;
+  source: "arxiv" | "crossref";
+  fromYear: number;
+  toYear: number;
+  searchId?: string;
+  status: "pending" | "ok" | "failed" | "limited";
+  fetchedAt?: string;
+  exclusions: string[];
+}
+export interface ResearchResults {
+  ideas: ResearchIdea[];
+  novelty: NoveltyReport[];
+  queries: ResearchNoveltyQuery[];
+  pendingIdeaIds: string[];
+  capability: "text-search-assistance";
 }
