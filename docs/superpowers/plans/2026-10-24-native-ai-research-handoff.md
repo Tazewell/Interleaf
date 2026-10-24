@@ -1,6 +1,6 @@
-# 内置 AI 研究：Task 8 后的交接与剩余待办
+# 内置 AI 研究：实施进度与剩余待办
 
-本文件最初用于第 8 项后的换会话交接。2026-10-24 用户已在新会话授权继续完成剩余工作：先完成第 8 项复审及必要修复，再依次实施第 9～11 项和全分支审查。**后三项尚未实施，整个功能尚未验收完成。**
+本文件最初用于第 8 项后的换会话交接。2026-10-24 用户已在新会话授权继续完成剩余工作。**Tasks 1～9 已完成阶段实施与独立审查，接续 Task 10；Task 11 和全分支审查尚未完成，整个功能尚未验收完成。**
 
 ## 接续位置
 
@@ -11,9 +11,9 @@
 - 本轮实现起点：`3c2cac2f4f3f8b9199f202ae8dd95dc64ae2cc37`（台账记录，包含既有双语 PDF 基线 `1fb835d`）；最终审查必须覆盖整个本轮实现，不仅最后一项提交。
 - 任务台账：`.superpowers/sdd/2026-10-22-native-ai-research/progress.md`。
 - 完成证据：同目录 `completion-evidence.md`。该目录被 Git 忽略，当前机器保留；切换机器时不能假设它存在。
-- Task 8 当前提交、审查结论及接续位置：见本文件末尾。
+- Tasks 8～9 的提交、审查结论及当前接续位置：见本文件末尾。
 
-开始新对话时先核对 `git status --short --branch`、`git log`、`AGENTS.md` 和可能存在的 `AGENTS.local.md`；台账和实际源码优先于旧摘要。Tasks 1～8 已完成阶段实施与审查，不要重派；从第 9 项接续。不要把本文件当成后三项或最终整体验收已完成的证据。
+开始新对话时先核对 `git status --short --branch`、`git log`、`AGENTS.md` 和可能存在的 `AGENTS.local.md`；台账和实际源码优先于旧摘要。Tasks 1～9 已完成阶段实施与审查，不要重派；从第 10 项接续。不要把本文件当成最终整体验收已完成的证据。
 
 ## 全程约束
 
@@ -131,14 +131,24 @@
 
 ## 可复制给新对话的接续指令
 
-请继续 Reader 的“内置 API AI + 文件夹研究 + 论文搜索/查新”，按项子代理实施与独立审查。先读 `C:/Users/Administrator/.codex/worktrees/native-ai-research/reader/docs/superpowers/plans/2026-10-24-native-ai-research-handoff.md`，核对该 worktree 的分支、Git 状态与台账。Tasks 1～8 已完成阶段实施与审查，从 Task 9 开始，依次完成 Tasks 9、10、11 及全分支独立审查。保留 `D:/work/myreader/reader`，不推送/合并/发布，不读外部凭据，不动真实书库；WSL 使用现有专用镜像。不要重复已经通过且源码未变的套件，不把阶段通过当成全部完成。
+请继续 Reader 的“内置 API AI + 文件夹研究 + 论文搜索/查新”，按项子代理实施与独立审查。先读 `C:/Users/Administrator/.codex/worktrees/native-ai-research/reader/docs/superpowers/plans/2026-10-24-native-ai-research-handoff.md`，核对该 worktree 的分支、Git 状态与台账。Tasks 1～9 已完成阶段实施与审查，从 Task 10 开始，依次完成 Tasks 10、11 及全分支独立审查。保留 `D:/work/myreader/reader`，不推送/合并/发布，不读外部凭据，不动真实书库；WSL 使用现有专用镜像。不要重复已经通过且源码未变的套件，不把阶段通过当成全部完成。
 
-## 当前接续记录（2026-10-24）
+## Task 8 验收记录（2026-10-24）
 
 - Task 8 主体：`2d18346`，接通授权联网证据和显式候选导入。
 - 第一轮修复：`11fc12c` 精确限制候选元数据失效范围；`be69ee4` 在普通候选读取失败时保留成功证据并继续报告。相关集成 race 的历史实际结果为 exit 0、68.351 秒。
 - 原实施会话在第二个修复提交后、追加最终修复报告前中断。新会话已从原工具输出恢复 `task-8-fix-1-recovery.md`，并派独立限定复审。
 - 第一轮复审另复现负检查点遮住后来导入本地原件的问题；第二轮修复 `529f8bc` 已补入正式回归，读取失败后导入可读原件可以在同 run 使用本地证据，当前不足说明随成功验证更新，历史记录与远程证据版本保留。
 - 第二轮正式回归经历 RED→GREEN；最终相关 Network/Candidates/Remote race exit 0、44.954 秒，318/318 源/镜像原始字节及更改的 HEAD blob 由独立复审再次核对。`task-8-rereview-2.md` 判定唯一新增 Important 已解决且无新问题，Task 8 阶段审查完成。
-- 当前产品提交为 `529f8bc`。Task 9～11 及最终完整应用检查、实际产物和隔离预览尚未完成；导入计页与桌面迁移组合等既有覆盖限制仍须在 Task 11 实测。
+- Task 8 验收时产品提交为 `529f8bc`。最终完整应用检查、实际产物和隔离预览仍属于 Task 11；导入计页与桌面迁移组合等既有覆盖限制仍须实测。
 - 详细进度、实际命令和审查结论以当前机器的 `.superpowers/sdd/2026-10-22-native-ai-research/progress.md` 及对应报告为准。
+
+## Task 9 验收与当前接续位置（2026-10-24）
+
+- 主体提交 `3da8729`：有来源归因的 idea、逐主张创新性对比、实际有界双源查询计划和已读证据校验。查询/模型/读取沿用既有任务、预算和事务。
+- 第一轮修复：`cdf4b1b` 重映射所选历史 idea 的合法行内引用；`0db1914` 在 idea/查新中实际读取用户显式授权链接；`fe49c92` 按真实模型窗口连续分批、保存成功检查点并在预算暂停后继续，保留全部来源范围。
+- 第二轮修复 `bb64f8c`：远端证据参与 idea 模型时持有当前许可 lease，撤权取消并等待；正式分批/非分批测试确保迟到响应不保存成功模型/批次/idea。纯本地 deny 和 candidate-local 保持本地语义。
+- 首次独立审查及两轮限定复审均已记录；`task-9-rereview-2.md` 关闭最后唯一 Important，未发现新问题。最终相关 Ideas/Novelty 测试 exit 0、7.704 秒，撤权/生命周期 race exit 0、18.549 秒；更早最终 Research 回归 18.656 秒、scholar 0.452 秒、API 生成/typecheck 均 exit 0。复审准确区分报告中的执行输出和后来已不存在的 `/tmp` 原始日志，没有重复运行绿色套件。
+- 只读 `researchAPI.getResults(runId, signal?)` 返回 `ideas`、`partialIdeas`、`novelty`、`queries`、`pendingIdeaIds`、`batches` 和 `capability: text-search-assistance`。批次计数是来源片段分析进度，不能称作论文全文覆盖率；部分 idea 不能当作最终可选候选。Go/core/OpenAPI/generated client 已一致。
+- Task 10 从当前已接受产品提交 `bb64f8c` 后接续；优先读生成的 `task-10-brief.md` 与当前接入材料 `task-10-context.md`，不要重做 Task 9。Task 10 需要独立完整审查；Task 11 的根检查、实际产物、在线来源烟测、隔离预览和全分支审查均未完成。
+- 本阶段使用受控 HTTP 模型/论文夹具；工程测试不证明真实模型的科学推理或原创性。尚无用户另行提供的真实模型配置，不读取外部凭据或真实书库补足验证。
