@@ -249,11 +249,13 @@ type ResearchMessage struct {
 // Only public, typed successful research output; private control/model units
 // never cross this boundary. Queries remain visible when a budget pauses work.
 type ResearchResults struct {
-	Ideas          []ResearchIdea         `json:"ideas"`
-	Novelty        []NoveltyReport        `json:"novelty"`
-	Queries        []ResearchNoveltyQuery `json:"queries"`
-	PendingIdeaIDs []string               `json:"pendingIdeaIds"`
-	Capability     string                 `json:"capability"`
+	PartialIdeas   []ResearchIdea          `json:"partialIdeas"`
+	Batches        []ResearchBatchProgress `json:"batches"`
+	Ideas          []ResearchIdea          `json:"ideas"`
+	Novelty        []NoveltyReport         `json:"novelty"`
+	Queries        []ResearchNoveltyQuery  `json:"queries"`
+	PendingIdeaIDs []string                `json:"pendingIdeaIds"`
+	Capability     string                  `json:"capability"`
 }
 type ResearchNoveltyQuery struct {
 	IdeaID     string   `json:"ideaId"`
@@ -266,4 +268,22 @@ type ResearchNoveltyQuery struct {
 	Status     string   `json:"status"`
 	FetchedAt  string   `json:"fetchedAt,omitempty"`
 	Exclusions []string `json:"exclusions"`
+}
+
+// Progress counts source fragments, never paper/fulltext coverage. Partial
+// candidates are derived analysis and are not selectable final idea units.
+type ResearchBatchProgress struct {
+	Stage            string                        `json:"stage"`
+	IdeaID           string                        `json:"ideaId,omitempty"`
+	ClaimID          string                        `json:"claimId,omitempty"`
+	Done             int                           `json:"done"`
+	Total            int                           `json:"total"`
+	CompletedBatches int                           `json:"completedBatches"`
+	Sources          []ResearchBatchSourceProgress `json:"sources"`
+}
+
+type ResearchBatchSourceProgress struct {
+	SourceID string `json:"sourceId"`
+	Done     int    `json:"done"`
+	Total    int    `json:"total"`
 }

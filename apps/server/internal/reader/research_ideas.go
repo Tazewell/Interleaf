@@ -124,6 +124,19 @@ func (s *Server) saveResearchResult(ctx context.Context, scope researchScope, ke
 	}()
 	refs := []string{}
 	switch v := result.(type) {
+	case researchBatchCheckpoint:
+		refs = append(refs, v.SourceIDs...)
+		for _, source := range v.Progress.Sources {
+			refs = append(refs, source.SourceID)
+		}
+		for _, idea := range v.Ideas {
+			for _, f := range idea.Basis {
+				refs = append(refs, f.EvidenceIDs...)
+			}
+		}
+		for _, row := range v.Rows {
+			refs = append(refs, row.EvidenceIDs...)
+		}
 	case []ResearchIdea:
 		for _, idea := range v {
 			for _, f := range idea.Basis {
@@ -173,11 +186,11 @@ func (s *Server) saveResearchResult(ctx context.Context, scope researchScope, ke
 	})
 }
 func (s *Server) getResearchResults(ctx context.Context, runID string) (ResearchResults, error) {
-	out := ResearchResults{Ideas: []ResearchIdea{}, Novelty: []NoveltyReport{}, Queries: []ResearchNoveltyQuery{}, PendingIdeaIDs: []string{}, Capability: "text-search-assistance"}
+	out := ResearchResults{PartialIdeas: []ResearchIdea{}, Batches: []ResearchBatchProgress{}, Ideas: []ResearchIdea{}, Novelty: []NoveltyReport{}, Queries: []ResearchNoveltyQuery{}, PendingIdeaIDs: []string{}, Capability: "text-search-assistance"}
 	if _, err := readResearchRecord(ctx, s.Store.DB, runID); err != nil {
 		return out, err
 	}
-	rows, err := s.Store.DB.QueryContext(ctx, `SELECT unit_key FROM research_units WHERE run_id=? AND kind IN ('ideas','novelty','novelty-queries') AND status='complete' ORDER BY unit_key`, runID)
+	rows, err := s.Store.DB.QueryContext(ctx, `SELECT unit_key FROM research_units WHERE run_id=? AND kind IN ('ideas','novelty','novelty-queries','research-batch') AND status='complete' ORDER BY unit_key`, runID)
 	if err != nil {
 		return out, err
 	}
@@ -205,6 +218,13 @@ func (s *Server) getResearchResults(ctx context.Context, runID string) (Research
 			return out, errResearchScopeChanged
 		}
 		switch u.Kind {
+		case "research-batch":
+			var cp researchBatchCheckpoint
+			err = json.Unmarshal(u.Result, &cp)
+			out.Batches = append(out.Batches, cp.Progress)
+			if cp.Progress.Stage == "ideas" {
+				out.PartialIdeas = cp.Ideas
+			}
 		case "ideas":
 			err = json.Unmarshal(u.Result, &out.Ideas)
 		case "novelty":
@@ -220,6 +240,9 @@ func (s *Server) getResearchResults(ctx context.Context, runID string) (Research
 		if err != nil {
 			return out, err
 		}
+	}
+	if len(out.Ideas) > 0 {
+		out.PartialIdeas = []ResearchIdea{}
 	}
 	for _, idea := range out.Ideas {
 		if !checked[idea.ID] {
@@ -344,7 +367,13 @@ func (s *Server) exploreResearchIdeas(ctx context.Context, runID string) ([]Rese
 			return nil
 		}
 		prompt := researchIdeasPrompt + fmt.Sprintf("\n候选数量=%d；用户要求=%s；仅精化此候选=%s\nRESEARCH_IDEA_EVIDENCE_JSON\n%s", count, r.Input.Question, jsonText(selected), jsonText(evidence))
-		if _, err = s.researchNetworkPlan(ctx, scope, "ideas-model", prompt, validate); err != nil {
+		if !researchStageFits(ctx, prompt) {
+			ideas, err = s.exploreResearchIdeaBatches(ctx, scope, r, count, selected, evidence)
+			if err != nil {
+				return nil, err
+			}
+			payload.Ideas = ideas
+		} else if _, err = s.researchNetworkPlan(ctx, scope, "ideas-model", prompt, validate); err != nil {
 			return nil, err
 		}
 		ideas = payload.Ideas

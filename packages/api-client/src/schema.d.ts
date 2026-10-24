@@ -7716,7 +7716,26 @@ export interface components {
             fetchedAt?: string;
             exclusions: string[];
         };
+        /** @description Processing counts of original source fragments; does not upgrade abstracts or declare full-text coverage. */
+        ResearchBatchSourceProgress: {
+            sourceId: string;
+            done: number;
+            total: number;
+        };
+        /** @description Durable processing progress; partial ideas are derived analysis, and unfinished novelty batches are not final conclusions. */
+        ResearchBatchProgress: {
+            /** @enum {unknown} */
+            stage: "ideas" | "novelty";
+            ideaId?: string;
+            claimId?: string;
+            done: number;
+            total: number;
+            completedBatches: number;
+            sources: components["schemas"]["ResearchBatchSourceProgress"][];
+        };
         ResearchResults: {
+            partialIdeas: components["schemas"]["ResearchIdea"][];
+            batches: components["schemas"]["ResearchBatchProgress"][];
             ideas: components["schemas"]["ResearchIdea"][];
             novelty: components["schemas"]["NoveltyReport"][];
             queries: components["schemas"]["ResearchNoveltyQuery"][];

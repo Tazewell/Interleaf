@@ -307,7 +307,23 @@ export interface ResearchNoveltyQuery {
   fetchedAt?: string;
   exclusions: string[];
 }
+export interface ResearchBatchSourceProgress {
+  sourceId: string;
+  done: number;
+  total: number;
+}
+export interface ResearchBatchProgress {
+  stage: "ideas" | "novelty";
+  ideaId?: string;
+  claimId?: string;
+  done: number;
+  total: number;
+  completedBatches: number;
+  sources: ResearchBatchSourceProgress[];
+}
 export interface ResearchResults {
+  partialIdeas: ResearchIdea[];
+  batches: ResearchBatchProgress[];
   ideas: ResearchIdea[];
   novelty: NoveltyReport[];
   queries: ResearchNoveltyQuery[];

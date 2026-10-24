@@ -41,6 +41,10 @@ func noveltyFixture(t *testing.T, mode string) (*Server, string, *atomic.Int32) 
 		case "/works":
 			w.Header().Set("Content-Type", "application/json")
 			fmt.Fprint(w, `{"status":"ok","message-type":"work-list","message":{"items-per-page":5,"total-results":1,"items":[{"DOI":"10.1000/overlap","title":["Different title B"],"abstract":"Only a summary","URL":"http://paper.example/full"}]}}`)
+		case "/large":
+			for i := 0; i < 24; i++ {
+				fmt.Fprintf(w, "<p>Passage %d: %s</p>", i, strings.Repeat("evidence ", 1000))
+			}
 		case "/missing":
 			http.Error(w, "private upstream", 404)
 		case "/explicit":

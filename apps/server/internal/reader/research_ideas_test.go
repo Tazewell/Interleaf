@@ -12,6 +12,9 @@ import (
 )
 
 func ideasModel(t *testing.T, s *Server, calls *atomic.Int32, mutate func(*ResearchIdea), mutateRow ...func(*NoveltyRow)) {
+	ideasModelObserved(t, s, calls, mutate, nil, mutateRow...)
+}
+func ideasModelObserved(t *testing.T, s *Server, calls *atomic.Int32, mutate func(*ResearchIdea), observe func(string), mutateRow ...func(*NoveltyRow)) {
 	t.Helper()
 	endpoint := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == "GET" {
@@ -32,6 +35,9 @@ func ideasModel(t *testing.T, s *Server, calls *atomic.Int32, mutate func(*Resea
 			text, ok := msg.Content.(string)
 			if !ok {
 				continue
+			}
+			if observe != nil {
+				observe(text)
 			}
 			if at := strings.Index(text, "RESEARCH_EVIDENCE_JSON\n"); at >= 0 {
 				var ev []struct {

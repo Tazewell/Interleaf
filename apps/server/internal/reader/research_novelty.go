@@ -335,7 +335,15 @@ func (s *Server) checkResearchNovelty(parent context.Context, runID, ideaID stri
 		report.QueryIDs = []string{}
 	}
 	prompt := researchNoveltyPrompt + "\nRESEARCH_NOVELTY_INPUT_JSON\n" + jsonText(map[string]any{"idea": idea, "evidence": evidence, "queries": queries, "coverageComplete": complete, "localOnly": local, "requestedSourceGaps": urlGaps})
-	if _, err = s.researchNetworkPlan(ctx, scope, "novelty-model:"+idea.ID, prompt, validate); err != nil {
+	if !researchStageFits(ctx, prompt) {
+		report.Rows, err = s.checkResearchNoveltyBatches(ctx, scope, idea, evidence, report, searches, queries, complete, local, urlGaps)
+		if err != nil {
+			return empty, err
+		}
+		if err = validateNoveltyReport(report, evidence, searches); err != nil {
+			return empty, err
+		}
+	} else if _, err = s.researchNetworkPlan(ctx, scope, "novelty-model:"+idea.ID, prompt, validate); err != nil {
 		return empty, err
 	}
 	report.Coverage = scope.Run.Coverage
