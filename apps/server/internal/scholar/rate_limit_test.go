@@ -2,6 +2,7 @@ package scholar
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"sync/atomic"
@@ -116,5 +117,63 @@ func TestScholarGlobalActualClientsSerializeBodyAndRespectHeaders(t *testing.T) 
 	unlock()
 	if clock.Now().Sub(clockBefore) < 7*time.Second {
 		t.Fatal("stricter service quota ignored")
+	}
+}
+
+func TestScholarGlobalCanonicalHostReads(t *testing.T) {
+	for _, tc := range []struct {
+		first, second string
+		interval      time.Duration
+	}{
+		{"arxiv.org.", "arxiv.org", 3 * time.Second},
+		{"ExPoRt.ArXiV.Org.", "ARXIV.ORG.", 3 * time.Second},
+		{"API.CROSSREF.ORG.", "api.crossref.org", time.Second},
+	} {
+		t.Run(tc.first, func(t *testing.T) {
+			entered := make(chan struct{}, 3)
+			release := make(chan struct{})
+			var calls atomic.Int32
+			c, _, clock := publicFixture(t, func(w http.ResponseWriter, r *http.Request) {
+				if r.Host != tc.first && r.Host != tc.second {
+					t.Errorf("original Host lost: %s", r.Host)
+				}
+				entered <- struct{}{}
+				if calls.Add(1) == 1 {
+					<-release
+				}
+				fmt.Fprint(w, "<p>Article.</p>")
+			})
+			other := New(64 << 20)
+			other.Public = c.Public
+			start := clock.Now()
+			first := make(chan error, 1)
+			go func() { _, err := c.FetchPublic(t.Context(), "http://"+tc.first+"/paper", "html"); first <- err }()
+			<-entered
+			ctx, cancel := context.WithCancel(t.Context())
+			queued := make(chan error, 1)
+			go func() { _, err := other.FetchPublic(ctx, "http://"+tc.second+"/paper", "html"); queued <- err }()
+			select {
+			case <-entered:
+				t.Error("equivalent source bypassed occupied global slot")
+			case <-time.After(20 * time.Millisecond):
+			}
+			cancel()
+			if err := <-queued; !errors.Is(err, context.Canceled) {
+				t.Errorf("queued cancellation lost: %v", err)
+			}
+			close(release)
+			if err := <-first; err != nil {
+				t.Fatal(err)
+			}
+			if _, err := other.FetchPublic(t.Context(), "http://"+tc.second+"/next", "html"); err != nil {
+				t.Fatal(err)
+			}
+			if elapsed := clock.Now().Sub(start); elapsed < tc.interval {
+				t.Fatalf("source interval bypassed: %s", elapsed)
+			}
+			if calls.Load() != 2 {
+				t.Fatalf("canceled queue issued network request: %d", calls.Load())
+			}
+		})
 	}
 }

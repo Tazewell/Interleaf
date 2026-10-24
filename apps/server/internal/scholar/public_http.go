@@ -103,12 +103,14 @@ func isPublicIP(ip net.IP) bool {
 	}
 	return true
 }
+func publicHostname(u *url.URL) string { return strings.TrimSuffix(strings.ToLower(u.Hostname()), ".") }
+
 func publicURL(raw string) (*url.URL, error) {
 	u, err := url.Parse(raw)
 	if err != nil || len(raw) > 4096 || u.Hostname() == "" || u.User != nil || u.Opaque != "" || (u.Scheme != "http" && u.Scheme != "https") {
 		return nil, Error{"公开资料链接必须是无用户凭据的 HTTP(S) 地址"}
 	}
-	host := strings.TrimSuffix(strings.ToLower(u.Hostname()), ".")
+	host := publicHostname(u)
 	if host == "localhost" || strings.HasSuffix(host, ".localhost") || strings.HasSuffix(host, ".local") || strings.Contains(host, "%") {
 		return nil, Error{"不能访问本机或局域网地址"}
 	}
@@ -118,7 +120,7 @@ func publicURL(raw string) (*url.URL, error) {
 	return u, nil
 }
 func publicSource(u *url.URL) string {
-	h := strings.ToLower(u.Hostname())
+	h := publicHostname(u)
 	if h == "arxiv.org" || strings.HasSuffix(h, ".arxiv.org") {
 		return "arxiv"
 	}
