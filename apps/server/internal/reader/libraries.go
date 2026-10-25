@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 	"os"
 	"strings"
@@ -84,13 +85,19 @@ func pdfPageCount(path string) (pages int, err error) {
 	if err != nil {
 		return 0, err
 	}
+	return pdfPageCountReader(f, info.Size())
+}
+
+// Keep the synchronous parser boundary explicit so lifecycle tests can hold an
+// actual ReaderAt call while checking that shutdown joins candidate imports.
+func pdfPageCountReader(input io.ReaderAt, size int64) (pages int, err error) {
 	defer func() {
 		// The parser panics on some malformed objects.
 		if recover() != nil {
 			pages, err = 0, errors.New("malformed PDF")
 		}
 	}()
-	r, err := pdf.NewReader(f, info.Size())
+	r, err := pdf.NewReader(input, size)
 	if err != nil {
 		return 0, err
 	}

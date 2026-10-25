@@ -76,6 +76,7 @@ type Server struct {
 	documentTasks          map[string]map[*documentTask]struct{}
 	deletingDocuments      map[string]bool
 	importMu               sync.Mutex
+	importPDFPageCount     func(string) (int, error) // nil uses the ordinary synchronous parser
 	configMu               sync.Mutex
 	translationMu          sync.Mutex
 	translationSubscribers map[string]map[chan TranslationBlock]struct{}
@@ -501,7 +502,11 @@ func (s *Server) importFileToCategoryWithCommit(ctx context.Context, temp, filen
 		if reason := paperLimit(kind, size, temp); reason != "" {
 			return failure(400, reason)
 		}
-		pages, _ := pdfPageCount(temp)
+		count := s.importPDFPageCount
+		if count == nil {
+			count = pdfPageCount
+		}
+		pages, _ := count(temp)
 		if (pages > largePaperPages || size > largePaperBytes) && !allowLarge {
 			return Document{}, 409, importError{409, "检测到 PDF 过大，请确认是否是论文？如果是图书类，请导入图书库。", "large-paper", pages}
 		}
