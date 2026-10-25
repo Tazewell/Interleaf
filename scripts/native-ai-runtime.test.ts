@@ -1,4 +1,4 @@
-import { readFileSync, existsSync } from 'node:fs';
+import { readFileSync, existsSync, readdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, it, expect } from 'vitest';
 const root = resolve(import.meta.dirname, '..');
@@ -9,7 +9,21 @@ describe('native AI runtime packaging', () => {
       expect(read(path), path).not.toMatch(/READER_AGENT|@reader\/agent|build:agent|agentPath|agent-path|agent\/smoke/);
     }
     expect(existsSync(resolve(root, 'apps/agent/package.json'))).toBe(false);
-    expect(read('pnpm-lock.yaml')).not.toMatch(/@mariozechner\/pi-|apps\/agent:/);
+    expect(read('pnpm-lock.yaml')).not.toMatch(/@(?:mariozechner|earendil-works)\/pi-|apps\/agent:/);
+  });
+  it('keeps the production dependency and packaged entry closure free of retired runtimes', () => {
+    const retired = /@(?:mariozechner|earendil-works)\/pi-|@reader\/agent/;
+    for (const parent of ['apps', 'packages']) {
+      for (const directory of readdirSync(resolve(root, parent))) {
+        const path = `${parent}/${directory}/package.json`;
+        if (!existsSync(resolve(root, path))) continue;
+        const manifest = JSON.parse(read(path));
+        expect(JSON.stringify([manifest.dependencies, manifest.optionalDependencies, manifest.peerDependencies]), path).not.toMatch(retired);
+      }
+    }
+    for (const path of ['apps/desktop/build.mjs', 'apps/processor/build.mjs', 'scripts/build-server.mjs', 'scripts/prepare-assets.mjs', 'apps/server/cmd/reader-server/main.go']) {
+      expect(read(path), path).not.toMatch(/READER_AGENT|@reader\/agent|@(?:mariozechner|earendil-works)\/pi-|agentPath|agent-path/);
+    }
   });
   it('retains the PDF worker and ordinary Reader client', () => {
     for (const path of ['scripts/dev.mjs', 'scripts/package-smoke.mjs', 'apps/desktop/main/index.ts']) {
