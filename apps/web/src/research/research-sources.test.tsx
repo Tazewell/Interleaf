@@ -3,6 +3,7 @@ import { act } from "react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { researchAPI } from "@reader/api";
 import { ResearchPanel } from "./ResearchPanel";
+import { ResearchReport } from "./ResearchReport";
 import {
   click,
   flush,
@@ -29,6 +30,269 @@ const evidence: ResearchEvidence = {
   readAt: "2026",
   availability: "valid",
 };
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((done) => (resolve = done));
+  return { promise, resolve };
+}
+it.each(["markdown", "revision"])(
+  "releases an aborted %s owner without letting its late completion unlock the next session",
+  async (kind) => {
+    const old = deferred<typeof report>();
+    const exportOld = deferred<string>();
+    const exportNew = deferred<string>();
+    let oldSignal: AbortSignal | undefined;
+    vi.spyOn(researchAPI, "markdown").mockImplementation(async (id, signal) => {
+      if (id === "report") {
+        oldSignal = signal;
+        return exportOld.promise;
+      }
+      return exportNew.promise;
+    });
+    const revise = vi
+      .spyOn(researchAPI, "reviseReport")
+      .mockImplementation(async (_id, _input, signal) => {
+        oldSignal = signal;
+        return old.promise;
+      });
+    const saved = vi.fn();
+    const other = {
+      ...report,
+      id: "other-report",
+      sessionId: "other-session",
+      content: "另一会话报告",
+    };
+    const editor = (reports: (typeof report)[]) => (
+      <ResearchReport
+        topicId="topic"
+        reports={reports}
+        onOpenDocument={async () => {}}
+        onSaved={saved}
+      />
+    );
+    await render(view.root, editor([report]));
+    if (kind === "markdown") await click(view.host, "导出 Markdown");
+    else {
+      await click(view.host, "编辑报告");
+      await type(view.host, "未确认保存笔记", "编辑研究报告");
+      await click(view.host, "保存新版本");
+    }
+    await render(view.root, editor([other]));
+    expect(oldSignal?.aborted).toBe(true);
+    const button = () =>
+      Array.from(view.host.querySelectorAll("button")).find(
+        (button) => button.textContent === "导出 Markdown",
+      )!;
+    expect(button().disabled).toBe(false);
+    await click(view.host, "导出 Markdown");
+    expect(button().disabled).toBe(true);
+    await act(async () => {
+      if (kind === "markdown") exportOld.resolve("旧会话导出");
+      else
+        old.resolve({
+          ...report,
+          id: "old-revision",
+          origin: "user",
+          content: "旧保存回包",
+        });
+    });
+    await flush();
+    expect(button().disabled).toBe(true);
+    expect(view.host.textContent).not.toContain("旧保存回包");
+    expect(saved).not.toHaveBeenCalled();
+    await act(async () => exportNew.resolve("新会话导出"));
+    await flush();
+    expect(button().disabled).toBe(false);
+    expect(
+      (
+        view.host.querySelector(
+          '[aria-label="导出 Markdown 内容"]',
+        ) as HTMLTextAreaElement
+      ).value,
+    ).toBe("新会话导出");
+    if (kind === "revision") {
+      const requestId = revise.mock.calls[0][1].requestId;
+      await render(view.root, editor([report]));
+      await click(view.host, "编辑报告");
+      await click(view.host, "保存新版本");
+      expect(revise.mock.calls[1][1].requestId).toBe(requestId);
+    }
+  },
+);
+it("keeps an in-progress edit and its base when SSE completion appends a model report", async () => {
+  let stream!: ReadableStreamDefaultController<Uint8Array>;
+  let reports = [report];
+  const newer = {
+    ...report,
+    id: "new-model",
+    revision: "model-v2",
+    content: "后台新模型报告",
+  };
+  vi.mocked(researchAPI.listMessages).mockResolvedValue([
+    {
+      id: "m",
+      sessionId: "session",
+      runId: "run",
+      role: "user",
+      content: "背景研究",
+      createdAt: "2026",
+    },
+  ]);
+  vi.mocked(researchAPI.listReports).mockImplementation(async () => reports);
+  vi.mocked(researchAPI.events).mockImplementation(
+    async () =>
+      new Response(
+        new ReadableStream({
+          start(controller) {
+            stream = controller;
+          },
+        }),
+      ),
+  );
+  const revise = vi
+    .spyOn(researchAPI, "reviseReport")
+    .mockImplementation(async (_id, input) => {
+      const edited = {
+        ...report,
+        id: "edited",
+        origin: "user" as const,
+        content: input.content,
+        derivedFromId: report.id,
+      };
+      reports = [...reports, edited];
+      return edited;
+    });
+  await render(
+    view.root,
+    <ResearchPanel topicId="topic" onOpenDocument={async () => {}} />,
+  );
+  await click(view.host, "编辑报告");
+  await type(view.host, "尚未保存的用户研究笔记", "编辑研究报告");
+  reports = [{ ...report }, newer];
+  vi.mocked(researchAPI.getRun).mockResolvedValue({
+    ...run,
+    status: "completed",
+    latestReportId: newer.id,
+  });
+  await act(async () =>
+    stream.enqueue(
+      new TextEncoder().encode(
+        'id: 10\nevent: done\ndata: {"ok":true,"reportId":"new-model"}\n\n',
+      ),
+    ),
+  );
+  await flush();
+  expect(
+    (
+      view.host.querySelector(
+        '[aria-label="编辑研究报告"]',
+      ) as HTMLTextAreaElement
+    )?.value,
+  ).toBe("尚未保存的用户研究笔记");
+  expect(
+    view.host.querySelector('[aria-label="历史版本"]')?.textContent,
+  ).toContain("历史版本 1");
+  await click(view.host, "保存新版本");
+  expect(revise).toHaveBeenCalledWith(
+    "report",
+    expect.objectContaining({ content: "尚未保存的用户研究笔记" }),
+    expect.any(AbortSignal),
+  );
+  expect(reports.map((report) => report.id)).toEqual([
+    "report",
+    "new-model",
+    "edited",
+  ]);
+  expect(newer.content).toBe("后台新模型报告");
+});
+it("restores unsaved report drafts after explicit session navigation", async () => {
+  const other = {
+    ...report,
+    id: "other-report",
+    sessionId: "other-session",
+    content: "另一会话",
+  };
+  const editor = (reports: (typeof report)[]) => (
+    <ResearchReport
+      topicId="topic"
+      reports={reports}
+      onOpenDocument={async () => {}}
+      onSaved={() => {}}
+    />
+  );
+  await render(view.root, editor([report]));
+  await click(view.host, "编辑报告");
+  await type(view.host, "保留到返回时的草稿", "编辑研究报告");
+  await render(view.root, editor([other]));
+  await click(view.host, "编辑报告");
+  await type(view.host, "第二会话草稿", "编辑研究报告");
+  await render(view.root, editor([report]));
+  await click(view.host, "编辑报告");
+  expect(
+    (
+      view.host.querySelector(
+        '[aria-label="编辑研究报告"]',
+      ) as HTMLTextAreaElement
+    )?.value,
+  ).toBe("保留到返回时的草稿");
+});
+it("retains separate drafts when the user selects another historical version", async () => {
+  vi.stubGlobal("PointerEvent", MouseEvent);
+  vi.stubGlobal(
+    "ResizeObserver",
+    class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    },
+  );
+  const newer = { ...report, id: "newer", revision: "v2", content: "较新报告" };
+  const revise = vi
+    .spyOn(researchAPI, "reviseReport")
+    .mockResolvedValue(report);
+  await render(
+    view.root,
+    <ResearchReport
+      topicId="topic"
+      reports={[report, newer]}
+      onOpenDocument={async () => {}}
+      onSaved={() => {}}
+    />,
+  );
+  const choose = async (index: number) => {
+    await click(view.host, "历史版本");
+    const options = Array.from(
+      document.querySelectorAll<HTMLElement>('[role="option"]'),
+    );
+    expect(options).toHaveLength(2);
+    await act(async () => {
+      options[index].dispatchEvent(
+        new MouseEvent("pointerdown", { bubbles: true }),
+      );
+      options[index].click();
+    });
+    await flush();
+    expect(
+      view.host.querySelector('[aria-label="历史版本"]')?.textContent,
+    ).toContain(`历史版本 ${index + 1}`);
+  };
+  await choose(0);
+  await click(view.host, "编辑报告");
+  await type(view.host, "原版草稿", "编辑研究报告");
+  await choose(1);
+  await click(view.host, "编辑报告");
+  await type(view.host, "新版草稿", "编辑研究报告");
+  await choose(0);
+  await click(view.host, "编辑报告");
+  expect(
+    (
+      view.host.querySelector(
+        '[aria-label="编辑研究报告"]',
+      ) as HTMLTextAreaElement
+    ).value,
+  ).toBe("原版草稿");
+  expect(revise).not.toHaveBeenCalled();
+});
 let view: ReturnType<typeof mount>;
 beforeEach(() => {
   mockAPI();

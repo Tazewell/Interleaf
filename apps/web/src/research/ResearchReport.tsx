@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { researchAPI } from "@reader/api";
 import type {
   DocumentLocation,
@@ -29,62 +29,115 @@ import {
   finishResearchOperation,
   researchOperationID,
   researchSignal,
+  researchEpoch,
+  subscribeResearchEpoch,
+  researchReportEditor,
 } from "./research-session";
 const noSources: string[] = [];
-export function ResearchReport({
-  topicId,
-  reports,
-  onOpenDocument,
-  onSaved,
-}: {
+type ReportProps = {
   topicId: string;
+  sessionId?: string;
   reports: Report[];
   onOpenDocument: (id: string, location: DocumentLocation) => Promise<void>;
   onSaved: () => void;
-}) {
-  const [selected, setSelected] = useState("");
-  const [editing, setEditing] = useState(false);
-  const [content, setContent] = useState("");
+};
+export function ResearchReport(props: ReportProps) {
+  const epoch = useSyncExternalStore(subscribeResearchEpoch, researchEpoch);
+  const sessionId = props.sessionId ?? props.reports[0]?.sessionId ?? "";
+  return (
+    <ReportEditor
+      key={`${epoch}:${props.topicId}:${sessionId}`}
+      {...props}
+      sessionId={sessionId}
+    />
+  );
+}
+function ReportEditor({
+  topicId,
+  sessionId,
+  reports,
+  onOpenDocument,
+  onSaved,
+}: ReportProps & { sessionId: string }) {
+  const editor = researchReportEditor(topicId, sessionId);
+  const [, redraw] = useState(0);
+  const update = () => redraw((value) => value + 1);
+  const draft = editor.editingId
+    ? editor.drafts.get(editor.editingId)
+    : undefined;
+  const editing = !!draft;
+  const content = draft?.content ?? "";
   const [markdown, setMarkdown] = useState<string>();
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const locked = useRef(false);
   const pending = useRef<AbortController | undefined>(undefined);
+  const generation = useRef(0);
   const report =
-    reports.find((report) => report.id === selected) ??
+    draft?.base ??
+    reports.find((report) => report.id === editor.selected) ??
     reports[reports.length - 1];
   useEffect(() => {
-    setEditing(false);
+    ++generation.current;
+    pending.current?.abort();
+    locked.current = false;
+    setBusy(false);
     setMarkdown(undefined);
     setError("");
-    pending.current?.abort();
+    return () => {
+      ++generation.current;
+      pending.current?.abort();
+      locked.current = false;
+    };
   }, [report?.id]);
-  useEffect(() => () => pending.current?.abort(), []);
-  const save = async () => {
-    if (!report || locked.current) return;
+  const beginOperation = () => {
+    pending.current?.abort();
+    const controller = new AbortController();
+    pending.current = controller;
+    const ownGeneration = ++generation.current;
+    const signal = AbortSignal.any([controller.signal, researchSignal()]);
+    const owns = () => generation.current === ownGeneration && !signal.aborted;
     locked.current = true;
     setBusy(true);
     setError("");
+    return {
+      signal,
+      owns,
+      finish: () => {
+        if (owns()) {
+          locked.current = false;
+          setBusy(false);
+        }
+      },
+    };
+  };
+  const save = async () => {
+    if (!report || !draft || locked.current) return;
     const operation = `revision:${topicId}:${report.id}`;
     const requestId = researchOperationID(operation, content);
-    pending.current = new AbortController();
-    const signal = AbortSignal.any([pending.current.signal, researchSignal()]);
+    const { signal, owns, finish } = beginOperation();
     try {
       const revision = await researchAPI.reviseReport(
         report.id,
         { requestId, content },
         signal,
       );
-      if (signal.aborted || revision.topicId !== topicId) return;
+      if (
+        !owns() ||
+        revision.topicId !== topicId ||
+        revision.sessionId !== sessionId
+      )
+        return;
       finishResearchOperation(operation, requestId);
-      setSelected(revision.id);
-      setEditing(false);
+      editor.drafts.delete(report.id);
+      editor.selected = revision.id;
+      editor.editingId = undefined;
+      update();
       onSaved();
     } catch (error) {
-      if (!signal.aborted) setError((error as Error).message);
+      if (owns()) setError((error as Error).message);
     } finally {
-      locked.current = false;
-      if (!signal.aborted) setBusy(false);
+      finish();
     }
   };
   if (!report)
@@ -96,12 +149,16 @@ export function ResearchReport({
         <Select
           value={report.id}
           onValueChange={(id) => {
-            if (id) setSelected(id);
+            if (id) {
+              editor.selected = id;
+              editor.editingId = undefined;
+              update();
+            }
           }}
           disabled={busy}
         >
           <SelectTrigger aria-label="历史版本" className="w-auto">
-            <SelectValue>{`历史版本 ${reports.indexOf(report) + 1} · ${report.origin === "user" ? "用户编辑" : "模型报告"}`}</SelectValue>
+            <SelectValue>{`${reports.some((item) => item.id === report.id) ? `历史版本 ${reports.findIndex((item) => item.id === report.id) + 1}` : "草稿基版"} · ${report.origin === "user" ? "用户编辑" : "模型报告"}`}</SelectValue>
           </SelectTrigger>
           <SelectContent>
             {reports.map((r, index) => (
@@ -117,8 +174,14 @@ export function ResearchReport({
           variant="outline"
           disabled={busy}
           onClick={() => {
-            setContent(report.content);
-            setEditing(true);
+            if (!editor.drafts.has(report.id))
+              editor.drafts.set(report.id, {
+                base: report,
+                content: report.content,
+              });
+            editor.selected = report.id;
+            editor.editingId = report.id;
+            update();
           }}
         >
           编辑报告
@@ -128,21 +191,15 @@ export function ResearchReport({
           variant="outline"
           disabled={busy}
           onClick={async () => {
-            pending.current?.abort();
-            pending.current = new AbortController();
-            const signal = AbortSignal.any([
-              pending.current.signal,
-              researchSignal(),
-            ]);
-            setError("");
-            setBusy(true);
+            if (locked.current) return;
+            const { signal, owns, finish } = beginOperation();
             try {
               const text = await researchAPI.markdown(report.id, signal);
-              if (!signal.aborted) setMarkdown(text);
+              if (owns()) setMarkdown(text);
             } catch (error) {
-              if (!signal.aborted) setError((error as Error).message);
+              if (owns()) setError((error as Error).message);
             } finally {
-              if (!signal.aborted) setBusy(false);
+              finish();
             }
           }}
         >
@@ -167,7 +224,13 @@ export function ResearchReport({
             aria-label="编辑研究报告"
             className="min-h-64"
             value={content}
-            onChange={(event) => setContent(event.target.value)}
+            disabled={busy}
+            onChange={(event) => {
+              if (draft) {
+                draft.content = event.target.value;
+                update();
+              }
+            }}
           />
           <div className="flex gap-2">
             <Button
@@ -181,7 +244,12 @@ export function ResearchReport({
               variant="ghost"
               size="sm"
               disabled={busy}
-              onClick={() => setEditing(false)}
+              title="放弃此版本尚未保存的修改"
+              onClick={() => {
+                if (editor.editingId) editor.drafts.delete(editor.editingId);
+                editor.editingId = undefined;
+                update();
+              }}
             >
               取消编辑
             </Button>

@@ -235,6 +235,7 @@ function ResearchPanelView({
         />
         <ResearchReport
           topicId={topicId}
+          sessionId={state.sessionId}
           reports={reports}
           onOpenDocument={onOpenDocument}
           onSaved={() => void store.recover()}

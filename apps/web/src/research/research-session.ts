@@ -27,6 +27,21 @@ let lifetime = new AbortController();
 const entries = new Map<string, ResearchStore>();
 const epochListeners = new Set<() => void>();
 const pendingOperations = new Map<string, { body: string; id: string }>();
+type ReportEditor = {
+  selected: string;
+  editingId?: string;
+  drafts: Map<string, { base: ResearchReport; content: string }>;
+};
+const reportEditors = new Map<string, ReportEditor>();
+export function researchReportEditor(topicId: string, sessionId: string) {
+  const key = JSON.stringify([topicId, sessionId]);
+  let editor = reportEditors.get(key);
+  if (!editor) {
+    editor = { selected: "", drafts: new Map() };
+    reportEditors.set(key, editor);
+  }
+  return editor;
+}
 export function researchOperationID(key: string, body = "") {
   const existing = pendingOperations.get(key);
   if (existing?.body === body) return existing.id;
@@ -52,6 +67,7 @@ export function resetResearchLibrary() {
   for (const entry of entries.values()) entry.dispose();
   entries.clear();
   pendingOperations.clear();
+  reportEditors.clear();
   for (const listener of epochListeners) listener();
 }
 export function researchStore(topicId: string) {
