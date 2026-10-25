@@ -1,6 +1,6 @@
 # 内置 AI 研究：实施进度与剩余待办
 
-本文件最初用于第 8 项后的换会话交接。2026-10-24 用户已在新会话授权继续完成剩余工作。**Tasks 1～9 已完成阶段实施与独立审查，接续 Task 10；Task 11 和全分支审查尚未完成，整个功能尚未验收完成。**
+本文件最初用于第 8 项后的换会话交接。2026-10-24 用户已在新会话授权继续完成剩余工作。**Tasks 1～10 已完成阶段实施与独立审查，接续 Task 11；整体验收和全分支审查尚未完成。**
 
 ## 接续位置
 
@@ -11,9 +11,9 @@
 - 本轮实现起点：`3c2cac2f4f3f8b9199f202ae8dd95dc64ae2cc37`（台账记录，包含既有双语 PDF 基线 `1fb835d`）；最终审查必须覆盖整个本轮实现，不仅最后一项提交。
 - 任务台账：`.superpowers/sdd/2026-10-22-native-ai-research/progress.md`。
 - 完成证据：同目录 `completion-evidence.md`。该目录被 Git 忽略，当前机器保留；切换机器时不能假设它存在。
-- Tasks 8～9 的提交、审查结论及当前接续位置：见本文件末尾。
+- Tasks 8～10 的提交、审查结论及当前接续位置：见本文件末尾。
 
-开始新对话时先核对 `git status --short --branch`、`git log`、`AGENTS.md` 和可能存在的 `AGENTS.local.md`；台账和实际源码优先于旧摘要。Tasks 1～9 已完成阶段实施与审查，不要重派；从第 10 项接续。不要把本文件当成最终整体验收已完成的证据。
+开始新对话时先核对 `git status --short --branch`、`git log`、`AGENTS.md` 和可能存在的 `AGENTS.local.md`；台账和实际源码优先于旧摘要。Tasks 1～10 已完成阶段实施与审查，不要重派；从第 11 项接续。不要把本文件当成最终整体验收已完成的证据。
 
 ## 全程约束
 
@@ -131,7 +131,7 @@
 
 ## 可复制给新对话的接续指令
 
-请继续 Reader 的“内置 API AI + 文件夹研究 + 论文搜索/查新”，按项子代理实施与独立审查。先读 `C:/Users/Administrator/.codex/worktrees/native-ai-research/reader/docs/superpowers/plans/2026-10-24-native-ai-research-handoff.md`，核对该 worktree 的分支、Git 状态与台账。Tasks 1～9 已完成阶段实施与审查，从 Task 10 开始，依次完成 Tasks 10、11 及全分支独立审查。保留 `D:/work/myreader/reader`，不推送/合并/发布，不读外部凭据，不动真实书库；WSL 使用现有专用镜像。不要重复已经通过且源码未变的套件，不把阶段通过当成全部完成。
+请继续 Reader 的“内置 API AI + 文件夹研究 + 论文搜索/查新”，按项子代理实施与独立审查。先读 `C:/Users/Administrator/.codex/worktrees/native-ai-research/reader/docs/superpowers/plans/2026-10-24-native-ai-research-handoff.md`，核对该 worktree 的分支、Git 状态与台账。Tasks 1～10 已完成阶段实施与审查，从 Task 11 接续，完成整体验收及全分支独立审查。保留 `D:/work/myreader/reader`，不推送/合并/发布，不读外部凭据，不动真实书库；WSL 使用现有专用镜像。不要重复已经通过且源码未变的套件，不把阶段通过当成全部完成。
 
 ## Task 8 验收记录（2026-10-24）
 
@@ -152,3 +152,12 @@
 - 只读 `researchAPI.getResults(runId, signal?)` 返回 `ideas`、`partialIdeas`、`novelty`、`queries`、`pendingIdeaIds`、`batches` 和 `capability: text-search-assistance`。批次计数是来源片段分析进度，不能称作论文全文覆盖率；部分 idea 不能当作最终可选候选。Go/core/OpenAPI/generated client 已一致。
 - Task 10 从当前已接受产品提交 `bb64f8c` 后接续；优先读生成的 `task-10-brief.md` 与当前接入材料 `task-10-context.md`，不要重做 Task 9。Task 10 需要独立完整审查；Task 11 的根检查、实际产物、在线来源烟测、隔离预览和全分支审查均未完成。
 - 本阶段使用受控 HTTP 模型/论文夹具；工程测试不证明真实模型的科学推理或原创性。尚无用户另行提供的真实模型配置，不读取外部凭据或真实书库补足验证。
+
+## Task 10 验收与当前接续位置（2026-10-25）
+
+- 主体提交 `9fb82c6` 接入真实研究界面、会话 registry、报告修订和来源；`70e26dc` 接入论文库入口、物理库 epoch 与原生跨文献导航。create/start 不确定后仅 GET 恢复；卸载不取消后台研究；候选只在显式操作后导入。
+- 第一轮修复 `7f85a44` 在同一健康 SSE 上串行读取持久进度；`a217818` 将报告操作归属与草稿按会话/版本隔离，固定编辑基版，避免后台新报告打断用户笔记。
+- 第二轮修复 `bd54fdd` 为同一 run 的整批读取增加顺序保护，在终结事件让步前使旧批次失效，避免迟到的 run/results/关联刷新覆盖最终状态。正式回归包含迟到 run、results 与 refresh，旧响应忽略 abort 也不能改写。
+- 完整审查的 3 个 Important 和限定复审的新竞态均已关闭；`task-10-rereview-2.md` 判定唯一新增 N1 已解决，无新问题。最终受影响研究界面 37/37、typecheck exit 0；未改部分较早的集成 71/71、聊天/Markdown 49/49 保留，不冒称重复执行。完整 23 文件源/已测镜像/HEAD 原始 bytes 一致。
+- 两个 Minor 留给 Task 11/全分支收尾：来源详情需增加可读论文/候选出处；原有 export-doc duplicate-key 测试警告需查明并修复，不能过滤日志。
+- 当前产品提交 `bd54fdd961f8db14fbf2e5da0953d4281092b320`，接续 Task 11。当前接入材料是 `task-11-context.md`，旧 `task-11-context-draft.md` 仅留历史。完整根检查、实际样本及 PDF 重读/逐页查看、真实来源烟测、独立 WSL 预览和全分支审查仍未完成；不宣布整体交付。
