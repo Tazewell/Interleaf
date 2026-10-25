@@ -64,3 +64,5 @@ Reader 启动本地服务后，在书库目录写入 `server.json`（服务地�
 3. 运行 `reader search` 找一篇论文，再用 `reader read` 核对页码。
 4. 退出 Reader 后运行 `reader list`，应提示 Reader 没有运行（退出码 3）。
 5. 卸载后 `/usr/local/bin/reader` 不存在；Windows 新终端中 `reader` 不再可用。
+
+内置 AI 不依赖外部 AI CLI；这里的 reader 是普通书库客户端，仍保留。模型、会话及研究入口见[内置 AI](native-ai.md)与[主题研究](topic-research.md)。

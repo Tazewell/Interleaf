@@ -287,3 +287,5 @@ READER_TEST_STREAM_PROVIDER=kimi go test ./internal/reader -run '^TestLiveAgentS
 pi 原生 entries 保留工具调用配对、推理协议字段及压缩记录。历史图片二进制不重复写入数据库，而以明确提示替换；下一轮需要图片细节时必须重新读取页面，手动附件需再次提供。最终正文、当前候选正文、思考各限制 1 MiB；运行事件最多 8 MiB，接受的 native entries 最多 32 MiB，超过限制明确失败并保留之前的历史。
 
 后台翻译、概要、分类和公式处理继续使用既有链路。自有 Agent 仍按已有能力检测结果选择工具或预检索；本次没有扩充模型检测/登录协议。安装包通过现有 Electron 的 Node 模式运行 worker，不要求用户安装 Node。打包 smoke 在移动后的资源目录验证 pi 的模型流、工具往返和 entries，防止依赖意外从开发 checkout 解析。
+
+原生配置、主题任务与复现验收分别见[内置 AI](native-ai.md)、[主题研究](topic-research.md)和[验证说明](native-ai-research-validation.md)。旧 fallback 事件形状只为历史兼容保留，当前原生调用不发起备用提供方。

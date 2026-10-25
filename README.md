@@ -12,7 +12,7 @@
   <img src="website/assets/screenshots/pdf-bilingual-ai.webp" alt="Reader 的 PDF 双语阅读界面：左侧目录，中间原文与译文，右侧 AI 助读" />
 </p>
 
-Reader 以 EPUB 和 PDF 为两种核心文档格式，将图书库与论文库分开管理，提供目录、搜索、双语对照、批注与 AI 助读。文档、阅读进度和笔记保存在本机。AI 功能可以通过已登录的 Claude Code、Codex CLI 或 Kimi Code CLI 调用，无需在 Reader 中另填 API Key；也可以填写 API 地址和 Key，接入 OpenAI 或 Anthropic 兼容接口。
+Reader 以 EPUB 和 PDF 为两种核心文档格式，将图书库与论文库分开管理，提供目录、搜索、双语对照、批注与 AI 助读。文档、阅读进度和笔记保存在本机。AI 由内置 Go 运行时直接连接设置中的 OpenAI 或 Anthropic 兼容 API，支持独立问答、翻译、图片与研究用途。参见[内置 AI 配置](docs/native-ai.md)与[主题研究](docs/topic-research.md)。
 
 可从[官网](https://cynicalight.github.io/reader/)了解项目，或在 [GitHub Releases](https://github.com/cynicalight/reader/releases) 下载安装包：macOS（Apple Silicon）DMG 与 Windows x64 EXE。Intel Mac 安装包暂停构建，Linux 不提供安装包，也可以从源码运行。安装包没有受系统信任的开发者证书，首次运行可能需要允许系统安全提示。流程与验证范围见[安装包与发版说明](docs/releasing.md)。
 
@@ -38,8 +38,7 @@ Reader 以 EPUB 和 PDF 为两种核心文档格式，将图书库与论文库�
 **AI 助读**
 
 - **问答与解释**：选区翻译与解释、多选区引用、EPUB 当前章节或 PDF 当前页总结、对话历史和生成取消。普通提问默认附带论文标题和摘要，可开启章节正文；引用选段提问时附带所在章节。回答中的出处可跳回原文并闪烁定位。
-- **在 Codex 中继续**：完成 Codex 文档阅读对话后，从 Agent 顶栏打开独立的 Codex App 对话，保留已有上下文并附带原文和聊天快照。关闭 Reader 后也可继续阅读；两边后续消息不自动同步。
-- **两种接入方式**：检测本机 Claude Code / Codex CLI / Kimi Code CLI 的安装与登录状态，通过官方 CLI 使用已有账户；或在设置中配置 API 连接，支持 OpenAI Chat Completions 与 Anthropic Messages 协议。问答与翻译可分别选择模型和思考强度。
+- **内置 API 与主题研究**：按用途选择模型，维护独立文档会话；基于文件夹全范围资料生成综述、对比和有证据的研究想法，联网查新需明确授权。
 
 **桌面应用**
 
@@ -93,28 +92,11 @@ node apps/desktop/node_modules/electron/install.js
 
 AI 是可选功能。本地阅读、搜索和批注不需要登录 AI 账户。
 
-**通过 CLI 接入**：先安装所需的官方 CLI，并在终端完成登录：
+在设置中保存 API 地址、Key、协议及问答、翻译、图片、研究模型。内置运行时管理工具与会话，不启动外部 AI CLI，不读取其凭据，不自动切换备用服务。Key 仅存于本机后端私有配置。详见[内置 AI](docs/native-ai.md)、[主题研究](docs/topic-research.md)和[验证与人工预览步骤](docs/native-ai-research-validation.md)。
 
-```sh
-# 使用 Codex
-codex login
+本地 PDF 版面处理器仍保留，内置模型离线提取版面与图块；扫描页尚不支持 OCR。调用 AI 时，所需原文、元数据、对话或主动选取的图片会发送到配置的模型服务；研究联网另向公开学术服务发送必要关键词。服务费用与真实回答质量需要用户自行核验。
 
-# 或使用 Claude Code
-claude auth login
-```
-
-Reader 不安装 CLI、不读取其凭据文件，也不自行实现 OAuth。账户权限、额度、模型可用性与计费方式由 CLI 登录和对应服务决定。旧版 CLI 可能需要升级才能支持桥接参数。
-
-**通过 API 接入**：在设置中选择 API，填写地址、Key 和模型。请求协议默认按官方地址自动识别，也可手动选择 OpenAI Chat Completions 或 Anthropic Messages；中转地址保持填写的根路径。Key 只保存在本机后端，界面只显示是否已配置。各厂商思考强度的适配规则见 [API 厂商适配](docs/api-provider-compatibility.md)。
-
-打开 Reader 设置，指定主 Agent，并检查文字与图片能力检测结果。真实测试通过后显示绿色徽标，等待中的 PDF 翻译会自动继续。问答与翻译可分别选择模型及支持的思考强度；未指定时使用对应任务的推荐模型。
-
-应用内置约 67 MB 的版面模型，首次解析 PDF 即可离线提取版面和定位图片区域；无需安装 Python 或 PaddlePaddle。模型在构建时获取并校验，权重不进入 Git。未配置通过能力测试的主 Agent 时，正文阅读和图片区域悬停仍可用，翻译显示等待配置。退出后会恢复任务并复用已保存译文；扫描页尚不支持 OCR，会明确标记正文不完整。
-
-**调用 AI 时，相关内容会离开本机。** 图片能力测试使用合成图片；启用主 Agent 后，导入 PDF 的正文和图题会发送翻译，公式图片会发送转换为 LaTeX；图表和表格不会发送解析。EPUB 只在点击“翻译本章”后发送该章正文。触发翻译、解释、总结或发送问题后，Reader 会将选区、论文标题与摘要、按需附带的章节或当前页面上下文及最近对话交给 CLI 或 API 服务。章节和上下文有长度限制；当前页总结不等于整篇论文总结。
-
-CLI 在临时空目录中运行。Claude 配置为禁用工具与 MCP；Codex 使用只读沙箱并禁用 shell 工具。CLI 的原始日志不会作为回答显示。Codex 通过 App Server 接收增量文字，Claude 使用 stream-json，Kimi 使用 ACP 消息片段，API 使用 SSE；纯文字和图片对话均逐段传输。前端对接约定见 [Agent 流式输出文档](docs/agent-streaming-contract.md)。
-
+文本与图片增量显示，提供方完整结束、来源验证和保存成功后才确认完成。断开界面订阅不取消已接受的后台工作；显式停止、退出和迁移取消并等待任务。前端合同见[流式输出文档](docs/agent-streaming-contract.md)。
 ## 本地数据
 
 原文件存放在文件系统，文档信息、进度、批注、对话与设置存放在 SQLite。Reader 没有内置云同步。论文元数据查找和在线导入会访问公开的论文服务；自动补全仅发送识别到的 DOI 或 arXiv 编号，可在设置中关闭。期刊评级只在配置 easyScholar 密钥后查询，并在本机缓存结果。

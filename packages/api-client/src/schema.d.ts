@@ -3700,7 +3700,7 @@ export interface paths {
                 };
             };
             responses: {
-                /** @description SSE v1: status, delta, fallback, error, done. See ChatStreamEvent. done is sent once only after confirmed upstream completion and successful assistant persistence. Fallback is allowed only before the first text delta. Disconnect cancels upstream; missing done requires checking messages, never automatic POST replay. */
+                /** @description Native SSE: draft, reasoning, activity, delta, error, done (legacy status/fallback shapes remain for compatibility). See ChatStreamEvent. done is sent once only after confirmed upstream completion, validated sources and successful assistant persistence. Native calls never switch providers. Disconnect detaches the subscription without canceling accepted background work; missing done requires checking saved state, never automatic POST replay. */
                 200: {
                     headers: {
                         [name: string]: unknown;
