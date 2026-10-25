@@ -94,6 +94,72 @@ func TestResearchRemoteRegisteredOwnerAndCache(t *testing.T) {
 	}
 }
 
+func TestResearchRemoteReacquiresReturningMetadataVersion(t *testing.T) {
+	s, run, candidate, hits := remoteFixture(t, func(w http.ResponseWriter, r *http.Request) { fmt.Fprint(w, "<p>Current public full text.</p>") })
+	scope, err := readResearchRunScope(t.Context(), s.Store.DB, run.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	old := []ResearchEvidence{}
+	for _, title := range []string{"Remote", "Formal publication title", "Remote"} {
+		candidate.Title = title
+		tx, err := s.Store.DB.BeginTx(t.Context(), nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		_, err = writeResearchCandidate(t.Context(), tx, scope, candidate)
+		if err != nil {
+			tx.Rollback()
+			t.Fatal(err)
+		}
+		if err = tx.Commit(); err != nil {
+			t.Fatal(err)
+		}
+		ev, err := s.readResearchRemote(t.Context(), run.ID, candidate.ID)
+		if err != nil || len(ev) != 1 {
+			t.Fatal("returning metadata must perform a fresh read", title, err)
+		}
+		for _, previous := range old {
+			if ev[0].ID == previous.ID {
+				t.Fatal("revived historical source")
+			}
+			if _, err = s.resolveResearchSource(t.Context(), previous.ID); err == nil {
+				t.Fatal("stale source became usable")
+			}
+			var availability string
+			if err := s.Store.DB.QueryRow(`SELECT availability FROM research_evidence WHERE id=?`, previous.ID).Scan(&availability); err != nil || availability != "stale" {
+				t.Fatal(availability, err)
+			}
+		}
+		old = append(old, ev[0])
+	}
+	record, err := readResearchRecord(t.Context(), s.Store.DB, run.ID)
+	if err != nil || hits.Load() != 3 || record.RemoteReads != 3 || record.AttemptRemoteReads != 3 {
+		t.Fatal("fresh reads must be budgeted", hits.Load(), record, err)
+	}
+}
+
+func TestResearchRemoteStaleCacheStillRejectsCorruptionAndRemoved(t *testing.T) {
+	for _, mutation := range []string{
+		`UPDATE research_units SET status='stale',body=json_set(body,'$.status','stale','$.contentHash','corrupt') WHERE kind='remote'`,
+		`UPDATE research_units SET status='stale',body=json_set(body,'$.status','stale','$.result.runId','foreign') WHERE kind='remote'`,
+		`UPDATE research_candidates SET body=json_set(body,'$.availability','removed')`,
+	} {
+		t.Run(mutation, func(t *testing.T) {
+			s, run, c, hits := remoteFixture(t, func(w http.ResponseWriter, r *http.Request) { fmt.Fprint(w, "<p>fact</p>") })
+			if _, err := s.readResearchRemote(t.Context(), run.ID, c.ID); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := s.Store.DB.Exec(mutation); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := s.readResearchRemote(t.Context(), run.ID, c.ID); err == nil || hits.Load() != 1 {
+				t.Fatal("invalid cache triggered I/O", err, hits.Load())
+			}
+		})
+	}
+}
+
 func TestResearchRemoteRejectsRegistrationForgeryAndRemoved(t *testing.T) {
 	for _, mutation := range []string{`UPDATE research_searches SET body=json_set(body,'$.runId','other')`, `UPDATE research_searches SET body=json_set(body,'$.status','failed')`, `UPDATE research_candidates SET body=json_set(body,'$.topicId','other')`, `UPDATE research_candidates SET body=json_set(body,'$.availability','removed')`} {
 		t.Run(mutation, func(t *testing.T) {

@@ -286,8 +286,16 @@ func readResearchRemoteCache(ctx context.Context, q researchRowQuery, scope rese
 	if err != nil {
 		return cache, err
 	}
-	if unit.Kind != "remote" || unit.Status != "complete" || unit.ContentHash != sourceKey(string(unit.Result)) || json.Unmarshal(unit.Result, &cache) != nil || cache.RunID != scope.Run.ID || cache.TopicID != scope.Run.TopicID || cache.SnapshotID != scope.Snapshot.ID || cache.CandidateID != c.ID || cache.Version != version || cache.Protocol != researchRemoteProtocol || len(cache.Evidence) == 0 {
+	if unit.Kind != "remote" || (unit.Status != "complete" && unit.Status != "stale") || unit.ContentHash != sourceKey(string(unit.Result)) || json.Unmarshal(unit.Result, &cache) != nil || cache.RunID != scope.Run.ID || cache.TopicID != scope.Run.TopicID || cache.SnapshotID != scope.Snapshot.ID || cache.CandidateID != c.ID || cache.Version != version || cache.Protocol != researchRemoteProtocol || len(cache.Evidence) == 0 {
 		return cache, errResearchScopeChanged
+	}
+	if unit.Status == "stale" {
+		// Metadata from two providers can cycle back to an earlier version.
+		// A valid but invalidated cache is a miss, never revived evidence. The
+		// caller rechecks registration/permission/local ownership, pays the read
+		// budget, downloads again and publishes new source IDs. Corruption and
+		// removed candidates still fail before any I/O.
+		return cache, sql.ErrNoRows
 	}
 	return cache, nil
 }
