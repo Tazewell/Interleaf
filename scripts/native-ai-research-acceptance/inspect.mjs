@@ -11,6 +11,13 @@ assert.match(r.implementationCommit, /^[a-f0-9]{40}$/);
 assert.equal(r.defaultScope, 5);
 assert.equal(r.directScope, 4);
 assert.equal(r.fullCoverage, 40);
+const trapFile = join(out, 'external-agent-calls.log');
+const trapText = existsSync(trapFile) ? readFileSync(trapFile, 'utf8') : '';
+// Match Python str.splitlines(), including an unterminated final record.
+const lines = trapText.split(/\r\n|[\n\r\v\f\u001c-\u001e\u0085\u2028\u2029]/);
+const trailingBreak = /[\n\r\v\f\u001c-\u001e\u0085\u2028\u2029]$/.test(trapText);
+const trapCount = trapText ? lines.length - Number(trailingBreak) : 0;
+assert.equal(r.externalAgentCalls, trapCount, 'external Agent trap count differs from actual file');
 assert.equal(r.externalAgentCalls, 0);
 assert.ok(r.modelCalls > 0);
 assert.ok(r.searchCalls.arxiv > 0 && r.searchCalls.crossref > 0);

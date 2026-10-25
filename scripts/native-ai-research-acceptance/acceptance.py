@@ -350,7 +350,11 @@ subprocess.run(['openssl', 'req', '-x509', '-newkey', 'rsa:2048', '-nodes', '-ke
 TLS = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER); TLS.load_cert_chain(tlsdir / 'cert.pem', tlsdir / 'key.pem')
 model = http.server.ThreadingHTTPServer(('127.0.0.1', 0), Model)
 proxy = http.server.ThreadingHTTPServer(('127.0.0.1', 0), Public)
-for server in [model, proxy]: threading.Thread(target=server.serve_forever, daemon=True).start()
+workers = []
+for server in [model, proxy]:
+    server.daemon_threads = False  # server_close joins outstanding request handlers
+    worker = threading.Thread(target=server.serve_forever, daemon=True)
+    worker.start(); workers.append(worker)
 trap = OUT / 'trap'; trap.mkdir()
 for name in ['codex', 'claude', 'kimi', 'pi']:
     p = trap / name; p.write_text('#!/bin/sh\nprintf "%s\\n" "$0" >> "' + str(OUT / 'external-agent-calls.log') + '"\nexit 97\n'); p.chmod(0o700)
@@ -482,7 +486,6 @@ try:
     stop(); unblock(); start()
     check('restart', api('GET', '/api/research/runs/' + interrupted['id'])['status'] == 'interrupted' and api('GET', '/api/research/reports/' + edit['id'])['content'] == edit['content'] and preservation(doc) == before)
     RESULT['modelCalls'] = STATE['modelCalls']; RESULT['searchCalls'] = STATE['searchCalls']; RESULT['modelRequests'] = STATE['requests']
-    RESULT['externalAgentCalls'] = len((OUT / 'external-agent-calls.log').read_text().splitlines()) if (OUT / 'external-agent-calls.log').exists() else 0
     assert not STATE['errors'], STATE['errors']
     interrupted_move = blocked_run(forty, session(forty))
     stop(); unblock(); check('close', SERVER.returncode == 0)
@@ -509,5 +512,9 @@ try:
     assert not api('GET', '/api/ai/config')['connection']['hasKey']
     stop(); LIB = destination
 finally:
-    RELEASE.set(); stop(); model.shutdown(); proxy.shutdown(); RESULT['errors'] = STATE['errors']
+    RELEASE.set(); stop(); model.shutdown(); proxy.shutdown()
+    model.server_close(); proxy.server_close()
+    for worker in workers: worker.join()
+    RESULT['externalAgentCalls'] = len((OUT / 'external-agent-calls.log').read_text().splitlines()) if (OUT / 'external-agent-calls.log').exists() else 0
+    RESULT['errors'] = STATE['errors']
     RESULT['modelCalls'] = STATE['modelCalls']; RESULT['searchCalls'] = STATE['searchCalls']; RESULT['modelRequests'] = STATE['requests']; save()

@@ -18,6 +18,22 @@ bash scripts/bilingual-pdf-acceptance/run.sh /absolute/outside/repository/anothe
 
 原有双语验收保留左右并排、逐页交替、公式、字体、最小 9pt、附件与取消断言。所有样本 PDF 必须用标准工具重新打开、Poppler 逐页渲染并人工查看；文本提取不能代替版面检查。研究样本必须同时保留 A/B 冲突和已覆盖/仅摘要不足结论。
 
+## 同名块与归因的 focused 检查
+
+生产 PDF corpus 的 blockId 含 revision 前缀。额外的 `TestResearchSameBareBlockHTTPAttribution` 在两个测试自有原件的有效 fingerprint 缓存中显式设置相同裸 `p1-b1`，同步 FTS，经过真实 loopback 鉴权 HTTP、模型协议、研究完成、报告和来源 GET，核对相反结论与各自 paperId/documentId/sourceId/原文 hash。这是 seeded-corpus 集成，不能称为 ONNX 自然产生碰撞；生产身份规则没有修改。
+
+在 Linux checkout 使用两个绝对仓库外目录（`FOCUSED_OUT` 是新输出目录，`PRIOR_OUT` 是已有完整验收产物）：
+
+```sh
+(cd apps/server && READER_TEST_ATTRIBUTION_OUT="$FOCUSED_OUT" go test -race ./internal/reader -run '^TestResearchSameBareBlockHTTPAttribution$' -count=1 -v)
+python3 scripts/native-ai-research-acceptance/attribution_test.py
+python3 scripts/native-ai-research-acceptance/verify-attribution.py "$FOCUSED_OUT" "$PRIOR_OUT"
+python3 scripts/native-ai-research-acceptance/traps_test.py "$PRIOR_OUT" "$FOCUSED_OUT"
+node scripts/native-ai-research-acceptance/inspect.mjs "$PRIOR_OUT"
+```
+
+逐项归因断言还用于原始 ONNX harness。focused verifier 拒绝互换但各自仍有效的来源引用；对已有 ONNX 产物只读核对历史报告、原件文字/hash 与逐论文绑定，不复活后来 stale/removed 的来源。trap 在最终停止服务并 join 全部自有 worker 后计数，inspector 与实际记录文件交叉核对；负例只写合成记录，不启动外部 Agent。此检查不重跑 40 篇或 PDF 生成。
+
 ## 真实网络与质量边界
 
 2026-10-25 06:21 UTC 对 arXiv、Crossref 各执行一次公开小查询 `graph neural networks`，分别请求 1 条，HTTP 200 并解析成功。arXiv 返回 2488 字节 Atom/1 entry；Crossref 返回 381 字节 JSON/1 item。没有重试、模型调用或私人资料。原始状态记录在任务日志 `live-source-smoke.json`，它仅证明该时刻公开端点可用，不能代替上述构建应用链或科学质量验证。
