@@ -132,7 +132,22 @@ class ResearchStore {
   private busyFor(sid: string) {
     return this.sending || this.controls.has(sid) || this.networks.has(sid);
   }
-  private refreshGeneration = 0;
+  private readVersions = new Map<string, number>();
+  private beginRead(sid: string, signal: AbortSignal) {
+    const version = (this.readVersions.get(sid) ?? 0) + 1;
+    this.readVersions.set(sid, version);
+    const operation = this.generations.get(sid) ?? 0;
+    return () =>
+      this.valid() &&
+      !signal.aborted &&
+      this.state.sessionId === sid &&
+      this.readVersions.get(sid) === version &&
+      operation === (this.generations.get(sid) ?? 0);
+  }
+  private fenceLiveRead(sid: string) {
+    clearTimeout(this.liveTimer);
+    this.readVersions.set(sid, (this.readVersions.get(sid) ?? 0) + 1);
+  }
   state: ResearchState = {
     ...emptySession(),
     sessions: [],
@@ -205,32 +220,34 @@ class ResearchStore {
         this.patch({ error: String((error as Error).message), loading: false });
     }
   }
-  async refresh(sid = this.state.sessionId, signal = lifetime.signal) {
-    const generation = ++this.refreshGeneration;
-    const operation = this.generations.get(sid) ?? 0;
-    const [reports, candidates, searches, messages] = await Promise.all([
-      researchAPI.listReports(this.topicId, signal),
-      researchAPI.listCandidates(this.topicId, signal),
-      researchAPI.listSearches(this.topicId, signal),
-      sid ? researchAPI.listMessages(sid, signal) : Promise.resolve([]),
-    ]);
-    if (
-      !this.valid() ||
-      signal.aborted ||
-      operation !== (this.generations.get(sid) ?? 0) ||
-      generation !== this.refreshGeneration ||
-      sid !== this.state.sessionId
-    )
-      return;
-    this.patch({
-      reports: reports.filter((r) => r.topicId === this.topicId),
-      candidates: candidates.filter((c) => c.topicId === this.topicId),
-      searches,
-    });
-    if (sid)
-      this.sessionPatch(sid, {
-        messages: messages.filter((m) => m.sessionId === sid),
+  async refresh(
+    sid = this.state.sessionId,
+    signal = lifetime.signal,
+    owns = this.beginRead(sid, signal),
+  ) {
+    if (!owns()) return false;
+    try {
+      const [reports, candidates, searches, messages] = await Promise.all([
+        researchAPI.listReports(this.topicId, signal),
+        researchAPI.listCandidates(this.topicId, signal),
+        researchAPI.listSearches(this.topicId, signal),
+        sid ? researchAPI.listMessages(sid, signal) : Promise.resolve([]),
+      ]);
+      if (!owns()) return false;
+      this.patch({
+        reports: reports.filter((r) => r.topicId === this.topicId),
+        candidates: candidates.filter((c) => c.topicId === this.topicId),
+        searches,
       });
+      if (sid)
+        this.sessionPatch(sid, {
+          messages: messages.filter((m) => m.sessionId === sid),
+        });
+      return true;
+    } catch (error) {
+      if (owns()) throw error;
+      return false;
+    }
   }
   async selectSession(sid: string) {
     this.stopStream();
@@ -244,8 +261,9 @@ class ResearchStore {
       ...(this.sessions.get(sid) ?? emptySession()),
       loading: true,
     });
+    const owns = this.beginRead(sid, signal);
     try {
-      await this.refresh(sid, signal);
+      if (!(await this.refresh(sid, signal, owns))) return;
       if (
         signal.aborted ||
         sid !== this.state.sessionId ||
@@ -260,11 +278,10 @@ class ResearchStore {
       const runId =
         cached?.id ??
         [...this.state.messages].reverse().find((m) => m.runId)?.runId;
-      if (runId) await this.query(sid, runId, signal);
+      if (runId && !(await this.query(sid, runId, signal, owns))) return;
       if (!signal.aborted) this.connect();
     } catch (error) {
-      if (!signal.aborted)
-        this.sessionPatch(sid, { error: (error as Error).message });
+      if (owns()) this.sessionPatch(sid, { error: (error as Error).message });
     } finally {
       if (!signal.aborted && sid === this.state.sessionId)
         this.patch({ loading: false });
@@ -438,20 +455,25 @@ class ResearchStore {
         return run;
     }
   }
-  private async query(sid: string, runId: string, signal: AbortSignal) {
-    const operation = this.generations.get(sid) ?? 0;
-    const run = await researchAPI.getRun(runId, signal);
-    if (
-      !this.valid() ||
-      signal.aborted ||
-      operation !== (this.generations.get(sid) ?? 0) ||
-      !this.accepts(run, sid, runId)
-    )
-      return;
-    this.sessionPatch(sid, { run, error: "" });
-    const results = await researchAPI.getResults(runId, signal);
-    if (!signal.aborted && operation === (this.generations.get(sid) ?? 0))
+  private async query(
+    sid: string,
+    runId: string,
+    signal: AbortSignal,
+    owns: () => boolean,
+  ) {
+    if (!owns()) return false;
+    try {
+      const run = await researchAPI.getRun(runId, signal);
+      if (!owns() || !this.accepts(run, sid, runId)) return false;
+      this.sessionPatch(sid, { run, error: "" });
+      const results = await researchAPI.getResults(runId, signal);
+      if (!owns()) return false;
       this.sessionPatch(sid, { results });
+      return true;
+    } catch (error) {
+      if (owns()) throw error;
+      return false;
+    }
   }
   async recover(
     sid = this.state.sessionId,
@@ -459,7 +481,9 @@ class ResearchStore {
   ) {
     const signal = lifetime.signal;
     const operation = this.generations.get(sid) ?? 0;
+    const owns = this.beginRead(sid, signal);
     try {
+      if (!owns()) return;
       const uncertain = this.sessions.get(sid)?.uncertain;
       if (uncertain) {
         const found = await this.findCreatedRun(
@@ -468,6 +492,7 @@ class ResearchStore {
           uncertain.question,
           signal,
         );
+        if (!owns()) return;
         if (!found) {
           this.sessionPatch(sid, {
             error: "创建结果仍未确认。请重试查询；不会自动重新提交。",
@@ -477,15 +502,15 @@ class ResearchStore {
         runId = found.id;
         this.sessionPatch(sid, { run: found, uncertain: undefined });
       }
-      if (runId) await this.query(sid, runId, signal);
+      if (runId && !(await this.query(sid, runId, signal, owns))) return;
       if (!this.valid() || operation !== (this.generations.get(sid) ?? 0))
         return;
-      await this.refresh(sid, signal);
+      if (!(await this.refresh(sid, signal, owns))) return;
       if (!runId && sid === this.state.sessionId) {
         const found = [...this.state.messages]
           .reverse()
           .find((m) => m.runId)?.runId;
-        if (found) await this.query(sid, found, signal);
+        if (found && !(await this.query(sid, found, signal, owns))) return;
       }
       if (
         operation === (this.generations.get(sid) ?? 0) &&
@@ -493,7 +518,7 @@ class ResearchStore {
       )
         this.connect();
     } catch (error) {
-      if (this.valid())
+      if (owns())
         this.sessionPatch(sid, {
           error: `查询失败：${(error as Error).message}`,
         });
@@ -553,6 +578,7 @@ class ResearchStore {
     const signal = AbortSignal.any([controller.signal, lifetime.signal]);
     this.refreshWhileRunning(sid, run!.id, signal);
     void (async () => {
+      let readOwns: (() => boolean) | undefined;
       try {
         const response = await researchAPI.events(
           run!.id,
@@ -625,6 +651,9 @@ class ResearchStore {
               if (kind === "error" || kind === "done" || kind === "reset") {
                 // Reset snapshots apply even at an already-seen terminal sequence.
                 if (kind !== "reset" || !running(payload.run)) {
+                  // A terminal event supersedes the whole older GET batch,
+                  // before cancel()/recovery yields to any delayed response.
+                  this.fenceLiveRead(sid);
                   await reader.cancel();
                   break;
                 }
@@ -636,24 +665,28 @@ class ResearchStore {
           reader.releaseLock();
         }
         if (signal.aborted) return;
-        await this.query(sid, run!.id, signal);
-        await this.refresh(sid, signal);
+        this.fenceLiveRead(sid);
+        readOwns = this.beginRead(sid, signal);
+        if (!(await this.query(sid, run!.id, signal, readOwns))) return;
+        if (!(await this.refresh(sid, signal, readOwns))) return;
         if (!signal.aborted && running(this.state.run))
           this.timer = setTimeout(() => this.connect(), 2000);
       } catch (error) {
-        if (signal.aborted) return;
+        if (signal.aborted || (readOwns && !readOwns())) return;
         // Transport failure does not authorize another model call.
         try {
-          await this.query(sid, run!.id, signal);
-          await this.refresh(sid, signal);
+          this.fenceLiveRead(sid);
+          readOwns = this.beginRead(sid, signal);
+          if (!(await this.query(sid, run!.id, signal, readOwns))) return;
+          if (!(await this.refresh(sid, signal, readOwns))) return;
         } catch (queryError) {
-          if (!signal.aborted)
+          if (readOwns?.())
             this.sessionPatch(sid, {
               error: `查询失败：${(queryError as Error).message}`,
             });
           return;
         }
-        if (!signal.aborted && running(this.state.run))
+        if (readOwns?.() && running(this.state.run))
           this.sessionPatch(sid, {
             error: `连接中断，请重试查询：${(error as Error).message}`,
           });
@@ -671,12 +704,12 @@ class ResearchStore {
       operation === (this.generations.get(sid) ?? 0);
     const read = async () => {
       if (!owns()) return;
+      const ownsBatch = this.beginRead(sid, signal);
       try {
-        await this.query(sid, runId, signal);
-        if (!owns()) return;
-        await this.refresh(sid, signal);
+        if (!(await this.query(sid, runId, signal, ownsBatch))) return;
+        if (!(await this.refresh(sid, signal, ownsBatch))) return;
       } catch (error) {
-        if (owns())
+        if (ownsBatch())
           this.sessionPatch(sid, {
             error: `查询失败：${(error as Error).message}`,
           });
@@ -684,7 +717,7 @@ class ResearchStore {
       // One bounded GET batch at a time, independent of the still-open SSE.
       // Never recover()/connect() here: polling cannot restart a subscription
       // or authorize another create/start/model operation.
-      if (owns() && running(this.state.run))
+      if (owns() && ownsBatch() && running(this.state.run))
         this.liveTimer = setTimeout(() => void read(), 3000);
     };
     this.liveTimer = setTimeout(() => void read(), 3000);
