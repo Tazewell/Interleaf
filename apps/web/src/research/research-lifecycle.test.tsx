@@ -5,7 +5,15 @@ import { researchAPI } from "@reader/api";
 import { ResearchPanel } from "./ResearchPanel";
 import { ResearchNavigation } from "./ResearchNavigation";
 import { usePaperUI } from "../papers/state";
-import { click, mockAPI, mount, render, run, type } from "./test-helpers";
+import {
+  click,
+  mockAPI,
+  mount,
+  render,
+  results,
+  run,
+  type,
+} from "./test-helpers";
 import { researchStore, resetResearchLibrary } from "./research-session";
 let view: ReturnType<typeof mount>;
 beforeEach(() => {
@@ -17,7 +25,169 @@ afterEach(async () => {
   view.host.remove();
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
+  vi.useRealTimers();
 });
+
+const checkpoint = {
+  ...results,
+  partialIdeas: [
+    {
+      id: "checkpoint",
+      problem: "运行中阶段想法",
+      mechanism: "机制",
+      basis: [],
+      hypotheses: [],
+      changes: [],
+      nearestWorkIds: [],
+      minimumExperiment: "实验",
+      baselines: [],
+      ablations: [],
+      falsification: "证伪",
+      resources: "",
+      claims: [],
+    },
+  ],
+  batches: [
+    {
+      stage: "ideas" as const,
+      done: 3,
+      total: 11,
+      completedBatches: 1,
+      sources: [],
+    },
+  ],
+};
+it("refreshes checkpoints over one healthy SSE and stops read polling on unmount", async () => {
+  vi.mocked(researchAPI.listMessages).mockResolvedValue([
+    {
+      id: "m",
+      sessionId: "session",
+      runId: "run",
+      role: "user",
+      content: "后台研究",
+      createdAt: "2026",
+    },
+  ]);
+  vi.useFakeTimers();
+  await act(async () =>
+    view.root.render(
+      <ResearchPanel topicId="topic" onOpenDocument={async () => {}} />,
+    ),
+  );
+  expect(researchAPI.events).toHaveBeenCalledTimes(1);
+  vi.mocked(researchAPI.getRun).mockResolvedValue({
+    ...run,
+    phase: "checking",
+    done: 2,
+  });
+  vi.mocked(researchAPI.getResults).mockResolvedValue(checkpoint);
+  vi.mocked(researchAPI.listSearches).mockResolvedValue([
+    {
+      id: "query",
+      runId: "run",
+      query: "新批次检索",
+      source: "arxiv",
+      filters: {},
+      status: "ok",
+      candidateIds: [],
+      fetchedAt: "2026",
+    },
+  ]);
+  await act(async () => vi.advanceTimersByTimeAsync(4000));
+  expect(view.host.textContent).toContain("核查主张");
+  expect(view.host.textContent).toContain("证据片段 3 / 11");
+  expect(view.host.textContent).toContain("运行中阶段想法");
+  expect(view.host.textContent).toContain("新批次检索");
+  expect(researchAPI.events).toHaveBeenCalledTimes(1);
+  expect(researchAPI.createRun).not.toHaveBeenCalled();
+  expect(researchAPI.controlRun).not.toHaveBeenCalled();
+  await act(async () => view.root.render(null));
+  const reads = vi.mocked(researchAPI.getRun).mock.calls.length;
+  await act(async () => vi.advanceTimersByTimeAsync(10000));
+  expect(researchAPI.getRun).toHaveBeenCalledTimes(reads);
+});
+it.each(["session", "library", "run"])(
+  "aborts and ignores a delayed checkpoint after %s ownership changes",
+  async (owner) => {
+    vi.mocked(researchAPI.listMessages).mockImplementation(async (sid) =>
+      sid === "session"
+        ? [
+            {
+              id: "m",
+              sessionId: sid,
+              runId: "run",
+              role: "user",
+              content: "研究",
+              createdAt: "2026",
+            },
+          ]
+        : [],
+    );
+    vi.useFakeTimers();
+    await act(async () =>
+      view.root.render(
+        <ResearchPanel topicId="topic" onOpenDocument={async () => {}} />,
+      ),
+    );
+    let finish!: (value: typeof checkpoint) => void;
+    let readSignal: AbortSignal | undefined;
+    if (owner === "run")
+      vi.mocked(researchAPI.getRun).mockResolvedValue({
+        ...run,
+        status: "completed",
+      });
+    vi.mocked(researchAPI.getResults).mockImplementationOnce(
+      async (_id, signal) => {
+        readSignal = signal;
+        return new Promise((resolve) => (finish = resolve));
+      },
+    );
+    const calls = vi.mocked(researchAPI.getResults).mock.calls.length;
+    await act(async () => vi.advanceTimersByTimeAsync(4000));
+    expect(researchAPI.getResults).toHaveBeenCalledTimes(calls + 1);
+    expect(readSignal).toBeDefined();
+    await act(async () => vi.advanceTimersByTimeAsync(9000));
+    expect(researchAPI.getResults).toHaveBeenCalledTimes(calls + 1);
+    if (owner === "session")
+      await act(async () => researchStore("topic").selectSession("empty"));
+    else if (owner === "library") {
+      vi.mocked(researchAPI.listMessages).mockResolvedValue([]);
+      await act(async () => resetResearchLibrary());
+    } else {
+      vi.mocked(researchAPI.createRun).mockResolvedValue({
+        ...run,
+        id: "new-run",
+      });
+      vi.mocked(researchAPI.controlRun).mockResolvedValue({
+        ...run,
+        id: "new-run",
+      });
+      vi.mocked(researchAPI.getRun).mockImplementation(async (id) => ({
+        ...run,
+        id,
+      }));
+      await type(view.host, "新任务");
+      const button = Array.from(view.host.querySelectorAll("button")).find(
+        (button) => button.textContent === "开始研究",
+      )!;
+      await act(async () => button.click());
+      expect(researchStore("topic").snapshot().run?.id).toBe("new-run");
+    }
+    expect(readSignal?.aborted).toBe(true);
+    await act(async () => finish(checkpoint));
+    expect(view.host.textContent).not.toContain("运行中阶段想法");
+    if (owner !== "run") {
+      const reads = vi.mocked(researchAPI.getRun).mock.calls.length;
+      await act(async () => vi.advanceTimersByTimeAsync(6000));
+      expect(researchAPI.getRun).toHaveBeenCalledTimes(reads);
+      expect(researchAPI.createRun).not.toHaveBeenCalled();
+      expect(researchAPI.controlRun).not.toHaveBeenCalled();
+    } else {
+      expect(researchAPI.createRun).toHaveBeenCalledTimes(1);
+      expect(researchAPI.controlRun).toHaveBeenCalledTimes(1);
+    }
+  },
+);
 it("switches topics without mixing evidence or canceling explicit background work", async () => {
   await render(
     view.root,

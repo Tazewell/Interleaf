@@ -107,6 +107,7 @@ class ResearchStore {
   private read?: AbortController;
   private stream?: AbortController;
   private timer?: ReturnType<typeof setTimeout>;
+  private liveTimer?: ReturnType<typeof setTimeout>;
   private sequences = new Map<string, number>();
   private generations = new Map<string, number>();
   private sending = false;
@@ -164,6 +165,7 @@ class ResearchStore {
     this.stream?.abort();
     this.stream = undefined;
     clearTimeout(this.timer);
+    clearTimeout(this.liveTimer);
   }
   async load() {
     this.read?.abort();
@@ -533,6 +535,7 @@ class ResearchStore {
     const controller = new AbortController();
     this.stream = controller;
     const signal = AbortSignal.any([controller.signal, lifetime.signal]);
+    this.refreshWhileRunning(sid, run!.id, signal);
     void (async () => {
       try {
         const response = await researchAPI.events(
@@ -640,5 +643,34 @@ class ResearchStore {
           });
       }
     })();
+  }
+  private refreshWhileRunning(sid: string, runId: string, signal: AbortSignal) {
+    const operation = this.generations.get(sid) ?? 0;
+    const owns = () =>
+      !signal.aborted &&
+      this.valid() &&
+      this.listeners.size > 0 &&
+      this.state.sessionId === sid &&
+      this.state.run?.id === runId &&
+      operation === (this.generations.get(sid) ?? 0);
+    const read = async () => {
+      if (!owns()) return;
+      try {
+        await this.query(sid, runId, signal);
+        if (!owns()) return;
+        await this.refresh(sid, signal);
+      } catch (error) {
+        if (owns())
+          this.sessionPatch(sid, {
+            error: `查询失败：${(error as Error).message}`,
+          });
+      }
+      // One bounded GET batch at a time, independent of the still-open SSE.
+      // Never recover()/connect() here: polling cannot restart a subscription
+      // or authorize another create/start/model operation.
+      if (owns() && running(this.state.run))
+        this.liveTimer = setTimeout(() => void read(), 3000);
+    };
+    this.liveTimer = setTimeout(() => void read(), 3000);
   }
 }
