@@ -64,6 +64,7 @@ const docs: Document[] = [
 ];
 let root: Root, host: HTMLDivElement;
 const open = vi.fn();
+const researchFolder = vi.fn();
 let jobs = new Map<string, Processing>();
 function Harness({
   navOpen = true,
@@ -83,6 +84,7 @@ function Harness({
           trashCount={0}
           openDocument={open}
           onNewCategory={() => {}}
+          onResearchFolder={researchFolder}
         />
       )}
       <PaperLibrary
@@ -94,6 +96,7 @@ function Harness({
         moveToBooks={() => {}}
         navOpen={navOpen}
         onToggleNav={() => {}}
+        onResearchFolder={researchFolder}
       />
     </>
   );
@@ -151,6 +154,14 @@ const button = (label: string) =>
     (b) =>
       b.textContent?.trim() === label || b.getAttribute("aria-label") === label,
   )!;
+
+it("opens topic research from the selected folder without opening a document", async () => {
+  await act(async () => usePaperUI.getState().setView("folder:ML"));
+  expect(button("主题研究")).toBeDefined();
+  await act(async () => button("主题研究").click());
+  expect(researchFolder).toHaveBeenCalledWith("ML");
+  expect(open).not.toHaveBeenCalled();
+});
 
 it("shows details on click and saves an edited field as manual metadata", async () => {
   await act(async () => row("Attention Is All You Need").click());

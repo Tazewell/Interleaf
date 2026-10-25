@@ -219,22 +219,18 @@ export function PaperSidebar({
   trashCount,
   openDocument,
   onNewCategory,
+  onResearchFolder,
 }: {
   documents: Document[];
   jobs: Map<string, Processing>;
   trashCount: number;
   openDocument: (doc: Document) => void;
   onNewCategory: () => void;
+  onResearchFolder?: (folder: string) => void;
 }) {
   const prefs = useReaderStore((s) => s.libraryPreferences.papers) || {};
-  const {
-    view,
-    setView,
-    select,
-    selectedId,
-    setNaming,
-    setSmartEditing,
-  } = usePaperUI();
+  const { view, setView, select, selectedId, setNaming, setSmartEditing } =
+    usePaperUI();
   const [renaming, setRenaming] = useState<string | null>(null);
   const [deleting, setDeleting] = useState<string | null>(null);
   const [recentOpen, setRecentOpen] = useState(false);
@@ -398,6 +394,11 @@ export function PaperSidebar({
         menu={
           <>
             {pinItem(key)}
+            {onResearchFolder && (
+              <ContextMenuItem onClick={() => onResearchFolder(name)}>
+                主题研究
+              </ContextMenuItem>
+            )}
             <ContextMenuItem onClick={() => setNaming([], name)}>
               <FolderPlus />
               新建子分类…

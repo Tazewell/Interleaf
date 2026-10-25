@@ -156,6 +156,7 @@ export interface PaperLibraryProps {
   moveToBooks: (doc: Document) => void;
   navOpen: boolean;
   onToggleNav: () => void;
+  onResearchFolder?: (folder: string) => void;
 }
 
 const busy = (job?: Processing) =>
@@ -170,6 +171,7 @@ export function PaperLibrary({
   moveToBooks,
   navOpen,
   onToggleNav,
+  onResearchFolder,
 }: PaperLibraryProps) {
   const openDocument = (doc: Document) => {
     if (!doc.metadataOnly)
@@ -612,6 +614,15 @@ export function PaperLibrary({
             <PanelLeft />
           </Button>
           <h1 className="library-title truncate">{title}</h1>
+          {onResearchFolder && view.startsWith("folder:") && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => onResearchFolder(category)}
+            >
+              主题研究
+            </Button>
+          )}
           {view !== "trash" && tagFilter.tags.length > 0 && (
             <div
               className="paper-tag-summary"

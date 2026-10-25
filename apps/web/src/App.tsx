@@ -21,7 +21,7 @@ import {
   BookOpenText,
 } from "lucide-react";
 import { version } from "../../desktop/package.json";
-import { api, RequestError } from "@reader/api";
+import { api, RequestError, researchAPI } from "@reader/api";
 import {
   LargePaperConfirmation,
   LargePaperDialog,
@@ -51,6 +51,13 @@ import {
 import { TrashView } from "./TrashView";
 import { PaperLibrary } from "./papers/PaperLibrary";
 import { PaperSidebar } from "./papers/PaperSidebar";
+import { ResearchPanel } from "./research/ResearchPanel";
+import { ResearchNavigation } from "./research/ResearchNavigation";
+import {
+  researchEpoch,
+  researchSignal,
+  resetResearchLibrary,
+} from "./research/research-session";
 import { usePaperUI } from "./papers/state";
 import { ImportPaperDialog } from "./papers/ImportPaperDialog";
 import { LibraryModeSwitcher, libraryModes } from "./LibraryModeSwitcher";
@@ -80,6 +87,55 @@ export function App() {
   } = useReaderStore();
   const mode = libraryMode(libraryPreferences);
   const papers = mode === "papers";
+  const researchTopicId = usePaperUI((s) => s.researchTopicId);
+  const researchOpening = useRef<number | null>(null);
+  const researchSelection = useRef(0);
+  const openResearch = async (folder: string) => {
+    if (researchOpening.current) return;
+    const epoch = researchEpoch();
+    const selection = ++researchSelection.current;
+    const signal = researchSignal();
+    researchOpening.current = selection;
+    try {
+      const topics = await researchAPI.listTopics(signal);
+      const topic =
+        topics.find(
+          (topic) => topic.folder === folder && topic.scopeState === "active",
+        ) ??
+        (await researchAPI.createTopic(
+          {
+            title: folder.split("/").pop() || "全部论文",
+            folder,
+            includeChildren:
+              useReaderStore.getState().libraryPreferences.papers
+                ?.subcategoryItems !== false,
+            networkAllowed: false,
+          },
+          signal,
+        ));
+      if (
+        !signal.aborted &&
+        researchEpoch() === epoch &&
+        selection === researchSelection.current
+      )
+        usePaperUI.getState().setResearchTopic(topic.id);
+    } catch (error) {
+      if (!signal.aborted) toast.error((error as Error).message);
+    } finally {
+      if (selection === researchOpening.current) researchOpening.current = null;
+    }
+  };
+  useEffect(
+    () =>
+      usePaperUI.subscribe((state, previous) => {
+        if (
+          state.view !== previous.view ||
+          state.researchTopicId !== previous.researchTopicId
+        )
+          ++researchSelection.current;
+      }),
+    [],
+  );
   const documents = papers
     ? libraryPapers(paperItems, allDocuments)
     : allDocuments.filter((d) => d.library === mode);
@@ -233,6 +289,11 @@ export function App() {
   useEffect(
     () =>
       window.readerDesktop?.onLibraryChanged(() => {
+        resetResearchLibrary();
+        ++researchSelection.current;
+        researchOpening.current = null;
+        usePaperUI.getState().setResearchTopic(null);
+        usePaperUI.getState().setResearchTarget(null);
         void refreshLibrary().catch((e) => toast.error(e.message));
       }),
     [],
@@ -323,6 +384,9 @@ export function App() {
   };
   const switchMode = (next: LibraryMode) => {
     if (next === mode) return;
+    ++researchSelection.current;
+    researchOpening.current = null;
+    usePaperUI.getState().setResearchTopic(null);
     setFilter("all");
     setFilters(initialFilters);
     setQuery("");
@@ -458,6 +522,7 @@ export function App() {
                   trashCount={trash.length}
                   openDocument={openDocument}
                   onNewCategory={() => usePaperUI.getState().setNaming([])}
+                  onResearchFolder={(folder) => void openResearch(folder)}
                 />
               ) : (
                 <nav className="space-y-1">
@@ -507,6 +572,7 @@ export function App() {
                   ))}
                 </nav>
               )}
+              {papers && <ResearchNavigation />}
               <div className="sidebar-bottom">
                 <Button
                   className="mb-2 h-10 w-full gap-2 rounded-full"
@@ -555,7 +621,26 @@ export function App() {
                 </Button>
               </div>
             </aside>
-            {papers ? (
+            {papers && researchTopicId ? (
+              <ResearchPanel
+                topicId={researchTopicId}
+                onOpenDocument={async (documentId, location) => {
+                  const document = useReaderStore
+                    .getState()
+                    .documents.find((document) => document.id === documentId);
+                  if (
+                    !document ||
+                    document.metadataOnly ||
+                    document.type !== location.type
+                  )
+                    throw new Error("原文不可用，请返回论文库检查附件。");
+                  usePaperUI
+                    .getState()
+                    .setResearchTarget({ documentId, location });
+                  useReaderStore.getState().open(document);
+                }}
+              />
+            ) : papers ? (
               <PaperLibrary
                 documents={documents}
                 trash={trash}
@@ -565,6 +650,7 @@ export function App() {
                 moveToBooks={(doc) => void moveDocument(doc, "books")}
                 navOpen={nav}
                 onToggleNav={() => setNav(!nav)}
+                onResearchFolder={(folder) => void openResearch(folder)}
               />
             ) : (
               <main className="library-main">

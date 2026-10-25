@@ -1,4 +1,5 @@
 import { useShortcut } from "./shortcuts/shortcuts";
+import { usePaperUI } from "./papers/state";
 import { SelectionTranslation } from "./SelectionTranslation";
 import { LinkPreviewPanel } from "./LinkPreviewPanel";
 import { AnnotationHoverCard } from "./AnnotationHoverCard";
@@ -229,6 +230,7 @@ export function Workspace({
   const translationSize = theme.translationFontSize ?? 1;
   const assistantSize = theme.assistantFontScale ?? 1;
   const linkTarget = useReaderStore((s) => s.linkTarget);
+  const researchTarget = usePaperUI((s) => s.researchTarget);
   const [annotationsLoaded, setAnnotationsLoaded] = useState(false);
   const [blocks, setBlocks] = useState<PDFBlock[]>([]);
   const [adapter, setAdapter] = useState<ReaderAdapter>();
@@ -577,6 +579,14 @@ export function Workspace({
         .goTo({ type: "pdf", page: linkTarget.page })
         .catch((e) => toast.error(e.message));
   }, [linkTarget, adapter, annotationsLoaded, annotations, doc.id, doc.type]);
+  useEffect(() => {
+    if (!adapter || researchTarget?.documentId !== doc.id) return;
+    usePaperUI.getState().setResearchTarget(null);
+    if (researchTarget.location.type === doc.type)
+      void adapter
+        .goTo(researchTarget.location)
+        .catch((error) => toast.error(error.message));
+  }, [adapter, doc.id, doc.type, researchTarget]);
   const saveLocation = (next: DocumentLocation, percent: number) => {
     setTranslationSelection(null);
     setLocation(next);
