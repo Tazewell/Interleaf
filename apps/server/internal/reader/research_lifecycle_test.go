@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -100,12 +101,7 @@ func TestResearchLifecycleFinalTransactionJoin(t *testing.T) {
 				} else if action == "paper-trash" {
 					ended <- request(t, s, "POST", "/api/papers/"+paper+"/trash", nil).Code
 				} else if action == "pause" {
-					_, err := s.controlResearchRun(t.Context(), run, "pause", ResearchControl{RequestID: id()})
-					if err != nil {
-						ended <- 500
-					} else {
-						ended <- 200
-					}
+					ended <- request(t, s, "POST", "/api/research/runs/"+run+"/pause", strings.NewReader(`{"requestId":"`+id()+`"}`)).Code
 				} else {
 					s.Close()
 					ended <- 0
@@ -126,7 +122,8 @@ func TestResearchLifecycleFinalTransactionJoin(t *testing.T) {
 			once.Do(func() { close(release) })
 			select {
 			case status := <-ended:
-				if action == "delete" && status != 204 {
+				want := map[string]int{"delete": 204, "trash": 200, "paper-trash": 200, "pause": 200, "close": 0, "migration": 0}[action]
+				if status != want {
 					t.Fatal(status)
 				}
 			case <-time.After(3 * time.Second):
@@ -135,6 +132,17 @@ func TestResearchLifecycleFinalTransactionJoin(t *testing.T) {
 			var n int
 			if err := s.Store.DB.QueryRow(`SELECT count(*) FROM research_reports WHERE run_id=?`, run).Scan(&n); err != nil || n != 0 {
 				t.Fatal("canceled report survived transaction", n, err)
+			}
+			var status string
+			if err := s.Store.DB.QueryRow(`SELECT status FROM research_runs WHERE id=?`, run).Scan(&status); err != nil {
+				t.Fatal(err)
+			}
+			wantStatus := "interrupted"
+			if action == "pause" {
+				wantStatus = "paused"
+			}
+			if status != wantStatus {
+				t.Fatalf("lifecycle state %s, want %s", status, wantStatus)
 			}
 			report, err := readResearchReport(t.Context(), s.Store.DB, prior["latestReportId"].(string))
 			if err != nil || report.Content == "" {

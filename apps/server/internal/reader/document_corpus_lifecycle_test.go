@@ -3,6 +3,9 @@ package reader
 import (
 	"context"
 	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -75,13 +78,41 @@ func TestDocumentCorpusBackgroundDoesNotResumeTranslation(t *testing.T) {
 	if err := s.Store.saveProcessing(p); err != nil {
 		t.Fatal(err)
 	}
+	// Isolate the synchronous startup recovery from background worker timing.
+	if err := s.Store.recoverPausedPaperParsing(); err != nil {
+		t.Fatal(err)
+	}
+	recovered, err := s.Store.processing("doc")
+	if err != nil || !recovered.Enabled || recovered.Status != "queued" || recovered.Phase != "learning" || recovered.AutoTranslateMaxPages == nil || *recovered.AutoTranslateMaxPages != 0 {
+		t.Fatalf("startup must recover local parsing with translation disabled: %+v %v", recovered, err)
+	}
+	var modelCalls atomic.Int32
+	endpoint := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		modelCalls.Add(1)
+		http.Error(w, "translation must remain paused", http.StatusTeapot)
+	}))
+	defer endpoint.Close()
+	configureNativeTest(t, s, endpoint.URL, "test", false)
 	ctx, cancel := context.WithCancel(t.Context())
 	stop := s.StartProcessing(ctx)
 	defer func() { cancel(); stop() }()
 	waitPreparedCorpus(t, s, "doc")
-	saved, err := s.Store.processing("doc")
-	if err != nil || saved.Enabled || saved.Status != "paused" {
-		t.Fatalf("index preparation resumed translation: %+v %v", saved, err)
+	// Corpus is published inside learnPDF before its terminal processing state.
+	// Wait for that local stage, not just corpus visibility (the original race).
+	deadline := time.Now().Add(3 * time.Second)
+	var saved Processing
+	for time.Now().Before(deadline) {
+		saved, err = s.Store.processing("doc")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if saved.Phase != "learning" {
+			break
+		}
+		time.Sleep(time.Millisecond)
+	}
+	if saved.Enabled || saved.Status != "paused" || saved.Phase != "translating" || saved.Translating == nil || saved.Translating.Status != "paused" || modelCalls.Load() != 0 {
+		t.Fatalf("local parsing resumed translation: %+v calls=%d", saved, modelCalls.Load())
 	}
 }
 
