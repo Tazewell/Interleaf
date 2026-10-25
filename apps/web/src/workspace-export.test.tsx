@@ -137,3 +137,14 @@ it("checks annotations once on opening, before loading marks, not on progress up
   await act(async () => render(1));
   expect(api.recoverAnnotations).toHaveBeenCalledTimes(1);
 });
+
+it("keeps sibling document views distinct during reconciliation", async () => {
+  const errors = vi.spyOn(console, "error");
+  try {
+    await act(async () => render(0));
+    await act(async () => render(1));
+    expect(errors.mock.calls.flat().join(" ")).not.toMatch(/same key|unique.*key/);
+  } finally {
+    errors.mockRestore();
+  }
+});

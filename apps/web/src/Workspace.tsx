@@ -1817,7 +1817,7 @@ export function Workspace({
       </ResizablePanelGroup>
 
       <SelectionTranslation
-        key={doc.id}
+        key={`selection-translation-${doc.id}`}
         selection={translationSelection}
         onClose={() => setTranslationSelection(null)}
       />
@@ -1827,7 +1827,7 @@ export function Workspace({
         onEdit={editAnnotationNote}
       />
       <LinkPreviewPanel
-        key={doc.id}
+        key={`link-preview-${doc.id}`}
         preview={linkPreview}
         onDismiss={() => setLinkPreview(null)}
         onNavigate={(location) =>
@@ -1940,7 +1940,7 @@ export function Workspace({
         />
       )}
       <DocumentOverviewDialog
-        key={doc.id}
+        key={`overview-${doc.id}`}
         document={overviewOpen ? doc : null}
         onClose={() => setOverviewOpen(false)}
         onNavigate={async (location) => {
