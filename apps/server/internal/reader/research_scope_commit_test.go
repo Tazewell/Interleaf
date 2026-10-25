@@ -9,6 +9,49 @@ import (
 	"testing"
 )
 
+// Diagnostics may contain parser scratch/library paths. Moving a library must
+// not make unchanged unavailable content appear to be new research evidence.
+func TestResearchUnavailableDiagnosticDoesNotChangeIdentity(t *testing.T) {
+	s, topicID, _ := researchFixture(t)
+	tx, err := s.Store.DB.Begin()
+	if err != nil {
+		t.Fatal(err)
+	}
+	topic, items, err := readResearchScope(tx, topicID)
+	tx.Rollback()
+	if err != nil {
+		t.Fatal(err)
+	}
+	d, err := s.Store.Document("doc")
+	if err != nil {
+		t.Fatal(err)
+	}
+	info, err := os.Stat(s.Store.File(d))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var revisions []string
+	for _, reason := range []string{"open /old/library/cache/doc/corpus.json: permission denied", "open /new/library/cache/doc/corpus.json: permission denied", "parser diagnostic wording changed"} {
+		prepared := map[string]researchPreparedDocument{"doc": {Document: d, Hash: "same-original-bytes", Reason: reason, Context: context.Background(), SourceInfo: info, ParserGeneration: s.parserGeneration("doc")}}
+		snap, err := s.commitResearchScope(t.Context(), ResearchSnapshot{ID: id(), TopicID: topicID, CreatedAt: now()}, topic, items, prepared)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if snap.Members[0].Reason != reason || snap.Members[0].Coverage != "unavailable" {
+			t.Fatal("diagnostic lost", snap)
+		}
+		revisions = append(revisions, snap.Revision)
+	}
+	if revisions[0] != revisions[1] || revisions[0] != revisions[2] {
+		t.Fatal("diagnostic path changed identity", revisions)
+	}
+	prepared := map[string]researchPreparedDocument{"doc": {Document: d, Hash: "actually-changed-original", Reason: "parser diagnostic wording changed", Context: context.Background(), SourceInfo: info, ParserGeneration: s.parserGeneration("doc")}}
+	changed, err := s.commitResearchScope(t.Context(), ResearchSnapshot{ID: id(), TopicID: topicID, CreatedAt: now()}, topic, items, prepared)
+	if err != nil || changed.Revision == revisions[0] {
+		t.Fatal("real content change ignored", changed, err)
+	}
+}
+
 // Exercise the real prepare/commit boundary deterministically: application
 // publishing may happen after expensive source verification, before the Tx.
 func TestResearchScopeCommitRejectsCorpusAndParserReplacement(t *testing.T) {

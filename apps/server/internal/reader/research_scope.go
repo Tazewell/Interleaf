@@ -390,12 +390,16 @@ func (s *Server) commitResearchScope(ctx context.Context, snap ResearchSnapshot,
 			}
 		}
 		snap.Members = append(snap.Members, m)
+		// Diagnostic text may include library/scratch paths or parser wording.
+		// Keep it in the snapshot for display, outside stable source identity.
+		identity := m
+		identity.Reason = ""
 		identities = append(identities, struct {
 			Member   ResearchMember
 			Author   string
 			Metadata PaperMetadata
 			Versions []string
-		}{m, p.Author, p.Metadata, versions})
+		}{identity, p.Author, p.Metadata, versions})
 	}
 	raw, err := json.Marshal(struct {
 		Protocol string
