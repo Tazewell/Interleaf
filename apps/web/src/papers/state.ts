@@ -1,9 +1,15 @@
 import { create } from "zustand";
-import type { SmartCategory, TagBoard } from "@reader/core";
+import type { DocumentLocation, SmartCategory, TagBoard } from "@reader/core";
 import type { PaperView } from "./model";
 
 /** Session state shared by the paper sidebar, list and detail panel. */
 export const usePaperUI = create<{
+  researchTopicId: string | null;
+  setResearchTopic: (id: string | null) => void;
+  researchTarget: { documentId: string; location: DocumentLocation } | null;
+  setResearchTarget: (
+    target: { documentId: string; location: DocumentLocation } | null,
+  ) => void;
   view: PaperView;
   query: string;
   tagFilter: Pick<TagBoard, "tags" | "match">;
@@ -32,6 +38,10 @@ export const usePaperUI = create<{
   togglePick: (id: string, range: boolean, visible: string[]) => void;
   setPicked: (ids: Iterable<string>) => void;
 }>((set) => ({
+  researchTopicId: null,
+  setResearchTopic: (researchTopicId) => set({ researchTopicId }),
+  researchTarget: null,
+  setResearchTarget: (researchTarget) => set({ researchTarget }),
   view: "all",
   query: "",
   tagFilter: { tags: [], match: "all" },
@@ -47,7 +57,7 @@ export const usePaperUI = create<{
   setSmartEditing: (smartEditing) => set({ smartEditing }),
   exporting: null,
   setExporting: (exporting) => set({ exporting }),
-  setView: (view) => set({ view }),
+  setView: (view) => set({ view, researchTopicId: null }),
   setQuery: (query) => set({ query }),
   select: (selectedId) => set({ selectedId }),
   startPicking: (ids = []) =>

@@ -27,6 +27,10 @@ import {
 import "./markdown.css";
 import { remarkLatex } from "./remark-latex";
 import { ChatCitationNavigation, remarkChatCitations } from "./citations";
+import {
+  ResearchCitationNavigation,
+  remarkResearchCitations,
+} from "../research/citations";
 
 const Code = lazy(() => import("./CodeBlock"));
 const MathFormula = lazy(() => import("./MathFormula"));
@@ -44,6 +48,22 @@ function MarkdownLink({
 }) {
   const navigate = useContext(ReadingLinkNavigation);
   const evidence = useContext(ChatCitationNavigation);
+  const research = useContext(ResearchCitationNavigation);
+  if (href?.startsWith("#reader-research?")) {
+    const id = new URLSearchParams(href.split("?")[1]).get("source") ?? "";
+    if (!research?.sourceIds.includes(id)) return <span>{children}</span>;
+    return (
+      <a
+        href={href}
+        onClick={(event) => {
+          event.preventDefault();
+          research.navigate(id);
+        }}
+      >
+        {children}
+      </a>
+    );
+  }
   if (href?.startsWith("#reader-evidence?")) {
     const sourceId =
       new URLSearchParams(href.split("?")[1]).get("source") ?? "";
@@ -202,6 +222,7 @@ const StaticBlock = memo(function StaticBlock({
   generating: boolean;
 }) {
   const evidence = useContext(ChatCitationNavigation);
+  const research = useContext(ResearchCitationNavigation);
   const options = useMemo<
     Pick<ComponentProps<typeof CachedMarkdown>, "remarkPlugins">
   >(
@@ -209,10 +230,11 @@ const StaticBlock = memo(function StaticBlock({
       remarkPlugins: [
         ...plugins,
         [remarkChatCitations, { sourceIds: evidence?.sourceIds, generating }],
+        [remarkResearchCitations, { sourceIds: research?.sourceIds }],
         [remarkReadingCitations, { blockId: citationBlockId }],
       ],
     }),
-    [citationBlockId, evidence?.sourceIds, generating],
+    [citationBlockId, evidence?.sourceIds, research?.sourceIds, generating],
   );
   return (
     <CachedMarkdown {...markdownOptions} {...options}>
@@ -282,14 +304,16 @@ export const MessageMarkdown = memo(function MessageMarkdown({
 }) {
   const reduced = useMotionPreference();
   const evidence = useContext(ChatCitationNavigation);
+  const research = useContext(ResearchCitationNavigation);
   const streamingPlugins = useMemo<
     ComponentProps<typeof CachedMarkdown>["remarkPlugins"]
   >(
     () => [
       ...plugins,
       [remarkChatCitations, { sourceIds: evidence?.sourceIds, generating }],
+      [remarkResearchCitations, { sourceIds: research?.sourceIds }],
     ],
-    [evidence?.sourceIds, generating],
+    [evidence?.sourceIds, research?.sourceIds, generating],
   );
   const [backgrounded, setBackgrounded] = useState(false);
   useEffect(() => {
