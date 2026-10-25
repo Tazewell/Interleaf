@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
 import { act } from "react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import { researchAPI } from "@reader/api";
+import { api, researchAPI } from "@reader/api";
+import { paper } from "../papers/fixtures";
 import { ResearchPanel } from "./ResearchPanel";
 import { ResearchReport } from "./ResearchReport";
 import {
@@ -407,6 +408,68 @@ it("validates current evidence before PDF and native EPUB navigation, and reject
   await click(view.host, "来源 1");
   expect(open).toHaveBeenCalledTimes(2);
   expect(view.host.textContent).toContain("来源已失效");
+});
+
+it("shows the validated source's readable paper identity", async () => {
+  vi.mocked(researchAPI.listReports).mockResolvedValue([
+    { ...report, sourceIds: [evidence.id] },
+  ]);
+  vi.spyOn(researchAPI, "getSource").mockResolvedValue({
+    ...evidence,
+    paperId: "paper-a",
+  });
+  vi.spyOn(api, "paper").mockResolvedValue(
+    { ...paper({
+      id: "paper-a",
+      title: "Uncertainty graph study",
+      citationKey: "Graph2026",
+    }), primaryDocumentId: "pdf-doc", citationKey: "Graph2026", attachments: [] },
+  );
+  await render(
+    view.root,
+    <ResearchPanel topicId="topic" onOpenDocument={async () => {}} />,
+  );
+  await click(view.host, "来源 1");
+  expect(view.host.textContent).toContain("Uncertainty graph study");
+  expect(view.host.textContent).toContain("Graph2026");
+});
+
+it("shows remote provenance without fetching the public paper", async () => {
+  vi.mocked(researchAPI.listReports).mockResolvedValue([
+    { ...report, sourceIds: [evidence.id] },
+  ]);
+  vi.spyOn(researchAPI, "getSource").mockResolvedValue({
+    ...evidence,
+    documentId: undefined,
+    kind: "remote-abstract",
+    candidateId: "candidate",
+  });
+  vi.mocked(researchAPI.listCandidates).mockResolvedValue([
+    {
+      id: "candidate",
+      topicId: "topic",
+      identityKey: "doi:10.1000/provenance",
+      title: "Remote graph study",
+      authors: "Fixture",
+      doi: "10.1000/provenance",
+      arxiv: "",
+      publishedAt: "2026",
+      updatedAt: "",
+      abstract: "Abstract",
+      landingUrl: "https://example.org/paper",
+      pdfUrl: "",
+      aliases: [],
+    },
+  ]);
+  await render(
+    view.root,
+    <ResearchPanel topicId="topic" onOpenDocument={async () => {}} />,
+  );
+  await click(view.host, "来源 1");
+  const provenance = view.host.querySelector('[aria-label="来源出处"]');
+  expect(provenance?.textContent).toContain("Remote graph study");
+  expect(provenance?.textContent).toContain("10.1000/provenance");
+  expect(provenance?.textContent).toContain("https://example.org/paper");
 });
 it("ignores a source response from the previous library epoch", async () => {
   vi.mocked(researchAPI.listReports).mockResolvedValue([

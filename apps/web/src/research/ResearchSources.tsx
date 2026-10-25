@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { researchAPI } from "@reader/api";
+import { api, researchAPI } from "@reader/api";
 import type { DocumentLocation, ResearchEvidence } from "@reader/core";
 import { Button } from "@reader/ui/components/button";
 import { researchSignal } from "./research-session";
@@ -42,11 +42,13 @@ export function ResearchSources({
   children?: React.ReactNode;
 }) {
   const [source, setSource] = useState<ResearchEvidence>();
+  const [provenance, setProvenance] = useState<string[]>([]);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const pending = useRef<AbortController | undefined>(undefined);
   useEffect(() => {
     setSource(undefined);
+    setProvenance([]);
     setError("");
     setLoading(false);
     return () => pending.current?.abort();
@@ -60,11 +62,47 @@ export function ResearchSources({
     setLoading(true);
     setError("");
     setSource(undefined);
+    setProvenance([]);
     try {
       const fresh = await researchAPI.getSource(id, signal);
       if (signal.aborted || fresh.id !== id || fresh.topicId !== topicId)
         return;
       setSource(fresh);
+      // Read metadata only after the evidence binding was validated. These
+      // local API reads never grant public-network or import permission.
+      const describe = async () => {
+        try {
+          let lines: string[] = [];
+          if (fresh.candidateId) {
+            const candidates = await researchAPI.listCandidates(
+              topicId,
+              signal,
+            );
+            const candidate = candidates.find(
+              (c) => c.id === fresh.candidateId && c.topicId === topicId,
+            );
+            if (candidate)
+              lines = [
+                candidate.title,
+                candidate.doi,
+                candidate.arxiv,
+                candidate.landingUrl,
+              ];
+          } else if (fresh.paperId) {
+            const paper = await api.paper(fresh.paperId);
+            if (paper.id === fresh.paperId)
+              lines = [
+                paper.title,
+                paper.citationKey,
+                paper.metadata.doi ?? "",
+              ];
+          }
+          if (!signal.aborted) setProvenance(lines.filter(Boolean));
+        } catch {
+          if (!signal.aborted) setProvenance(["出处元数据暂不可用"]);
+        }
+      };
+      void describe();
       const location = localResearchLocation(fresh);
       if (location) await onOpenDocument(fresh.documentId!, location);
       else if (fresh.availability !== "valid")
@@ -106,6 +144,13 @@ export function ResearchSources({
         {error && <p role="alert">{error}</p>}
         {source && (
           <div className="rounded-md border p-3 text-sm">
+            {provenance.length > 0 && (
+              <div aria-label="来源出处" className="break-words">
+                {provenance.map((line, index) => (
+                  <p key={index}>{line}</p>
+                ))}
+              </div>
+            )}
             <p>
               {labels[source.kind]} ·{" "}
               {source.availability === "valid" ? "有效" : "已失效"} ·{" "}
