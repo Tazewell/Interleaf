@@ -24,6 +24,7 @@ import urllib.request
 import uuid
 import struct
 import zlib
+from attribution import assert_attribution
 
 ROOT, OUT = [Path(x).resolve() for x in sys.argv[1:3]]
 LIB = OUT / 'library'
@@ -428,7 +429,12 @@ try:
     done = terminal(run); check('pauseResume', done['coverage']['analyzedPapers'] == 5 and len(STATE['cardSources']) == 4 and all(STATE['cardSources'].count(x) == 1 for x in initial_sources), done['coverage'])
     report = api('GET', '/api/research/reports/' + done['latestReportId'])
     check('compare', 'improves' in report['content'] and 'worsens' in report['content'] and len(report['sourceIds']) >= 3)
-    for source in report['sourceIds']: assert api('GET', '/api/research/sources/' + source)['availability'] == 'valid'
+    report_sources = {source: api('GET', '/api/research/sources/' + source) for source in report['sourceIds']}
+    assert_attribution(report, report_sources, [
+        {'paperId': docs[name]['paperId'], 'documentId': docs[name]['id'], 'claim': claim}
+        for name, claim in [('A', 'Uniform aggregation improves calibration on sparse graphs.'), ('B', 'Uniform aggregation worsens calibration on sparse graphs.')]
+    ])
+    RESULT['comparisonAttribution'] = {'report': report, 'sources': report_sources}
     api('PATCH', '/api/research/topics/' + tid, {'includeChildren': False})
     direct = create(tid, sid, 'overview'); RESULT['directScope'] = len(snapshot(direct)['members']); assert RESULT['directScope'] == 4
     control(direct, 'start'); overview = terminal(direct); check('overview', bool(overview.get('latestReportId')))
