@@ -415,13 +415,13 @@ func TestResearchUserReportMarkdownBoundary(t *testing.T) {
 	if _, err := s.createResearchReportRevision(t.Context(), parent, id(), strings.Repeat("x", researchReportBytes+1)); err == nil {
 		t.Fatal("oversized report accepted")
 	}
-	edited, err := s.createResearchReportRevision(t.Context(), parent, id(), `<script>bad()</script> ![remote](https://example.invalid/image) [unknown-source]`)
+	edited, err := s.createResearchReportRevision(t.Context(), parent, id(), "<script>bad()</script> ![remote](https://example.invalid/image) [unknown-source]\n[leak][url]\n[url]: https://example.invalid/private")
 	if err != nil {
 		t.Fatal(err)
 	}
 	response := request(t, s, "GET", "/api/research/reports/"+edited.ID+"/markdown", nil)
 	text := response.Body.String()
-	if response.Code != 200 || strings.Contains(text, "<script>") || strings.Contains(text, "](https://") || !strings.Contains(text, "来源：user") || calls.Load() != 2 {
+	if response.Code != 200 || strings.Contains(text, "\n[url]:") || strings.Contains(text, "<script>") || strings.Contains(text, "](https://") || !strings.Contains(text, "来源：user") || calls.Load() != 2 {
 		t.Fatal("export/revision boundary", response.Code, text, calls.Load())
 	}
 }

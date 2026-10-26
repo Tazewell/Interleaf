@@ -24,7 +24,7 @@ func (s *Server) researchMarkdown(ctx context.Context, r ResearchReport) string 
 		}
 		seen[sid] = true
 		anchor := "source-" + sid
-		text = strings.ReplaceAll(text, "["+sid+"]", "["+sid+"](#"+anchor+")")
+		text = strings.ReplaceAll(text, "\\["+sid+"]", "["+sid+"](#"+anchor+")")
 		fmt.Fprintf(&appendix, "\n### %s\n\n", anchor)
 		var raw, availability, paperID, runID, topicID string
 		err := s.Store.DB.QueryRowContext(ctx, `SELECT body,availability,paper_id,run_id,topic_id FROM research_evidence WHERE id=?`, sid).Scan(&raw, &availability, &paperID, &runID, &topicID)

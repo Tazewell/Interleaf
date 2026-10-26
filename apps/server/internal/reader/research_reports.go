@@ -603,6 +603,9 @@ func researchMarkdown(r ResearchReport) string {
 	text := html.EscapeString(r.Content)
 	text = strings.ReplaceAll(text, "](", "]\\(")
 	text = strings.ReplaceAll(text, "![", "\\![")
+	// Reference-style links are also untrusted. Verified source links are added
+	// separately by the read-only export after escaping authored Markdown.
+	text = strings.ReplaceAll(text, "[", "\\[")
 	return fmt.Sprintf("# 研究报告\n\n来源：%s；修订：%s\n\n%s\n", r.Origin, r.Revision, text)
 }
 
