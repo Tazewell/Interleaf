@@ -71,9 +71,7 @@ function ResearchPanelView({
   const blocked =
     !config?.connection.url ||
     !model ||
-    capability?.text === false ||
-    capability?.tools === "unsupported" ||
-    capability?.tools === "failed";
+    capability?.text === false;
   const active = running(state.run);
   const session = state.sessions.find(
     (session) => session.id === state.sessionId,
@@ -186,9 +184,12 @@ function ResearchPanelView({
           <p role="status">
             {!config?.connection.url || !model
               ? "请在设置中配置 API 地址和问答 / 研究模型后开始研究。"
-              : capability?.tools !== "passed"
-                ? "当前模型不支持研究所需的工具。请在设置中选择并检查支持工具的模型。"
-                : "当前模型不可用，请在设置中检查连接。"}
+              : "当前模型不可用，请在设置中检查连接。"}
+          </p>
+        )}
+        {!blocked && capability && capability.tools !== "passed" && (
+          <p className="text-sm text-muted-foreground">
+            受限文字模式：由 Reader 控制资料读取，模型不调用工具。
           </p>
         )}
         {capability && !capability.vision && (

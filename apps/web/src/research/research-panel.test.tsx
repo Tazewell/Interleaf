@@ -379,9 +379,12 @@ it("keeps reports readable without API configuration or tool support and explain
     }),
   );
   await flush();
-  expect(view.host.textContent).toContain("不支持研究所需的工具");
+  expect(view.host.textContent).toContain("受限文字模式");
   expect(view.host.textContent).toContain("图表图片未读取");
   expect(researchAPI.createRun).not.toHaveBeenCalled();
+  await click(view.host, "开始研究");
+  expect(researchAPI.createRun).toHaveBeenCalledTimes(1);
+  expect(researchAPI.controlRun).toHaveBeenCalledWith("run", "start", expect.any(Object), expect.any(AbortSignal));
 });
 it("presents native evidence ranges as pages and chapters instead of raw protocol JSON", async () => {
   vi.mocked(researchAPI.listReports).mockResolvedValue([
