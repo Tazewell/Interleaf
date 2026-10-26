@@ -182,3 +182,96 @@ func TestResearchCompositionRetainedWindowResumeAndFollowup(t *testing.T) {
 	}
 	t.Logf("model requests=%d compactions=%d sections=%d near-retained-window batches=%d", calls.Load(), compacts.Load(), sections.Load(), nearWindow)
 }
+
+func TestResearchCompositionRemoteCJKRetainedWindow(t *testing.T) {
+	body := strings.Repeat("测量条件和实验结果。", 700)
+	s, run, candidate, hits := remoteFixture(t, func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html")
+		fmt.Fprint(w, "<article><h2>Methods</h2><p>"+body+"</p><h2>Results</h2><p>"+body+"</p></article>")
+	})
+	evidence, err := s.readResearchRemote(t.Context(), run.ID, candidate.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	expected := 0
+	for _, ev := range evidence {
+		expected += len(ev.Excerpt)
+	}
+	got, calls := 0, 0
+	endpoint := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var in struct {
+			Messages []toolCompletionMessage `json:"messages"`
+			Tools    []any                   `json:"tools"`
+		}
+		if e := json.NewDecoder(r.Body).Decode(&in); e != nil {
+			t.Error(e)
+			return
+		}
+		if len(in.Tools) != 0 {
+			t.Error("composition advertised tools")
+		}
+		result := "Preserve the comparison and verified sources."
+		if !strings.Contains(fmt.Sprint(in.Messages[0].Content), "整理对话检查点") {
+			calls++
+			last := fmt.Sprint(in.Messages[len(in.Messages)-1].Content)
+			at := strings.Index(last, "RESEARCH_CARDS_JSON\n")
+			if at < 0 {
+				t.Error("missing cards")
+				return
+			}
+			var items []researchCompositionItem
+			if e := json.Unmarshal([]byte(last[at+len("RESEARCH_CARDS_JSON\n"):]), &items); e != nil {
+				t.Error(e)
+				return
+			}
+			ids := []string{}
+			text := "Measured comparison "
+			for _, item := range items {
+				got += len(item.Fact.Text)
+				for _, sid := range item.Fact.EvidenceIDs {
+					ids = append(ids, sid)
+					text += "[" + sid + "] "
+				}
+			}
+			result = jsonText(researchReportSection{Content: text, SourceIDs: ids})
+		}
+		w.Header().Set("Content-Type", "text/event-stream")
+		fmt.Fprint(w, "data: "+jsonText(map[string]any{"choices": []any{map[string]any{"index": 0, "delta": map[string]any{"content": result}, "finish_reason": "stop"}}})+"\n\ndata: [DONE]\n\n")
+	}))
+	defer endpoint.Close()
+	scope, err := readResearchRunScope(t.Context(), s.Store.DB, run.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	record, err := readResearchRecord(t.Context(), s.Store.DB, run.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	record.Input.Mode = "compare"
+	record.Input.Question = "Compare the full online evidence"
+	record.AttemptBudget.MaxModelRequests = 100
+	err = s.commitResearchRead(t.Context(), scope, nil, true, func(tx *sql.Tx) error {
+		if e := writeResearchRecord(t.Context(), tx, record); e != nil {
+			return e
+		}
+		for _, m := range scope.Snapshot.Members {
+			card := ResearchPaperCard{PaperID: m.PaperID, DocumentID: m.DocumentID, Revision: m.CorpusRevision, Level: m.Coverage}
+			if e := writeResearchUnit(t.Context(), tx, ResearchUnit{RunID: run.ID, UnitKey: "paper:" + m.PaperID, Kind: "paper", Status: "complete", Result: []byte(jsonText(card))}); e != nil {
+				return e
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	attempt := &researchAttempt{server: s, runID: run.ID, snapshot: nativeTaskSnapshot{Connection: APIConnection{URL: endpoint.URL, Protocol: "openai"}, Model: "test", ContextWindow: 8192}}
+	_, err = s.composeResearchReport(context.WithValue(t.Context(), researchAttemptKey{}, attempt), run.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != expected || calls < 2 || hits.Load() != 1 {
+		t.Fatal("truncated/repeated online evidence or unexpected network", got, expected, calls, hits.Load())
+	}
+	t.Logf("all %d online UTF-8 bytes delivered in %d sections with one authorized fetch", got, calls)
+}

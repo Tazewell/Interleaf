@@ -258,16 +258,7 @@ func (s *Server) composeResearchReport(ctx context.Context, runID string) (Resea
 					n = 2000
 				}
 				item := researchCompositionItem{PaperID: m.PaperID, Title: m.Title, Level: m.Coverage, Field: fields[i], Fact: ResearchFact{EvidenceIDs: f.EvidenceIDs}, Coverage: card.ReadCoverage}
-				for {
-					item.Fact.Text = string(runes[:n])
-					if researchCompositionFits(snapshot, researchReportInput(r, []researchCompositionItem{item})) {
-						break
-					}
-					if n == 1 {
-						return empty, generationError(ErrorContext, "研究问题及来源描述超过当前模型保留窗口")
-					}
-					n = max(1, n/2)
-				}
+				item.Fact.Text = string(runes[:n])
 				items = append(items, item)
 				runes = runes[n:]
 			}
@@ -278,6 +269,32 @@ func (s *Server) composeResearchReport(ctx context.Context, runID string) (Resea
 		return empty, err
 	}
 	items = append(items, online...)
+	// Online and local facts must obey the same retained-window boundary. Keep
+	// every rune, source ID and native position when an individual item splits.
+	fitted := []researchCompositionItem{}
+	for _, item := range items {
+		runes := []rune(item.Fact.Text)
+		if len(runes) == 0 {
+			fitted = append(fitted, item)
+			continue
+		}
+		for len(runes) > 0 {
+			n := len(runes)
+			for {
+				item.Fact.Text = string(runes[:n])
+				if researchCompositionFits(snapshot, researchReportInput(r, []researchCompositionItem{item})) {
+					break
+				}
+				if n == 1 {
+					return empty, generationError(ErrorContext, "研究问题及来源描述超过当前模型保留窗口")
+				}
+				n = max(1, n/2)
+			}
+			fitted = append(fitted, item)
+			runes = runes[n:]
+		}
+	}
+	items = fitted
 	for _, source := range onlineIDs {
 		allowed[source] = true
 	}
