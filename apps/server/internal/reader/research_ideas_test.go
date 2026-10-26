@@ -167,6 +167,25 @@ func TestResearchIdeasHaveMechanismAndFalsification(t *testing.T) {
 		t.Fatal("GET triggered model")
 	}
 }
+
+func TestResearchIdeasScientificPercentages(t *testing.T) {
+	s, topic, _ := researchFixture(t)
+	var calls atomic.Int32
+	ideasModel(t, s, &calls, func(v *ResearchIdea) {
+		v.MinimumExperiment = "Compare accuracy gains of 5% with a 95% confidence interval; train on 80% of data"
+	})
+	run := ideasRun(t, s, topic, "", ResearchRunInput{IdeaCount: 1})
+	researchWaitJob(t, s, run, "completed")
+}
+
+func TestResearchOriginalityGuard(t *testing.T) {
+	for _, text := range []string{"Novelty probability 98%", "95% probability of originality", "原创概率95%", "百分之九十五的原创概率", "绝对原创", "guaranteed novel"} {
+		if !researchOverclaim(text) { t.Errorf("accepted originality overclaim: %s", text) }
+	}
+	for _, text := range []string{"accuracy 95%", "95% confidence interval", "训练集占百分之八十", "Improves a novel method by 5%"} {
+		if researchOverclaim(text) { t.Errorf("rejected scientific metric: %s", text) }
+	}
+}
 func TestResearchIdeasBudgetKeepsTypedResultsAndRefinement(t *testing.T) {
 	s, topic, _ := researchFixture(t)
 	var calls atomic.Int32

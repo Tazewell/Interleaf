@@ -12,7 +12,9 @@ import (
 	"time"
 )
 
-var researchProbability = regexp.MustCompile(`(?i)(\d+(\.\d+)?\s*(%|％)|absolute(ly)? original|guaranteed novel|100 percent|绝对原创|保证原创|完全原创|百分之)`)
+// Percentages are ordinary scientific data. Reject quantified originality,
+// rather than rejecting every accuracy, confidence interval or data split.
+var researchProbability = regexp.MustCompile(`(?i)(absolute(ly)? original|guaranteed (novel|original)|绝对原创|保证原创|完全原创|(?:novelty|originality|原创|创新)(?:\s*(?:probability|chance|likelihood|概率|可能性|为|是|of|:|：))*\s*(?:\d+(?:\.\d+)?\s*(?:%|％|percent)|百分之)|(?:\d+(?:\.\d+)?\s*(?:%|％|percent)|百分之[零一二三四五六七八九十百点\d]+)\s*(?:(?:probability|chance|likelihood)\s+of\s+|的)?(?:originality|novelty|original|novel|原创|创新))`)
 
 func researchOverclaim(text string) bool { return researchProbability.MatchString(text) }
 func researchFulltext(ev ResearchEvidence) bool {
