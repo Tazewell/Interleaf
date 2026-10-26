@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { ResearchRunInput } from "@reader/core";
 import { Button } from "@reader/ui/components/button";
 import { Textarea } from "@reader/ui/components/textarea";
@@ -31,6 +31,9 @@ export function ResearchChat({
   ) => void;
 }) {
   const [question, setQuestion] = useState("");
+  useEffect(() => {
+    if (state.rejectedDraft) setQuestion(state.rejectedDraft.question);
+  }, [state.rejectedDraft]);
   const [mode, setMode] = useState<keyof typeof labels>("overview");
   const send = (online = false) => {
     if (!question.trim() || disabled) return;

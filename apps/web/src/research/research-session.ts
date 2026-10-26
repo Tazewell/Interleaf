@@ -1,4 +1,4 @@
-import { researchAPI } from "@reader/api";
+import { researchAPI, RequestError } from "@reader/api";
 import { researchDraftText } from "./research-draft";
 import type {
   ResearchBudget,
@@ -91,6 +91,7 @@ type SessionState = {
   controlBusy?: boolean;
   networkBusy?: boolean;
   uncertain?: { userMessageId: string; question: string };
+  rejectedDraft?: { question: string };
 };
 const emptySession = (): SessionState => ({
   run: undefined,
@@ -357,6 +358,7 @@ class ResearchStore {
         activity: "",
         results: undefined,
         uncertain: { userMessageId, question: question.trim() },
+        rejectedDraft: undefined,
         messages: [
           ...(this.sessions.get(sid)?.messages ?? []),
           {
@@ -397,6 +399,14 @@ class ResearchStore {
     } catch (error) {
       if (!this.valid()) return;
       if (created) await this.recover(sid, created.id);
+      else if (error instanceof RequestError && error.status === 400 && error.code === "research_create_rejected") {
+        this.sessionPatch(sid, {
+          uncertain: undefined,
+          rejectedDraft: { question: question.trim() },
+          error: error.message,
+          messages: (this.sessions.get(sid)?.messages ?? []).filter((message) => message.id !== userMessageId),
+        });
+      }
       else {
         // A lost create response may still have saved the user message and run.
         // Only read history; never repeat create/start to discover its identity.

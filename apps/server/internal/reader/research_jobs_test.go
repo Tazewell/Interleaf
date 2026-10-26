@@ -13,6 +13,20 @@ import (
 	"time"
 )
 
+func TestResearchCreateRejectionIsKnownNotCreated(t *testing.T) {
+	s, topic, _ := researchFixture(t)
+	session := paperCall(t, s, "POST", "/api/research/topics/"+topic+"/sessions", `{"title":"Rejection"}`, 201)["id"].(string)
+	input := ResearchRunInput{UserMessageID: id(), Question: "https://example.org/paper", Mode: "question", Network: "inherit", URLs: []string{"https://example.org/paper"}}
+	result := paperCall(t, s, "POST", "/api/research/topics/"+topic+"/sessions/"+session+"/runs", jsonText(input), 400)
+	if result["code"] != "research_create_rejected" {
+		t.Fatalf("ambiguous rejection: %v", result)
+	}
+	var count int
+	if err := s.Store.DB.QueryRow(`SELECT count(*) FROM research_runs WHERE session_id=?`, session).Scan(&count); err != nil || count != 0 {
+		t.Fatalf("run persisted: %d %v", count, err)
+	}
+}
+
 // Real completion HTTP plus SQLite: dropping a control response must never
 // replay a paid run, and a successfully committed unit survives a new attempt.
 func researchJobModel(t *testing.T, s *Server, calls *atomic.Int32, block chan struct{}, observe ...func(string, int32)) *httptest.Server {

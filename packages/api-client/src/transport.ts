@@ -9,6 +9,7 @@ export class RequestError extends Error {
     message: string,
     readonly code?: string,
     readonly pages?: number,
+    readonly status?: number,
   ) {
     super(message);
   }
@@ -42,6 +43,7 @@ export async function requestResponse(
       data.error || `请求失败 (${response.status})`,
       data.code,
       data.pages,
+      response.status,
     );
   }
   return response;

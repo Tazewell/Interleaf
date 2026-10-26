@@ -32,6 +32,12 @@ func (s *Server) registerResearchRoutes(mux *http.ServeMux) {
 		}
 		run, err := s.createResearchRun(r.Context(), r.PathValue("topic"), r.PathValue("session"), in)
 		if err != nil {
+			// An empty identity means creation never reached the persistence phase.
+			// Errors with an allocated/existing identity remain uncertain to clients.
+			if run.ID == "" {
+				respond(w, 400, map[string]string{"error": err.Error(), "code": "research_create_rejected"})
+				return
+			}
 			researchError(w, err)
 			return
 		}

@@ -172,6 +172,9 @@ func (s *Server) createResearchRun(ctx context.Context, topicID, sessionID strin
 	err := s.Store.DB.QueryRowContext(ctx, `SELECT id,request_hash FROM research_runs WHERE session_id=? AND user_message_id=?`, sessionID, in.UserMessageID).Scan(&existing, &oldHash)
 	if err == nil {
 		r, e := s.getResearchRun(ctx, existing)
+		if e != nil {
+			return ResearchRun{ID: existing}, e
+		}
 		if oldHash != hash || r.TopicID != topicID {
 			return r, paperConflict("请求标识已用于其他内容")
 		}
