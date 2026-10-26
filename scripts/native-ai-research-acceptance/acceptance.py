@@ -226,7 +226,7 @@ class Public(http.server.BaseHTTPRequestHandler):
         elif host in ['1.1.1.1', 'arxiv.org']:
             if STATE['mode'] == 'abstract': status, body = 404, b'Owned full text unavailable'
             elif url.path.endswith('.pdf') or '/pdf/' in url.path: kind, body = 'application/pdf', (OUT / 'fixtures/B2.pdf').read_bytes()
-            else: body = b'<html><body><h1>B2: Variance weighting</h1><p>We implement uncertainty weighted graph propagation with variance weights. Fixed graph splits compare uniform and variance weighted aggregation.</p></body></html>'
+            else: body = ('<html><body><article><h1>B2: Variance weighting</h1><h2>Methods</h2><p>We implement uncertainty weighted graph propagation with variance weights. ' + 'We describe the measured experimental conditions and reproducible implementation. ' * 4 + '</p><h2>Results</h2><p>' + 'Fixed graph splits compare uniform and variance weighted aggregation on held-out data. ' * 4 + '</p></article></body></html>').encode()
         else:
             STATE['errors'].append('unexpected scholarly host ' + host); status, body = 502, b'Unexpected host'
         if STATE['mode'] == 'throttle' and host == 'export.arxiv.org': status, body = 429, b'Owned rate limit'
