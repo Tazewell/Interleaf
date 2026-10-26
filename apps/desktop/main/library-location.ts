@@ -48,7 +48,7 @@ export function stopLibraryServer(child: ChildProcess): Promise<void> {
       finish(code === 0 ? undefined : new Error("本地服务未正常停止"));
     const failed = (error: Error) => finish(error);
     const timer = setTimeout(
-      () => finish(new Error("本地服务停止超时，未迁移书库")),
+      () => finish(new Error("本地服务停止超时，未确认工作结束")),
       30_000,
     );
     child.once("close", closed);

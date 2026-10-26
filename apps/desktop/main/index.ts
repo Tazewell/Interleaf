@@ -62,8 +62,16 @@ let proxySettings: ProxySettingsService;
 let activeLibrary: string | undefined;
 let choosingLibrary = false;
 let bilingualPDFSave: BilingualPDFSaveService | undefined;
-let waitingForBilingualSaveStop = false;
-let bilingualSavesStoppedForQuit = false;
+let serverStop: Promise<void> | undefined;
+let serverClosed: Promise<void> = Promise.resolve();
+let quitJoin: Promise<void> | undefined;
+let quitJoined = false;
+function stopOwnedServer() {
+  return (serverStop ??= (async () => {
+    if (child) await stopLibraryServer(child);
+    await serverClosed;
+  })());
+}
 let pendingLibraryMove:
   { destination: string; resolve: (moved: boolean) => void } | undefined;
 const root = resolve(__dirname, "../..");
@@ -122,6 +130,8 @@ async function startServer() {
       stdio: ["pipe", "pipe", "pipe"],
     },
   );
+  // Observe close from spawn time: exitCode may be set before stdio is closed.
+  serverClosed = new Promise((resolve) => child!.once("close", () => resolve()));
   const stderrLines = createInterface({ input: child.stderr! });
   stderrLines.on("line", (line) =>
     diagnostics?.logs.record("server-stderr", {
@@ -133,7 +143,6 @@ async function startServer() {
   child.once("close", () => stderrLines.close());
   return new Promise<string>((accept, reject) => {
     const timer = setTimeout(() => {
-      child?.kill();
       reject(new Error("本地服务启动超时"));
     }, 20000);
     child!.once("error", (err) => {
@@ -439,9 +448,7 @@ app
               activeLibrary!,
               move.destination,
               serverBinary(),
-              async () => {
-                if (child) await stopLibraryServer(child);
-              },
+              stopOwnedServer,
             );
             move.resolve(true);
           } catch (error) {
@@ -455,7 +462,6 @@ app
           }
         }
         flushed = true;
-        bilingualSavesStoppedForQuit = true;
         window?.close();
       };
       ipcMain.on("reader:flushed", handler);
@@ -862,20 +868,29 @@ app
     app.quit();
   });
 app.on("before-quit", (event) => {
-  const stoppedBilingualSave = bilingualPDFSave?.stop();
   if (window && !window.isDestroyed() && !flushed) {
     event.preventDefault();
     window.close();
     return;
   }
-  // Renderer crashes and destroyed windows also join owned downloads before exit.
-  if (stoppedBilingualSave && !bilingualSavesStoppedForQuit) {
+  // All exits (including startup failure and crashed/destroyed renderers) share
+  // one stop owner. stdin EOF lets Go cancel and join its work on Windows too.
+  if (!quitJoined) {
     event.preventDefault();
-    if (!waitingForBilingualSaveStop) {
-      waitingForBilingualSaveStop = true;
-      void stoppedBilingualSave.then(() => {
-        bilingualSavesStoppedForQuit = true;
+    if (!quitJoin) {
+      quitting = true;
+      diagnostics?.record("desktop.stopping");
+      updateService?.stop();
+      proxySettings?.stop();
+      quitJoin = (async () => {
+        await bilingualPDFSave?.stop();
+        await stopOwnedServer();
+        quitJoined = true;
         app.quit();
+      })().catch((error) => {
+        restartRequested = false;
+        diagnostics?.record("desktop.stop_failed", error);
+        dialog.showErrorBox("Reader 尚未退出", `本地服务未确认停止，未重新启动。\n${String(error)}`);
       });
     }
     return;
@@ -885,10 +900,6 @@ app.on("before-quit", (event) => {
     restartRequested = false;
     app.relaunch();
   }
-  diagnostics?.record("desktop.stopping");
-  updateService?.stop();
-  proxySettings?.stop();
-  child?.kill();
 });
 for (const signal of ["SIGINT", "SIGTERM"] as const)
   process.on(signal, () => app.quit());

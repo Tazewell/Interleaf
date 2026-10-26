@@ -20,14 +20,18 @@ let migrate: ReturnType<typeof vi.fn>;
 let stop: ReturnType<typeof vi.fn>;
 let showMessageBox: ReturnType<typeof vi.fn>;
 let showOpenDialog: ReturnType<typeof vi.fn>;
+let serverChild: any;
+let exitCount = 0;
 const event = () => ({
   sender: window.webContents,
   senderFrame: window.webContents.mainFrame,
 });
 const move = () => handlers.get("reader:move-library")!(event());
 
-beforeEach(async () => {
+beforeEach(async (context) => {
+  const startupFailure=context.task.name.includes("startup failure");
   vi.resetModules();
+  exitCount = 0;
   handlers = new Map();
   ipc = Object.assign(new EventEmitter(), {
     handle: (name: string, fn: (...args: any[]) => any) =>
@@ -41,7 +45,9 @@ beforeEach(async () => {
     setAsDefaultProtocolClient: vi.fn(),
     relaunch: vi.fn(),
     quit: () => {
-      app.emit("before-quit", { preventDefault() {} });
+      let prevented=false;
+      app.emit("before-quit", { preventDefault() {prevented=true;} });
+      if (!prevented) exitCount++;
     },
   });
   showOpenDialog = vi
@@ -74,7 +80,7 @@ beforeEach(async () => {
       isDestroyed() {
         return this.destroyed;
       }
-      async loadURL() {}
+      async loadURL() {if(startupFailure) throw new Error("load failed");}
       close() {
         let prevented = false;
         this.emit("close", {
@@ -90,13 +96,17 @@ beforeEach(async () => {
     },
   }));
   vi.doMock("node:child_process", () => ({
+    execFile: vi.fn(),
     spawn: () => {
       const child = Object.assign(new EventEmitter(), {
+        exitCode: null,
+        signalCode: null,
         stdin: new PassThrough(),
         stdout: new PassThrough(),
         stderr: new PassThrough(),
         kill: vi.fn(),
       });
+      serverChild=child;
       queueMicrotask(() =>
         child.stdout.write('{"url":"http://127.0.0.1:1234"}\n'),
       );
@@ -110,7 +120,11 @@ beforeEach(async () => {
       throw Object.assign(new Error("absent"), { code: "ENOENT" });
     },
   }));
-  stop = vi.fn().mockResolvedValue(undefined);
+  stop = vi.fn().mockImplementation(async () => {serverChild.emit("close",0,null);});
+  if(startupFailure) {
+    const actual=await vi.importActual<typeof import("./library-location")>("./library-location");
+    stop.mockImplementation(actual.stopLibraryServer);
+  }
   migrate = vi.fn(
     async (
       _userData,
@@ -146,7 +160,7 @@ beforeEach(async () => {
       logs: { secrets: [], sessionId: "test", record: vi.fn() },
       record: vi.fn(),
       setSettings() {},
-      failure: vi.fn(),
+      failure: vi.fn().mockResolvedValue(undefined),
     }),
   }));
   vi.doMock("./clipboard", () => ({ writeClipboardText: vi.fn() }));
@@ -164,9 +178,8 @@ beforeEach(async () => {
     }),
   );
   await import("./index");
-  await vi.waitFor(() =>
-    expect(handlers.has("reader:check-updates")).toBe(true),
-  );
+  if(startupFailure) await vi.waitFor(()=>expect(stop).toHaveBeenCalledOnce());
+  else await vi.waitFor(() => expect(handlers.has("reader:check-updates")).toBe(true));
 });
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -202,7 +215,7 @@ it("waits for flushed reading data, then copies once despite repeated quit event
     expect.any(String),
     expect.any(Function),
   );
-  expect(app.relaunch).toHaveBeenCalledOnce();
+  await vi.waitFor(()=>expect(app.relaunch).toHaveBeenCalledOnce());
 });
 
 it("cancels migration after a save failure and allows returning to reading", async () => {
@@ -223,7 +236,7 @@ it("cancels migration after a save failure and allows returning to reading", asy
   expect(showOpenDialog).toHaveBeenCalledTimes(2);
 });
 
-it("reopens the old library after shutdown or copy fails", async () => {
+it("keeps the old library and refuses relaunch after shutdown fails", async () => {
   stop.mockRejectedValueOnce(new Error("shutdown failed"));
   const result = move();
   await vi.waitFor(() =>
@@ -241,7 +254,37 @@ it("reopens the old library after shutdown or copy fails", async () => {
   expect(handlers.get("reader:library-location")!(event())).toBe(
     "/old/library",
   );
-  expect(app.relaunch).toHaveBeenCalledOnce();
+  expect(app.relaunch).not.toHaveBeenCalled();
+});
+
+it.each(["normal", "destroyed", "renderer-crash"])("joins server close once on %s quit despite reentry", async (kind) => {
+  const actual=await vi.importActual<typeof import("./library-location")>("./library-location");
+  stop.mockImplementation(actual.stopLibraryServer);
+  if (kind==="destroyed") (window as any).destroyed=true;
+  if (kind==="renderer-crash") window.webContents.emit("render-process-gone",{}, {reason:"crashed",exitCode:1});
+  else app.quit();
+  if (kind==="normal") ipc.emit("reader:flushed",event(),null);
+  await vi.waitFor(()=>expect(stop).toHaveBeenCalledOnce());
+  app.quit();app.quit();
+  expect(stop).toHaveBeenCalledOnce();
+  expect(serverChild.stdin.writableEnded).toBe(true);
+  expect(serverChild.kill).not.toHaveBeenCalled();
+  expect(exitCount).toBe(0);
+  serverChild.exitCode=0;serverChild.emit("exit",0);
+  await Promise.resolve();
+  expect(exitCount).toBe(0);
+  serverChild.emit("close",0,null);
+  await vi.waitFor(()=>expect(exitCount).toBe(1));
+});
+
+it("joins the started child after startup failure without killing it", async () => {
+  expect(serverChild.stdin.writableEnded).toBe(true);
+  expect(serverChild.kill).not.toHaveBeenCalled();
+  expect(exitCount).toBe(0);
+  app.quit();
+  expect(stop).toHaveBeenCalledOnce();
+  serverChild.emit("close",0,null);
+  await vi.waitFor(()=>expect(exitCount).toBe(1));
 });
 
 it("does not close the reader when the native confirmation is cancelled", async () => {
