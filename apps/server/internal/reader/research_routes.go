@@ -87,7 +87,7 @@ func (s *Server) registerResearchRoutes(mux *http.ServeMux) {
 		w.Header().Set("Content-Type", "text/markdown; charset=utf-8")
 		w.Header().Set("Content-Disposition", `attachment; filename="research-report.md"`)
 		w.Header().Set("X-Content-Type-Options", "nosniff")
-		_, _ = w.Write([]byte(researchMarkdown(report)))
+		_, _ = w.Write([]byte(s.researchMarkdown(r.Context(), report)))
 	})
 	mux.HandleFunc("POST /api/research/reports/{report}/revisions", func(w http.ResponseWriter, r *http.Request) {
 		var in struct {
