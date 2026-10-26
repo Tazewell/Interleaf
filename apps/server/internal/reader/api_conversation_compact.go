@@ -114,7 +114,9 @@ func compactNativeConversation(ctx context.Context, c APIConnection, req complet
 		keep[last] = true
 		used += conversationTokens(groups[last])
 	}
-	if used > limit-4096 {
+	// Reserve a proportional checkpoint budget in small windows as well. A
+	// fixed 4096-token reserve made otherwise valid half-window inputs fail.
+	if used > limit-min(4096, max(1024, limit/3)) {
 		return nil, "", generationError(ErrorLimit, "本轮输入超过可用上下文，未截断原文")
 	}
 	imageBytes := 0
