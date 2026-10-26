@@ -48,13 +48,15 @@ func noveltyFixture(t *testing.T, mode string) (*Server, string, *atomic.Int32) 
 		case "/missing":
 			http.Error(w, "private upstream", 404)
 		case "/explicit":
-			fmt.Fprint(w, "<p>Explicit user paper uses uncertainty weighted graph propagation.</p>")
+			w.Header().Set("Content-Type", "text/html")
+			fmt.Fprint(w, researchArticleFixture("Explicit user paper uses uncertainty weighted graph propagation."))
 		case "/full":
 			if mode == "abstract" {
 				http.Error(w, "not available", 404)
 				return
 			}
-			fmt.Fprint(w, "<html><body><p>We implement uncertainty weighted graph propagation with variance weights.</p></body></html>")
+			w.Header().Set("Content-Type", "text/html")
+			fmt.Fprint(w, researchArticleFixture("We implement uncertainty weighted graph propagation with variance weights."))
 		default:
 			t.Error("unexpected HTTP path", r.URL.Path)
 		}
@@ -164,7 +166,7 @@ func TestResearchNoveltyBudgetRetainsQueries(t *testing.T) {
 	}
 }
 func TestResearchNoveltyRejectsInvalidClaims(t *testing.T) {
-	ev := ResearchEvidence{ID: "e1", CandidateID: "b", Kind: "remote-html", Availability: "valid"}
+	ev := ResearchEvidence{ID: "e1", CandidateID: "b", Kind: "remote-html", Location: []byte(`{"contentLevel":"fulltext"}`), Availability: "valid"}
 	searches := []ResearchSearch{}
 	ids := []string{}
 	for i := 0; i < 6; i++ {

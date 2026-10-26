@@ -265,9 +265,16 @@ func (s *Server) researchOnlineComposition(ctx context.Context, scope researchSc
 			return nil, nil, e
 		}
 		text := []rune(ev.Excerpt)
+		level := "unconfirmed"
+		if ev.Kind == "remote-abstract" {
+			level = "abstract"
+		}
+		if researchFulltext(ev) {
+			level = "fulltext"
+		}
 		for len(text) > 0 {
 			n := min(2000, len(text))
-			items = append(items, researchCompositionItem{PaperID: ev.CandidateID, Title: c.Title, Level: ev.Kind, Field: "verified-online-evidence", Fact: ResearchFact{Text: string(text[:n]), EvidenceIDs: []string{id}}, Coverage: ResearchReadCoverage{Ranges: []json.RawMessage{ev.Location}}})
+			items = append(items, researchCompositionItem{PaperID: ev.CandidateID, Title: c.Title, Level: level, Field: "verified-online-evidence", Fact: ResearchFact{Text: string(text[:n]), EvidenceIDs: []string{id}}, Coverage: ResearchReadCoverage{Ranges: []json.RawMessage{ev.Location}}})
 			text = text[n:]
 		}
 	}

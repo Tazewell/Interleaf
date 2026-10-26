@@ -36,6 +36,8 @@ type PublicResource struct {
 	FinalURL, ContentType string
 	Bytes                 []byte
 	Hash, FetchedAt       string
+	// One-based sanitized paragraphs proven to belong to a readable article body.
+	BodyParagraphs map[int]bool
 }
 
 // Keep operational URL parameters inside transport/registration only. Public
@@ -457,6 +459,7 @@ func (c *Client) FetchPublic(ctx context.Context, raw, kind string) (PublicResou
 	}
 	if kind == "html" {
 		got.Bytes = []byte(PublicText(string(got.Bytes)))
+		got.BodyParagraphs = publicArticleParagraphs(string(got.Bytes))
 		got.Hash = publicHash(got.Bytes)
 	}
 	return got, nil
@@ -482,7 +485,7 @@ func PublicText(raw string) string {
 					return
 				}
 			}
-			if n.Data == "p" || n.Data == "div" || n.Data == "br" || strings.HasSuffix(n.Data, ":p") {
+			if n.Data == "p" || n.Data == "div" || n.Data == "br" || isPublicHeading(n.Data) || strings.HasSuffix(n.Data, ":p") {
 				out.WriteByte('\n')
 			}
 		}
@@ -492,7 +495,7 @@ func PublicText(raw string) string {
 		for child := n.FirstChild; child != nil; child = child.NextSibling {
 			visit(child)
 		}
-		if n.Type == nethtml.ElementNode && (n.Data == "p" || n.Data == "div" || strings.HasSuffix(n.Data, ":p")) {
+		if n.Type == nethtml.ElementNode && (n.Data == "p" || n.Data == "div" || isPublicHeading(n.Data) || strings.HasSuffix(n.Data, ":p")) {
 			out.WriteByte('\n')
 		}
 	}
@@ -504,4 +507,44 @@ func PublicText(raw string) string {
 		}
 	}
 	return strings.Join(lines, "\n")
+}
+
+func isPublicHeading(tag string) bool {
+	return len(tag) == 2 && tag[0] == 'h' && tag[1] >= '1' && tag[1] <= '6'
+}
+
+// Conservative structural qualification, not a scientific quality judgment.
+// Abstracts, headings alone and access gates never prove readable full text.
+func publicArticleParagraphs(text string) map[int]bool {
+	lower := strings.ToLower(text)
+	for _, gate := range []string{"purchase access", "sign in to access", "log in to access", "subscribe to access", "buy this article", "购买全文", "登录后查看"} {
+		if strings.Contains(lower, gate) {
+			return nil
+		}
+	}
+	section := ""
+	counts := map[string]int{}
+	paragraphs := map[int]bool{}
+	for i, line := range strings.Split(text, "\n") {
+		heading := strings.Trim(strings.ToLower(line), "0123456789. :：")
+		switch heading {
+		case "methods", "method", "methodology", "materials and methods", "方法":
+			section = "method"
+			continue
+		case "results", "experiments", "experimental results", "结果", "实验":
+			section = "results"
+			continue
+		case "abstract", "references", "摘要", "参考文献":
+			section = ""
+			continue
+		}
+		if section != "" && len([]rune(line)) >= 80 {
+			counts[section] += len([]rune(line))
+			paragraphs[i+1] = true
+		}
+	}
+	if counts["method"] < 160 || counts["results"] < 160 {
+		return nil
+	}
+	return paragraphs
 }

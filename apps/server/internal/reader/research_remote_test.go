@@ -57,6 +57,62 @@ func remoteRegister(t *testing.T, s *Server, run ResearchRun, c ResearchCandidat
 	}
 }
 
+func researchArticleFixture(method string) string {
+	return "<article><h1>Study</h1><h2>Abstract</h2><p>Summary only.</p><h2>Methods</h2><p>" + method + strings.Repeat(" We describe the measured experimental conditions and reproducible implementation.", 4) + "</p><h2>Results</h2><p>" + strings.Repeat("The measured evaluation compares the proposed and baseline procedures on held-out data. ", 4) + "</p></article>"
+}
+
+func TestResearchRemoteHTMLContentQualification(t *testing.T) {
+	for _, kind := range []string{"abstract", "login", "body"} {
+		t.Run(kind, func(t *testing.T) {
+			html := "<h1>Abstract</h1><p>Study summary.</p><p>Purchase access</p>"
+			if kind == "login" {
+				html = "<article><h2>Methods</h2><p>Log in to access this article.</p><h2>Results</h2><p>Purchase access.</p></article>"
+			}
+			if kind == "body" {
+				html = researchArticleFixture("We use uncertainty weighted propagation.")
+			}
+			s, run, c, hits := remoteFixture(t, func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Content-Type", "text/html")
+				fmt.Fprint(w, html)
+			})
+			evs, err := s.readResearchRemote(t.Context(), run.ID, c.ID)
+			if err != nil || len(evs) == 0 || hits.Load() != 1 {
+				t.Fatal(evs, err)
+			}
+			body := 0
+			for _, ev := range evs {
+				if !strings.Contains(string(ev.Location), "resourceHash") || !strings.Contains(string(ev.Location), "fetchedAt") {
+					t.Fatal("missing provenance", ev)
+				}
+				if researchFulltext(ev) {
+					body++
+				}
+				if kind != "body" && researchFulltext(ev) {
+					t.Fatal("landing page is not fulltext", ev.Excerpt)
+				}
+			}
+			if kind == "body" && body < 2 {
+				t.Fatal("method/results not qualified", body)
+			}
+			row := NoveltyRow{ClaimID: "method", Status: "partial_overlap", RelatedWorkIDs: []string{c.ID}, Overlap: "same condition", Difference: "changed method"}
+			for _, ev := range evs {
+				row.EvidenceIDs = append(row.EvidenceIDs, ev.ID)
+			}
+			err = validateNoveltyReport(NoveltyReport{IdeaID: "idea", AsOf: now(), Rows: []NoveltyRow{row}}, evs, nil)
+			if (err == nil) != (kind == "body") {
+				t.Fatal("novelty gate disagrees with readable body", err)
+			}
+			cached, err := s.readResearchRemote(t.Context(), run.ID, c.ID)
+			if err != nil || hits.Load() != 1 || jsonText(evs) != jsonText(cached) {
+				t.Fatal("cache changed provenance", err)
+			}
+		})
+	}
+	if researchFulltext(ResearchEvidence{Kind: "remote-html", Availability: "valid"}) {
+		t.Fatal("legacy HTML silently upgraded")
+	}
+}
+
 func TestResearchRemoteRegisteredOwnerAndCache(t *testing.T) {
 	s, run, c, hits := remoteFixture(t, func(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprint(w, "<p>First fact.</p><script>bad()</script><p>Second fact.</p>")

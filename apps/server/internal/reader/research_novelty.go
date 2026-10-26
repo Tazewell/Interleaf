@@ -18,7 +18,13 @@ var researchProbability = regexp.MustCompile(`(?i)(absolute(ly)? original|guaran
 
 func researchOverclaim(text string) bool { return researchProbability.MatchString(text) }
 func researchFulltext(ev ResearchEvidence) bool {
-	return ev.Kind == "remote-html" || ev.Kind == "remote-page" || (ev.Kind == "local-passage" && ev.DocumentID != "")
+	if ev.Kind == "remote-html" {
+		var location struct {
+			ContentLevel string `json:"contentLevel"`
+		}
+		return json.Unmarshal(ev.Location, &location) == nil && location.ContentLevel == "fulltext"
+	}
+	return ev.Kind == "remote-page" || (ev.Kind == "local-passage" && ev.DocumentID != "")
 }
 
 func validateNoveltyReport(report NoveltyReport, evidence []ResearchEvidence, searches []ResearchSearch) error {

@@ -420,7 +420,11 @@ func (s *Server) readResearchRemote(ctx context.Context, runID, candidateID stri
 		}
 	} else if fetchErr == nil {
 		for i, p := range strings.Split(string(resource.Bytes), "\n") {
-			add("remote-html", p, map[string]any{"type": "html", "paragraph": i + 1})
+			level := "unconfirmed"
+			if resource.BodyParagraphs[i+1] {
+				level = "fulltext"
+			}
+			add("remote-html", p, map[string]any{"type": "html", "paragraph": i + 1, "contentLevel": level})
 		}
 	}
 	if ctx.Err() != nil {
