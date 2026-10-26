@@ -168,34 +168,63 @@ it("offers query retry without replaying a POST when recovery also fails", async
   expect(researchAPI.createRun).toHaveBeenCalledTimes(1);
   expect(researchAPI.controlRun).toHaveBeenCalledTimes(1);
 });
-it.each(["rejected", "disconnect", "ambiguous"])("handles %s create through real transport without automatic replay", async (kind) => {
-  vi.mocked(researchAPI.createRun).mockRestore();
-  let posts = 0;
-  vi.stubGlobal("fetch", vi.fn(async (_url, init) => {
-    posts++;
-    if (posts > 1) return new Response(JSON.stringify({ ...run, userMessageId: JSON.parse(init.body).userMessageId }));
-    if (kind === "disconnect") throw new TypeError("network disconnected");
-    return new Response(JSON.stringify({ error: "请先允许本次任务联网", ...(kind === "rejected" ? { code: "research_create_rejected" } : {}) }), { status: kind === "rejected" ? 400 : 500 });
-  }));
-  await render(view.root, <ResearchPanel topicId="topic" onOpenDocument={async () => {}} />);
-  await type(view.host, "https://example.org/paper");
-  await click(view.host, "开始研究");
-  expect(posts).toBe(1);
-  expect(researchAPI.controlRun).not.toHaveBeenCalled();
-  if (kind === "rejected") {
-    expect((view.host.querySelector('textarea[aria-label="研究问题"]') as HTMLTextAreaElement).value).toBe("https://example.org/paper");
-    expect(view.host.textContent).toContain("请先允许本次任务联网");
-    await click(view.host, "联网找论文");
-    expect(posts).toBe(2);
-    expect(researchAPI.controlRun).toHaveBeenCalledTimes(1);
-  } else {
-    await click(view.host, "重试查询");
-    await type(view.host, "新问题");
+it.each(["rejected", "disconnect", "ambiguous"])(
+  "handles %s create through real transport without automatic replay",
+  async (kind) => {
+    vi.mocked(researchAPI.createRun).mockRestore();
+    let posts = 0;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_url, init) => {
+        posts++;
+        if (posts > 1)
+          return new Response(
+            JSON.stringify({
+              ...run,
+              userMessageId: JSON.parse(init.body).userMessageId,
+            }),
+          );
+        if (kind === "disconnect") throw new TypeError("network disconnected");
+        return new Response(
+          JSON.stringify({
+            error: "请先允许本次任务联网",
+            ...(kind === "rejected"
+              ? { code: "research_create_rejected" }
+              : {}),
+          }),
+          { status: kind === "rejected" ? 400 : 500 },
+        );
+      }),
+    );
+    await render(
+      view.root,
+      <ResearchPanel topicId="topic" onOpenDocument={async () => {}} />,
+    );
+    await type(view.host, "https://example.org/paper");
     await click(view.host, "开始研究");
     expect(posts).toBe(1);
     expect(researchAPI.controlRun).not.toHaveBeenCalled();
-  }
-});
+    if (kind === "rejected") {
+      expect(
+        (
+          view.host.querySelector(
+            'textarea[aria-label="研究问题"]',
+          ) as HTMLTextAreaElement
+        ).value,
+      ).toBe("https://example.org/paper");
+      expect(view.host.textContent).toContain("请先允许本次任务联网");
+      await click(view.host, "联网找论文");
+      expect(posts).toBe(2);
+      expect(researchAPI.controlRun).toHaveBeenCalledTimes(1);
+    } else {
+      await click(view.host, "重试查询");
+      await type(view.host, "新问题");
+      await click(view.host, "开始研究");
+      expect(posts).toBe(1);
+      expect(researchAPI.controlRun).not.toHaveBeenCalled();
+    }
+  },
+);
 it("recovers a lost create response by matching the run userMessageId, not the saved message id", async () => {
   let requestId = "";
   vi.mocked(researchAPI.createRun).mockImplementation(
@@ -412,7 +441,12 @@ it("keeps reports readable without API configuration or tool support and explain
   expect(researchAPI.createRun).not.toHaveBeenCalled();
   await click(view.host, "开始研究");
   expect(researchAPI.createRun).toHaveBeenCalledTimes(1);
-  expect(researchAPI.controlRun).toHaveBeenCalledWith("run", "start", expect.any(Object), expect.any(AbortSignal));
+  expect(researchAPI.controlRun).toHaveBeenCalledWith(
+    "run",
+    "start",
+    expect.any(Object),
+    expect.any(AbortSignal),
+  );
 });
 it("presents native evidence ranges as pages and chapters instead of raw protocol JSON", async () => {
   vi.mocked(researchAPI.listReports).mockResolvedValue([

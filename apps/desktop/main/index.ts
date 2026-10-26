@@ -131,7 +131,9 @@ async function startServer() {
     },
   );
   // Observe close from spawn time: exitCode may be set before stdio is closed.
-  serverClosed = new Promise((resolve) => child!.once("close", () => resolve()));
+  serverClosed = new Promise((resolve) =>
+    child!.once("close", () => resolve()),
+  );
   const stderrLines = createInterface({ input: child.stderr! });
   stderrLines.on("line", (line) =>
     diagnostics?.logs.record("server-stderr", {
@@ -890,7 +892,10 @@ app.on("before-quit", (event) => {
       })().catch((error) => {
         restartRequested = false;
         diagnostics?.record("desktop.stop_failed", error);
-        dialog.showErrorBox("Reader 尚未退出", `本地服务未确认停止，未重新启动。\n${String(error)}`);
+        dialog.showErrorBox(
+          "Reader 尚未退出",
+          `本地服务未确认停止，未重新启动。\n${String(error)}`,
+        );
       });
     }
     return;

@@ -29,7 +29,7 @@ const event = () => ({
 const move = () => handlers.get("reader:move-library")!(event());
 
 beforeEach(async (context) => {
-  const startupFailure=context.task.name.includes("startup failure");
+  const startupFailure = context.task.name.includes("startup failure");
   vi.resetModules();
   exitCount = 0;
   handlers = new Map();
@@ -45,8 +45,12 @@ beforeEach(async (context) => {
     setAsDefaultProtocolClient: vi.fn(),
     relaunch: vi.fn(),
     quit: () => {
-      let prevented=false;
-      app.emit("before-quit", { preventDefault() {prevented=true;} });
+      let prevented = false;
+      app.emit("before-quit", {
+        preventDefault() {
+          prevented = true;
+        },
+      });
       if (!prevented) exitCount++;
     },
   });
@@ -80,7 +84,9 @@ beforeEach(async (context) => {
       isDestroyed() {
         return this.destroyed;
       }
-      async loadURL() {if(startupFailure) throw new Error("load failed");}
+      async loadURL() {
+        if (startupFailure) throw new Error("load failed");
+      }
       close() {
         let prevented = false;
         this.emit("close", {
@@ -106,7 +112,7 @@ beforeEach(async (context) => {
         stderr: new PassThrough(),
         kill: vi.fn(),
       });
-      serverChild=child;
+      serverChild = child;
       queueMicrotask(() =>
         child.stdout.write('{"url":"http://127.0.0.1:1234"}\n'),
       );
@@ -120,9 +126,14 @@ beforeEach(async (context) => {
       throw Object.assign(new Error("absent"), { code: "ENOENT" });
     },
   }));
-  stop = vi.fn().mockImplementation(async () => {serverChild.emit("close",0,null);});
-  if(startupFailure) {
-    const actual=await vi.importActual<typeof import("./library-location")>("./library-location");
+  stop = vi.fn().mockImplementation(async () => {
+    serverChild.emit("close", 0, null);
+  });
+  if (startupFailure) {
+    const actual =
+      await vi.importActual<typeof import("./library-location")>(
+        "./library-location",
+      );
     stop.mockImplementation(actual.stopLibraryServer);
   }
   migrate = vi.fn(
@@ -178,8 +189,12 @@ beforeEach(async (context) => {
     }),
   );
   await import("./index");
-  if(startupFailure) await vi.waitFor(()=>expect(stop).toHaveBeenCalledOnce());
-  else await vi.waitFor(() => expect(handlers.has("reader:check-updates")).toBe(true));
+  if (startupFailure)
+    await vi.waitFor(() => expect(stop).toHaveBeenCalledOnce());
+  else
+    await vi.waitFor(() =>
+      expect(handlers.has("reader:check-updates")).toBe(true),
+    );
 });
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -215,7 +230,7 @@ it("waits for flushed reading data, then copies once despite repeated quit event
     expect.any(String),
     expect.any(Function),
   );
-  await vi.waitFor(()=>expect(app.relaunch).toHaveBeenCalledOnce());
+  await vi.waitFor(() => expect(app.relaunch).toHaveBeenCalledOnce());
 });
 
 it("cancels migration after a save failure and allows returning to reading", async () => {
@@ -257,25 +272,38 @@ it("keeps the old library and refuses relaunch after shutdown fails", async () =
   expect(app.relaunch).not.toHaveBeenCalled();
 });
 
-it.each(["normal", "destroyed", "renderer-crash"])("joins server close once on %s quit despite reentry", async (kind) => {
-  const actual=await vi.importActual<typeof import("./library-location")>("./library-location");
-  stop.mockImplementation(actual.stopLibraryServer);
-  if (kind==="destroyed") (window as any).destroyed=true;
-  if (kind==="renderer-crash") window.webContents.emit("render-process-gone",{}, {reason:"crashed",exitCode:1});
-  else app.quit();
-  if (kind==="normal") ipc.emit("reader:flushed",event(),null);
-  await vi.waitFor(()=>expect(stop).toHaveBeenCalledOnce());
-  app.quit();app.quit();
-  expect(stop).toHaveBeenCalledOnce();
-  expect(serverChild.stdin.writableEnded).toBe(true);
-  expect(serverChild.kill).not.toHaveBeenCalled();
-  expect(exitCount).toBe(0);
-  serverChild.exitCode=0;serverChild.emit("exit",0);
-  await Promise.resolve();
-  expect(exitCount).toBe(0);
-  serverChild.emit("close",0,null);
-  await vi.waitFor(()=>expect(exitCount).toBe(1));
-});
+it.each(["normal", "destroyed", "renderer-crash"])(
+  "joins server close once on %s quit despite reentry",
+  async (kind) => {
+    const actual =
+      await vi.importActual<typeof import("./library-location")>(
+        "./library-location",
+      );
+    stop.mockImplementation(actual.stopLibraryServer);
+    if (kind === "destroyed") (window as any).destroyed = true;
+    if (kind === "renderer-crash")
+      window.webContents.emit(
+        "render-process-gone",
+        {},
+        { reason: "crashed", exitCode: 1 },
+      );
+    else app.quit();
+    if (kind === "normal") ipc.emit("reader:flushed", event(), null);
+    await vi.waitFor(() => expect(stop).toHaveBeenCalledOnce());
+    app.quit();
+    app.quit();
+    expect(stop).toHaveBeenCalledOnce();
+    expect(serverChild.stdin.writableEnded).toBe(true);
+    expect(serverChild.kill).not.toHaveBeenCalled();
+    expect(exitCount).toBe(0);
+    serverChild.exitCode = 0;
+    serverChild.emit("exit", 0);
+    await Promise.resolve();
+    expect(exitCount).toBe(0);
+    serverChild.emit("close", 0, null);
+    await vi.waitFor(() => expect(exitCount).toBe(1));
+  },
+);
 
 it("joins the started child after startup failure without killing it", async () => {
   expect(serverChild.stdin.writableEnded).toBe(true);
@@ -283,8 +311,8 @@ it("joins the started child after startup failure without killing it", async () 
   expect(exitCount).toBe(0);
   app.quit();
   expect(stop).toHaveBeenCalledOnce();
-  serverChild.emit("close",0,null);
-  await vi.waitFor(()=>expect(exitCount).toBe(1));
+  serverChild.emit("close", 0, null);
+  await vi.waitFor(() => expect(exitCount).toBe(1));
 });
 
 it("does not close the reader when the native confirmation is cancelled", async () => {

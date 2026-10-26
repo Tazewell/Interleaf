@@ -399,15 +399,20 @@ class ResearchStore {
     } catch (error) {
       if (!this.valid()) return;
       if (created) await this.recover(sid, created.id);
-      else if (error instanceof RequestError && error.status === 400 && error.code === "research_create_rejected") {
+      else if (
+        error instanceof RequestError &&
+        error.status === 400 &&
+        error.code === "research_create_rejected"
+      ) {
         this.sessionPatch(sid, {
           uncertain: undefined,
           rejectedDraft: { question: question.trim() },
           error: error.message,
-          messages: (this.sessions.get(sid)?.messages ?? []).filter((message) => message.id !== userMessageId),
+          messages: (this.sessions.get(sid)?.messages ?? []).filter(
+            (message) => message.id !== userMessageId,
+          ),
         });
-      }
-      else {
+      } else {
         // A lost create response may still have saved the user message and run.
         // Only read history; never repeat create/start to discover its identity.
         try {
