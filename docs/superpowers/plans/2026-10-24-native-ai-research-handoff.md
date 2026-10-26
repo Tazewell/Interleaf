@@ -1,6 +1,21 @@
 # 内置 AI 研究：实施进度与剩余待办
 
-本文件最初用于第 8 项后的换会话交接。2026-10-24 用户已在新会话授权继续完成剩余工作。**Tasks 1～10 已完成阶段实施与独立审查，接续 Task 11；整体验收和全分支审查尚未完成。**
+本文件最初用于第 8 项后的换会话交接。**2026-10-26 最新状态：Tasks 1～10 已完成阶段实施与独立审查；Task 11 的完整检查、实际产物和隔离预览已执行，但最终限定复审仍有 I1、I3、I7 三项 Important，整体验收未通过。** 后文 Task 8～10 的“接续位置”和 Task 11 待办是阶段历史，当前状态以本节及[最终复审报告](2026-10-26-native-ai-research-final-review.md)为准。
+
+## 当前阻断与交付状态（2026-10-26）
+
+- 当前产品提交：`f0ae338b895196323a6d44259e22089a9d80cf22`，分支 `codex/native-ai-research`；本次收尾只新增审查交接文档。
+- 原完整分支审查覆盖 `d64f41a..d8071c3`，提出 7 个 Important；统一修复范围 `d8071c3..f0ae338` 共 11 个提交、24 个路径。唯一一次限定复审关闭 I2/I4/I5/I6，I1/I3/I7 保持阻断；没有再发起第二修复波次。
+- I1：常见原创概率句式仍可绕过成功校验，例如“原创性概率95%”“The probability of originality is 95%”。必须在保留普通科学百分比的同时修复。
+- I3：结构化摘要中的 Methods/Results 可被扁平文本分类器当成全文。必须在失去 HTML 结构前确认正文身份，否则保持未确认，不能满足查新全文门槛。此残余由源码推导，尚未新增实际 HTTP 反例。
+- I7：停服超时后实际 close、或服务已非零退出，失败 Promise 被永久缓存；再次退出仍被拦截。必须区分清理结果与进程已关闭状态，保留取消/join 和失败不迁移、不重启约束。
+- `pnpm typecheck`、`pnpm test`、`pnpm build` 在最终产品源码上均 exit 0；Go 全套通过，Vitest 170 文件通过、3 文件跳过，1225 测试通过、5 跳过。根检查和原验收没有覆盖上述三个残余，不构成豁免。
+- 新原生验收 `E:/WSL/reader-native-ai-final-fix-acceptance-v2`：20 项通过、40 篇覆盖、69 次受控模型调用、外部 Agent trap 0、非空历史保全。最终研究 PDF 6 页全部渲染、查看、重开；既有双语 4 个 PDF 共 15 页检查保留。受控工程验收不证明真实模型的科学质量。
+- 最终检查、source/mirror/HEAD 字节绑定及退出记录：`E:/WSL/reader-native-ai-logs/final-review-fix/v2`。完整执行台账、独立报告和反例保留于本工作树 `.superpowers/sdd/2026-10-22-native-ai-research/`；因为未通过，不删除该审计目录。
+- 独立样本预览：`E:/Administrator/Desktop/Reader 内置 AI 研究预览.lnk`；人工步骤见 `docs/native-ai-research-validation.md`。样本连接的 endpoint/Key 已清空，用户自行填写。当前为 Linux WSLg 开发预览，未验收 Windows 安装包/原生对话框。
+- 主检出 `D:/work/myreader/reader` 保持 `main` / `d64f41a` 干净；没有 push、merge、发布、改版本或构建安装器，也没有访问真实书库或外部凭据。
+
+后续需用户明确授权第二轮修复，再只处理这三个已确认缺口及必要验证，使用同一工作树，保留所有原检查和失败记录。不得按旧“继续 Task 11”文字重新执行已经完成的 Tasks 1～10，也不得把 Task 11 或整体目标标为完成。
 
 ## 接续位置
 
@@ -13,7 +28,7 @@
 - 完成证据：同目录 `completion-evidence.md`。该目录被 Git 忽略，当前机器保留；切换机器时不能假设它存在。
 - Tasks 8～10 的提交、审查结论及当前接续位置：见本文件末尾。
 
-开始新对话时先核对 `git status --short --branch`、`git log`、`AGENTS.md` 和可能存在的 `AGENTS.local.md`；台账和实际源码优先于旧摘要。Tasks 1～10 已完成阶段实施与审查，不要重派；从第 11 项接续。不要把本文件当成最终整体验收已完成的证据。
+开始新对话时先核对 `git status --short --branch`、`git log`、`AGENTS.md` 和可能存在的 `AGENTS.local.md`；台账和实际源码优先于旧摘要。Tasks 1～10 已完成阶段实施与审查，不要重派；第 11 项当前只剩最终复审的三个阻断及修复后的验证。不要把本文件当成最终整体验收已完成的证据。
 
 ## 全程约束
 
@@ -131,7 +146,7 @@
 
 ## 可复制给新对话的接续指令
 
-请继续 Reader 的“内置 API AI + 文件夹研究 + 论文搜索/查新”，按项子代理实施与独立审查。先读 `C:/Users/Administrator/.codex/worktrees/native-ai-research/reader/docs/superpowers/plans/2026-10-24-native-ai-research-handoff.md`，核对该 worktree 的分支、Git 状态与台账。Tasks 1～10 已完成阶段实施与审查，从 Task 11 接续，完成整体验收及全分支独立审查。保留 `D:/work/myreader/reader`，不推送/合并/发布，不读外部凭据，不动真实书库；WSL 使用现有专用镜像。不要重复已经通过且源码未变的套件，不把阶段通过当成全部完成。
+先读 `C:/Users/Administrator/.codex/worktrees/native-ai-research/reader/docs/superpowers/plans/2026-10-24-native-ai-research-handoff.md` 的最新状态及同目录 `2026-10-26-native-ai-research-final-review.md`，核对工作树、分支、Git 状态与台账。Tasks 1～10 不重派；Task 11 的根检查、产物、联网烟测、预览、全分支审查和唯一限定复审均已执行，但 I1/I3/I7 仍为 Important。只有用户明确授权第二轮修复后，才在现有工作树处理这三个缺口及必要验证。保留 `D:/work/myreader/reader`，不推送/合并/发布、不读外部凭据、不动真实书库；WSL 使用现有专用镜像。不因旧交接文字重跑未改变的绿色套件，不把工程检查通过当成整体完成。
 
 ## Task 8 验收记录（2026-10-24）
 
