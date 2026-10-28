@@ -44,21 +44,9 @@ export const guideTopics: GuideTopic[] = [
     action: { kind: "settings", label: "打开设置" },
     steps: [
       {
-        id: "detect",
-        title: "自动检测本机 Agent",
-        body: "打开「设置 → Agent」，Reader 会自动检测已安装的 Codex、Claude Code 和 Kimi CLI，并测试文本推理与图片理解。检测通过后，在「Agent SDK」中选择要使用的一个。",
-        scene: "detect",
-      },
-      {
-        id: "login",
-        title: "在终端登录 CLI",
-        body: "Reader 直接调用 CLI，使用它当前的登录账户与计费方式，不读取账号凭据。检测未通过时，先在终端完成登录：Codex 运行 codex login，Claude Code 运行 claude auth login，Kimi 启动后按提示登录。登录后回到设置点击重新检测。",
-        scene: "login",
-      },
-      {
-        id: "api",
-        title: "或者填入 API Key",
-        body: "没有安装 CLI 时，点击 API 卡片，填写 OpenAI 兼容接口的地址和 Key 并保存。Reader 会拉取模型列表并逐个检测，Key 只保存在本机。",
+        id: "connect",
+        title: "连接模型 API",
+        body: "打开「设置 → Agent」，选择 OpenAI 兼容或 Anthropic 协议，填写接口地址与 Key 并保存。Key 只保存在本机；保存后 Reader 会拉取模型列表，并检测文本推理与图片理解能力。",
         scene: "api",
       },
     ],
@@ -73,7 +61,7 @@ export const guideTopics: GuideTopic[] = [
       {
         id: "task-models",
         title: "问答和翻译分开选模型",
-        body: "问答需要理解和推理，选能力强的模型。翻译调用量大，选最低档的快速模型即可，例如 Codex 的 Luna、Kimi 或 API 中的 Flash；Effort 也可以调到 Low。",
+        body: "问答需要理解和推理，选能力强的模型。翻译调用量大，选速度更快的模型即可。Effort 越高越慢，日常问答用中档即可。",
         scene: "models",
       },
     ],
@@ -113,8 +101,8 @@ export const guideTopics: GuideTopic[] = [
       },
       {
         id: "assistant",
-        title: "侧栏 Agent",
-        body: "选中文字后，在浮动工具栏点「问 AI」，回答会出现在右侧 Agent 栏。也可以把多段文字引用到对话，或直接在底部输入框提问。",
+        title: "侧栏对话",
+        body: "选中文字后，在浮动工具栏点「问 AI」，回答会出现在右侧「对话」栏。也可以把多段文字引用到对话，或直接在底部输入框提问。",
         scene: "assistant",
       },
     ],
@@ -127,7 +115,7 @@ export const guideTopics: GuideTopic[] = [
       {
         id: "research",
         title: "AI 自主检索原文",
-        body: "使用 Codex 或支持工具调用的 API 模型时，AI 会根据问题自己查看目录、检索原文并补读相关章节，侧栏会显示它正在检索的关键词和阅读位置。点击回答下方的「引用原文」，可以跳回原文并高亮对应段落。",
+        body: "配置了支持工具调用的 API 模型时，AI 会根据问题自己查看目录、检索原文并补读相关章节，侧栏会显示它正在检索的关键词和阅读位置。点击回答下方的「引用原文」，可以跳回原文并高亮对应段落。",
         scene: "research",
       },
       {
@@ -139,7 +127,7 @@ export const guideTopics: GuideTopic[] = [
       {
         id: "overview",
         title: "生成文档概要",
-        body: "点击阅读工具栏的书本图标，或在书库中右键选择「文档概要」，即可生成概要、主要内容、限制和原文术语。长文档会分段汇总，结果会保存下来，AI 回答时可以复用。也可以在「设置 → 阅读」中开启导入后自动生成。",
+        body: "在右侧栏点书本图标，或在书库中右键选择「文档概要」，即可生成概要、主要内容、限制和原文术语。长文档会分段汇总，结果会保存下来，AI 回答时可以复用。也可以在「设置 → 阅读」中开启导入后自动生成。",
         scene: "overview",
       },
     ],

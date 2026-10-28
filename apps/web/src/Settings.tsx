@@ -296,8 +296,7 @@ export function Settings({
                   }}
                 />
                 <span className="mt-1 block text-xs text-muted-foreground">
-                  优先读取模型信息或 Codex 配置；留空为自动，未知时采用
-                  64K。填写后只限制上限。
+                  优先读取模型信息；留空为自动，无法确定时采用 64K。填写后只限制上限。
                 </span>
               </label>
             </section>

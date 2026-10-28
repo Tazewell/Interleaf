@@ -86,8 +86,6 @@ describe("guide content", () => {
       "reading",
     ]);
     expect(pages.map((p) => p.step.scene)).toEqual([
-      "detect",
-      "login",
       "api",
       "models",
       "link",
