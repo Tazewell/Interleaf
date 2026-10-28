@@ -62,7 +62,7 @@ func researchArticleFixture(method string) string {
 }
 
 func TestResearchRemoteHTMLContentQualification(t *testing.T) {
-	for _, kind := range []string{"abstract", "login", "body"} {
+	for _, kind := range []string{"abstract", "login", "body", "structured-abstract", "heading-abstract", "mixed", "nested-body"} {
 		t.Run(kind, func(t *testing.T) {
 			html := "<h1>Abstract</h1><p>Study summary.</p><p>Purchase access</p>"
 			if kind == "login" {
@@ -71,6 +71,20 @@ func TestResearchRemoteHTMLContentQualification(t *testing.T) {
 			if kind == "body" {
 				html = researchArticleFixture("We use uncertainty weighted propagation.")
 			}
+			abstract := `<section class="abstract"><h2>Abstract</h2><h3>Methods</h3><p>` + strings.Repeat("ABSTRACT-ONLY summary method and sampled participants. ", 6) + `</p><h3>Results</h3><p>` + strings.Repeat("ABSTRACT-ONLY summary results and preliminary conclusions. ", 6) + `</p></section>`
+			if kind == "structured-abstract" {
+				html = abstract
+			}
+			if kind == "heading-abstract" {
+				html = strings.ReplaceAll(abstract, ` class="abstract"`, "")
+			}
+			if kind == "mixed" {
+				html = abstract + researchArticleFixture("Actual body method.")
+			}
+			if kind == "nested-body" {
+				html = `<main><div class="journal-article"><section><h2><span>Materials &amp; Methods</span></h2><div><p>` + strings.Repeat("Body method &amp; reproducible measurements. ", 8) + `</p></div></section><section><h2>Results</h2><div><p>` + strings.Repeat("Body results &amp; measured comparisons on held-out data. ", 8) + `</p></div></section></div></main>`
+			}
+			wantBody := kind == "body" || kind == "mixed" || kind == "nested-body"
 			s, run, c, hits := remoteFixture(t, func(w http.ResponseWriter, r *http.Request) {
 				w.Header().Set("Content-Type", "text/html")
 				fmt.Fprint(w, html)
@@ -87,11 +101,11 @@ func TestResearchRemoteHTMLContentQualification(t *testing.T) {
 				if researchFulltext(ev) {
 					body++
 				}
-				if kind != "body" && researchFulltext(ev) {
+				if (!wantBody || strings.Contains(ev.Excerpt, "ABSTRACT-ONLY")) && researchFulltext(ev) {
 					t.Fatal("landing page is not fulltext", ev.Excerpt)
 				}
 			}
-			if kind == "body" && body < 2 {
+			if wantBody && body < 2 {
 				t.Fatal("method/results not qualified", body)
 			}
 			row := NoveltyRow{ClaimID: "method", Status: "partial_overlap", RelatedWorkIDs: []string{c.ID}, Overlap: "same condition", Difference: "changed method"}
@@ -99,7 +113,7 @@ func TestResearchRemoteHTMLContentQualification(t *testing.T) {
 				row.EvidenceIDs = append(row.EvidenceIDs, ev.ID)
 			}
 			err = validateNoveltyReport(NoveltyReport{IdeaID: "idea", AsOf: now(), Rows: []NoveltyRow{row}}, evs, nil)
-			if (err == nil) != (kind == "body") {
+			if (err == nil) != wantBody {
 				t.Fatal("novelty gate disagrees with readable body", err)
 			}
 			cached, err := s.readResearchRemote(t.Context(), run.ID, c.ID)
@@ -110,6 +124,9 @@ func TestResearchRemoteHTMLContentQualification(t *testing.T) {
 	}
 	if researchFulltext(ResearchEvidence{Kind: "remote-html", Availability: "valid"}) {
 		t.Fatal("legacy HTML silently upgraded")
+	}
+	if researchFulltext(ResearchEvidence{Kind: "remote-html", Availability: "valid", Location: json.RawMessage(`{"contentLevel":"fulltext"}`)}) {
+		t.Fatal("old flattened-text qualification still clears novelty")
 	}
 }
 
@@ -147,6 +164,66 @@ func TestResearchRemoteRegisteredOwnerAndCache(t *testing.T) {
 	s.Store.DB.Exec(`UPDATE research_candidates SET body=json_set(body,'$.abstract','changed') WHERE id=?`, c.ID)
 	if _, err = s.resolveResearchSource(t.Context(), evidence[0].ID); err == nil {
 		t.Fatal("candidate revision not checked")
+	}
+}
+
+func TestResearchRemoteLegacyHTMLQualificationIsUnconfirmed(t *testing.T) {
+	s, run, candidate, hits := remoteFixture(t, func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprint(w, researchArticleFixture("Readable body."))
+	})
+	if _, err := s.readResearchRemote(t.Context(), run.ID, candidate.ID); err != nil {
+		t.Fatal(err)
+	}
+	scope, err := readResearchRunScope(t.Context(), s.Store.DB, run.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, version, err := readResearchRegisteredCandidate(t.Context(), s.Store.DB, scope, candidate.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cache, err := readResearchRemoteCache(t.Context(), s.Store.DB, scope, candidate, version)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Recreate a valid old cache, including its original flattened-text fulltext
+	// label and consistent hashes. It lacks the new structural proof version.
+	tx, err := s.Store.DB.BeginTx(t.Context(), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tx.Rollback()
+	for i := range cache.Evidence {
+		var location map[string]any
+		if err = json.Unmarshal(cache.Evidence[i].Location, &location); err != nil {
+			t.Fatal(err)
+		}
+		delete(location, "qualification")
+		cache.Evidence[i].Location = json.RawMessage(jsonText(location))
+		if _, err = tx.ExecContext(t.Context(), `UPDATE research_evidence SET body=? WHERE id=?`, jsonText(cache.Evidence[i]), cache.Evidence[i].ID); err != nil {
+			t.Fatal(err)
+		}
+	}
+	payload := json.RawMessage(jsonText(cache))
+	if err = writeResearchUnit(t.Context(), tx, ResearchUnit{RunID: run.ID, UnitKey: remoteCacheKey(candidate.ID, version), Kind: "remote", Status: "complete", ContentHash: sourceKey(string(payload)), Result: payload}); err != nil {
+		t.Fatal(err)
+	}
+	if err = tx.Commit(); err != nil {
+		t.Fatal(err)
+	}
+	evidence, err := s.readResearchRemote(t.Context(), run.ID, candidate.ID)
+	if err != nil || hits.Load() != 1 || jsonText(evidence) != jsonText(cache.Evidence) {
+		t.Fatal("legacy cache was refetched or rewritten", err)
+	}
+	row := NoveltyRow{ClaimID: "method", Status: "partial_overlap", RelatedWorkIDs: []string{candidate.ID}, Overlap: "same method", Difference: "changed method"}
+	for _, ev := range evidence {
+		if researchFulltext(ev) {
+			t.Fatal("legacy qualification accepted", ev)
+		}
+		row.EvidenceIDs = append(row.EvidenceIDs, ev.ID)
+	}
+	if validateNoveltyReport(NoveltyReport{IdeaID: "idea", AsOf: now(), Rows: []NoveltyRow{row}}, evidence, nil) == nil {
+		t.Fatal("legacy cache cleared fulltext novelty gate")
 	}
 }
 

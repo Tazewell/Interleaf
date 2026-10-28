@@ -28,9 +28,10 @@ func researchOverclaim(text string) bool { return researchProbability.MatchStrin
 func researchFulltext(ev ResearchEvidence) bool {
 	if ev.Kind == "remote-html" {
 		var location struct {
-			ContentLevel string `json:"contentLevel"`
+			ContentLevel  string `json:"contentLevel"`
+			Qualification string `json:"qualification"`
 		}
-		return json.Unmarshal(ev.Location, &location) == nil && location.ContentLevel == "fulltext"
+		return json.Unmarshal(ev.Location, &location) == nil && location.ContentLevel == "fulltext" && location.Qualification == "dom-body-v1"
 	}
 	return ev.Kind == "remote-page" || (ev.Kind == "local-passage" && ev.DocumentID != "")
 }

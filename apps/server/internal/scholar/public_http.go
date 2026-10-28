@@ -458,8 +458,9 @@ func (c *Client) FetchPublic(ctx context.Context, raw, kind string) (PublicResou
 		kind = "html"
 	}
 	if kind == "html" {
-		got.Bytes = []byte(PublicText(string(got.Bytes)))
-		got.BodyParagraphs = publicArticleParagraphs(string(got.Bytes))
+		text, lines := publicText(string(got.Bytes))
+		got.Bytes = []byte(text)
+		got.BodyParagraphs = publicArticleParagraphs(lines)
 		got.Hash = publicHash(got.Bytes)
 	}
 	return got, nil
@@ -468,13 +469,39 @@ func (c *Client) FetchPublic(ctx context.Context, raw, kind string) (PublicResou
 // PublicText deliberately returns plain text, never reusable active markup.
 // Drop entire active/hidden subtrees, including script text and fallback frames.
 func PublicText(raw string) string {
+	text, _ := publicText(raw)
+	return text
+}
+
+type publicTextLine struct {
+	text     string
+	abstract bool
+	heading  int
+}
+
+// Keep qualification metadata alongside the exact sanitized paragraph indices.
+// Abstract containers and subordinate headings remain abstracts after flattening.
+func publicText(raw string) (string, []publicTextLine) {
 	root, err := nethtml.Parse(strings.NewReader(raw))
 	if err != nil {
-		return ""
+		return "", nil
 	}
+	lines := []publicTextLine{}
 	var out strings.Builder
-	var visit func(*nethtml.Node)
-	visit = func(n *nethtml.Node) {
+	lineAbstract, lineHeading, abstractLevel := false, 0, 0
+	flush := func() {
+		for _, line := range strings.Split(out.String(), "\n") {
+			if text := clean(line); text != "" {
+				lines = append(lines, publicTextLine{text, lineAbstract, lineHeading})
+			}
+		}
+		out.Reset()
+		lineAbstract, lineHeading = false, 0
+	}
+	var visit func(*nethtml.Node, bool, int)
+	visit = func(n *nethtml.Node, abstract bool, heading int) {
+		boundary := false
+		previousLevel := abstractLevel
 		if n.Type == nethtml.ElementNode {
 			switch strings.ToLower(n.Data) {
 			case "script", "style", "iframe", "object", "embed", "svg", "math", "form", "input", "button", "template", "noscript", "head":
@@ -484,29 +511,62 @@ func PublicText(raw string) string {
 				if a.Key == "hidden" || a.Key == "aria-hidden" && a.Val == "true" {
 					return
 				}
+				if (a.Key == "class" || a.Key == "id" || a.Key == "role") && strings.Contains(strings.ToLower(a.Val), "abstract") {
+					abstract = true
+				}
 			}
-			if n.Data == "p" || n.Data == "div" || n.Data == "br" || isPublicHeading(n.Data) || strings.HasSuffix(n.Data, ":p") {
-				out.WriteByte('\n')
+			boundary = n.Data == "p" || n.Data == "div" || n.Data == "br" || n.Data == "section" || n.Data == "article" || isPublicHeading(n.Data) || strings.HasSuffix(n.Data, ":p")
+			if boundary {
+				flush()
+			}
+			if isPublicHeading(n.Data) {
+				heading = int(n.Data[1] - '0')
+				if abstractLevel != 0 && heading <= abstractLevel {
+					abstractLevel = 0
+				}
+				var title strings.Builder
+				var headingText func(*nethtml.Node)
+				headingText = func(c *nethtml.Node) {
+					if c.Type == nethtml.TextNode {
+						title.WriteString(c.Data)
+					}
+					for child := c.FirstChild; child != nil; child = child.NextSibling {
+						headingText(child)
+					}
+				}
+				headingText(n)
+				label := strings.Trim(strings.ToLower(clean(title.String())), "0123456789. :：")
+				if label == "abstract" || label == "摘要" {
+					abstractLevel = heading
+				}
 			}
 		}
 		if n.Type == nethtml.TextNode {
 			out.WriteString(n.Data)
+			if strings.TrimSpace(n.Data) != "" {
+				lineAbstract = lineAbstract || abstract || abstractLevel != 0
+				if heading != 0 {
+					lineHeading = heading
+				}
+			}
 		}
 		for child := n.FirstChild; child != nil; child = child.NextSibling {
-			visit(child)
+			visit(child, abstract, heading)
 		}
-		if n.Type == nethtml.ElementNode && (n.Data == "p" || n.Data == "div" || isPublicHeading(n.Data) || strings.HasSuffix(n.Data, ":p")) {
-			out.WriteByte('\n')
+		if boundary {
+			flush()
 		}
-	}
-	visit(root)
-	lines := []string{}
-	for _, line := range strings.Split(out.String(), "\n") {
-		if s := clean(line); s != "" {
-			lines = append(lines, s)
+		if n.Type == nethtml.ElementNode && (n.Data == "section" || n.Data == "article") {
+			abstractLevel = previousLevel
 		}
 	}
-	return strings.Join(lines, "\n")
+	visit(root, false, 0)
+	flush()
+	text := make([]string, len(lines))
+	for i, line := range lines {
+		text[i] = line.text
+	}
+	return strings.Join(text, "\n"), lines
 }
 
 func isPublicHeading(tag string) bool {
@@ -515,8 +575,13 @@ func isPublicHeading(tag string) bool {
 
 // Conservative structural qualification, not a scientific quality judgment.
 // Abstracts, headings alone and access gates never prove readable full text.
-func publicArticleParagraphs(text string) map[int]bool {
-	lower := strings.ToLower(text)
+func publicArticleParagraphs(lines []publicTextLine) map[int]bool {
+	var text strings.Builder
+	for _, line := range lines {
+		text.WriteString(line.text)
+		text.WriteByte('\n')
+	}
+	lower := strings.ToLower(text.String())
 	for _, gate := range []string{"purchase access", "sign in to access", "log in to access", "subscribe to access", "buy this article", "购买全文", "登录后查看"} {
 		if strings.Contains(lower, gate) {
 			return nil
@@ -525,10 +590,17 @@ func publicArticleParagraphs(text string) map[int]bool {
 	section := ""
 	counts := map[string]int{}
 	paragraphs := map[int]bool{}
-	for i, line := range strings.Split(text, "\n") {
-		heading := strings.Trim(strings.ToLower(line), "0123456789. :：")
+	for i, line := range lines {
+		if line.abstract {
+			section = ""
+			continue
+		}
+		heading := ""
+		if line.heading != 0 {
+			heading = strings.Trim(strings.ToLower(line.text), "0123456789. :：")
+		}
 		switch heading {
-		case "methods", "method", "methodology", "materials and methods", "方法":
+		case "methods", "method", "methodology", "materials and methods", "materials & methods", "方法":
 			section = "method"
 			continue
 		case "results", "experiments", "experimental results", "结果", "实验":
@@ -538,8 +610,8 @@ func publicArticleParagraphs(text string) map[int]bool {
 			section = ""
 			continue
 		}
-		if section != "" && len([]rune(line)) >= 80 {
-			counts[section] += len([]rune(line))
+		if section != "" && len([]rune(line.text)) >= 80 {
+			counts[section] += len([]rune(line.text))
 			paragraphs[i+1] = true
 		}
 	}

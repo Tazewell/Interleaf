@@ -424,7 +424,7 @@ func (s *Server) readResearchRemote(ctx context.Context, runID, candidateID stri
 			if resource.BodyParagraphs[i+1] {
 				level = "fulltext"
 			}
-			add("remote-html", p, map[string]any{"type": "html", "paragraph": i + 1, "contentLevel": level})
+			add("remote-html", p, map[string]any{"type": "html", "paragraph": i + 1, "contentLevel": level, "qualification": "dom-body-v1"})
 		}
 	}
 	if ctx.Err() != nil {
