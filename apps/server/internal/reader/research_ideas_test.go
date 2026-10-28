@@ -179,14 +179,62 @@ func TestResearchIdeasScientificPercentages(t *testing.T) {
 }
 
 func TestResearchOriginalityGuard(t *testing.T) {
-	for _, text := range []string{"Novelty probability 98%", "95% probability of originality", "原创概率95%", "百分之九十五的原创概率", "绝对原创", "guaranteed novel"} {
+	for _, text := range []string{"Novelty probability 98%", "95% probability of originality", "原创概率95%", "百分之九十五的原创概率", "绝对原创", "guaranteed novel", "原创性概率95%", "该方法有95%的概率是原创的", "The probability of originality is 95%", "This has a 95 percent chance of being original", "创新性概率为百分之九十五", "原创性是95％"} {
 		if !researchOverclaim(text) {
 			t.Errorf("accepted originality overclaim: %s", text)
 		}
 	}
-	for _, text := range []string{"accuracy 95%", "95% confidence interval", "训练集占百分之八十", "Improves a novel method by 5%"} {
+	for _, text := range []string{"accuracy 95%", "95% confidence interval", "训练集占百分之八十", "Improves a novel method by 5%", "The novel method estimates a 95% probability of rain", "原创方法的准确率95%，训练集占80%", "The probability of failure is 5%; originality needs checking"} {
 		if researchOverclaim(text) {
 			t.Errorf("rejected scientific metric: %s", text)
+		}
+	}
+}
+
+// The model must not publish quantified originality in otherwise valid idea or
+// novelty text, nor replace earlier successful history after a rejected run.
+func TestResearchQuantifiedOriginalityPreservesHistory(t *testing.T) {
+	for _, stage := range []string{"idea", "novelty"} {
+		for _, claim := range []string{"原创性概率95%", "该方法有95%的概率是原创的", "The probability of originality is 95%"} {
+			t.Run(stage+"/"+claim, func(t *testing.T) {
+				s, topic, _ := researchFixture(t)
+				var calls atomic.Int32
+				var invalid atomic.Bool
+				ideasModel(t, s, &calls, func(v *ResearchIdea) {
+					if invalid.Load() && stage == "idea" {
+						v.Mechanism = claim
+					}
+				}, func(row *NoveltyRow) {
+					if invalid.Load() && stage == "novelty" {
+						row.Unverified = claim
+					}
+				})
+				first := ideasRun(t, s, topic, "", ResearchRunInput{IdeaCount: 1})
+				done := researchWaitJob(t, s, first, "completed")
+				reportID := done["latestReportId"].(string)
+				before := paperCall(t, s, "GET", "/api/research/reports/"+reportID, "", 200)["content"]
+				history, err := s.getResearchResults(t.Context(), first)
+				if err != nil {
+					t.Fatal(err)
+				}
+				invalid.Store(true)
+				bad := ideasRun(t, s, topic, "", ResearchRunInput{IdeaCount: 1})
+				waitIdeasFailure(t, s, bad)
+				results, err := s.getResearchResults(t.Context(), bad)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if len(results.Novelty) != 0 || (stage == "idea" && len(results.Ideas) != 0) {
+					t.Fatal("quantified originality became durable success", results)
+				}
+				after, err := s.getResearchResults(t.Context(), first)
+				if err != nil || jsonText(after) != jsonText(history) {
+					t.Fatal("old results changed", err)
+				}
+				if paperCall(t, s, "GET", "/api/research/reports/"+reportID, "", 200)["content"] != before {
+					t.Fatal("old report changed")
+				}
+			})
 		}
 	}
 }
