@@ -2884,6 +2884,10 @@ body[data-resizing] * {
   align-items: center;
   gap: 8px;
 }
+.paper-row-kind {
+  font-size: 10px;
+  color: var(--muted-foreground);
+}
 .paper-row-status {
   min-width: 34px;
   justify-content: center;

@@ -232,10 +232,17 @@ export function PaperDetail({
         <Button
           className="paper-detail-open"
           disabled={doc.metadataOnly}
+          title={doc.metadataOnly ? "该文献尚无附件" : undefined}
           onClick={() => actions.open(doc)}
         >
           <BookOpen />
-          {percent > 1 ? `继续阅读 · ${percent}%` : "开始阅读"}
+          {percent > 1
+            ? `继续阅读 · ${percent}%`
+            : doc.metadataOnly
+              ? doc.attachments?.length
+                ? "从附件打开"
+                : "先添加附件"
+              : "开始阅读"}
         </Button>
         <div className="paper-detail-actions">
           <DropdownMenu>
@@ -298,6 +305,7 @@ export function PaperDetail({
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
+        <PaperAttachments doc={doc} open={actions.open} />
         <section className="paper-abstract">
           <div className="flex items-center justify-between">
             <h3>摘要</h3>
@@ -444,7 +452,6 @@ export function PaperDetail({
               .join(" · ")}
           </p>
         )}
-        <PaperAttachments doc={doc} open={actions.open} />
         <PaperCitationKey doc={doc} />
         {!doc.metadataOnly && <RelatedPapers doc={doc} />}
       </div>

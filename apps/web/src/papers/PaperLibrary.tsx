@@ -1590,6 +1590,13 @@ function PaperRow({
               )}
             </div>
             <div className="paper-row-meta">
+              <span className="paper-row-kind">
+                {doc.metadataOnly
+                  ? "无附件"
+                  : (doc.attachments?.length ?? 0) > 1
+                    ? `${doc.attachments!.length} 个附件`
+                    : doc.type.toUpperCase()}
+              </span>
               {percent > 0 && (
                 <span className="paper-row-progress" aria-hidden="true">
                   <span style={{ width: `${percent}%` }} />
