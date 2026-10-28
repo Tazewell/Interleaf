@@ -115,11 +115,11 @@ OpenAPI 同时定义 NativeAIConfig、Research*、Novelty*；`pnpm api:generate`
 
 **Interfaces:** 产生 A 中 NativeAIConfig/Update、nativeAIConfig/saveNativeAIConfig/resolveNativeTask；保留仅服务端临时 legacy bridge。Task 2 消费 frozen snapshot；Task 3 移除 bridge，不再引入另一套配置持久源。
 
-- [ ] 写 `TestNativeAIConfigMigrationAndKeyEdits`：v1.API优先完整迁移；TextAPI唯一且无API时可迁移，冲突/仅CLI则needsConfiguration；遗漏Key只在同端点保留，换端点不复用，null清空；旧文件备份一次/重启幂等/0600，故障原文件不损坏。断言 `publicJSON` 不含 `"sk-test-secret"`，只有hasKey；迁移不碰旧问答/笔记/译文。
-- [ ] 写 UI 测试 `configures one connection and role models without external Agent controls`，断言无SDK/登录/安装选项，研究继承问答、模型列表失败仍保留手填值、保存模型不清Key；用现有连接probe测试补 secret/error/localhost模型端点边界。
-- [ ] RED：`cd apps/server && go test ./internal/reader -run TestNativeAIConfig -count=1`；`pnpm exec vitest run apps/web/src/ai/ai-settings.test.tsx`。预期新类型/路由/行为缺失而失败。
-- [ ] 实现上述精确配置接口与原子迁移；Settings只将AI区域提为新组件，不重排整个设置；TaskModels/ModelSelector用role，catalog/probe按端点+模型指纹失效。公共端点不接受 legacy provider；迁移parser可读legacy。暂存必要generation桥，写入仍落version2真源。
-- [ ] GREEN：上述两条命令、`pnpm api:generate`、`pnpm typecheck` 全成功；审准确配置/组件/生成文件并提交 `feat(ai): add native API configuration and migration`。
+- [x] 写 `TestNativeAIConfigMigrationAndKeyEdits`：v1.API优先完整迁移；TextAPI唯一且无API时可迁移，冲突/仅CLI则needsConfiguration；遗漏Key只在同端点保留，换端点不复用，null清空；旧文件备份一次/重启幂等/0600，故障原文件不损坏。断言 `publicJSON` 不含 `"sk-test-secret"`，只有hasKey；迁移不碰旧问答/笔记/译文。
+- [x] 写 UI 测试 `configures one connection and role models without external Agent controls`，断言无SDK/登录/安装选项，研究继承问答、模型列表失败仍保留手填值、保存模型不清Key；用现有连接probe测试补 secret/error/localhost模型端点边界。
+- [x] RED：`cd apps/server && go test ./internal/reader -run TestNativeAIConfig -count=1`；`pnpm exec vitest run apps/web/src/ai/ai-settings.test.tsx`。预期新类型/路由/行为缺失而失败。
+- [x] 实现上述精确配置接口与原子迁移；Settings只将AI区域提为新组件，不重排整个设置；TaskModels/ModelSelector用role，catalog/probe按端点+模型指纹失效。公共端点不接受 legacy provider；迁移parser可读legacy。暂存必要generation桥，写入仍落version2真源。
+- [x] GREEN：上述两条命令、`pnpm api:generate`、`pnpm typecheck` 全成功；审准确配置/组件/生成文件并提交 `feat(ai): add native API configuration and migration`。
 
 ## Task 2: Reader 自有模型/工具循环与持久会话
 
@@ -129,11 +129,11 @@ OpenAPI 同时定义 NativeAIConfig、Research*、Novelty*；`pnpm api:generate`
 
 **Interfaces:** 消费 nativeTaskSnapshot，产生 A 中 runNativeLoop/nativeToolset/nativeConversation/nativeLoopResult。documentToolset 包装既有 `documentAgent`，保持 `get_outline/search_document/read_passage/read_pdf_pages` 和来源验证；研究下一阶段不必依赖 documentAgent 内部 Codex 字段。
 
-- [ ] 写 `TestNativeLoopOpenAIAndAnthropicCompletion`，使用同一套transcript fixture验证文字/工具/图片、分片参数、未知/重复工具ID、明确finish、断流、取消；配套 `TestNativeSessionDocumentCompletionCommitsAtomically` 用实际 SQLite assistant 行数、运行审计及会话窗口验证保存屏障：每次流事件及显式保存入口前均保持未提交，只有正常终态和来源校验通过后的事务成功才出现一次保存；不使用独立局部变量模拟保存计数。失败后无Fallback/第二模型调用，draft/reasoning已可见时同样如此。
-- [ ] 写 `TestNativeSessionRebuildAndCompaction`：以可见历史重建旧CLI/Pi会话，保留消息ID/来源/阅读位置；不消费piEntries/thread ID；换端点或模型重建窗口；压缩只切完整调用-结果组，失败不覆盖历史；SessionID非空也不调用Pi。
-- [ ] RED：`go test ./internal/reader -run 'TestNative(Loop|Session)' -count=1`（server目录）。预期当前Pi分支/缺失nativeLoop失败。
-- [ ] 抽取现有 Go API 循环为 runNativeLoop；单文献活动状态以versioned native connection key保存，完整回答/证据/窗口/审计沿用一次事务。原始历史与跨provider可见记录保留；api_stream/api_agent中全部SessionID路径用同一native循环；未支持工具/图片时用已有文字辅助而非假称可看图。
-- [ ] GREEN：上述焦点 + `go test ./internal/reader -run 'Test(Document|API|Chat)'`、`pnpm exec vitest run apps/web/src/chat/chat-session.test.ts apps/web/src/chat/streaming-lifecycle.test.tsx`、typecheck；提交 `feat(ai): own native model and document tool sessions`。
+- [x] 写 `TestNativeLoopOpenAIAndAnthropicCompletion`，使用同一套transcript fixture验证文字/工具/图片、分片参数、未知/重复工具ID、明确finish、断流、取消；配套 `TestNativeSessionDocumentCompletionCommitsAtomically` 用实际 SQLite assistant 行数、运行审计及会话窗口验证保存屏障：每次流事件及显式保存入口前均保持未提交，只有正常终态和来源校验通过后的事务成功才出现一次保存；不使用独立局部变量模拟保存计数。失败后无Fallback/第二模型调用，draft/reasoning已可见时同样如此。
+- [x] 写 `TestNativeSessionRebuildAndCompaction`：以可见历史重建旧CLI/Pi会话，保留消息ID/来源/阅读位置；不消费piEntries/thread ID；换端点或模型重建窗口；压缩只切完整调用-结果组，失败不覆盖历史；SessionID非空也不调用Pi。
+- [x] RED：`go test ./internal/reader -run 'TestNative(Loop|Session)' -count=1`（server目录）。预期当前Pi分支/缺失nativeLoop失败。
+- [x] 抽取现有 Go API 循环为 runNativeLoop；单文献活动状态以versioned native connection key保存，完整回答/证据/窗口/审计沿用一次事务。原始历史与跨provider可见记录保留；api_stream/api_agent中全部SessionID路径用同一native循环；未支持工具/图片时用已有文字辅助而非假称可看图。
+- [x] GREEN：上述焦点 + `go test ./internal/reader -run 'Test(Document|API|Chat)'`、`pnpm exec vitest run apps/web/src/chat/chat-session.test.ts apps/web/src/chat/streaming-lifecycle.test.tsx`、typecheck；提交 `feat(ai): own native model and document tool sessions`。
 
 ## Task 3: 全功能用途路由与外部 Agent/Pi 退役
 
@@ -141,11 +141,11 @@ OpenAPI 同时定义 NativeAIConfig、Research*、Novelty*；`pnpm api:generate`
 
 **Interfaces:** `(*Server).nativeGenerationService(config NativeAIConfig,task modelTask) (*GenerationService,error)`；`nativeTranslationSession` 保持顺序批次复用与close；将 `Server.Close()` 从codex_chat.go迁至native_ai_lifecycle.go，保留document task cancel/join与双语清理；以后所有AI调用只消费NativeAIConfig/snapshot。`GenerationService.Generate`/ProviderEvent调用侧签名保留；research用途默认chat模型。
 
-- [ ] 写 `TestNativeTasksWithoutAgentRuntimes`：仅有本地mock API、PATH中codex/claude/kimi为一调用就记录失败的trap、READER_AGENT不存在；聊天/多会话、翻译、概要、公式/图片、分类、双语preflight/start都成功，无trap。`TestNativeCloseJoinsAllAIIO` 在删除/close/迁移边界阻塞API，断言返回前已join，无迟到保存。
-- [ ] 写 runtime packaging test：build/dev/desktop/package引用闭包不含READER_AGENT、@reader/agent或pi依赖；仍传READER_NODE/processor及字体。测试旧CLI历史可读、legacy JSON只能迁移，CmdReader普通CLI/API不丢失，模型/额度失败不触发任何外部fallback。
-- [ ] RED：`go test ./internal/reader -run 'TestNative(Tasks|Close)' -count=1`；`pnpm exec vitest run scripts/native-ai-runtime.test.ts`，预期现有硬断言/CLI/Pi/资源引用失败。
-- [ ] 将所有用途迁到nativeGenerationService并移除Task1桥；替换translationService对codexChatAdapter的类型断言；保留有效stream/protocol/数据保全测试，删除仅证明已退役特性的测试。更新用量provider显示、HTTP诊断脱敏及SSE/CLI说明，移除Codex handoff按钮和安装路径探测。将双语验收脚本配置步骤适配version2，保留所有实际PDF断言。
-- [ ] GREEN：上述焦点、`go test ./...`、`pnpm exec vitest run scripts/native-ai-runtime.test.ts apps/web/src/ai/ai-settings.test.tsx apps/web/src/BilingualPDFExport.test.tsx`、typecheck；检查prod依赖图和build脚本，提交 `refactor(ai): retire external Agent and Pi runtimes`。
+- [x] 写 `TestNativeTasksWithoutAgentRuntimes`：仅有本地mock API、PATH中codex/claude/kimi为一调用就记录失败的trap、READER_AGENT不存在；聊天/多会话、翻译、概要、公式/图片、分类、双语preflight/start都成功，无trap。`TestNativeCloseJoinsAllAIIO` 在删除/close/迁移边界阻塞API，断言返回前已join，无迟到保存。
+- [x] 写 runtime packaging test：build/dev/desktop/package引用闭包不含READER_AGENT、@reader/agent或pi依赖；仍传READER_NODE/processor及字体。测试旧CLI历史可读、legacy JSON只能迁移，CmdReader普通CLI/API不丢失，模型/额度失败不触发任何外部fallback。
+- [x] RED：`go test ./internal/reader -run 'TestNative(Tasks|Close)' -count=1`；`pnpm exec vitest run scripts/native-ai-runtime.test.ts`，预期现有硬断言/CLI/Pi/资源引用失败。
+- [x] 将所有用途迁到nativeGenerationService并移除Task1桥；替换translationService对codexChatAdapter的类型断言；保留有效stream/protocol/数据保全测试，删除仅证明已退役特性的测试。更新用量provider显示、HTTP诊断脱敏及SSE/CLI说明，移除Codex handoff按钮和安装路径探测。将双语验收脚本配置步骤适配version2，保留所有实际PDF断言。
+- [x] GREEN：上述焦点、`go test ./...`、`pnpm exec vitest run scripts/native-ai-runtime.test.ts apps/web/src/ai/ai-settings.test.tsx apps/web/src/BilingualPDFExport.test.tsx`、typecheck；检查prod依赖图和build脚本，提交 `refactor(ai): retire external Agent and Pi runtimes`。
 
 ## Task 4: 主题研究存储、范围快照与资料变更
 
@@ -153,11 +153,11 @@ OpenAPI 同时定义 NativeAIConfig、Research*、Novelty*；`pnpm api:generate`
 
 **Interfaces:** 定义B中所有实体存储类型，先交付topic/session CRUD与快照；共享snapshotResearchScope、`(*Store).migrateResearch() error`、`(*Store).invalidateResearchDocument(ctx context.Context,documentID,reason string) error`。后者取消/清理的Server协调在Task6接上，Task4先实现事务失效。现有 `changeLibraryLabels('folders')` 的同一资料事务更新研究绑定，不另造重复分类API。
 
-- [ ] 写 `TestResearchScopeMembersAndRevisions`：子文件夹开/关、非活动文献、一个PaperItem多个原文/译文附件、仅元数据、无可读原件、不确定两个原文时的明确选择；相同内容的范围重算revision稳定；原文替换/成员变化使revision不同。原文选择顺序：原文primary→唯一其他可读original；多个候选不猜译本或随机附件，标unavailable并给原因。
-- [ ] 写 `TestResearchFolderRenameDeleteAndPaperMerge` 与migration测试：大小写/子路径匹配沿用library分类语义，rename保持topicID，删除分类只detached而保留报告；Paper合并redirect去重、引用键不写回；永久删源清掉可读取payload并标removed但其他报告仍在。初始化/重复迁移/失败回滚不改变旧表/文件/笔记。
-- [ ] RED：`go test ./internal/reader -run 'TestResearch(Scope|Folder|Migration)' -count=1`。
-- [ ] 实现12表迁移、索引/唯一约束及topic/session CRUD；快照在一致数据库读事务中解析成员，在校验原文版本后存入研究表；数据变更与研究失效处于同一事务/提交协议。避免外键删除原文时清除跨论文用户成果。
-- [ ] GREEN：上述焦点、`go test ./internal/reader -run 'Test(Paper|Library|Research)'`、api:generate/typecheck；提交 `feat(research): persist topics and versioned paper scopes`。
+- [x] 写 `TestResearchScopeMembersAndRevisions`：子文件夹开/关、非活动文献、一个PaperItem多个原文/译文附件、仅元数据、无可读原件、不确定两个原文时的明确选择；相同内容的范围重算revision稳定；原文替换/成员变化使revision不同。原文选择顺序：原文primary→唯一其他可读original；多个候选不猜译本或随机附件，标unavailable并给原因。
+- [x] 写 `TestResearchFolderRenameDeleteAndPaperMerge` 与migration测试：大小写/子路径匹配沿用library分类语义，rename保持topicID，删除分类只detached而保留报告；Paper合并redirect去重、引用键不写回；永久删源清掉可读取payload并标removed但其他报告仍在。初始化/重复迁移/失败回滚不改变旧表/文件/笔记。
+- [x] RED：`go test ./internal/reader -run 'TestResearch(Scope|Folder|Migration)' -count=1`。
+- [x] 实现12表迁移、索引/唯一约束及topic/session CRUD；快照在一致数据库读事务中解析成员，在校验原文版本后存入研究表；数据变更与研究失效处于同一事务/提交协议。避免外键删除原文时清除跨论文用户成果。
+- [x] GREEN：上述焦点、`go test ./internal/reader -run 'Test(Paper|Library|Research)'`、api:generate/typecheck；提交 `feat(research): persist topics and versioned paper scopes`。
 
 ## Task 5: 跨论文读工具与可复用证据条目
 
@@ -165,11 +165,11 @@ OpenAPI 同时定义 NativeAIConfig、Research*、Novelty*；`pnpm api:generate`
 
 **Interfaces:** 实现B中researchTools/analyzeResearchPaper；`(*Server).validateResearchSources(ctx context.Context,runID string,sourceIDs []string) error`、`(*Server).resolveResearchSource(ctx context.Context,sourceID string) (ResearchEvidence,error)`。本地工具定义只含snapshot成员，来源ID是opaque全局ID，块ID只是某篇内定位。
 
-- [ ] 写 `TestResearchToolsIsolateSameBlockIDs`：两篇PDF均有p1-b1，证据ID不同；越范围paperId与伪造sourceId拒绝；跨PDF/EPUB定位不互换；FTS查询绑定参数；页图仅视觉能力可用时注册。大结果返回nextCursor，不把未读片段记已读。
-- [ ] 写 `TestResearchCardsCoverageCacheAndInvalidation`：fulltext/abstract/metadata分级、不同模型/提示/原文hash不能命中旧卡；冲突论文结论各有自己的证据；源删除/替换后cache拒读。无工具模型由Reader先检索/按页读原文再提供有来源的文字辅助，不取消主题研究能力。
-- [ ] RED：`go test ./internal/reader -run 'TestResearch(Tools|Cards)' -count=1`。
-- [ ] 实现按snapshot过滤的FTS5查询/逐篇公平排序，复用现有corpus与PDF/Readium定位；论文过长以cursor分片提取证据条目并合并，仅保存完成且校验的字段；来源缺失或事实字段只靠标题则失败/明确metadata。正文/页图读取注册beginDocumentTask并在完成后release。
-- [ ] GREEN：焦点加现有 `TestDocumentTools`、native loop tests、typecheck；提交 `feat(research): read scoped papers with traceable evidence`。
+- [x] 写 `TestResearchToolsIsolateSameBlockIDs`：两篇PDF均有p1-b1，证据ID不同；越范围paperId与伪造sourceId拒绝；跨PDF/EPUB定位不互换；FTS查询绑定参数；页图仅视觉能力可用时注册。大结果返回nextCursor，不把未读片段记已读。
+- [x] 写 `TestResearchCardsCoverageCacheAndInvalidation`：fulltext/abstract/metadata分级、不同模型/提示/原文hash不能命中旧卡；冲突论文结论各有自己的证据；源删除/替换后cache拒读。无工具模型由Reader先检索/按页读原文再提供有来源的文字辅助，不取消主题研究能力。
+- [x] RED：`go test ./internal/reader -run 'TestResearch(Tools|Cards)' -count=1`。
+- [x] 实现按snapshot过滤的FTS5查询/逐篇公平排序，复用现有corpus与PDF/Readium定位；论文过长以cursor分片提取证据条目并合并，仅保存完成且校验的字段；来源缺失或事实字段只靠标题则失败/明确metadata。正文/页图读取注册beginDocumentTask并在完成后release。
+- [x] GREEN：焦点加现有 `TestDocumentTools`、native loop tests、typecheck；提交 `feat(research): read scoped papers with traceable evidence`。
 
 ## Task 6: 持久任务、主题综述与断线继续
 
@@ -177,11 +177,11 @@ OpenAPI 同时定义 NativeAIConfig、Research*、Novelty*；`pnpm api:generate`
 
 **Interfaces:** 实现create/get/controlResearchRun与events/report/markdown路由；`(*Server).composeResearchReport(ctx context.Context,runID string) (ResearchReport,error)`、`(*Server).createResearchReportRevision(ctx context.Context,parentID,requestID,content string) (ResearchReport,error)`；`(*Server).stopResearch(ctx context.Context) error` 与 `(*Server).cancelResearchForDocument(ctx context.Context,documentID string) error`。overview/compare/question均调用共用的native loop和scope证据。Task8追加网络阶段，Task9追加ideas/novelty，不另建第二种job系统。
 
-- [ ] 写 `TestResearchRunIdempotencyAndLostResponse`：同session+userMessageId+body返回同run，改变body409；create不调用模型，start重复不重复执行；start响应丢失经GET取回completed报告。`TestResearchResumeSuccessfulUnits`：预算耗尽/主动pause/cancel/重启interrupted，已成功paper单元不重算；首次resume很快再次paused后，重试相同control requestId也不再开预算；新requestId的显式resume才做剩余单元，旧成功报告保留。`TestResearchUserReportRevision`：编辑保存新版本且不调用模型，旧版不变，用户版本清楚标识、未知引用不能变成可信跳转。
-- [ ] 写 `TestResearchLifecycleCommitBarrier`：close/删除/迁移在HTTP、读页图、最终保存前取消并join；worker不在持有任务注册时反取importMu，不造成delete→join→importMu循环。新文献/模型/快照变化继续旧run返回409，旧部分证据保留为历史但不混入；页面SSE断开不自动取消显式后台run。
-- [ ] RED：`go test ./internal/reader -run 'TestResearch(Run|Resume|Lifecycle)' -count=1`。
-- [ ] 依共享预算实现持久状态机、两槽调度器/每topic唯一活动run、成功单元事务及事件序号；用户问题先持久化且同请求复用。运行中事件可暂存受8MiB上限约束，断线读当前snapshot/后续事件；超过可回放窗口给reset状态让客户端读报告，不重启生成。报告/来源/会话窗口/成功消息在一次事务提交，done在commit后发送。
-- [ ] GREEN：焦点race `go test -race ./internal/reader -run 'TestResearch(Run|Resume|Lifecycle)' -count=1`、Go相关suite/api:generate/typecheck；提交 `feat(research): run resumable topic reviews with durable reports`。
+- [x] 写 `TestResearchRunIdempotencyAndLostResponse`：同session+userMessageId+body返回同run，改变body409；create不调用模型，start重复不重复执行；start响应丢失经GET取回completed报告。`TestResearchResumeSuccessfulUnits`：预算耗尽/主动pause/cancel/重启interrupted，已成功paper单元不重算；首次resume很快再次paused后，重试相同control requestId也不再开预算；新requestId的显式resume才做剩余单元，旧成功报告保留。`TestResearchUserReportRevision`：编辑保存新版本且不调用模型，旧版不变，用户版本清楚标识、未知引用不能变成可信跳转。
+- [x] 写 `TestResearchLifecycleCommitBarrier`：close/删除/迁移在HTTP、读页图、最终保存前取消并join；worker不在持有任务注册时反取importMu，不造成delete→join→importMu循环。新文献/模型/快照变化继续旧run返回409，旧部分证据保留为历史但不混入；页面SSE断开不自动取消显式后台run。
+- [x] RED：`go test ./internal/reader -run 'TestResearch(Run|Resume|Lifecycle)' -count=1`。
+- [x] 依共享预算实现持久状态机、两槽调度器/每topic唯一活动run、成功单元事务及事件序号；用户问题先持久化且同请求复用。运行中事件可暂存受8MiB上限约束，断线读当前snapshot/后续事件；超过可回放窗口给reset状态让客户端读报告，不重启生成。报告/来源/会话窗口/成功消息在一次事务提交，done在commit后发送。
+- [x] GREEN：焦点race `go test -race ./internal/reader -run 'TestResearch(Run|Resume|Lifecycle)' -count=1`、Go相关suite/api:generate/typecheck；提交 `feat(research): run resumable topic reviews with durable reports`。
 
 ## Task 7: 公共论文搜索、读取与网络边界
 
@@ -189,12 +189,12 @@ OpenAPI 同时定义 NativeAIConfig、Research*、Novelty*；`pnpm api:generate`
 
 **Interfaces:** 实现 C 中 Search/FetchPublic/Candidate/PublicResource 与公开资料客户端，后续Task8调用。`(*Server).readResearchRemote(ctx context.Context,runID,candidateID string) ([]ResearchEvidence,error)`：只读取经检索登记或用户明确给出的候选URL，在owned work目录中解析；公开PDF可走现有processor/corpus底层，但不调用会创建PaperItem的import API。优先同标识符本地已存在原文并重查版本。
 
-- [ ] 写 `TestScholarSearchPaginationIdentityAndVersions`：arXiv Atom/Crossref JSON分页、日期过滤/未知日期、相同DOI/版本arXiv去重与版本保留；同名不同作者/DOI不自动合并；响应200但正文错误/截断/超大小/畸形分页须失败。合法空数组与网络错误可区分。
-- [ ] 写 `TestPublicFetchRejectsResolvedPrivateTargets`：hostname初次公网后重绑私网、IPv4/IPv6/映射IPv4、redirect、userinfo/非HTTP协议被拒，真实dial不能落内网；模型API仍可localhost。测试无Authorization/x-api-key泄漏、正文限额按解压后计、HTML主动内容移除、PDF真实签名/解析错误和abstract-only降级。
-- [ ] 写 `TestScholarGlobalLimiterAndCancel`：两个run共用arXiv单槽/至少3秒；Crossref Retry-After与最多2次重试计入预算；关闭/取消中断排队和body读；使用注入clock而非让suite真实睡眠。代理为用户可信出口时不得将其localhost误判成论文目标；最终目标必须固定在已验证公网IP（含CONNECT路径），不能证明时明确失败而非绕过校验。
-- [ ] RED：`cd apps/server && go test ./internal/scholar ./internal/reader -run 'Test(ScholarSearch|ScholarGlobal|PublicFetch|ResearchRemote)' -count=1`。
-- [ ] 实现Go标准库HTTP/XML/JSON适配器、规范化、限速、取消和owned缓存，补现有scholar仅检查字面IP而未固定实际dial的缺口。缓存用URL/标识符/内容hash，存fetchedAt/版本；临时PDF不作为书库文献，正常下载保留安全目录和解析生命周期。普通检索缓存/查新刷新按共享合同执行，不默认调用S2等未登记来源。
-- [ ] GREEN：上述焦点与旧 `go test ./internal/scholar`、typecheck；提交 `feat(research): search and read public scholarly sources`。
+- [x] 写 `TestScholarSearchPaginationIdentityAndVersions`：arXiv Atom/Crossref JSON分页、日期过滤/未知日期、相同DOI/版本arXiv去重与版本保留；同名不同作者/DOI不自动合并；响应200但正文错误/截断/超大小/畸形分页须失败。合法空数组与网络错误可区分。
+- [x] 写 `TestPublicFetchRejectsResolvedPrivateTargets`：hostname初次公网后重绑私网、IPv4/IPv6/映射IPv4、redirect、userinfo/非HTTP协议被拒，真实dial不能落内网；模型API仍可localhost。测试无Authorization/x-api-key泄漏、正文限额按解压后计、HTML主动内容移除、PDF真实签名/解析错误和abstract-only降级。
+- [x] 写 `TestScholarGlobalLimiterAndCancel`：两个run共用arXiv单槽/至少3秒；Crossref Retry-After与最多2次重试计入预算；关闭/取消中断排队和body读；使用注入clock而非让suite真实睡眠。代理为用户可信出口时不得将其localhost误判成论文目标；最终目标必须固定在已验证公网IP（含CONNECT路径），不能证明时明确失败而非绕过校验。
+- [x] RED：`cd apps/server && go test ./internal/scholar ./internal/reader -run 'Test(ScholarSearch|ScholarGlobal|PublicFetch|ResearchRemote)' -count=1`。
+- [x] 实现Go标准库HTTP/XML/JSON适配器、规范化、限速、取消和owned缓存，补现有scholar仅检查字面IP而未固定实际dial的缺口。缓存用URL/标识符/内容hash，存fetchedAt/版本；临时PDF不作为书库文献，正常下载保留安全目录和解析生命周期。普通检索缓存/查新刷新按共享合同执行，不默认调用S2等未登记来源。
+- [x] GREEN：上述焦点与旧 `go test ./internal/scholar`、typecheck；提交 `feat(research): search and read public scholarly sources`。
 
 ## Task 8: 按需联网工具、候选导入与跨域来源
 
@@ -202,12 +202,12 @@ OpenAPI 同时定义 NativeAIConfig、Research*、Novelty*；`pnpm api:generate`
 
 **Interfaces:** 实现 C 中setResearchNetwork/importResearchCandidate，注册search_papers_online/read_online_paper；Query/来源过滤只在Task7接口执行，不复制请求器。`ResearchSearch`记录每个来源真实状态；`ResearchEvidence.candidateId`与本地paperId映射明确。许可由session状态+run allow-task/deny+当前许可generation判定，deny总是优先；关闭联网撤销当前session所有allow-task许可，并阻止工具排队中的新请求。
 
-- [ ] 写 `TestResearchNetworkPermissionAndRevocation`：默认本地overview/query没有任何搜索HTTP；用户allow-task才可联网；文献或模型工具参数不能开启；关闭时取消/join，迟到response不能写成已读证据，其他本地卡/历史仍保留。用户显式urls可安全登记/读取，模型任意URL不行；query只发必要关键词，不发源PDF/私密笔记/模型Key。
-- [ ] 写 `TestResearchCandidatesDoNotImportUntilChosen`：搜索/读取前后PaperItem、Document和citationKey不变，用户显式import才新增/去重；相同requestId重复返回同Document，原主附件不变，同名不同论文不误并。导入后删除本地原件，旧candidate不得通过缓存绕过失效；不同topic的candidate ID不能导入/读取。
-- [ ] 写 `TestResearchRemoteEvidenceLevels`：网页摘要、HTML全文、PDF页保留真实层级/位置，跨论文同块ID不串联；429/一个源失败保留成功源且report列出不足，来源ID并非模型任意URL。候选PDF下载取消/退出/迁移会join，不出现迟到导入。
-- [ ] RED：`go test ./internal/reader -run 'TestResearch(Network|Candidates|RemoteEvidence)' -count=1`。
-- [ ] 扩展已有job与nativeToolset，不建第二套调度；search/read请求在执行前及提交前再查许可/资料；搜索日志不保存密钥，导入记录按requestId事务去重。search result只可生成候选，不给模型write/import/delete工具。
-- [ ] GREEN：上述焦点race、scholar suite、api:generate/typecheck；提交 `feat(research): connect authorized online evidence and candidate imports`。
+- [x] 写 `TestResearchNetworkPermissionAndRevocation`：默认本地overview/query没有任何搜索HTTP；用户allow-task才可联网；文献或模型工具参数不能开启；关闭时取消/join，迟到response不能写成已读证据，其他本地卡/历史仍保留。用户显式urls可安全登记/读取，模型任意URL不行；query只发必要关键词，不发源PDF/私密笔记/模型Key。
+- [x] 写 `TestResearchCandidatesDoNotImportUntilChosen`：搜索/读取前后PaperItem、Document和citationKey不变，用户显式import才新增/去重；相同requestId重复返回同Document，原主附件不变，同名不同论文不误并。导入后删除本地原件，旧candidate不得通过缓存绕过失效；不同topic的candidate ID不能导入/读取。
+- [x] 写 `TestResearchRemoteEvidenceLevels`：网页摘要、HTML全文、PDF页保留真实层级/位置，跨论文同块ID不串联；429/一个源失败保留成功源且report列出不足，来源ID并非模型任意URL。候选PDF下载取消/退出/迁移会join，不出现迟到导入。
+- [x] RED：`go test ./internal/reader -run 'TestResearch(Network|Candidates|RemoteEvidence)' -count=1`。
+- [x] 扩展已有job与nativeToolset，不建第二套调度；search/read请求在执行前及提交前再查许可/资料；搜索日志不保存密钥，导入记录按requestId事务去重。search result只可生成候选，不给模型write/import/delete工具。
+- [x] GREEN：上述焦点race、scholar suite、api:generate/typecheck；提交 `feat(research): connect authorized online evidence and candidate imports`。
 
 ## Task 9: 有证据的 idea 探索与创新性对比
 
@@ -215,12 +215,12 @@ OpenAPI 同时定义 NativeAIConfig、Research*、Novelty*；`pnpm api:generate`
 
 **Interfaces:** 实现C中exploreResearchIdeas/checkResearchNovelty/validateNoveltyReport；idea和novelty作为同一ResearchRun.mode的阶段，成功结构结果写入research_units，再形成ResearchReport。报告引用仅来自本run已读或同版本已验证的缓存证据；从旧报告复制的引用须重新验证，不当作模型已读。
 
-- [ ] 写 `TestResearchIdeasHaveMechanismAndFalsification`：确定性mock输出3个候选，均有problem/mechanism/hypotheses/changes/minimumExperiment/baselines/ablations/falsification/resources；空洞标题/无证据归因/缺实验字段使该单元失败且旧结果保留；明确未知资源可用unknown，不造GPU/费用数字。用户选择一个idea后可继续精化而不重跑所有已成功论文卡。
-- [ ] 写 `TestResearchNoveltyFindsKnownOverlap`：本地A提出技术X，联网B全文已覆盖X；真实mock搜索和读取路径生成high_overlap并列出B的已读片段，不能仍输出not_found。新增同义词/机制/相邻领域的3类查询，至少两个来源，记录日期/过滤和排除理由。
-- [ ] 写 `TestResearchNoveltyInsufficientEvidence`：仅摘要、失败源、未覆盖查询或超预算时，方法/实验claim为insufficient或显示未完成；不能因标题不相似给新颖保证。`not_found`只表示计划查询均执行成功且未发现可支持重合的证据；不等于证明创新。非法/未读citation、绝对原创/伪造概率结论被结构验证拒绝或明确要求修订，不保存成功报告。
-- [ ] RED：`go test ./internal/reader -run 'TestResearch(Ideas|Novelty)' -count=1`。
-- [ ] 用受约束JSON输出明确分开论文事实/推断/待验假设；后台执行有预算的真实查询计划，补读后生成逐claim对比。无function-calling模型仍可由Reader运行固定检索/读取流水线和结构化模型步骤，UI标为文字检索辅助；不伪装其有工具或视觉能力。联网未授权则给本地范围结论和启用入口，不悄悄提升权限。
-- [ ] GREEN：上述焦点、Tasks5—8相关研究suite、api:generate/typecheck；提交 `feat(research): ground idea exploration and novelty checks in evidence`。
+- [x] 写 `TestResearchIdeasHaveMechanismAndFalsification`：确定性mock输出3个候选，均有problem/mechanism/hypotheses/changes/minimumExperiment/baselines/ablations/falsification/resources；空洞标题/无证据归因/缺实验字段使该单元失败且旧结果保留；明确未知资源可用unknown，不造GPU/费用数字。用户选择一个idea后可继续精化而不重跑所有已成功论文卡。
+- [x] 写 `TestResearchNoveltyFindsKnownOverlap`：本地A提出技术X，联网B全文已覆盖X；真实mock搜索和读取路径生成high_overlap并列出B的已读片段，不能仍输出not_found。新增同义词/机制/相邻领域的3类查询，至少两个来源，记录日期/过滤和排除理由。
+- [x] 写 `TestResearchNoveltyInsufficientEvidence`：仅摘要、失败源、未覆盖查询或超预算时，方法/实验claim为insufficient或显示未完成；不能因标题不相似给新颖保证。`not_found`只表示计划查询均执行成功且未发现可支持重合的证据；不等于证明创新。非法/未读citation、绝对原创/伪造概率结论被结构验证拒绝或明确要求修订，不保存成功报告。
+- [x] RED：`go test ./internal/reader -run 'TestResearch(Ideas|Novelty)' -count=1`。
+- [x] 用受约束JSON输出明确分开论文事实/推断/待验假设；后台执行有预算的真实查询计划，补读后生成逐claim对比。无function-calling模型仍可由Reader运行固定检索/读取流水线和结构化模型步骤，UI标为文字检索辅助；不伪装其有工具或视觉能力。联网未授权则给本地范围结论和启用入口，不悄悄提升权限。
+- [x] GREEN：上述焦点、Tasks5—8相关研究suite、api:generate/typecheck；提交 `feat(research): ground idea exploration and novelty checks in evidence`。
 
 ## Task 10: 主题研究界面、编辑导出和失败恢复
 
@@ -228,12 +228,12 @@ OpenAPI 同时定义 NativeAIConfig、Research*、Novelty*；`pnpm api:generate`
 
 **Interfaces:** `ResearchPanel({topicId:string,onOpenDocument:(documentId:string,location:DocumentLocation)=>Promise<void>})`；研究session registry按topicId/sessionId/runId隔离，subscribe GET不创建工作；ResearchSources先GET /sources验证再导航。Markdown/用户编辑使用ResearchReport修订接口；候选导入只来自用户点击。遵守现有真实packages/ui按钮/对话框/输入/切换组件，主题风格/缩放/减少动态保持一致。
 
-- [ ] 写 `sends once and recovers the same research after start response loss`：mock create返回run、start执行后reject，GET返回running/completed，可读报告，create/start各一次；GET也失败显示查询重试，禁止自动POST。SSE重复after序号不重复正文，done丢失时查同run/消息，不重新调用模型。
-- [ ] 写 `switches topics without mixing evidence or canceling explicit background work`：同名论文/同source标签在不同topic不混；切页/卸载取消订阅，后台run仍可重新订阅，取消按钮才control cancel；普通短问答stop行为与后台区别明确。双击/库迁移/过期回包受session身份约束；暂停/中断/预算触顶显示剩余篇目与继续动作。
-- [ ] 写 `renders source coverage, revision history and authorized candidate import`：仅摘要/失效来源不导航为PDF，跨论文定位正确；未知引用不成链接；旧报告在新run失败后仍可读；用户编辑新修订标用户编辑且旧版不变，导出Markdown不执行raw HTML或远程图片；失效来源仍可编辑用户笔记。metadata-only/空文件夹/全部解析失败/无工具与无视觉状态均可行动。
-- [ ] RED：`pnpm exec vitest run apps/web/src/research/research-panel.test.tsx apps/web/src/research/research-lifecycle.test.tsx apps/web/src/research/research-sources.test.tsx`。
-- [ ] 实现文件夹「主题研究」入口、会话/范围/联网开关、真实阶段/coverage、报告/idea/查新表、来源与候选。发送/开始研究是一次用户动作，可顺序create→start，无额外每工具确认；明确联网动作发送allow-task，普通发送用inherit。保存编辑产生新版本，追问可用已有研究上下文修订。UI不显示内部SDK/临时路径或给模型任意权限的选项；多主题背景状态在已有任务入口可找到。
-- [ ] GREEN：上述焦点、`pnpm exec vitest run apps/web/src/papers/paper-library.test.tsx apps/web/src/workspace-export.test.tsx apps/web/src/BilingualPDFExport.test.tsx`、typecheck；提交 `feat(research): expose topic reviews and evidence-backed idea workflows`。
+- [x] 写 `sends once and recovers the same research after start response loss`：mock create返回run、start执行后reject，GET返回running/completed，可读报告，create/start各一次；GET也失败显示查询重试，禁止自动POST。SSE重复after序号不重复正文，done丢失时查同run/消息，不重新调用模型。
+- [x] 写 `switches topics without mixing evidence or canceling explicit background work`：同名论文/同source标签在不同topic不混；切页/卸载取消订阅，后台run仍可重新订阅，取消按钮才control cancel；普通短问答stop行为与后台区别明确。双击/库迁移/过期回包受session身份约束；暂停/中断/预算触顶显示剩余篇目与继续动作。
+- [x] 写 `renders source coverage, revision history and authorized candidate import`：仅摘要/失效来源不导航为PDF，跨论文定位正确；未知引用不成链接；旧报告在新run失败后仍可读；用户编辑新修订标用户编辑且旧版不变，导出Markdown不执行raw HTML或远程图片；失效来源仍可编辑用户笔记。metadata-only/空文件夹/全部解析失败/无工具与无视觉状态均可行动。
+- [x] RED：`pnpm exec vitest run apps/web/src/research/research-panel.test.tsx apps/web/src/research/research-lifecycle.test.tsx apps/web/src/research/research-sources.test.tsx`。
+- [x] 实现文件夹「主题研究」入口、会话/范围/联网开关、真实阶段/coverage、报告/idea/查新表、来源与候选。发送/开始研究是一次用户动作，可顺序create→start，无额外每工具确认；明确联网动作发送allow-task，普通发送用inherit。保存编辑产生新版本，追问可用已有研究上下文修订。UI不显示内部SDK/临时路径或给模型任意权限的选项；多主题背景状态在已有任务入口可找到。
+- [x] GREEN：上述焦点、`pnpm exec vitest run apps/web/src/papers/paper-library.test.tsx apps/web/src/workspace-export.test.tsx apps/web/src/BilingualPDFExport.test.tsx`、typecheck；提交 `feat(research): expose topic reviews and evidence-backed idea workflows`。
 
 ## Task 11: 无外部运行时端到端验收与 WSL 预览
 
@@ -241,13 +241,13 @@ OpenAPI 同时定义 NativeAIConfig、Research*、Novelty*；`pnpm api:generate`
 
 **Interfaces:** `bash scripts/native-ai-research-acceptance/run.sh /absolute/outside-repository/directory` 以已构建应用、鉴权loopback API、owned临时库运行；目录先canonicalize并拒绝repo/其子目录。result.json记录implementationCommit、模型/搜索mock计数、研究范围/来源/报告、保全hash和检查结果；生成可读Markdown研究样本及样本PDF，标准工具检查实际文件。
 
-- [ ] 先写失败的acceptance断言及可复现fixture：主题内A/B/C三篇PDF（A含原文+译文附件；A/B同块名但结论冲突；C的方法被远程B2覆盖）、子文件夹一篇EPUB、一篇仅元数据文献；另有回收站/范围外文献。活动范围默认5篇，关闭子级为4；另用40篇小文献验证分批覆盖不只取前N篇。远程fixture有arXiv/Crossref分页、同名不同ID、正式版/预印本、仅摘要及限流错误。
-- [ ] RED：先运行focused harness模式 `bash scripts/native-ai-research-acceptance/run.sh OUT --checks-only`（脚本需支持该标志且不自动修fixture）。未实现的真实链路断言应失败；已有成功功能不人为改错求RED。此前TDD已证明的路径记录引用，不再重复制造失败。
-- [ ] 完成实际链路：v1迁移→无Agent/Pi启动→API角色设置→单篇原文引用问答/图片与翻译→主题快照→overview/compare→pause/resume与source变化→查新已覆盖/证据不足→候选明确导入去重→编辑/导出→restart/close/move/delete边界。trap外部CLI、READER_AGENT不存在、真实PDF processor仍可用。保存前后比较非空问答/笔记/批注/译文/引用键和原始SHA，不能只测空库。模型输出确定性mock，不冒充真实语言质量。
-- [ ] 跑最终 `pnpm typecheck`、`pnpm test`、`pnpm build`；再运行新acceptance到 `E:/WSL/reader-native-ai-acceptance-final` 和现有 `scripts/bilingual-pdf-acceptance/run.sh` 到独立新目录，保持两种PDF布局/公式/字体/9pt/附件/取消全部既有断言。重开PDF并用Poppler渲染、实际查看所有样本页；研究样本核对引用与已知冲突/重合结论。报告全部exit/status、skips/warnings及实际commit，不重复绿灯suite除非产品源码变化或具体疑问。
-- [ ] 在用户明确授权的搜索功能范围内做低频arXiv/Crossref在线可用性烟测（各一个小查询，遵守限速、无私人文献/密钥）；失败记录真实状态，不将mock当在线通过。真实模型API只用用户另行提供的配置；无Key时说明质量仍人工验证，不读取外部凭据。
-- [ ] 建立独立WSL profile/library和 `E:/Administrator/Desktop/Reader 内置 AI 研究预览.lnk`，启动最终Electron/Go，核对路径/进程/健康接口/HTML、无外部Agent/Pi运行、样本与API测试Key已清空。给用户API设置、文件夹综述、联网查新、来源回跳、预算继续和两种PDF导出人工步骤；禁止浏览器自动化界面验收，不修改真实Reader启动器/库。
-- [ ] 文档记录本轮范围、旧配置/历史迁移、模型Key仅本地保护、联网关键词外发/公开资料范围、摘要/全文与创新性不确定、预算及失败恢复；报告mock/在线/实际OS对话框边界。检查最终diff只含该任务内容，提交 `test(research): verify native AI workflows and isolated WSL preview`。最后完成当前执行方式要求的全分支独立审查及任何修复验证，整体验收通过才报告功能完成。
+- [x] 先写失败的acceptance断言及可复现fixture：主题内A/B/C三篇PDF（A含原文+译文附件；A/B同块名但结论冲突；C的方法被远程B2覆盖）、子文件夹一篇EPUB、一篇仅元数据文献；另有回收站/范围外文献。活动范围默认5篇，关闭子级为4；另用40篇小文献验证分批覆盖不只取前N篇。远程fixture有arXiv/Crossref分页、同名不同ID、正式版/预印本、仅摘要及限流错误。
+- [x] RED：先运行focused harness模式 `bash scripts/native-ai-research-acceptance/run.sh OUT --checks-only`（脚本需支持该标志且不自动修fixture）。未实现的真实链路断言应失败；已有成功功能不人为改错求RED。此前TDD已证明的路径记录引用，不再重复制造失败。
+- [x] 完成实际链路：v1迁移→无Agent/Pi启动→API角色设置→单篇原文引用问答/图片与翻译→主题快照→overview/compare→pause/resume与source变化→查新已覆盖/证据不足→候选明确导入去重→编辑/导出→restart/close/move/delete边界。trap外部CLI、READER_AGENT不存在、真实PDF processor仍可用。保存前后比较非空问答/笔记/批注/译文/引用键和原始SHA，不能只测空库。模型输出确定性mock，不冒充真实语言质量。
+- [x] 跑最终 `pnpm typecheck`、`pnpm test`、`pnpm build`；再运行新acceptance到 `E:/WSL/reader-native-ai-acceptance-final` 和现有 `scripts/bilingual-pdf-acceptance/run.sh` 到独立新目录，保持两种PDF布局/公式/字体/9pt/附件/取消全部既有断言。重开PDF并用Poppler渲染、实际查看所有样本页；研究样本核对引用与已知冲突/重合结论。报告全部exit/status、skips/warnings及实际commit，不重复绿灯suite除非产品源码变化或具体疑问。
+- [x] 在用户明确授权的搜索功能范围内做低频arXiv/Crossref在线可用性烟测（各一个小查询，遵守限速、无私人文献/密钥）；失败记录真实状态，不将mock当在线通过。真实模型API只用用户另行提供的配置；无Key时说明质量仍人工验证，不读取外部凭据。
+- [x] 建立独立WSL profile/library和 `E:/Administrator/Desktop/Reader 内置 AI 研究预览.lnk`，启动最终Electron/Go，核对路径/进程/健康接口/HTML、无外部Agent/Pi运行、样本与API测试Key已清空。给用户API设置、文件夹综述、联网查新、来源回跳、预算继续和两种PDF导出人工步骤；禁止浏览器自动化界面验收，不修改真实Reader启动器/库。
+- [x] 文档记录本轮范围、旧配置/历史迁移、模型Key仅本地保护、联网关键词外发/公开资料范围、摘要/全文与创新性不确定、预算及失败恢复；报告mock/在线/实际OS对话框边界。检查最终diff只含该任务内容，提交 `test(research): verify native AI workflows and isolated WSL preview`。最后完成当前执行方式要求的全分支独立审查及任何修复验证，整体验收通过才报告功能完成。
 
 ## 测试断言锚点
 
