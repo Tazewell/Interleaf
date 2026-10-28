@@ -889,13 +889,20 @@ app.on("before-quit", (event) => {
         await stopOwnedServer();
         quitJoined = true;
         app.quit();
-      })().catch((error) => {
+      })().catch(async (error) => {
         restartRequested = false;
         diagnostics?.record("desktop.stop_failed", error);
         dialog.showErrorBox(
           "Reader 尚未退出",
           `本地服务未确认停止，未重新启动。\n${String(error)}`,
         );
+        // Cleanup success and process closure are separate barriers. Keep the
+        // rejected stop owner for migration/restart, but allow a plain exit
+        // after a late or unsuccessful close. exitCode alone is not a join.
+        await serverClosed;
+        restartRequested = false;
+        quitJoined = true;
+        app.quit();
       });
     }
     return;

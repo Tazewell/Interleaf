@@ -20,6 +20,8 @@ let migrate: ReturnType<typeof vi.fn>;
 let stop: ReturnType<typeof vi.fn>;
 let showMessageBox: ReturnType<typeof vi.fn>;
 let showOpenDialog: ReturnType<typeof vi.fn>;
+let showErrorBox: ReturnType<typeof vi.fn>;
+let execute: ReturnType<typeof vi.fn>;
 let serverChild: any;
 let exitCount = 0;
 const event = () => ({
@@ -58,10 +60,12 @@ beforeEach(async (context) => {
     .fn()
     .mockResolvedValue({ canceled: false, filePaths: ["/destination"] });
   showMessageBox = vi.fn().mockResolvedValue({ response: 0 });
+  showErrorBox = vi.fn();
+  execute = vi.fn();
   vi.doMock("electron", () => ({
     app,
     ipcMain: ipc,
-    dialog: { showOpenDialog, showMessageBox, showErrorBox: vi.fn() },
+    dialog: { showOpenDialog, showMessageBox, showErrorBox },
     session: {
       defaultSession: {
         setProxy: async () => {},
@@ -102,7 +106,7 @@ beforeEach(async (context) => {
     },
   }));
   vi.doMock("node:child_process", () => ({
-    execFile: vi.fn(),
+    execFile: execute,
     spawn: () => {
       const child = Object.assign(new EventEmitter(), {
         exitCode: null,
@@ -197,6 +201,7 @@ beforeEach(async (context) => {
     );
 });
 afterEach(() => {
+  vi.useRealTimers();
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
 });
@@ -313,6 +318,95 @@ it("joins the started child after startup failure without killing it", async () 
   expect(stop).toHaveBeenCalledOnce();
   serverChild.emit("close", 0, null);
   await vi.waitFor(() => expect(exitCount).toBe(1));
+});
+
+it.each(["plain", "restart"])("recovers %s quit after timeout and late close without relaunch", async (kind) => {
+  const actual = await vi.importActual<typeof import("./library-location")>("./library-location");
+  stop.mockImplementation(actual.stopLibraryServer);
+  vi.useFakeTimers();
+  if (kind === "restart") handlers.get("reader:restart")!(event());
+  else app.quit();
+  ipc.emit("reader:flushed", event(), null);
+  await vi.advanceTimersByTimeAsync(0);
+  app.quit();
+  await vi.advanceTimersByTimeAsync(30_000);
+  expect(showErrorBox).toHaveBeenCalledOnce();
+  expect(exitCount).toBe(0);
+  expect(app.relaunch).not.toHaveBeenCalled();
+  expect(serverChild.kill).not.toHaveBeenCalled();
+  expect(serverChild.stdin.writableEnded).toBe(true);
+  serverChild.exitCode = 0;
+  serverChild.emit("exit", 0);
+  app.quit();
+  await vi.advanceTimersByTimeAsync(0);
+  expect(exitCount).toBe(0); // exit is not close; stdio/work still owns the barrier.
+  serverChild.emit("close", 0, null);
+  app.quit();
+  await vi.advanceTimersByTimeAsync(0);
+  expect(exitCount).toBe(1);
+  expect(stop).toHaveBeenCalledOnce();
+  expect(app.relaunch).not.toHaveBeenCalled();
+});
+
+it.each(["plain", "restart"])("finishes %s quit after an already exited nonzero child closes", async (kind) => {
+  const actual = await vi.importActual<typeof import("./library-location")>("./library-location");
+  stop.mockImplementation(actual.stopLibraryServer);
+  vi.useFakeTimers();
+  serverChild.exitCode = 1;
+  if (kind === "restart") handlers.get("reader:restart")!(event());
+  else app.quit();
+  ipc.emit("reader:flushed", event(), null);
+  await vi.advanceTimersByTimeAsync(0);
+  expect(exitCount).toBe(0);
+  serverChild.emit("close", 1, null);
+  app.quit();
+  await vi.advanceTimersByTimeAsync(0);
+  expect(exitCount).toBe(1);
+  expect(showErrorBox).toHaveBeenCalledOnce();
+  expect(app.relaunch).not.toHaveBeenCalled();
+  expect(serverChild.kill).not.toHaveBeenCalled();
+});
+
+it("finishes startup failure after nonzero close", async () => {
+  serverChild.exitCode = 1;
+  serverChild.emit("close", 1, null);
+  await vi.waitFor(() => expect(showErrorBox).toHaveBeenCalledOnce());
+  app.quit();
+  await vi.waitFor(() => expect(exitCount).toBeGreaterThan(0));
+  expect(app.relaunch).not.toHaveBeenCalled();
+  expect(serverChild.kill).not.toHaveBeenCalled();
+});
+
+it.each(["timeout", "nonzero"])("rejects migration after %s cleanup failure but allows desktop completion", async (kind) => {
+  const actual = await vi.importActual<typeof import("./library-location")>("./library-location");
+  stop.mockImplementation(actual.stopLibraryServer);
+  migrate.mockImplementation(actual.migrateLibrary);
+  vi.useFakeTimers();
+  const result = move();
+  await vi.advanceTimersByTimeAsync(0);
+  ipc.emit("reader:flushed", event(), null);
+  await vi.advanceTimersByTimeAsync(0);
+  expect(execute).not.toHaveBeenCalled();
+  if (kind === "timeout") await vi.advanceTimersByTimeAsync(30_000);
+  else {
+    serverChild.exitCode = 1;
+    serverChild.emit("close", 1, null);
+    await vi.advanceTimersByTimeAsync(0);
+  }
+  expect(await result).toBe(false);
+  expect(execute).not.toHaveBeenCalled();
+  expect(app.relaunch).not.toHaveBeenCalled();
+  expect(handlers.get("reader:library-location")!(event())).toBe("/old/library");
+  if (kind === "timeout") {
+    expect(exitCount).toBe(0);
+    serverChild.exitCode = 0;
+    serverChild.emit("close", 0, null);
+    app.quit();
+  }
+  await vi.advanceTimersByTimeAsync(0);
+  expect(exitCount).toBe(1);
+  expect(app.relaunch).not.toHaveBeenCalled();
+  expect(serverChild.kill).not.toHaveBeenCalled();
 });
 
 it("does not close the reader when the native confirmation is cancelled", async () => {
