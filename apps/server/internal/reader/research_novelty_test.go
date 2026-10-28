@@ -166,7 +166,7 @@ func TestResearchNoveltyBudgetRetainsQueries(t *testing.T) {
 	}
 }
 func TestResearchNoveltyRejectsInvalidClaims(t *testing.T) {
-	ev := ResearchEvidence{ID: "e1", CandidateID: "b", Kind: "remote-html", Location: []byte(`{"contentLevel":"fulltext","qualification":"dom-body-v1"}`), Availability: "valid"}
+	ev := ResearchEvidence{ID: "e1", CandidateID: "b", Kind: "remote-html", Location: []byte(`{"contentLevel":"fulltext","qualification":"dom-body-v2"}`), Availability: "valid"}
 	searches := []ResearchSearch{}
 	ids := []string{}
 	for i := 0; i < 6; i++ {

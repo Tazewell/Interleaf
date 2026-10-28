@@ -31,7 +31,7 @@ func researchFulltext(ev ResearchEvidence) bool {
 			ContentLevel  string `json:"contentLevel"`
 			Qualification string `json:"qualification"`
 		}
-		return json.Unmarshal(ev.Location, &location) == nil && location.ContentLevel == "fulltext" && location.Qualification == "dom-body-v1"
+		return json.Unmarshal(ev.Location, &location) == nil && location.ContentLevel == "fulltext" && location.Qualification == "dom-body-v2"
 	}
 	return ev.Kind == "remote-page" || (ev.Kind == "local-passage" && ev.DocumentID != "")
 }

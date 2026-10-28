@@ -479,6 +479,23 @@ type publicTextLine struct {
 	heading  int
 }
 
+// Qualification and exported text must see the same visible subtree.
+func publicTextExcluded(n *nethtml.Node) bool {
+	if n.Type != nethtml.ElementNode {
+		return false
+	}
+	switch strings.ToLower(n.Data) {
+	case "script", "style", "iframe", "object", "embed", "svg", "math", "form", "input", "button", "template", "noscript", "head":
+		return true
+	}
+	for _, a := range n.Attr {
+		if a.Key == "hidden" || a.Key == "aria-hidden" && a.Val == "true" {
+			return true
+		}
+	}
+	return false
+}
+
 // Keep qualification metadata alongside the exact sanitized paragraph indices.
 // Abstract containers and subordinate headings remain abstracts after flattening.
 func publicText(raw string) (string, []publicTextLine) {
@@ -500,17 +517,13 @@ func publicText(raw string) (string, []publicTextLine) {
 	}
 	var visit func(*nethtml.Node, bool, int)
 	visit = func(n *nethtml.Node, abstract bool, heading int) {
+		if publicTextExcluded(n) {
+			return
+		}
 		boundary := false
 		previousLevel := abstractLevel
 		if n.Type == nethtml.ElementNode {
-			switch strings.ToLower(n.Data) {
-			case "script", "style", "iframe", "object", "embed", "svg", "math", "form", "input", "button", "template", "noscript", "head":
-				return
-			}
 			for _, a := range n.Attr {
-				if a.Key == "hidden" || a.Key == "aria-hidden" && a.Val == "true" {
-					return
-				}
 				if (a.Key == "class" || a.Key == "id" || a.Key == "role") && strings.Contains(strings.ToLower(a.Val), "abstract") {
 					abstract = true
 				}
@@ -527,6 +540,9 @@ func publicText(raw string) (string, []publicTextLine) {
 				var title strings.Builder
 				var headingText func(*nethtml.Node)
 				headingText = func(c *nethtml.Node) {
+					if publicTextExcluded(c) {
+						return
+					}
 					if c.Type == nethtml.TextNode {
 						title.WriteString(c.Data)
 					}
