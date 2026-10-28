@@ -1591,7 +1591,7 @@ function PaperRow({
             </div>
             <div className="paper-row-meta">
               <span className="paper-row-kind">
-                {doc.metadataOnly
+                {(doc.attachments?.length ?? 0) === 0
                   ? "无附件"
                   : (doc.attachments?.length ?? 0) > 1
                     ? `${doc.attachments!.length} 个附件`
