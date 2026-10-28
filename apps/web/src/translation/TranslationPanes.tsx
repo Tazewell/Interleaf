@@ -20,12 +20,16 @@ export function TranslationPanes({
   onSwap,
   source,
   translation,
+  sourceLabel,
+  translationLabel,
 }: {
   mode: "source" | "parallel" | "translation";
   swapped: boolean;
   onSwap: () => void;
   source: ReactNode;
   translation: ReactNode;
+  sourceLabel?: string;
+  translationLabel?: string;
 }) {
   const id = useId();
   const sourcePanel = usePanelRef();
@@ -33,6 +37,14 @@ export function TranslationPanes({
   const [dividerLeft, setDividerLeft] = useState(50);
   const parallel = mode === "parallel";
   const sourceId = `${id}-${swapped ? "right" : "left"}`;
+  const pane = (content: ReactNode, label?: string) => (
+    <div className="translation-pane-stack">
+      {parallel && label && (
+        <div className="translation-pane-caption">{label}</div>
+      )}
+      <div className="translation-pane-body">{content}</div>
+    </div>
+  );
 
   useLayoutEffect(() => {
     sourcePanel.current?.resize(
@@ -53,7 +65,7 @@ export function TranslationPanes({
       style={{ overflow: "hidden" }}
       inert={mode === "translation"}
     >
-      {source}
+      {pane(source, sourceLabel)}
     </ResizablePanel>,
     <ResizableHandle
       key="divider"
@@ -71,7 +83,7 @@ export function TranslationPanes({
       style={{ overflow: "hidden" }}
       inert={mode === "source"}
     >
-      {translation}
+      {pane(translation, translationLabel)}
     </ResizablePanel>,
   ];
 

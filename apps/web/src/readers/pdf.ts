@@ -213,15 +213,46 @@ export class PDFReaderAdapter implements ReaderAdapter {
       viewer.style.paddingBottom = `${container.clientHeight / 2}px`;
       this.clearSelection();
       clearTimeout(this.resizeTimer);
+      const recenter = () => {
+        const maximum = container.scrollWidth - container.clientWidth;
+        if (maximum > 0) container.scrollLeft = maximum / 2;
+      };
+      const toggling = !!container.closest("[data-toggling]");
       const fit = () => {
         if (container.closest("[inert]")) return;
-        if (!this.disposed && this.pdf && this.fitWidth)
+        const page = container.querySelector<HTMLElement>(".pdfViewer .page");
+        // A sidebar toggle often leaves a numerical zoom wider than the pane.
+        // In that one case fit again so the page cannot be clipped off-center.
+        const overflows =
+          !!page && page.getBoundingClientRect().width > container.clientWidth;
+        if (
+          !this.disposed &&
+          this.pdf &&
+          (this.fitWidth || (toggling && overflows))
+        ) {
           this.viewer.currentScaleValue = "page-width";
+          if (toggling && !this.fitWidth) {
+            this.fitWidth = true;
+            this.appliedZoom = "width";
+            this.events.zoom?.("width");
+          }
+        }
+        // Keep the page centered for the zoom levels that still fit. PDF.js
+        // settles its scroll position after the panel transition, so repeat
+        // the recenter once the 220ms toggle and the next layout frame pass.
+        requestAnimationFrame(recenter);
+        if (toggling) {
+          window.setTimeout(recenter, 260);
+          window.setTimeout(recenter, 520);
+        }
       };
       // Refit once the sidebar settles, not on every animation frame.
-      if (container.closest("[data-toggling]"))
+      if (toggling) {
         this.resizeTimer = setTimeout(fit, 100);
-      else fit();
+        // The panel transition is 220ms; PDF.js can apply its old scale after
+        // the first pass. A second fit after the transition lands is cheap.
+        window.setTimeout(fit, 360);
+      } else fit();
     });
     this.resize.observe(container);
   }

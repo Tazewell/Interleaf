@@ -767,7 +767,7 @@ const pdf = scene({
 
 // Reading modes.
 const modeTabs = { x: 360, y: 8, w: 222, h: 28 };
-const modeLabels = ["仅原文", "原文译文", "仅译文"];
+const modeLabels = ["原页", "对照", "译文"];
 const content: Rect = { x: 8, y: 44, w: 624, h: 348 };
 const source =
   "The dominant sequence transduction models are based on complex recurrent or convolutional neural networks that include an encoder and a decoder. The best performing models also connect the encoder and decoder through an attention mechanism. We propose a new simple network architecture, the Transformer, based solely on attention mechanisms, dispensing with recurrence and convolutions entirely.";

@@ -26,6 +26,7 @@ import {
   ListTree,
   Search,
   BookmarkPlus,
+  MoreHorizontal,
   Sparkles,
   Settings2,
   Underline,
@@ -72,6 +73,12 @@ import {
   TabsContent,
 } from "@reader/ui/components/tabs";
 import { ScrollArea } from "@reader/ui/components/scroll-area";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@reader/ui/components/dropdown-menu";
 import {
   Popover,
   PopoverTrigger,
@@ -1064,18 +1071,9 @@ export function Workspace({
               返回阅读位置
             </Button>
           )}
-          <IconButton label="文档概要" onClick={() => setOverviewOpen(true)}>
-            <BookOpen />
-          </IconButton>
           <div ref={setReadingToolbar} />
           <span className="toolbar-divider" />
           <div ref={setSourceAutoCenterToolbar} />
-          <IconButton
-            label="添加书签"
-            onClick={() => void annotate("bookmark")}
-          >
-            <BookmarkPlus />
-          </IconButton>
           <Popover>
             <PopoverTrigger
               render={
@@ -1292,9 +1290,30 @@ export function Workspace({
           >
             <Sparkles />
           </IconButton>
-          <IconButton label="设置" onClick={onSettings}>
-            <Settings2 />
-          </IconButton>
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              render={
+                <Button
+                  size="icon-sm"
+                  variant="ghost"
+                  aria-label="更多阅读操作"
+                  title="更多阅读操作"
+                />
+              }
+            >
+              <MoreHorizontal />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-44">
+              <DropdownMenuItem onClick={() => void annotate("bookmark")}>
+                <BookmarkPlus />
+                添加书签
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={onSettings}>
+                <Settings2 />
+                设置
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </header>
       <ResizablePanelGroup
@@ -1562,7 +1581,7 @@ export function Workspace({
               <TabsList className="panel-tabs">
                 <TabsTrigger value="ai">
                   <Sparkles className="size-3.5" />
-                  Agent
+                  对话
                 </TabsTrigger>
                 <TabsTrigger value="notes">
                   <StickyNote className="size-3.5" />
@@ -1576,6 +1595,15 @@ export function Workspace({
                   onClick={() => setUsageOpen(true)}
                 >
                   <ChartColumn />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon-xs"
+                  title="文档概要"
+                  aria-label="文档概要"
+                  onClick={() => setOverviewOpen(true)}
+                >
+                  <BookOpen />
                 </Button>
               </TabsList>
               <TabsContent
@@ -1632,44 +1660,45 @@ export function Workspace({
                   empty={
                     <div className="chat-empty">
                       <p>
-                        选中原文，可以翻译、解释，
-                        <br />
-                        或引用多段文字一起讨论。
+                        选中文字提问，或直接问这一
+                        {doc.type === "epub" ? "章" : "页"}。
                       </p>
-                      <Button
-                        variant="outline"
-                        className="suggestion"
-                        disabled={!adapter}
-                        onClick={() =>
-                          void send(
-                            doc.type === "epub"
-                              ? "请总结当前章节的核心内容，并列出值得思考的问题。"
-                              : "请总结当前 PDF 页的主要内容，保留重要术语。",
-                            [],
-                            true,
-                          )
-                        }
-                      >
-                        <BookOpen />
-                        总结当前{doc.type === "epub" ? "章节" : "页面"}
-                        <ArrowLeft className="ml-auto rotate-180" />
-                      </Button>
-                      <Button
-                        variant="outline"
-                        className="suggestion"
-                        disabled={!adapter}
-                        onClick={() =>
-                          void send(
-                            "请找出当前内容的核心概念，并用简明的语言解释。",
-                            [],
-                            true,
-                          )
-                        }
-                      >
-                        <MessageSquare />
-                        解释核心概念
-                        <ArrowLeft className="ml-auto rotate-180" />
-                      </Button>
+                      <div className="chat-empty-actions">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="suggestion"
+                          disabled={!adapter}
+                          onClick={() =>
+                            void send(
+                              doc.type === "epub"
+                                ? "请总结当前章节的核心内容，并列出值得思考的问题。"
+                                : "请总结当前 PDF 页的主要内容，保留重要术语。",
+                              [],
+                              true,
+                            )
+                          }
+                        >
+                          <BookOpen />
+                          总结当前{doc.type === "epub" ? "章节" : "页面"}
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="suggestion"
+                          disabled={!adapter}
+                          onClick={() =>
+                            void send(
+                              "请找出当前内容的核心概念，并用简明的语言解释。",
+                              [],
+                              true,
+                            )
+                          }
+                        >
+                          <MessageSquare />
+                          解释概念
+                        </Button>
+                      </div>
                       <p className="privacy-note">
                         主动引用的文字和图片随问题发送；文档 Agent
                         按需检索、读取原文。
@@ -1750,6 +1779,7 @@ export function Workspace({
                       key={provider}
                       disabled={sending || !currentSession}
                       onSettings={onSettings}
+                      modelsOnly
                     />
                     {sending ? (
                       <Button

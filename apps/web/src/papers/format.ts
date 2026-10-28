@@ -146,6 +146,13 @@ export const paperProgress = (percentage: number) =>
       100,
   );
 
+/** One-line abstract preview for paper list rows. */
+export function paperExcerpt(abstract?: string, limit = 180) {
+  const text = (abstract || "").replace(/\s+/g, " ").trim();
+  if (!text) return "";
+  return text.length > limit ? `${text.slice(0, limit).trimEnd()}…` : text;
+}
+
 export function fileSize(bytes: number) {
   if (!Number.isFinite(bytes) || bytes <= 0) return "—";
   if (bytes < 1024) return `${bytes} B`;

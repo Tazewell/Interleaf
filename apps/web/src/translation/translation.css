@@ -36,6 +36,32 @@
   min-width: 0;
   min-height: 0;
 }
+.translation-pane-stack {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  width: 100%;
+  height: 100%;
+}
+.translation-pane-body {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+}
+.translation-pane-caption {
+  display: flex;
+  flex: none;
+  align-items: center;
+  height: 30px;
+  padding: 0 14px;
+  border-bottom: 1px solid var(--border);
+  background: var(--background);
+  color: var(--muted-foreground);
+  font-size: 11px;
+}
 .translation-divider {
   z-index: 5;
   cursor: col-resize;
@@ -46,11 +72,20 @@
 }
 .translation-swap {
   position: absolute;
-  top: 12px;
+  top: 50%;
   z-index: 6;
-  transform: translateX(-50%);
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--background);
+  transform: translate(-50%, -50%);
   cursor: pointer;
   color: var(--muted-foreground);
+}
+.translation-swap:hover {
+  color: var(--foreground);
+  background: var(--muted);
 }
 .translation-document {
   flex: 1;
@@ -184,8 +219,8 @@
 }
 .pdf-reading[data-theme="sepia"] .pdf-page-navigation,
 .epub-reading[data-theme="sepia"] .pdf-page-navigation {
-  background: #f7f6f2;
-  color: #1f1e1d;
+  background: var(--card);
+  color: var(--foreground);
 }
 
 .textLayer ::highlight(reader-linked-sentences) {
@@ -203,10 +238,10 @@
   bottom: 0;
   width: 3px;
   border-radius: 3px;
-  background: #e6b94c;
+  background: var(--accent-ink);
 }
 :root[data-theme="sepia"] .translation-note-indicator {
-  background: var(--brand-30);
+  background: var(--accent-ink);
 }
 @media (prefers-reduced-motion: reduce) {
   .translation-document {
@@ -215,8 +250,8 @@
 }
 .pdf-reading[data-theme="sepia"] .translation-document,
 .epub-reading[data-theme="sepia"] .translation-document {
-  background: #f7f6f2;
-  color: #1f1e1d;
+  background: var(--card);
+  color: var(--foreground);
 }
 ::highlight(reader-translation-marks) {
   background: #e6b94c66;
