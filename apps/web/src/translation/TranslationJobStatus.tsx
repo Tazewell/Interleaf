@@ -10,7 +10,11 @@ export function TranslationJobStatus({
   error?: string;
   retry: () => void;
 }) {
-  const status = processing?.translating?.status ?? processing?.status;
+  const paused =
+    processing?.enabled === false || processing?.status === "paused";
+  const status = paused
+    ? "paused"
+    : (processing?.translating?.status ?? processing?.status);
   if (!error && status !== "failed" && status !== "waiting") return null;
   const detail =
     error ||

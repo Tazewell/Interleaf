@@ -120,7 +120,11 @@ function TranslationContent({
   const formula = ["display_formula", "inline_formula"].includes(block.label);
   const idle = translation?.status === "idle";
   const status = processing?.translating?.status ?? processing?.status;
-  const halted = paused || processing?.enabled === false || status === "paused";
+  const halted =
+    paused ||
+    processing?.enabled === false ||
+    processing?.status === "paused" ||
+    status === "paused";
   const pendingLabel = halted
     ? "翻译已暂停"
     : status === "failed"
