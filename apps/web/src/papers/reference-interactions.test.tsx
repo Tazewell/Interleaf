@@ -104,7 +104,7 @@ it("disables file actions for metadata-only papers without snapshot requests", a
       />,
     ),
   );
-  expect(button("开始阅读")?.disabled).toBe(true);
+  expect(button("先添加附件")?.disabled).toBe(true);
   expect(button("查找论文信息")?.disabled).toBe(true);
   expect(api.snapshotStatus).not.toHaveBeenCalled();
 });
