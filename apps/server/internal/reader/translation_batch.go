@@ -466,15 +466,15 @@ func (s *Server) settleTranslations(ctx context.Context, p *Processing, m transl
 		s.configMu.Lock()
 		stored, configErr := s.readNativeAIConfig()
 		s.configMu.Unlock()
+		waitingConfig := stored
 		stored.Config = options.apply(stored.Config)
 		snapshot, snapshotErr := s.resolveNativeStoredTask(ctx, stored, taskTranslation)
 		if configErr != nil || snapshotErr != nil {
-			s.processingMu.Lock()
-			p.Status = "waiting"
-			p.Detail = "请配置 API 翻译模型后继续翻译"
-			err = s.Store.saveProcessing(*p)
-			s.processingMu.Unlock()
-			return err
+			retry, waitErr := s.waitTranslationConfiguration(p, waitingConfig, "请配置 API 翻译模型后继续翻译")
+			if retry {
+				continue
+			}
+			return waitErr
 		}
 		var progressMu sync.Mutex
 		progress := func() {

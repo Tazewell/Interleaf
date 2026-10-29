@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"reflect"
 	"regexp"
 	"strings"
 	"time"
@@ -100,15 +101,21 @@ func (s *Server) convertFormulas(ctx context.Context, documentID string, m layou
 			return err
 		}
 		image, callErr := os.ReadFile(filepath.Join(s.analysisDir(documentID), b.Image))
+		preserveOriginal := false
 		if callErr == nil {
 			service := s.currentGenerationServiceContext(ctx, taskVision)
 			service.usageSink = s.processingUsageSink(documentID, "translating", b.ID)
 			service.timeout = 3 * time.Minute
-			t.FormulaMarkdown, callErr = generateFormula(ctx, service, AIInput{Prompt: formulaPrompt + b.Text, Image: image})
+			in := AIInput{Prompt: formulaPrompt + b.Text, Image: image}
+			callErr = service.ValidateInput(in, false)
+			preserveOriginal = errorKind(callErr) == ErrorCapability
+			if callErr == nil {
+				t.FormulaMarkdown, callErr = generateFormula(ctx, service, in)
+			}
 		}
 		t.Status = "complete"
 		if callErr != nil {
-			if errorKind(callErr) == ErrorCapability {
+			if preserveOriginal {
 				// Text translation remains usable without verified vision. Keep
 				// the original image, with conversion available as an explicit action.
 				t.Status = "idle"
@@ -134,17 +141,49 @@ func (s *Server) convertFormulas(ctx context.Context, documentID string, m layou
 	return errors.Join(failures...)
 }
 
+// Publish a configuration wait only while its local snapshot is still current.
+// Config saves release configMu before waking under processingMu. No model or
+// catalog I/O runs under these locks.
+func (s *Server) waitTranslationConfiguration(p *Processing, before nativeAIStored, detail string) (retry bool, err error) {
+	s.configMu.Lock()
+	defer s.configMu.Unlock()
+	latest, err := s.readNativeAIConfig()
+	if err != nil {
+		return false, err
+	}
+	if !reflect.DeepEqual(before, latest) {
+		return true, nil
+	}
+	s.processingMu.Lock()
+	defer s.processingMu.Unlock()
+	p.Status, p.Detail = "waiting", detail
+	return false, s.Store.saveProcessing(*p)
+}
+
 func (s *Server) translateContent(ctx context.Context, p *Processing, input translationInput) error {
 	// Check the shared connection before either concurrent lane starts. A local
 	// configuration block must not become a failed row for every formula.
-	if err := s.currentGenerationServiceContext(ctx, taskTranslation).ValidateInput(AIInput{}, false); err != nil {
+	for {
+		s.configMu.Lock()
+		stored, err := s.readNativeAIConfig()
+		s.configMu.Unlock()
+		if err != nil {
+			return err
+		}
+		service, err := s.nativeGenerationServiceContext(ctx, stored.Config, taskTranslation)
+		if err == nil {
+			err = service.ValidateInput(AIInput{}, false)
+		}
+		if err == nil {
+			break
+		}
 		if errorKind(err) != ErrorConfiguration {
 			return err
 		}
-		s.processingMu.Lock()
-		defer s.processingMu.Unlock()
-		p.Status, p.Detail = "waiting", err.Error()
-		return s.Store.saveProcessing(*p)
+		retry, saveErr := s.waitTranslationConfiguration(p, stored, err.Error())
+		if !retry {
+			return saveErr
+		}
 	}
 	finish, err := s.startUsageStage(p.DocumentID, "translating")
 	if err != nil {
