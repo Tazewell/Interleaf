@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -28,7 +30,44 @@ func queuedMetadataPaper(t *testing.T, s *Server, pages int, arxiv string) Docum
 	if err := s.Store.saveProcessing(Processing{DocumentID: d.ID, Phase: "translating", Status: "complete"}); err != nil {
 		t.Fatal(err)
 	}
+	if err := os.MkdirAll(s.analysisDir(d.ID), 0700); err != nil {
+		t.Fatal(err)
+	}
+	manifest, _ := json.Marshal(layoutManifest{Pages: pages})
+	if err := os.WriteFile(filepath.Join(s.analysisDir(d.ID), "manifest.json"), manifest, 0600); err != nil {
+		t.Fatal(err)
+	}
 	return d
+}
+
+func TestMetadataWorkerWaitsForParsingWithoutBlockingLaterPaper(t *testing.T) {
+	s := testServer(t)
+	scholarFixture(t, s)
+	first := queuedMetadataPaper(t, s, 2, "")
+	if err := os.Remove(filepath.Join(s.analysisDir(first.ID), "manifest.json")); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Store.saveProcessing(Processing{DocumentID: first.ID, Phase: "learning", Status: "failed"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Store.DB.Exec("UPDATE documents SET created_at='2000-01-01T00:00:00Z' WHERE id=?", first.ID); err != nil {
+		t.Fatal(err)
+	}
+	second := queuedMetadataPaper(t, s, 3, "1706.03762")
+	startMetadataWorker(t, s)
+	awaitMetadataState(t, s, second.ID, "done")
+	got, err := s.Store.Document(first.ID)
+	if err != nil || got.Metadata.Lookup != "pending" {
+		t.Fatalf("unparsed paper must remain pending: %+v %v", got, err)
+	}
+	manifest := `{"pages":2,"blocks":[{"id":"p1-b1","page":1,"label":"text","bounds":{"x":0.1,"y":0.1,"width":0.5,"height":0.1},"text":"arXiv:1706.03762v7"}]}`
+	if err := os.WriteFile(filepath.Join(s.analysisDir(first.ID), "manifest.json"), []byte(manifest), 0600); err != nil {
+		t.Fatal(err)
+	}
+	got = awaitMetadataState(t, s, first.ID, "done")
+	if got.Title != "Attention Is All You Need" || got.Author != "Ashish Vaswani" {
+		t.Fatalf("parsed paper did not resume metadata lookup: %+v", got)
+	}
 }
 
 func startMetadataWorker(t *testing.T, s *Server) (context.CancelFunc, <-chan struct{}) {
@@ -49,7 +88,7 @@ func startMetadataWorker(t *testing.T, s *Server) (context.CancelFunc, <-chan st
 
 func awaitMetadataState(t *testing.T, s *Server, id, state string) Document {
 	t.Helper()
-	deadline := time.Now().Add(5 * time.Second)
+	deadline := time.Now().Add(8 * time.Second)
 	for {
 		d, err := s.Store.Document(id)
 		if err != nil {

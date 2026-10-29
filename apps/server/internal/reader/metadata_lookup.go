@@ -2,7 +2,6 @@ package reader
 
 import (
 	"context"
-	"database/sql"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -268,37 +267,61 @@ func (s *Server) metadataWorker(ctx context.Context) {
 		if !s.autoLookupEnabled() {
 			continue
 		}
-		var id string
-		err := s.Store.DB.QueryRow(`SELECT d.id FROM documents d LEFT JOIN document_processing p ON p.document_id=d.id
+		rows, err := s.Store.DB.Query(`SELECT d.id FROM documents d LEFT JOIN document_processing p ON p.document_id=d.id
    WHERE d.library='papers' AND d.deleted_at='' AND json_extract(d.metadata,'$.lookup')='pending'
    AND (p.document_id IS NULL OR p.phase!='learning' OR p.status='failed')
-   ORDER BY d.created_at LIMIT 1`).Scan(&id)
-		if errors.Is(err, sql.ErrNoRows) || err != nil {
-			continue
-		}
-		work, finish, err := s.beginDocumentTask(ctx, id)
+   ORDER BY d.created_at`)
 		if err != nil {
 			continue
 		}
-		lookupCtx, cancel := context.WithTimeout(work, time.Minute)
-		_, err = s.lookupDocument(lookupCtx, id, false)
-		cancel()
-		if ctx.Err() != nil || work.Err() != nil {
-			finish()
-			continue
+		var pending []string
+		for rows.Next() {
+			var id string
+			if rows.Scan(&id) == nil {
+				pending = append(pending, id)
+			}
 		}
-		state := "done"
-		switch {
-		case errors.Is(err, errNoIdentifier) || errors.Is(err, scholar.ErrNotFound):
-			state = "notFound"
-		case err != nil:
-			state = "failed"
+		rows.Close()
+		for _, id := range pending {
+			if ctx.Err() != nil || s.lookupPendingMetadata(ctx, id) {
+				break
+			}
 		}
-		if err != nil {
-			_, _ = s.applyFound(id, PaperMetadata{}, "", "lookup", state)
-		}
-		// Keep the document owner through persistence: finish cancels work and
-		// releases deletion's barrier, so it must follow the cancellation check.
-		finish()
 	}
+}
+
+// Return true only when a lookup was attempted. Unparsed files retain pending
+// without blocking later papers; an explicit identifier needs no PDF layout.
+func (s *Server) lookupPendingMetadata(ctx context.Context, id string) bool {
+	work, finish, err := s.beginDocumentTask(ctx, id)
+	if err != nil {
+		return false
+	}
+	defer finish()
+	d, err := s.Store.Document(id)
+	if err != nil || d.Metadata.Lookup != "pending" {
+		return false
+	}
+	if d.Metadata.DOI == "" && d.Metadata.ArXiv == "" {
+		if _, err := s.readLayout(id); err != nil {
+			return false
+		}
+	}
+	lookupCtx, cancel := context.WithTimeout(work, time.Minute)
+	_, err = s.lookupDocument(lookupCtx, id, false)
+	cancel()
+	if ctx.Err() != nil || work.Err() != nil {
+		return true
+	}
+	state := "done"
+	switch {
+	case errors.Is(err, errNoIdentifier) || errors.Is(err, scholar.ErrNotFound):
+		state = "notFound"
+	case err != nil:
+		state = "failed"
+	}
+	if err != nil {
+		_, _ = s.applyFound(id, PaperMetadata{}, "", "lookup", state)
+	}
+	return true
 }
