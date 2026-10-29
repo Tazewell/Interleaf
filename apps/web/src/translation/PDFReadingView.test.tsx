@@ -12,6 +12,7 @@ import {
   type ReaderTheme,
   type SearchResult,
   type TranslationBlock,
+  type Processing,
 } from "@reader/core";
 const fixture = vi.hoisted(() => ({
   events: undefined as ReaderEvents | undefined,
@@ -25,6 +26,7 @@ const fixture = vi.hoisted(() => ({
       ) => void)
     | undefined,
   signal: undefined as AbortSignal | undefined,
+  processing: undefined as Processing | undefined,
 }));
 vi.mock("@reader/api", () => ({
   api: {
@@ -44,6 +46,7 @@ vi.mock("@reader/api", () => ({
       },
     ),
     translate: vi.fn(async () => ({ queued: true })),
+    process: vi.fn(async () => ({})),
   },
   blockImageURL: () => "",
 }));
@@ -113,6 +116,7 @@ import { PDFReadingView } from "./PDFReadingView";
 let root: Root, host: HTMLDivElement;
 const events = { location: vi.fn(), selection: vi.fn() };
 beforeEach(async () => {
+  fixture.processing = undefined;
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   vi.stubGlobal(
     "ResizeObserver",
@@ -152,6 +156,7 @@ async function renderView(
     root.render(
       <PDFReadingView
         sidebarsOpen={sidebarsOpen}
+        processing={fixture.processing}
         document={{ id: "doc", type: "pdf" } as Document}
         theme={theme}
         annotations={[]}
@@ -174,6 +179,34 @@ async function renderView(
     ),
   );
 }
+
+it("shows a single failed-job message and retries only after an explicit click", async () => {
+  fixture.processing = {
+    documentId: "doc",
+    enabled: true,
+    phase: "translating",
+    status: "failed",
+    detail: "请先确认 AI 连接配置\n请先确认 AI 连接配置",
+  } as Processing;
+  fixture.translations = [
+    { blockId: "p1-b1", sourceHash: "hash", status: "pending", sentences: [] },
+  ];
+  await renderView();
+  await act(async () =>
+    fixture.push!({ event: "snapshot", data: fixture.translations }),
+  );
+  await click("对照");
+  const { api } = await import("@reader/api");
+  expect(api.process).not.toHaveBeenCalled();
+  expect(host.textContent).not.toContain("正在翻译中");
+  expect(host.textContent?.split("请先确认 AI 连接配置")).toHaveLength(2);
+  const retry = host.querySelector<HTMLButtonElement>(
+    ".translation-warning button",
+  );
+  expect(retry).toBeTruthy();
+  await act(async () => retry!.click());
+  expect(api.process).toHaveBeenCalledExactlyOnceWith("doc");
+});
 
 it("uses repaired text for search and focuses the matching block", async () => {
   const results = await fixture.ready!.search("第二句");

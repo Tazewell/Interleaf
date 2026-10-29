@@ -42,6 +42,7 @@ import { animatePDFScroll } from "../readers/pdf-scroll";
 import { TranslationPanes } from "./TranslationPanes";
 import { formulaNumbers } from "./formulaNumbers";
 import { TranslationText } from "./TranslationText";
+import { TranslationJobStatus } from "./TranslationJobStatus";
 import { blockImageCache } from "./block-images";
 import { useSentenceMarks } from "./useSentenceMarks";
 import { translatedSelection as captureTranslationSelection } from "./selection";
@@ -1016,7 +1017,13 @@ export function PDFReadingView({
                 lineHeight: theme.lineHeight,
               }}
             >
-              {error && <p role="alert">{error}</p>}
+              <TranslationJobStatus
+                processing={processing}
+                error={error}
+                retry={() =>
+                  void api.process(doc.id).catch((e) => toast.error(e.message))
+                }
+              />
               {!visibleBlocks.length && (
                 <p role="status">
                   {doc.library === "books"
@@ -1106,6 +1113,7 @@ export function PDFReadingView({
                       renderImage={blockImages?.url}
                       retry={() => void translate(block.id)}
                       paused={processing?.enabled === false}
+                      processing={processing}
                     />
                     {noteIndexes.length > 0 && (
                       <span
@@ -1148,6 +1156,7 @@ export function PDFReadingView({
                 renderImage={blockImages?.url}
                 retry={() => void translate(popup.block.id)}
                 paused={processing?.enabled === false}
+                processing={processing}
               />
               <Button
                 variant="ghost"

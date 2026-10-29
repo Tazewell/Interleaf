@@ -24,6 +24,7 @@ import { ReaderView } from "../ReaderView";
 import { AssistanceControls } from "./AssistanceControls";
 import { TranslationPanes } from "./TranslationPanes";
 import { TranslationText } from "./TranslationText";
+import { TranslationJobStatus } from "./TranslationJobStatus";
 import { translatedSelection } from "./selection";
 import {
   paintTranslatedAnnotations,
@@ -545,27 +546,15 @@ export function EPUBReadingView({
               );
             }}
           >
-            {(error ||
-              streamError ||
-              processing?.status === "waiting" ||
-              processing?.status === "failed") && (
-              <div className="translation-warning">
-                {error || streamError || processing?.detail}
-                {processing?.status === "failed" && (
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={() =>
-                      void api
-                        .setAssistance(doc.id, "resume")
-                        .catch((e) => toast.error(e.message))
-                    }
-                  >
-                    重试翻译
-                  </Button>
-                )}
-              </div>
-            )}
+            <TranslationJobStatus
+              processing={processing}
+              error={error || streamError}
+              retry={() =>
+                void api
+                  .setAssistance(doc.id, "resume")
+                  .catch((e) => toast.error(e.message))
+              }
+            />
             {!blocks.length && (
               <p className="translation-warning">
                 {error ||
@@ -591,6 +580,7 @@ export function EPUBReadingView({
                   documentId={doc.id}
                   translation={translations.find((t) => t.blockId === block.id)}
                   paused={processing?.enabled === false}
+                  processing={processing}
                   retry={() => retry(block.id)}
                 />
               </section>

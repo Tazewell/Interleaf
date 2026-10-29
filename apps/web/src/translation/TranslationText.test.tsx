@@ -2,7 +2,7 @@
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import type { PDFBlock, TranslationBlock } from "@reader/core";
+import type { PDFBlock, Processing, TranslationBlock } from "@reader/core";
 import { TranslationText } from "./TranslationText";
 let host: HTMLDivElement, root: Root;
 const base: PDFBlock = {
@@ -33,6 +33,7 @@ async function render(
   block: PDFBlock,
   translation?: TranslationBlock,
   formulaNumber?: string,
+  processing?: Processing,
 ) {
   await act(async () =>
     root.render(
@@ -42,6 +43,7 @@ async function render(
         translation={translation}
         documentId="doc"
         retry={() => {}}
+        processing={processing}
       />,
     ),
   );
@@ -62,6 +64,63 @@ async function render(
     });
   }
 }
+it.each(["failed", "waiting", "queued", "paused"])(
+  "does not claim a %s translation job is actively translating",
+  async (status) => {
+    const processing = {
+      documentId: "doc",
+      enabled: status !== "paused",
+      status,
+      phase: "translating",
+      detail: "请确认连接",
+    } as Processing;
+    await render(
+      { ...base, label: "text", image: undefined },
+      {
+        blockId: base.id,
+        sourceHash: "hash",
+        status: "pending",
+        sentences: [],
+      },
+      undefined,
+      processing,
+    );
+    expect(host.textContent).not.toContain("正在翻译");
+    expect(host.textContent).toContain(
+      status === "failed"
+        ? "翻译已停止"
+        : status === "waiting"
+          ? "等待配置"
+          : status === "queued"
+            ? "等待翻译"
+            : "翻译已暂停",
+    );
+  },
+);
+it("keeps successful text visible when the overall job has failed", async () => {
+  await render(
+    { ...base, label: "text", image: undefined },
+    {
+      blockId: base.id,
+      sourceHash: "hash",
+      status: "complete",
+      sentences: [{ source: "Source", target: "已保存的译文" }],
+    },
+    undefined,
+    { status: "failed", enabled: true } as Processing,
+  );
+  expect(host.textContent).toContain("已保存的译文");
+  expect(host.textContent).not.toContain("翻译已停止");
+});
+it("labels an unconverted idle formula as its preserved original", async () => {
+  await render(
+    { ...base, label: "display_formula" },
+    { blockId: base.id, sourceHash: "hash", status: "idle", sentences: [] },
+  );
+  expect(host.querySelector("img")).not.toBeNull();
+  expect(host.textContent).toContain("保留原图");
+  expect(host.textContent).not.toContain("公式转换中");
+});
 it.each(["table", "chart", "image"])(
   "keeps %s body out of the translation view",
   async (label) => {

@@ -1,5 +1,5 @@
 import { FormulaRow } from "./FormulaRow";
-import type { PDFBlock, TranslationBlock } from "@reader/core";
+import type { PDFBlock, Processing, TranslationBlock } from "@reader/core";
 import { blockImageURL } from "@reader/api";
 import { Button } from "@reader/ui/components/button";
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
@@ -93,6 +93,7 @@ function TranslationContent({
   documentId,
   retry,
   paused = false,
+  processing,
   linked = [],
   formulaNumber,
   onCitation,
@@ -107,6 +108,7 @@ function TranslationContent({
   /** Requests this block; also used for blocks that were never requested. */
   retry: () => void;
   paused?: boolean;
+  processing?: Processing;
   linked?: number[];
   formulaNumber?: string;
   onCitation?: (blockId: string, label: string) => void;
@@ -117,7 +119,17 @@ function TranslationContent({
 }) {
   const formula = ["display_formula", "inline_formula"].includes(block.label);
   const idle = translation?.status === "idle";
-  const halted = paused && translation?.status === "pending";
+  const status = processing?.translating?.status ?? processing?.status;
+  const halted = paused || processing?.enabled === false || status === "paused";
+  const pendingLabel = halted
+    ? "翻译已暂停"
+    : status === "failed"
+      ? "翻译已停止"
+      : status === "waiting"
+        ? "等待配置翻译模型"
+        : status === "queued"
+          ? "等待翻译"
+          : "正在翻译中…";
   const asset =
     !!block.image ||
     ["algorithm", "table", "chart", "image"].includes(block.label);
@@ -167,11 +179,21 @@ function TranslationContent({
                 </Button>
               </>
             ) : idle ? (
-              <Button variant="ghost" size="sm" onClick={retry}>
-                转换公式
-              </Button>
+              <>
+                <span>保留原图</span>
+                <Button variant="ghost" size="sm" onClick={retry}>
+                  转换公式
+                </Button>
+              </>
             ) : (
-              <span>{halted ? "翻译已暂停" : "公式转换中…"}</span>
+              <span>
+                {halted ||
+                status === "failed" ||
+                status === "waiting" ||
+                status === "queued"
+                  ? pendingLabel
+                  : "公式转换中…"}
+              </span>
             )}
           </div>
         )}
@@ -224,9 +246,7 @@ function TranslationContent({
               ? translation.error || "此段翻译失败"
               : idle
                 ? "未翻译"
-                : halted
-                  ? "翻译已暂停"
-                  : "正在翻译中…"}
+                : pendingLabel}
           </span>
           {(translation?.status === "failed" || idle) && (
             <Button variant="ghost" size="sm" onClick={retry}>
