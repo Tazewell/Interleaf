@@ -108,9 +108,16 @@ func (s *Server) convertFormulas(ctx context.Context, documentID string, m layou
 		}
 		t.Status = "complete"
 		if callErr != nil {
-			t.Status = "failed"
-			t.Error = callErr.Error()
-			failures = append(failures, callErr)
+			if errorKind(callErr) == ErrorCapability {
+				// Text translation remains usable without verified vision. Keep
+				// the original image, with conversion available as an explicit action.
+				t.Status = "idle"
+				t.Error = ""
+			} else {
+				t.Status = "failed"
+				t.Error = callErr.Error()
+				failures = append(failures, callErr)
+			}
 		}
 		if ctx.Err() != nil {
 			t.Status = "pending"
@@ -128,6 +135,17 @@ func (s *Server) convertFormulas(ctx context.Context, documentID string, m layou
 }
 
 func (s *Server) translateContent(ctx context.Context, p *Processing, input translationInput) error {
+	// Check the shared connection before either concurrent lane starts. A local
+	// configuration block must not become a failed row for every formula.
+	if err := s.currentGenerationServiceContext(ctx, taskTranslation).ValidateInput(AIInput{}, false); err != nil {
+		if errorKind(err) != ErrorConfiguration {
+			return err
+		}
+		s.processingMu.Lock()
+		defer s.processingMu.Unlock()
+		p.Status, p.Detail = "waiting", err.Error()
+		return s.Store.saveProcessing(*p)
+	}
 	finish, err := s.startUsageStage(p.DocumentID, "translating")
 	if err != nil {
 		return err
