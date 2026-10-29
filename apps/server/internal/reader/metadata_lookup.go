@@ -283,8 +283,8 @@ func (s *Server) metadataWorker(ctx context.Context) {
 		lookupCtx, cancel := context.WithTimeout(work, time.Minute)
 		_, err = s.lookupDocument(lookupCtx, id, false)
 		cancel()
-		finish()
 		if ctx.Err() != nil || work.Err() != nil {
+			finish()
 			continue
 		}
 		state := "done"
@@ -297,5 +297,8 @@ func (s *Server) metadataWorker(ctx context.Context) {
 		if err != nil {
 			_, _ = s.applyFound(id, PaperMetadata{}, "", "lookup", state)
 		}
+		// Keep the document owner through persistence: finish cancels work and
+		// releases deletion's barrier, so it must follow the cancellation check.
+		finish()
 	}
 }
