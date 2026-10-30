@@ -33,6 +33,38 @@ it("reports a clipboard write failure", async () => {
   expect(toast.error).toHaveBeenCalledOnce();
   expect(toast.success).not.toHaveBeenCalled();
 });
+it("falls back to selection copy when the clipboard API is blocked", async () => {
+  vi.stubGlobal("navigator", {
+    clipboard: { writeText: vi.fn().mockRejectedValue(new Error("blocked")) },
+  });
+  const original = document.execCommand;
+  Object.defineProperty(document, "execCommand", {
+    value: vi.fn().mockReturnValue(true),
+    configurable: true,
+  });
+  try {
+    expect(await copyText("Ou2025SERL", "已复制引用键")).toBe(true);
+    expect(document.execCommand).toHaveBeenCalledWith("copy");
+    expect(toast.success).toHaveBeenCalledWith("已复制引用键", {
+      id: "reader-clipboard",
+    });
+    expect(document.querySelector("textarea")).toBeNull();
+  } finally {
+    Object.defineProperty(document, "execCommand", {
+      value: original,
+      configurable: true,
+    });
+  }
+});
+it("falls through to the browser clipboard when the desktop bridge rejects", async () => {
+  const writeClipboardText = vi.fn().mockRejectedValue(new Error("IPC down"));
+  const writeText = vi.fn().mockResolvedValue(undefined);
+  vi.stubGlobal("navigator", { clipboard: { writeText } });
+  vi.stubGlobal("window", { readerDesktop: { writeClipboardText } });
+  expect(await copyText("引用键")).toBe(true);
+  expect(writeText).toHaveBeenCalledWith("引用键");
+  expect(toast.error).not.toHaveBeenCalled();
+});
 it("confirms successful copies and writes again when the same passage is clicked again", async () => {
   const writeText = vi.fn().mockResolvedValue(undefined);
   vi.stubGlobal("navigator", { clipboard: { writeText } });
