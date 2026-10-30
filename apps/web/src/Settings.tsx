@@ -3,13 +3,13 @@ import { AutoTranslationSettings } from "./papers/AutoTranslationSettings";
 import { useEffect, useState } from "react";
 import {
   FileText,
-  Bot,
+  Robot as Bot,
   Check,
-  Highlighter,
-  Library,
+  HighlighterCircle as Highlighter,
+  Books as Library,
   Monitor,
-  RefreshCw,
-} from "lucide-react";
+  ArrowsClockwise as RefreshCw,
+} from "@phosphor-icons/react";
 import { DiagnosticExport } from "./DiagnosticExport";
 import { LibraryLocationSettings } from "./LibraryLocationSettings";
 import { CommandLineSettings } from "./CommandLineSettings";
@@ -296,7 +296,8 @@ export function Settings({
                   }}
                 />
                 <span className="mt-1 block text-xs text-muted-foreground">
-                  优先读取模型信息；留空为自动，无法确定时采用 64K。填写后只限制上限。
+                  优先读取模型信息；留空为自动，无法确定时采用
+                  64K。填写后只限制上限。
                 </span>
               </label>
             </section>

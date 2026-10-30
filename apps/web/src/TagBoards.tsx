@@ -1,13 +1,13 @@
 import { useEffect, useRef, useState } from "react";
 import {
   ArrowLeft,
-  LayoutGrid,
+  SquaresFour as LayoutGrid,
   List,
-  Pencil,
-  Save,
-  Tags,
-  Trash2,
-} from "lucide-react";
+  PencilSimple as Pencil,
+  FloppyDisk as Save,
+  Tag as Tags,
+  Trash,
+} from "@phosphor-icons/react";
 import type { Document, Processing, TagBoard } from "@reader/core";
 import { api } from "@reader/api";
 import { toast } from "sonner";
@@ -286,7 +286,7 @@ export function TagBoards({
                               aria-label={`删除看板 ${board.name}`}
                               onClick={() => setRemoving(board)}
                             >
-                              <Trash2 />
+                              <Trash />
                             </Button>
                           </div>
                         </div>
@@ -329,7 +329,7 @@ export function TagBoards({
                           variant="destructive"
                           onClick={() => setRemoving(board)}
                         >
-                          <Trash2 />
+                          <Trash />
                           删除看板
                         </ContextMenuItem>
                       </ContextMenuContent>
@@ -379,7 +379,7 @@ export function TagBoards({
                 aria-label="删除当前看板"
                 onClick={() => setRemoving(active)}
               >
-                <Trash2 />
+                <Trash />
               </Button>
             </>
           )}
@@ -404,7 +404,7 @@ export function TagBoards({
               title="清除筛选"
               onClick={reset}
             >
-              <Trash2 />
+              <Trash />
             </Button>
           )}
           <span className="text-xs text-muted-foreground" role="status">

@@ -1,27 +1,27 @@
 import { useEffect, useState } from "react";
 import {
   BookOpen,
-  CheckCircle2,
-  ChevronRight,
+  CheckCircle as CircleCheck,
+  CaretRight as ChevronRight,
   Circle,
-  CircleHelp,
+  Question as CircleHelp,
   Copy,
   Eye,
-  FileDown,
+  FileArrowDown as FileDown,
   FileText,
   Folder,
   FolderOpen,
-  FolderPlus,
-  Inbox,
-  Tags,
-  Library,
-  Loader2,
-  Pencil,
-  Pin,
+  FolderSimplePlus as FolderPlus,
+  Tray as Inbox,
+  Tag as Tags,
+  Books as Library,
+  CircleNotch as LoaderCircle,
+  PencilSimple as Pencil,
+  PushPin as Pin,
   Plus,
   Star,
-  Trash2,
-} from "lucide-react";
+  Trash,
+} from "@phosphor-icons/react";
 import type {
   Document,
   Processing,
@@ -105,9 +105,9 @@ const viewIcons: Record<BuiltinView, typeof Library> = {
   all: Library,
   reading: BookOpen,
   unread: Circle,
-  done: CheckCircle2,
+  done: CircleCheck,
   starred: Star,
-  processing: Loader2,
+  processing: LoaderCircle,
   questions: CircleHelp,
   unfiled: Inbox,
   duplicates: Copy,
@@ -498,7 +498,7 @@ export function PaperSidebar({
               variant="destructive"
               onClick={() => setDeleting(name)}
             >
-              <Trash2 />
+              <Trash />
               删除
             </ContextMenuItem>
           </>
@@ -594,7 +594,7 @@ export function PaperSidebar({
                 if (view === key) choose("all");
               }}
             >
-              <Trash2 />
+              <Trash />
               删除
             </ContextMenuItem>
           </>
@@ -654,9 +654,6 @@ export function PaperSidebar({
   const hiddenItems = hidden.filter((key) => hiddenLabel(key));
   return (
     <div className="paper-sidebar">
-      <nav className="space-y-1" aria-label="论文库">
-        {viewRow("all")}
-      </nav>
       {pinnedRows.length > 0 && (
         <section>
           <h3 className="paper-nav-heading">置顶</h3>
@@ -664,8 +661,9 @@ export function PaperSidebar({
         </section>
       )}
       <section>
-        <h3 className="paper-nav-heading">阅读</h3>
-        <nav className="space-y-0.5">
+        <h3 className="paper-nav-heading">书库</h3>
+        <nav className="space-y-0.5" aria-label="论文库">
+          {viewRow("all")}
           {managedViews
             .filter(
               (v) =>
@@ -760,7 +758,7 @@ export function PaperSidebar({
       {(trashCount > 0 || view === "trash") && (
         <nav>
           <SidebarRow
-            icon={Trash2}
+            icon={Trash}
             label="回收站"
             count={trashCount}
             active={view === "trash"}

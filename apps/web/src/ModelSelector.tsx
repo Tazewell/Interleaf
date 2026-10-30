@@ -7,7 +7,10 @@ import type {
   ModelTask,
   ReasoningEffort,
 } from "@reader/core";
-import { RotateCcw, Zap } from "lucide-react";
+import {
+  ArrowCounterClockwise as RotateCcw,
+  Lightning as Zap,
+} from "@phosphor-icons/react";
 import {
   Popover,
   PopoverContent,

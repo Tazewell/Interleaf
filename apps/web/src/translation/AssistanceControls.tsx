@@ -1,5 +1,11 @@
 import { useEffect, useRef, useState } from "react";
-import { Check, FileSearch, Pause, RotateCcw, Languages } from "lucide-react";
+import {
+  Check,
+  FileMagnifyingGlass as FileSearch,
+  Pause,
+  ArrowCounterClockwise as RotateCcw,
+  Translate as Languages,
+} from "@phosphor-icons/react";
 import type { EPUBLocation, LibraryMode, Processing } from "@reader/core";
 import { api } from "@reader/api";
 import { Button } from "@reader/ui/components/button";

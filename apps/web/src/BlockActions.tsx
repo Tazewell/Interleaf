@@ -1,5 +1,9 @@
 import type { ReactNode } from "react";
-import { Copy, Expand, Sparkles } from "lucide-react";
+import {
+  Copy,
+  ArrowsOut as Expand,
+  Sparkle as Sparkles,
+} from "@phosphor-icons/react";
 import { Button } from "@reader/ui/components/button";
 import type { PDFBlock, PDFBlockAction } from "@reader/core";
 export function BlockActions({

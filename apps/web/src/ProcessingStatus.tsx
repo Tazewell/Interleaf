@@ -1,5 +1,10 @@
 import { useEffect, useState } from "react";
-import { Check, ScanLine, RefreshCw, Languages } from "lucide-react";
+import {
+  Check,
+  Scan as ScanLine,
+  ArrowsClockwise as RefreshCw,
+  Translate as Languages,
+} from "@phosphor-icons/react";
 import type { Processing } from "@reader/core";
 import { api } from "@reader/api";
 import { Progress } from "@reader/ui/components/progress";

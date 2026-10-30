@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { Annotation, ReaderAnnotationTarget } from "@reader/core";
-import { Pencil } from "lucide-react";
+import { PencilSimple as Pencil } from "@phosphor-icons/react";
 import { Button } from "@reader/ui/components/button";
 import {
   Popover,

@@ -1,16 +1,16 @@
 import {
-  ArrowRightLeft,
+  ArrowsLeftRight as ArrowRightLeft,
   BookOpen,
-  ExternalLink,
-  FileDown,
+  ArrowSquareOut as ExternalLink,
+  FileArrowDown as FileDown,
   FolderOpen,
-  FolderPlus,
-  Link2,
-  Pin,
+  FolderSimplePlus as FolderPlus,
+  LinkSimple as Link2,
+  PushPin as Pin,
   Star,
   Tag,
-  Trash2,
-} from "lucide-react";
+  Trash,
+} from "@phosphor-icons/react";
 import { readerLink, type Document, type ReadingStatus } from "@reader/core";
 import { copyText } from "../chat/clipboard";
 import {
@@ -268,7 +268,7 @@ export function PaperMenuItems({
       )}
       <K.Separator />
       <K.Item variant="destructive" onClick={() => actions.trash(docs)}>
-        <Trash2 />
+        <Trash />
         {docs.length > 1 ? `将 ${docs.length} 篇移到回收站` : "移到回收站"}
       </K.Item>
     </>

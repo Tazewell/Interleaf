@@ -220,6 +220,40 @@ it.each([false, true])(
     }
   },
 );
+it("restores the page view and zoom when a focused block is left", async () => {
+  vi.useFakeTimers();
+  try {
+    Object.defineProperties(host, {
+      clientWidth: { value: 600 },
+      clientHeight: { value: 600 },
+    });
+    state.pageNode = document.createElement("div");
+    state.pageNode.getBoundingClientRect = () =>
+      new DOMRect(0, 0, 1000 * state.scale, 1200 * state.scale);
+    adapter.setBlocks([
+      {
+        id: "focus-target",
+        page: 1,
+        label: "text",
+        text: "Target",
+        bounds: { x: 0.1, y: 0.2, width: 0.4, height: 0.2 },
+      },
+    ]);
+    const pending = adapter.focusBlock("focus-target", "source");
+    await vi.advanceTimersByTimeAsync(500);
+    await pending;
+    expect(state.scale).toBeGreaterThan(1);
+    expect(host.classList.contains("pdf-block-reading")).toBe(true);
+    // The focus zoom is a temporary view, not the reader's zoom setting.
+    expect(zoom).not.toHaveBeenCalled();
+    adapter.exitBlockFocus?.();
+    expect(host.classList.contains("pdf-block-reading")).toBe(false);
+    expect(state.scaleValue).toBe("page-width");
+    expect(state.scale).toBe(1);
+  } finally {
+    vi.useRealTimers();
+  }
+});
 it("ignores plain keys, composing input and alternate modifier chords", () => {
   expect(key("+", document, { metaKey: false }).defaultPrevented).toBe(false);
   expect(key("+", document, { altKey: true }).defaultPrevented).toBe(false);

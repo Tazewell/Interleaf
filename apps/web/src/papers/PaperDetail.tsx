@@ -1,18 +1,18 @@
 import { useEffect, useState } from "react";
 import {
   BookOpen,
-  ExternalLink,
-  FolderPlus,
+  ArrowSquareOut as ExternalLink,
+  FolderSimplePlus as FolderPlus,
   Globe,
-  Loader2,
-  MoreHorizontal,
-  Pin,
+  CircleNotch as LoaderCircle,
+  DotsThree as Ellipsis,
+  PushPin as Pin,
   Plus,
-  Quote,
-  RefreshCw,
+  Quotes as Quote,
+  ArrowsClockwise as RefreshCw,
   Star,
   X,
-} from "lucide-react";
+} from "@phosphor-icons/react";
 import type {
   Creator,
   Document,
@@ -285,7 +285,7 @@ export function PaperDetail({
                 <Button size="sm" variant="outline" aria-label="更多操作" />
               }
             >
-              <MoreHorizontal />
+              <Ellipsis />
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-52">
               <PaperMenuItems
@@ -371,7 +371,11 @@ export function PaperDetail({
               void lookupPaper(doc).finally(() => setLookingUp(false));
             }}
           >
-            {lookingUp ? <Loader2 className="animate-spin" /> : <RefreshCw />}
+            {lookingUp ? (
+              <LoaderCircle className="animate-spin" />
+            ) : (
+              <RefreshCw />
+            )}
             查找论文信息
           </Button>
         </div>

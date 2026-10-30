@@ -1,4 +1,4 @@
-import { Copy, Download, Link } from "lucide-react";
+import { Copy, DownloadSimple as Download, Link } from "@phosphor-icons/react";
 import type { Document } from "@reader/core";
 import {
   ContextMenuItem,
@@ -32,11 +32,17 @@ export async function copyCitationKeys(docs: Document[], latex = false) {
   try {
     if (docs.some((d) => !d.citationKey && missingFields(d, "bibtex").length))
       toast.info("部分文献缺少作者或年份，将分配稳定备用键；可稍后补充信息。");
-    const items = await ensurePaperCitationKeys(
-      docs.map((d) => d.paperId || d.id),
-    );
+    // Skip the roundtrip when every key exists so the copy stays inside the
+    // click's user activation window.
+    const items = docs.every((d) => d.citationKey)
+      ? []
+      : await ensurePaperCitationKeys(docs.map((d) => d.paperId || d.id));
     const keys = docs
-      .map((d) => items.find((p) => p.id === (d.paperId || d.id))?.citationKey)
+      .map(
+        (d) =>
+          d.citationKey ||
+          items.find((p) => p.id === (d.paperId || d.id))?.citationKey,
+      )
       .filter(Boolean)
       .join(",");
     if (!keys) throw new Error("未能分配引用键");

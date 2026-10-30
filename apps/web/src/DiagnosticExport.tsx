@@ -1,5 +1,8 @@
 import { useState } from "react";
-import { Download, LoaderCircle } from "lucide-react";
+import {
+  DownloadSimple as Download,
+  CircleNotch as LoaderCircle,
+} from "@phosphor-icons/react";
 import { Button } from "@reader/ui/components/button";
 import { exportDiagnostics } from "./diagnostics";
 

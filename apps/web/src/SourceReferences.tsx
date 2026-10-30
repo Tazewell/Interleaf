@@ -1,6 +1,9 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { ChatCitationNavigation } from "./chat/citations";
-import { ArrowUpRight, Loader2 } from "lucide-react";
+import {
+  ArrowUpRight,
+  CircleNotch as LoaderCircle,
+} from "@phosphor-icons/react";
 import type {
   DocumentLocation,
   Message,
@@ -117,7 +120,7 @@ export function SourceReferences({
                   <span className="reference-card-heading">
                     <span title={card.label}>引用原文 · {card.label}</span>
                     {pending === card.id ? (
-                      <Loader2 className="size-3 animate-spin" />
+                      <LoaderCircle className="size-3 animate-spin" />
                     ) : (
                       <ArrowUpRight className="size-3" />
                     )}

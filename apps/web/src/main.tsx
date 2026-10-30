@@ -1,8 +1,11 @@
 import ReactDOM from "react-dom/client";
+import type { ReactNode } from "react";
+import { IconContext } from "@phosphor-icons/react";
 import { configureAPI } from "@reader/api";
 import { App } from "./App";
 import { installCloseFlush } from "./close-flush";
 import { AppCrash, ErrorBoundary } from "./ErrorBoundary";
+import "@fontsource-variable/inter/wght.css";
 import "./style.css";
 import { installDiagnostics } from "./diagnostics";
 import { installScrollbars } from "./scrollbars";
@@ -20,34 +23,40 @@ configureAPI(token);
 const removeDiagnostics = installDiagnostics(token);
 if (import.meta.hot) import.meta.hot.dispose(removeDiagnostics);
 const root = ReactDOM.createRoot(document.getElementById("root")!);
+const mount = (node: ReactNode) =>
+  root.render(
+    <IconContext.Provider value={{ weight: "duotone" }}>
+      {node}
+    </IconContext.Provider>,
+  );
 if (import.meta.env.DEV && location.pathname === "/__streaming-benchmark") {
   void import("./chat/StreamingBenchmark").then(({ default: Benchmark }) =>
-    root.render(<Benchmark />),
+    mount(<Benchmark />),
   );
 } else if (import.meta.env.DEV && location.pathname === "/__streaming") {
   void import("./chat/StreamingPreview").then(({ default: Preview }) =>
-    root.render(<Preview />),
+    mount(<Preview />),
   );
 } else if (import.meta.env.DEV && location.pathname === "/__link-preview") {
   void import("./LinkPreviewDemo").then(({ default: Preview }) =>
-    root.render(<Preview />),
+    mount(<Preview />),
   );
 } else if (import.meta.env.DEV && location.pathname === "/__formula-caption") {
   void import("./translation/FormulaCaptionPreview").then(
-    ({ default: Preview }) => root.render(<Preview />),
+    ({ default: Preview }) => mount(<Preview />),
   );
 } else if (import.meta.env.DEV && location.pathname === "/__guide") {
   void import("./guide/GuidePreview").then(({ default: Preview }) =>
-    root.render(<Preview />),
+    mount(<Preview />),
   );
 } else if (import.meta.env.DEV && location.pathname === "/__processing-cover") {
   void import("./CoverProcessingPreview").then(({ default: Preview }) =>
-    root.render(<Preview />),
+    mount(<Preview />),
   );
 } else {
   const removeCloseFlush = installCloseFlush();
   if (import.meta.hot) import.meta.hot.dispose(removeCloseFlush);
-  root.render(
+  mount(
     <ErrorBoundary fallback={<AppCrash />}>
       <App />
     </ErrorBoundary>,

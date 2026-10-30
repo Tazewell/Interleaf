@@ -4,13 +4,13 @@ import {
   FileText,
   ArrowUpRight,
   Star,
-  Pencil,
-  Trash2,
+  PencilSimple as Pencil,
+  Trash,
   Check,
-  ChartColumn,
-  ArrowRightLeft,
-  FileDown,
-} from "lucide-react";
+  ChartBar as ChartColumn,
+  ArrowsLeftRight as ArrowRightLeft,
+  FileArrowDown as FileDown,
+} from "@phosphor-icons/react";
 import { exportAnnotatedPDFWithToast } from "./annotated-pdf-export";
 import type { Document, LibraryMode, Processing } from "@reader/core";
 import { api } from "@reader/api";
@@ -170,7 +170,7 @@ export function LibraryDocuments({
                 disabled={!selected.size}
                 onClick={removeSelected}
               >
-                <Trash2 />
+                <Trash />
                 移到回收站
               </Button>
             </>
@@ -229,9 +229,9 @@ export function LibraryDocuments({
                   <div className="cover-top">
                     <span>{doc.type.toUpperCase()}</span>
                     {doc.type === "epub" ? (
-                      <BookOpen size={18} />
+                      <BookOpen className="size-5" />
                     ) : (
-                      <FileText size={18} />
+                      <FileText className="size-5" />
                     )}
                   </div>
                   <div className="cover-text">
@@ -243,7 +243,7 @@ export function LibraryDocuments({
                     )}
                   </div>
                   <div className="cover-bottom">
-                    <ArrowUpRight size={18} />
+                    <ArrowUpRight className="size-5" />
                   </div>
                   <div className="cover-decoration" />
                 </Button>
@@ -395,12 +395,12 @@ export function LibraryDocuments({
                 variant="destructive"
                 onClick={() => void trash([doc.id])}
               >
-                <Trash2 />
+                <Trash />
                 移到回收站
               </ContextMenuItem>
               {selecting && selected.has(doc.id) && selected.size > 1 && (
                 <ContextMenuItem variant="destructive" onClick={removeSelected}>
-                  <Trash2 />
+                  <Trash />
                   将所选 {selected.size} 份移到回收站
                 </ContextMenuItem>
               )}

@@ -10,5 +10,13 @@ export default defineConfig({
         inline: [/@lobehub\/ui/, /@emoji-mart\/data/],
       },
     },
+    deps: {
+      optimizer: {
+        // Phosphor's entry re-exports thousands of icon modules. Pre-bundle it
+        // once instead of loading each file over the 9p mount on every run.
+        client: { enabled: true, include: ["@phosphor-icons/react"] },
+        ssr: { enabled: true, include: ["@phosphor-icons/react"] },
+      },
+    },
   },
 });

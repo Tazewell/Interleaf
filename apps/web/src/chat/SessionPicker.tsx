@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Plus, Pencil, LoaderCircle } from "lucide-react";
+import { Plus, PencilSimple, CircleNotch } from "@phosphor-icons/react";
 import { api } from "@reader/api";
 import type { DocumentChatSession } from "@reader/core";
 import { Button } from "@reader/ui/components/button";
@@ -80,8 +80,8 @@ export function SessionPicker({
     }
   };
   return (
-    <div className="session-picker flex min-w-0 flex-col gap-1 border-b px-3 py-2">
-      <div className="flex min-w-0 items-center gap-1">
+    <div className="session-picker">
+      <div className="session-picker-row">
         <Select
           value={current?.id ?? null}
           onValueChange={(id) => {
@@ -107,10 +107,24 @@ export function SessionPicker({
             ))}
           </SelectContent>
         </Select>
+        {status && (
+          <span className="session-status" data-status={status} role="status">
+            {status === "running" ? (
+              <CircleNotch
+                className="size-2.5 animate-spin motion-reduce:animate-none"
+                aria-hidden="true"
+              />
+            ) : (
+              <span className="session-status-dot" aria-hidden="true" />
+            )}
+            {statusLabels[status]}
+          </span>
+        )}
         <Button
           variant="ghost"
           size="icon-xs"
           className="session-picker-action"
+          title="重命名会话"
           aria-label="重命名会话"
           disabled={!current || saving}
           onClick={() => {
@@ -118,12 +132,13 @@ export function SessionPicker({
             setRenaming(true);
           }}
         >
-          <Pencil />
+          <PencilSimple />
         </Button>
         <Button
           variant="ghost"
           size="icon-xs"
           className="session-picker-action"
+          title="新建会话"
           aria-label="新建会话"
           disabled={saving}
           onClick={() => void create()}
@@ -131,17 +146,6 @@ export function SessionPicker({
           <Plus />
         </Button>
       </div>
-      {status && (
-        <span
-          className="flex items-center justify-end gap-1 text-xs text-muted-foreground"
-          role="status"
-        >
-          {status === "running" && (
-            <LoaderCircle className="size-3 animate-spin motion-reduce:animate-none" />
-          )}
-          {statusLabels[status]}
-        </span>
-      )}
       <Dialog open={renaming} onOpenChange={setRenaming}>
         <DialogContent className="sm:max-w-sm">
           <DialogHeader>

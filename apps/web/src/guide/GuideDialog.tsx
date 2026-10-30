@@ -2,12 +2,12 @@ import { ShortcutPanel } from "../shortcuts/ShortcutPanel";
 import { useState, type KeyboardEvent } from "react";
 import { toast } from "sonner";
 import {
-  ChevronLeft,
-  ChevronRight,
+  CaretLeft as ChevronLeft,
+  CaretRight as ChevronRight,
   Star,
-  MessageSquare,
+  ChatText as MessageSquare,
   Keyboard,
-} from "lucide-react";
+} from "@phosphor-icons/react";
 import { Button } from "@reader/ui/components/button";
 import {
   Dialog,

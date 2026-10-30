@@ -1,5 +1,11 @@
 import { useState } from "react";
-import { LayoutGrid, List, Plus, Trash2, X } from "lucide-react";
+import {
+  SquaresFour as LayoutGrid,
+  List,
+  Plus,
+  Trash,
+  X,
+} from "@phosphor-icons/react";
 import type { Document, DocumentCategory } from "@reader/core";
 import { api } from "@reader/api";
 import { Button } from "@reader/ui/components/button";
@@ -141,7 +147,7 @@ export function LibraryFilterBar({
           title="清除筛选"
           onClick={() => onChange({ ...initialFilters, sort: filters.sort })}
         >
-          <Trash2 />
+          <Trash />
         </Button>
       )}
       <span className="text-xs text-muted-foreground" role="status">

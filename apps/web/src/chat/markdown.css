@@ -4,6 +4,32 @@
   max-width: 100%;
   overflow-wrap: anywhere;
 }
+.message-markdown[data-generating] > :last-child::after,
+.message-markdown[data-generating] > .streamdown-animated > :last-child::after {
+  content: "";
+  display: inline-block;
+  width: 0.42em;
+  height: 1em;
+  margin-left: 3px;
+  border-radius: 2px;
+  background: currentColor;
+  opacity: 0.4;
+  vertical-align: -0.12em;
+  animation: chat-caret 1.1s steps(2, jump-none) infinite;
+}
+@keyframes chat-caret {
+  50% {
+    opacity: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .message-markdown[data-generating] > :last-child::after,
+  .message-markdown[data-generating]
+    > .streamdown-animated
+    > :last-child::after {
+    animation: none;
+  }
+}
 .message-markdown p {
   margin: 0.65em 0;
 }

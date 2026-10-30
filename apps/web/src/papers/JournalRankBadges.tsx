@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { RefreshCw } from "lucide-react";
+import { ArrowsClockwise as RefreshCw } from "@phosphor-icons/react";
 import { api } from "@reader/api";
 import type {
   JournalRankBadge,

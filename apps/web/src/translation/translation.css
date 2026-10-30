@@ -113,9 +113,9 @@
   outline: 0.5px solid transparent;
   border-radius: 4px;
   transition:
-    background-color 180ms ease-out,
-    outline-color 180ms ease-out,
-    box-shadow 180ms ease-out;
+    background-color var(--motion-base) var(--ease-out),
+    outline-color var(--motion-base) var(--ease-out),
+    box-shadow var(--motion-base) var(--ease-out);
 }
 .translation-document [data-label="doc_title"] {
   font-size: 1.45em;
@@ -318,7 +318,7 @@
 }
 
 .reader-block-focus[data-fading] {
-  animation: block-focus-fade 180ms ease-out forwards;
+  animation: block-focus-fade var(--motion-base) var(--ease-out) forwards;
 }
 @keyframes block-focus-fade {
   to {
@@ -373,7 +373,7 @@
 }
 
 .reader-block-hover:not(.reader-block-focus) {
-  animation: block-hover-in 160ms ease-out;
+  animation: block-hover-in var(--motion-fast) var(--ease-out);
 }
 @keyframes block-hover-in {
   from {

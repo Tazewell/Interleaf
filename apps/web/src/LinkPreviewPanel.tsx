@@ -5,7 +5,14 @@ import {
   useState,
   type PointerEvent as ReactPointerEvent,
 } from "react";
-import { ArrowUpRight, Grip, Minus, Pin, Plus, X } from "lucide-react";
+import {
+  ArrowUpRight,
+  DotsSixVertical as GripVertical,
+  Minus,
+  PushPin as Pin,
+  Plus,
+  X,
+} from "@phosphor-icons/react";
 import type { DocumentLocation, LinkPreview } from "@reader/core";
 import { Button } from "@reader/ui/components/button";
 import { Popover, PopoverContent } from "@reader/ui/components/popover";
@@ -268,7 +275,7 @@ export function LinkPreviewPanel({
             onLostPointerCapture={stop}
             onKeyDown={(e) => keyboardFrame(e, true)}
           >
-            <Grip className="size-3" />
+            <GripVertical className="size-3" />
           </Button>
         </DialogContent>
       </Dialog>

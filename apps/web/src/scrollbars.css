@@ -4,7 +4,8 @@
   scrollbar-color: transparent transparent;
 }
 [data-reader-scrolling] {
-  scrollbar-color: rgb(128 128 128 / 55%) transparent;
+  scrollbar-color: color-mix(in srgb, var(--ink, #17181c) 32%, transparent)
+    transparent;
 }
 *::-webkit-scrollbar {
   width: 8px;
@@ -21,12 +22,12 @@
   background-clip: padding-box;
 }
 [data-reader-scrolling]::-webkit-scrollbar-thumb {
-  background-color: rgb(128 128 128 / 55%);
+  background-color: color-mix(in srgb, var(--ink, #17181c) 32%, transparent);
 }
 [data-slot="scroll-area-scrollbar"] {
   opacity: 0;
   pointer-events: none;
-  transition: opacity 180ms ease;
+  transition: opacity var(--motion-base) var(--ease-out);
 }
 [data-slot="scroll-area"]:has(> [data-reader-scrolling])
   > [data-slot="scroll-area-scrollbar"],

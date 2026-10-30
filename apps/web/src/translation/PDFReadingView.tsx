@@ -9,7 +9,7 @@ import {
 } from "react";
 import { useTranslations } from "./useTranslations";
 import { createPortal } from "react-dom";
-import { Crosshair } from "lucide-react";
+import { Crosshair } from "@phosphor-icons/react";
 import type {
   Annotation,
   Document as ReaderDocument,
@@ -595,6 +595,9 @@ export function PDFReadingView({
       }
     }
     const restore = async () => {
+      // A focused block zooms past the pane so the paragraph fits; returning
+      // to the page view must restore the page-level zoom and insets first.
+      if (previous !== mode && mode === "source") engine.exitBlockFocus?.();
       if (
         previous !== mode &&
         mode !== "translation" &&
@@ -821,8 +824,10 @@ export function PDFReadingView({
       <TooltipTrigger
         render={
           <Button
-            variant={syncEnabled ? "default" : "outline"}
+            variant="ghost"
             size="icon-sm"
+            data-active={syncEnabled || undefined}
+            className={syncEnabled ? "toolbar-icon-active" : undefined}
             aria-label={syncEnabled ? "取消同步效果" : "开启同步效果"}
             aria-pressed={syncEnabled}
             onClick={toggleSync}

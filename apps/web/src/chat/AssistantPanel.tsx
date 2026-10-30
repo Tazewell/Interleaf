@@ -1,5 +1,10 @@
 import { lazy, Suspense, useSyncExternalStore, type ReactNode } from "react";
-import { ArrowDown, BookOpen, LoaderCircle } from "lucide-react";
+import {
+  ArrowDown,
+  ArrowsClockwise,
+  BookOpen,
+  CircleNotch,
+} from "@phosphor-icons/react";
 import { ProviderGlyph } from "../ProviderIdentity";
 import type { Message } from "@reader/core";
 import { Button } from "@reader/ui/components/button";
@@ -118,22 +123,16 @@ export function AssistantPanel({
                 className={`chat-message ${assistant ? "assistant" : "user"}`}
               >
                 {waiting && (
-                  <div
-                    className="chat-waiting"
-                    role="status"
-                    aria-label={answer.notice ? undefined : "正在等待回答"}
-                  >
+                  <div className="chat-waiting" role="status">
                     <span
                       className={`chat-waiting-icon${answer.activity ? " chat-waiting-icon--activity" : ""}`}
                       aria-hidden="true"
                     >
                       {answer.activity ? (
-                        <BookOpen size={16} strokeWidth={1.5} />
+                        <BookOpen size={16} />
                       ) : answer.fallback ||
-                        !["api"].includes(
-                          answer.input.provider,
-                        ) ? (
-                        <LoaderCircle size={16} />
+                        !["api"].includes(answer.input.provider) ? (
+                        <CircleNotch size={16} />
                       ) : (
                         <ProviderGlyph
                           provider={answer.input.provider}
@@ -141,11 +140,13 @@ export function AssistantPanel({
                         />
                       )}
                     </span>
-                    {answer.notice && (
-                      <span className="chat-status" title={answer.notice}>
-                        {answer.notice}
-                      </span>
-                    )}
+                    <span
+                      className="chat-status"
+                      title={answer.notice ?? undefined}
+                    >
+                      {answer.notice ||
+                        (answer.activity ? "正在查阅原文…" : "正在思考…")}
+                    </span>
                   </div>
                 )}
                 {assistant && reasoning && (
@@ -191,6 +192,7 @@ export function AssistantPanel({
             <Button
               variant="ghost"
               size="sm"
+              className="chat-retry"
               disabled={
                 state.busy ||
                 (retryAction === "regenerate" && regenerateDisabled)
@@ -201,6 +203,7 @@ export function AssistantPanel({
                   : void session.retrySync()
               }
             >
+              <ArrowsClockwise className="size-3.5" aria-hidden="true" />
               {
                 {
                   reload: "重新加载",

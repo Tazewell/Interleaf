@@ -2,18 +2,18 @@
 // Add a topic here to show it in the guide; mark it `onboarding` to also
 // include it in the first-run walkthrough, in this order.
 import {
-  Award,
+  Medal as Award,
   BookOpenText,
-  BookSearch,
-  Bot,
-  FileUp,
-  FolderInput,
-  Highlighter,
+  BookOpenUser as BookSearch,
+  Robot as Bot,
+  FileArrowUp as FileUp,
+  FolderSimpleDashed as FolderInput,
+  HighlighterCircle as Highlighter,
   Palette,
   SlidersHorizontal,
-  SquareTerminal,
-  type LucideIcon,
-} from "lucide-react";
+  TerminalWindow as SquareTerminal,
+  type Icon,
+} from "@phosphor-icons/react";
 import type { SceneId } from "./scenes";
 
 export interface GuideStep {
@@ -29,7 +29,7 @@ export type GuideAction = "settings" | "import";
 export interface GuideTopic {
   id: string;
   title: string;
-  icon: LucideIcon;
+  icon: Icon;
   steps: GuideStep[];
   onboarding?: boolean;
   action?: { kind: GuideAction; label: string };

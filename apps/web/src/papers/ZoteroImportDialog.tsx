@@ -1,7 +1,11 @@
 import { EndNoteSourcePicker } from "./EndNoteSourcePicker";
 import { confirmLargePaper } from "../LargePaperDialog";
 import { useEffect, useRef, useState } from "react";
-import { Download, FolderOpen, Loader2 } from "lucide-react";
+import {
+  DownloadSimple as Download,
+  FolderOpen,
+  CircleNotch as LoaderCircle,
+} from "@phosphor-icons/react";
 import {
   api,
   RequestError,
@@ -291,7 +295,7 @@ export function ZoteroImportDialog({
                 富文本笔记转为纯文本。手绘、图片和无法定位的批注保留文本与原始位置；图片本身不迁移。仅有元数据、独立笔记和独立附件暂不导入。
               </p>
               <Button type="submit" disabled={busy || !directory.trim()}>
-                {busy && <Loader2 className="animate-spin" />}
+                {busy && <LoaderCircle className="animate-spin" />}
                 {busy ? "扫描中" : "扫描资料库"}
               </Button>
             </form>

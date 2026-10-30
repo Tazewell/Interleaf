@@ -93,6 +93,7 @@ const adapter = {
   getContext: vi.fn(async () => ""),
   destroy: vi.fn(async () => {}),
   focusBlock: vi.fn(async () => {}),
+  exitBlockFocus: vi.fn(),
   flashReference: vi.fn(),
   cancelBlockFocus: vi.fn(),
   followBlock: vi.fn(async () => {}),
@@ -283,6 +284,12 @@ it("switches modes without recreating the PDF or marking the opposite selection"
   await click("原页");
   expect(host.querySelector(".translation-document")).toBeNull();
   expect(adapter.destroy).not.toHaveBeenCalled();
+});
+it("restores the page zoom when returning from the parallel view", async () => {
+  await click("对照");
+  expect(adapter.exitBlockFocus).not.toHaveBeenCalled();
+  await click("原页");
+  expect(adapter.exitBlockFocus).toHaveBeenCalledOnce();
 });
 it("keeps the translated selection and navigation metadata without marking the original", async () => {
   const highlights = new Map<string, Set<Range>>();

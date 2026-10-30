@@ -15,33 +15,33 @@ import {
   type CSSProperties,
 } from "react";
 import {
-  Languages,
-  ChartColumn,
+  Translate as Languages,
+  ChartBar as ChartColumn,
   ArrowLeft,
   BookOpen,
-  PanelLeft,
-  ChevronLeft,
-  ChevronRight,
-  ChevronDown,
-  ListTree,
-  Search,
-  BookmarkPlus,
-  MoreHorizontal,
-  Sparkles,
-  Settings2,
-  Underline,
-  MessageSquare,
+  SidebarSimple as PanelLeft,
+  CaretLeft as ChevronLeft,
+  CaretRight as ChevronRight,
+  CaretDown as ChevronDown,
+  TreeStructure as ListTree,
+  MagnifyingGlass as Search,
+  BookmarkSimple as BookmarkPlus,
+  DotsThree as Ellipsis,
+  Sparkle as Sparkles,
+  GearSix as Settings2,
+  TextUnderline as Underline,
   X,
-  StickyNote,
-  Send,
+  Note as StickyNote,
   Square,
-  Quote,
-  Type,
-  Sun,
-  Moon,
+  PaperPlaneTilt,
+  Quotes as Quote,
+  TextAa,
+  HighlighterCircle as Highlighter,
   Check,
-  CircleHelp,
-} from "lucide-react";
+  Question as CircleHelp,
+  ChatCircleDots,
+  Lightbulb,
+} from "@phosphor-icons/react";
 import { api, blockImageURL } from "@reader/api";
 import {
   locationLabel,
@@ -124,16 +124,22 @@ import {
   applySavedAnnotation,
   highlightPalette,
 } from "./annotations";
-import { ColorSwatches } from "./ColorSwatches";
+import { ColorSwatchPicker } from "./ColorSwatches";
 import { useSelectionClipboard } from "./useSelectionClipboard";
 import { copyImage, copyText } from "./chat/clipboard";
 import { NotesPanel } from "./NotesPanel";
 import { ExportDocumentDialog } from "./ExportDocumentDialog";
 import { EPUBReadingView } from "./translation/EPUBReadingView";
 import { PDFReadingView } from "./translation/PDFReadingView";
+import {
+  activeHeading,
+  headingOutline,
+  pageOutline,
+} from "./readers/pdf-outline";
 import { useReaderStore } from "./store";
 import { scheduleProgress, flushProgress } from "./progress";
 import { Slider } from "@reader/ui/components/slider";
+import { Toggle } from "@reader/ui/components/toggle";
 import { TranslationFontControls } from "./TranslationFontControls";
 function IconButton({
   label,
@@ -155,8 +161,10 @@ function IconButton({
           <Button
             aria-label={label}
             aria-expanded={expanded}
+            data-active={active || undefined}
+            className={active ? "toolbar-icon-active" : undefined}
             size="icon-sm"
-            variant={active ? "secondary" : "ghost"}
+            variant="ghost"
             onClick={onClick}
           />
         }
@@ -171,28 +179,29 @@ function TOCTree({
   items,
   go,
   location,
-  depth = 0,
+  active,
 }: {
   items: TOCItem[];
   go: (location: DocumentLocation) => void;
   location?: DocumentLocation;
-  depth?: number;
+  active?: string;
 }) {
   return (
     <div className="toc-tree">
       {items.map((item) => {
         const selected =
-          item.location.type === location?.type &&
-          (item.location.type === "pdf"
-            ? item.location.page === (location as { page: number }).page
-            : item.location.href.split("#")[0] ===
-              (location as { href: string }).href?.split("#")[0]);
+          active !== undefined
+            ? item.id === active
+            : item.location.type === location?.type &&
+              (item.location.type === "pdf"
+                ? item.location.page === (location as { page: number }).page
+                : item.location.href.split("#")[0] ===
+                  (location as { href: string }).href?.split("#")[0]);
         return (
-          <div key={item.id}>
+          <div key={item.id} className="toc-node">
             <Button
               variant="ghost"
               className={`toc-item ${selected ? "selected" : ""}`}
-              style={{ paddingLeft: Math.min(12 + depth * 14, 96) }}
               title={item.label}
               onClick={() => go(item.location)}
             >
@@ -207,12 +216,14 @@ function TOCTree({
               )}
             </Button>
             {item.children.length > 0 && (
-              <TOCTree
-                items={item.children}
-                go={go}
-                location={location}
-                depth={depth + 1}
-              />
+              <div className="toc-children">
+                <TOCTree
+                  items={item.children}
+                  go={go}
+                  location={location}
+                  active={active}
+                />
+              </div>
             )}
           </div>
         );
@@ -287,6 +298,20 @@ export function Workspace({
   const [toc, setTOC] = useState<TOCItem[]>([]);
   const [location, setLocation] = useState<DocumentLocation | undefined>(
     doc.progress,
+  );
+  const sidebarTOC = useMemo(() => {
+    if (doc.type !== "pdf" || !pageOutline(toc)) return toc;
+    // Most PDFs ship without an embedded outline; parsed headings still give
+    // a real table of contents, with the page list only as a last resort.
+    const derived = headingOutline(blocks);
+    return derived.length ? derived : toc;
+  }, [doc.type, toc, blocks]);
+  const activeTOC = useMemo(
+    () =>
+      doc.type === "pdf" && location?.type === "pdf"
+        ? activeHeading(sidebarTOC, location.page)?.id
+        : undefined,
+    [doc.type, sidebarTOC, location],
   );
   const [translationSelection, setTranslationSelection] =
     useState<ReaderSelection | null>(null);
@@ -1059,6 +1084,9 @@ export function Workspace({
           </span>
           <Badge variant="secondary">{doc.type.toUpperCase()}</Badge>
         </div>
+        <div className="reader-toolbar-center">
+          <div ref={setReadingToolbar} />
+        </div>
         <div className="toolbar-actions">
           {returnLocation && (
             <Button
@@ -1071,8 +1099,6 @@ export function Workspace({
               返回阅读位置
             </Button>
           )}
-          <div ref={setReadingToolbar} />
-          <span className="toolbar-divider" />
           <div ref={setSourceAutoCenterToolbar} />
           <Popover>
             <PopoverTrigger
@@ -1080,11 +1106,14 @@ export function Workspace({
                 <Button size="icon-sm" variant="ghost" aria-label="阅读外观" />
               }
             >
-              <Type />
+              <TextAa />
             </PopoverTrigger>
-            <PopoverContent className="w-72">
-              <h3 className="text-sm font-medium">阅读外观</h3>
-              <div className="space-y-4">
+            <PopoverContent className="appearance-panel w-80 gap-0 p-0">
+              <div className="appearance-header">
+                <h3>阅读外观</h3>
+              </div>
+              <div className="appearance-section">
+                <span className="appearance-section-title">配色</span>
                 <Tabs
                   value={
                     theme.mode === "dark"
@@ -1117,144 +1146,178 @@ export function Workspace({
                     <TabsTrigger value="gray">灰色</TabsTrigger>
                   </TabsList>
                 </Tabs>
-                <div className="flex items-center gap-3">
-                  <span className="shrink-0 text-sm">Agent 字号</span>
-                  <Slider
-                    className="reading-appearance-slider min-w-0 flex-1"
-                    thumbLabel="Agent 字号"
-                    min={80}
-                    max={160}
-                    step={5}
-                    value={[Math.round(assistantSize * 100)]}
-                    onValueChange={(value) =>
-                      setTheme({
-                        assistantFontScale:
-                          (Array.isArray(value) ? value[0] : value) / 100,
-                      })
-                    }
-                  />
-                  <span className="w-10 text-right text-xs tabular-nums">
-                    {Math.round(assistantSize * 100)}%
-                  </span>
+              </div>
+              <div className="appearance-section">
+                <div className="appearance-section-head">
+                  <span className="appearance-section-title">原文</span>
+                  {doc.type === "pdf" ? (
+                    <Button
+                      size="xs"
+                      variant="ghost"
+                      onClick={() => {
+                        adapter?.exitBlockFocus?.();
+                        setTheme({ zoom: "width" });
+                      }}
+                    >
+                      适宽
+                    </Button>
+                  ) : null}
                 </div>
                 {doc.type === "epub" ? (
                   <>
-                    <div className="setting-row">
+                    <div className="appearance-row">
                       <span>字号</span>
-                      <Button
-                        size="icon-xs"
-                        variant="outline"
-                        onClick={() =>
-                          setTheme({
-                            fontSize: Math.max(0.8, theme.fontSize - 0.1),
-                          })
-                        }
-                      >
-                        −
-                      </Button>
-                      <span>{Math.round(theme.fontSize * 100)}%</span>
-                      <Button
-                        size="icon-xs"
-                        variant="outline"
-                        onClick={() =>
-                          setTheme({
-                            fontSize: Math.min(2.4, theme.fontSize + 0.1),
-                          })
-                        }
-                      >
-                        +
-                      </Button>
+                      <div className="appearance-stepper">
+                        <Button
+                          size="icon-xs"
+                          variant="ghost"
+                          aria-label="减小字号"
+                          onClick={() =>
+                            setTheme({
+                              fontSize: Math.max(0.8, theme.fontSize - 0.1),
+                            })
+                          }
+                        >
+                          −
+                        </Button>
+                        <span className="appearance-value">
+                          {Math.round(theme.fontSize * 100)}%
+                        </span>
+                        <Button
+                          size="icon-xs"
+                          variant="ghost"
+                          aria-label="增大字号"
+                          onClick={() =>
+                            setTheme({
+                              fontSize: Math.min(2.4, theme.fontSize + 0.1),
+                            })
+                          }
+                        >
+                          +
+                        </Button>
+                      </div>
                     </div>
-                    <div className="setting-row">
+                    <div className="appearance-row">
                       <span>行距</span>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() =>
-                          setTheme({
-                            lineHeight:
-                              theme.lineHeight >= 2.2
-                                ? 1.4
-                                : Math.round((theme.lineHeight + 0.2) * 10) /
-                                  10,
-                          })
-                        }
-                      >
-                        {theme.lineHeight.toFixed(1)}
-                      </Button>
-                      <span>页边距</span>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() =>
-                          setTheme({
-                            margin: theme.margin >= 64 ? 16 : theme.margin + 16,
-                          })
-                        }
-                      >
-                        {theme.margin}
-                      </Button>
+                      <div className="appearance-stepper">
+                        <Button
+                          size="icon-xs"
+                          variant="ghost"
+                          aria-label="减小行距"
+                          onClick={() =>
+                            setTheme({
+                              lineHeight: Math.max(
+                                1.2,
+                                Math.round((theme.lineHeight - 0.2) * 10) / 10,
+                              ),
+                            })
+                          }
+                        >
+                          −
+                        </Button>
+                        <span className="appearance-value">
+                          {theme.lineHeight.toFixed(1)}
+                        </span>
+                        <Button
+                          size="icon-xs"
+                          variant="ghost"
+                          aria-label="增大行距"
+                          onClick={() =>
+                            setTheme({
+                              lineHeight: Math.min(
+                                2.4,
+                                Math.round((theme.lineHeight + 0.2) * 10) / 10,
+                              ),
+                            })
+                          }
+                        >
+                          +
+                        </Button>
+                      </div>
                     </div>
-                    <div className="flex gap-2">
-                      <Button
+                    <div className="appearance-row">
+                      <span>页边距</span>
+                      <div className="appearance-stepper">
+                        <Button
+                          size="icon-xs"
+                          variant="ghost"
+                          aria-label="减小页边距"
+                          onClick={() =>
+                            setTheme({
+                              margin: Math.max(16, theme.margin - 16),
+                            })
+                          }
+                        >
+                          −
+                        </Button>
+                        <span className="appearance-value">{theme.margin}</span>
+                        <Button
+                          size="icon-xs"
+                          variant="ghost"
+                          aria-label="增大页边距"
+                          onClick={() =>
+                            setTheme({
+                              margin: Math.min(64, theme.margin + 16),
+                            })
+                          }
+                        >
+                          +
+                        </Button>
+                      </div>
+                    </div>
+                    <div className="appearance-row">
+                      <span>字体</span>
+                      <Toggle
                         size="sm"
                         variant="outline"
-                        onClick={() =>
+                        className="text-xs font-normal"
+                        pressed={theme.fontFamily === "serif"}
+                        onPressedChange={(pressed) =>
                           setTheme({
-                            fontFamily:
-                              theme.fontFamily === "serif"
-                                ? "sans-serif"
-                                : "serif",
+                            fontFamily: pressed ? "serif" : "sans-serif",
                           })
                         }
                       >
                         {theme.fontFamily === "serif"
                           ? "宋体 / 衬线"
                           : "黑体 / 无衬线"}
-                      </Button>
+                      </Toggle>
                     </div>
                   </>
                 ) : (
-                  <>
-                    <div className="flex items-center gap-3">
-                      <span className="shrink-0 text-sm">原文缩放</span>
-                      <Slider
-                        className="reading-appearance-slider min-w-0 flex-1"
-                        thumbLabel="原文缩放"
-                        min={50}
-                        max={300}
-                        step={5}
-                        value={[
-                          typeof theme.zoom === "number"
-                            ? Math.round(theme.zoom * 100)
-                            : 100,
-                        ]}
-                        onValueChange={(value) =>
-                          setTheme({
-                            zoom:
-                              (Array.isArray(value) ? value[0] : value) / 100,
-                          })
-                        }
-                      />
-                      <span className="w-10 text-right text-xs tabular-nums">
-                        {typeof theme.zoom === "number"
-                          ? `${Math.round(theme.zoom * 100)}%`
-                          : "自动"}
-                      </span>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => setTheme({ zoom: "width" })}
-                      >
-                        适宽
-                      </Button>
-                    </div>
-                  </>
+                  <div className="appearance-slider-row">
+                    <span>缩放</span>
+                    <Slider
+                      className="reading-appearance-slider min-w-0"
+                      thumbLabel="原文缩放"
+                      min={50}
+                      max={300}
+                      step={5}
+                      value={[
+                        typeof theme.zoom === "number"
+                          ? Math.round(theme.zoom * 100)
+                          : 100,
+                      ]}
+                      onValueChange={(value) =>
+                        setTheme({
+                          zoom: (Array.isArray(value) ? value[0] : value) / 100,
+                        })
+                      }
+                    />
+                    <span className="appearance-value text-right">
+                      {typeof theme.zoom === "number"
+                        ? `${Math.round(theme.zoom * 100)}%`
+                        : "自动"}
+                    </span>
+                  </div>
                 )}
-                <div className="flex items-center gap-3">
-                  <span className="shrink-0 text-sm">译文字号</span>
+              </div>
+              <div className="appearance-section">
+                <span className="appearance-section-title">译文</span>
+                <div className="appearance-slider-row">
+                  <span>字号</span>
                   <Slider
-                    className="reading-appearance-slider min-w-0 flex-1"
+                    className="reading-appearance-slider min-w-0"
                     thumbLabel="译文字号"
                     min={80}
                     max={160}
@@ -1267,18 +1330,34 @@ export function Workspace({
                       })
                     }
                   />
-                  <span className="w-10 text-right text-xs tabular-nums">
+                  <span className="appearance-value text-right">
                     {Math.round(translationSize * 100)}%
                   </span>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => setTheme({ translationFontSize: 1 })}
-                  >
-                    恢复
-                  </Button>
                 </div>
                 <TranslationFontControls theme={theme} setTheme={setTheme} />
+              </div>
+              <div className="appearance-section">
+                <span className="appearance-section-title">对话</span>
+                <div className="appearance-slider-row">
+                  <span>字号</span>
+                  <Slider
+                    className="reading-appearance-slider min-w-0"
+                    thumbLabel="Agent 字号"
+                    min={80}
+                    max={160}
+                    step={5}
+                    value={[Math.round(assistantSize * 100)]}
+                    onValueChange={(value) =>
+                      setTheme({
+                        assistantFontScale:
+                          (Array.isArray(value) ? value[0] : value) / 100,
+                      })
+                    }
+                  />
+                  <span className="appearance-value text-right">
+                    {Math.round(assistantSize * 100)}%
+                  </span>
+                </div>
               </div>
             </PopoverContent>
           </Popover>
@@ -1301,7 +1380,7 @@ export function Workspace({
                 />
               }
             >
-              <MoreHorizontal />
+              <Ellipsis />
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-44">
               <DropdownMenuItem onClick={() => void annotate("bookmark")}>
@@ -1349,20 +1428,27 @@ export function Workspace({
               onValueChange={(value) => setLeftTab(String(value))}
               className="h-full gap-0"
             >
-              <TabsList className="panel-tabs">
-                <TabsTrigger value="toc">
-                  <ListTree className="size-3.5" />
-                  目录
-                </TabsTrigger>
-                <TabsTrigger value="search">
-                  <Search className="size-3.5" />
-                  搜索
-                </TabsTrigger>
-              </TabsList>
+              <div className="panel-header">
+                <TabsList className="panel-tabs">
+                  <TabsTrigger value="toc">
+                    <ListTree className="size-3.5" />
+                    目录
+                  </TabsTrigger>
+                  <TabsTrigger value="search">
+                    <Search className="size-3.5" />
+                    搜索
+                  </TabsTrigger>
+                </TabsList>
+              </div>
               <TabsContent value="toc" className="min-h-0 flex-1">
                 <ScrollArea className="h-full">
-                  <TOCTree items={toc} go={move} location={location} />
-                  {!toc.length && (
+                  <TOCTree
+                    items={sidebarTOC}
+                    active={activeTOC}
+                    go={move}
+                    location={location}
+                  />
+                  {!sidebarTOC.length && (
                     <p className="p-4 text-xs text-muted-foreground">
                       正在读取目录…
                     </p>
@@ -1491,19 +1577,14 @@ export function Workspace({
 
             {selection?.anchor && (
               <SelectionToolbar anchor={selection.anchor} pane={readingPane}>
-                <ColorSwatches
-                  action="高亮"
-                  onPick={(color) => {
-                    chooseColor(color);
-                    void annotate("highlight", "", color);
-                  }}
-                />
+                <ColorSwatchPicker color={markColor} onPick={chooseColor} />
                 <IconButton
-                  label="下划线"
-                  onClick={() => void annotate("underline")}
+                  label="高亮"
+                  onClick={() => void annotate("highlight", "", markColor)}
                 >
-                  <Underline />
+                  <Highlighter />
                 </IconButton>
+                <span className="selection-bar-divider" />
                 <IconButton
                   label="添加批注"
                   onClick={() => {
@@ -1518,19 +1599,6 @@ export function Workspace({
                   <StickyNote />
                 </IconButton>
                 <IconButton
-                  label="提问"
-                  onClick={() => {
-                    setNoteKind("question");
-                    setEditingAnnotation(null);
-                    setNoteSelection(selection);
-                    setNote("");
-                    setNoteOpen(true);
-                    adapter?.clearSelection();
-                  }}
-                >
-                  <CircleHelp />
-                </IconButton>
-                <IconButton
                   label="问 AI"
                   onClick={() =>
                     void send(
@@ -1540,9 +1608,6 @@ export function Workspace({
                   }
                 >
                   <Sparkles />
-                </IconButton>
-                <IconButton label="引用到对话" onClick={addQuote}>
-                  <Quote />
                 </IconButton>
                 <IconButton
                   label="划词翻译"
@@ -1554,6 +1619,50 @@ export function Workspace({
                 >
                   <Languages />
                 </IconButton>
+                <span className="selection-bar-divider" />
+                <DropdownMenu>
+                  <DropdownMenuTrigger
+                    render={
+                      <Button
+                        size="icon-sm"
+                        variant="ghost"
+                        aria-label="更多文字操作"
+                        title="更多文字操作"
+                      />
+                    }
+                  >
+                    <Ellipsis />
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent
+                    align="end"
+                    className="w-40"
+                    onMouseDown={(event) => event.preventDefault()}
+                  >
+                    <DropdownMenuItem
+                      onClick={() => void annotate("underline")}
+                    >
+                      <Underline />
+                      下划线
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onClick={() => {
+                        setNoteKind("question");
+                        setEditingAnnotation(null);
+                        setNoteSelection(selection);
+                        setNote("");
+                        setNoteOpen(true);
+                        adapter?.clearSelection();
+                      }}
+                    >
+                      <CircleHelp />
+                      提问
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={addQuote}>
+                      <Quote />
+                      引用到对话
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
               </SelectionToolbar>
             )}
           </div>
@@ -1578,34 +1687,38 @@ export function Workspace({
               onValueChange={(value) => setRightTab(String(value))}
               className="h-full gap-0"
             >
-              <TabsList className="panel-tabs">
-                <TabsTrigger value="ai">
-                  <Sparkles className="size-3.5" />
-                  对话
-                </TabsTrigger>
-                <TabsTrigger value="notes">
-                  <StickyNote className="size-3.5" />
-                  批注<small>{annotations.length || ""}</small>
-                </TabsTrigger>
-                <Button
-                  variant="ghost"
-                  size="icon-xs"
-                  title="聊天用量统计"
-                  aria-label="聊天用量统计"
-                  onClick={() => setUsageOpen(true)}
-                >
-                  <ChartColumn />
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="icon-xs"
-                  title="文档概要"
-                  aria-label="文档概要"
-                  onClick={() => setOverviewOpen(true)}
-                >
-                  <BookOpen />
-                </Button>
-              </TabsList>
+              <div className="panel-header">
+                <TabsList className="panel-tabs">
+                  <TabsTrigger value="ai">
+                    <ChatCircleDots className="size-3.5" />
+                    对话
+                  </TabsTrigger>
+                  <TabsTrigger value="notes">
+                    <StickyNote className="size-3.5" />
+                    批注<small>{annotations.length || ""}</small>
+                  </TabsTrigger>
+                </TabsList>
+                <div className="panel-header-actions">
+                  <Button
+                    variant="ghost"
+                    size="icon-xs"
+                    title="聊天用量统计"
+                    aria-label="聊天用量统计"
+                    onClick={() => setUsageOpen(true)}
+                  >
+                    <ChartColumn className="size-3.5" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon-xs"
+                    title="文档概要"
+                    aria-label="文档概要"
+                    onClick={() => setOverviewOpen(true)}
+                  >
+                    <BookOpen className="size-3.5" />
+                  </Button>
+                </div>
+              </div>
               <TabsContent
                 value="ai"
                 className="ai-panel"
@@ -1659,7 +1772,13 @@ export function Workspace({
                   )}
                   empty={
                     <div className="chat-empty">
-                      <p>
+                      <div className="chat-empty-hero">
+                        <span className="chat-empty-icon">
+                          <Sparkles size={18} aria-hidden="true" />
+                        </span>
+                        <span className="chat-empty-title">开始对话</span>
+                      </div>
+                      <p className="chat-empty-hint">
                         选中文字提问，或直接问这一
                         {doc.type === "epub" ? "章" : "页"}。
                       </p>
@@ -1679,8 +1798,17 @@ export function Workspace({
                             )
                           }
                         >
-                          <BookOpen />
-                          总结当前{doc.type === "epub" ? "章节" : "页面"}
+                          <span className="suggestion-icon">
+                            <BookOpen aria-hidden="true" />
+                          </span>
+                          <span className="suggestion-copy">
+                            <span className="suggestion-title">
+                              总结当前{doc.type === "epub" ? "章节" : "页面"}
+                            </span>
+                            <span className="suggestion-hint">
+                              要点、结构与值得追问的问题
+                            </span>
+                          </span>
                         </Button>
                         <Button
                           variant="ghost"
@@ -1695,8 +1823,15 @@ export function Workspace({
                             )
                           }
                         >
-                          <MessageSquare />
-                          解释概念
+                          <span className="suggestion-icon">
+                            <Lightbulb aria-hidden="true" />
+                          </span>
+                          <span className="suggestion-copy">
+                            <span className="suggestion-title">解释概念</span>
+                            <span className="suggestion-hint">
+                              用简明语言拆解核心概念
+                            </span>
+                          </span>
                         </Button>
                       </div>
                       <p className="privacy-note">
@@ -1784,18 +1919,22 @@ export function Workspace({
                     {sending ? (
                       <Button
                         size="icon-sm"
-                        variant="secondary"
+                        variant="outline"
+                        className="chat-stop"
+                        title="停止回答"
                         aria-label="停止回答"
                         onClick={() => {
                           abort.current?.abort();
                           session.cancel();
                         }}
                       >
-                        <Square className="size-3" />
+                        <Square size={11} weight="fill" />
                       </Button>
                     ) : (
                       <Button
                         size="icon-sm"
+                        className="chat-send"
+                        title="发送问题"
                         aria-label="发送问题"
                         disabled={
                           !adapter ||
@@ -1805,7 +1944,7 @@ export function Workspace({
                         }
                         onClick={() => void send()}
                       >
-                        <Send className="size-3.5" />
+                        <PaperPlaneTilt size={15} />
                       </Button>
                     )}
                   </div>

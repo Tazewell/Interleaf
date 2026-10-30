@@ -1,6 +1,11 @@
 import type { RefObject } from "react";
 import type { Annotation, SelectionAnchor } from "@reader/core";
-import { Trash2, StickyNote, SquarePen, Sparkles } from "lucide-react";
+import {
+  Trash,
+  Note as StickyNote,
+  NotePencil as SquarePen,
+  Sparkle as Sparkles,
+} from "@phosphor-icons/react";
 import { Button } from "@reader/ui/components/button";
 import {
   Tooltip,
@@ -8,7 +13,7 @@ import {
   TooltipContent,
 } from "@reader/ui/components/tooltip";
 import { SelectionToolbar } from "./SelectionToolbar";
-import { ColorSwatches } from "./ColorSwatches";
+import { ColorSwatchPicker } from "./ColorSwatches";
 
 export const annotationLabels = {
   highlight: "高亮",
@@ -41,53 +46,63 @@ export function AnnotationToolbar({
 }) {
   const hasNote = !!annotation.note.trim();
   const question = annotation.kind === "question";
-  const actions = [
-    {
-      label: question ? "编辑问题" : hasNote ? "编辑批注" : "添加批注",
-      Icon: hasNote ? SquarePen : StickyNote,
-      onClick: () => onNote(annotation),
-    },
+  const note = {
+    label: question ? "编辑问题" : hasNote ? "编辑批注" : "添加批注",
+    Icon: hasNote ? SquarePen : StickyNote,
+    onClick: () => onNote(annotation),
+  };
+  const ai =
     question && onAnswer && !annotation.answerId
       ? {
           label: "让 AI 回答",
           Icon: Sparkles,
           onClick: () => onAnswer(annotation),
         }
-      : { label: "问 AI", Icon: Sparkles, onClick: () => onAskAI(annotation) },
-    {
-      label: `删除${annotationLabels[annotation.kind]}`,
-      Icon: Trash2,
-      onClick: () => onDelete(annotation.id),
-    },
-  ];
+      : { label: "问 AI", Icon: Sparkles, onClick: () => onAskAI(annotation) };
+  const action = ({
+    label,
+    Icon,
+    onClick,
+  }: {
+    label: string;
+    Icon: typeof Trash;
+    onClick: () => void;
+  }) => (
+    <Tooltip key={label}>
+      <TooltipTrigger
+        render={
+          <Button
+            size="icon-sm"
+            variant="ghost"
+            aria-label={label}
+            disabled={deleting}
+            onClick={onClick}
+          />
+        }
+      >
+        <Icon />
+      </TooltipTrigger>
+      <TooltipContent>{label}</TooltipContent>
+    </Tooltip>
+  );
   return (
     <SelectionToolbar anchor={anchor} pane={pane} label="批注操作">
       {onColor && annotation.kind !== "bookmark" && (
-        <ColorSwatches
+        <ColorSwatchPicker
+          color={annotation.color}
           action="标记"
-          current={annotation.color}
           disabled={deleting}
           onPick={(color) => onColor(annotation, color)}
         />
       )}
-      {actions.map(({ label, Icon, onClick }) => (
-        <Tooltip key={label}>
-          <TooltipTrigger
-            render={
-              <Button
-                size="icon-sm"
-                variant="ghost"
-                aria-label={label}
-                disabled={deleting}
-                onClick={onClick}
-              />
-            }
-          >
-            <Icon />
-          </TooltipTrigger>
-          <TooltipContent>{label}</TooltipContent>
-        </Tooltip>
-      ))}
+      {action(note)}
+      {action(ai)}
+      <span className="selection-bar-divider" />
+      {action({
+        label: `删除${annotationLabels[annotation.kind]}`,
+        Icon: Trash,
+        onClick: () => onDelete(annotation.id),
+      })}
     </SelectionToolbar>
   );
 }

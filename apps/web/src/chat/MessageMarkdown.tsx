@@ -1,6 +1,6 @@
 import { Button } from "@reader/ui/components/button";
 import { copyText } from "./clipboard";
-import { Copy } from "lucide-react";
+import { Copy } from "@phosphor-icons/react";
 import { CachedMarkdown, Streamdown } from "@lobehub/streamdown";
 import {
   memo,
@@ -338,7 +338,11 @@ export const MessageMarkdown = memo(function MessageMarkdown({
     content.length <= 32_768 &&
     !globalDefinitions;
   return (
-    <div className="message-markdown" data-animated={animate}>
+    <div
+      className="message-markdown"
+      data-animated={animate}
+      data-generating={generating || undefined}
+    >
       {/* A Markdown failure falls back to the raw text of this message only. */}
       <ErrorBoundary
         resetKey={content}

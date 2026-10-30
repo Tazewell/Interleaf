@@ -7,7 +7,10 @@ import {
   type DragEvent,
   type ReactNode,
 } from "react";
-import { Columns3, GripVertical } from "lucide-react";
+import {
+  Columns as Columns3,
+  DotsSixVertical as GripVertical,
+} from "@phosphor-icons/react";
 import type { PaperColumn, PaperLibraryPreferences } from "@reader/core";
 import { Button } from "@reader/ui/components/button";
 import { Checkbox } from "@reader/ui/components/checkbox";

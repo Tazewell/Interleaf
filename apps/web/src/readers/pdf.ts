@@ -69,6 +69,7 @@ export class PDFReaderAdapter implements ReaderAdapter {
   private resizeTimer?: ReturnType<typeof setTimeout>;
   private fitWidth = true;
   private appliedZoom?: ReaderTheme["zoom"];
+  private blockFocused = false;
   private wheelScale?: number;
   private wheelAppliedScale?: number;
   private disposed = false;
@@ -464,6 +465,7 @@ export class PDFReaderAdapter implements ReaderAdapter {
       this.clearSelection();
       this.fitWidth = true;
       this.appliedZoom = "width";
+      this.blockFocused = false;
       this.viewer.currentScaleValue = "page-width";
       this.events.zoom?.("width");
       return;
@@ -497,6 +499,7 @@ export class PDFReaderAdapter implements ReaderAdapter {
     this.navigation.stop();
     this.clearSelection();
     this.fitWidth = false;
+    this.blockFocused = false;
     this.viewer.updateScale({
       scaleFactor: next / this.viewer.currentScale,
       drawingDelay: 150,
@@ -838,6 +841,7 @@ export class PDFReaderAdapter implements ReaderAdapter {
       this.navigation.stop();
       this.fitWidth = theme.zoom === "width";
       this.appliedZoom = theme.zoom;
+      this.blockFocused = false;
       this.wheelScale = undefined;
       this.viewer.currentScaleValue = this.fitWidth
         ? "page-width"
@@ -873,12 +877,11 @@ export class PDFReaderAdapter implements ReaderAdapter {
     if (location.type !== "pdf" || this.disposed) return false;
     const block = referenceBlock(this.blockData, location, text);
     if (!block) return false;
+    this.blockFocused = true;
     this.fitWidth = false;
     this.clearSelection();
     const reached = await this.navigation.focusBlock(block.id, "source");
     if (reached) {
-      this.appliedZoom = this.viewer.currentScale;
-      this.events.zoom?.(this.appliedZoom);
       this.location = { ...location, page: block.page };
       this.events.location(
         this.location,
@@ -908,12 +911,24 @@ export class PDFReaderAdapter implements ReaderAdapter {
   }
   async focusBlock(blockId: string, layout: "source" | "parallel") {
     this.fitWidth = false;
+    this.blockFocused = true;
     this.clearSelection();
-    const reached = await this.navigation.focusBlock(blockId, layout);
-    if (reached) {
-      this.appliedZoom = this.viewer.currentScale;
-      this.events.zoom?.(this.appliedZoom);
-    }
+    await this.navigation.focusBlock(blockId, layout);
+  }
+  /**
+   * Block focus is a temporary view: its zoom must not leak into the reader's
+   * zoom setting or follow the page into a now wider pane.
+   */
+  exitBlockFocus() {
+    if (!this.blockFocused) return;
+    this.blockFocused = false;
+    this.navigation.stop();
+    this.clearSelection();
+    this.wheelScale = undefined;
+    const zoom = this.theme.zoom;
+    this.fitWidth = zoom === "width";
+    this.appliedZoom = zoom;
+    this.viewer.currentScaleValue = this.fitWidth ? "page-width" : String(zoom);
   }
   cancelBlockFocus() {
     this.navigation.cancelMotion();

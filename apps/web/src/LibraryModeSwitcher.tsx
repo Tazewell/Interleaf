@@ -1,4 +1,4 @@
-import { Check, ChevronDown } from "lucide-react";
+import { Check, CaretDown as ChevronDown } from "@phosphor-icons/react";
 import type { LibraryMode } from "@reader/core";
 import { Button } from "@reader/ui/components/button";
 import {

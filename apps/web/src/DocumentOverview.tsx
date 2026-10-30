@@ -1,5 +1,10 @@
 import { useEffect, useState } from "react";
-import { BookOpen, RefreshCw, Square, ArrowUpRight } from "lucide-react";
+import {
+  BookOpen,
+  ArrowsClockwise as RefreshCw,
+  Square,
+  ArrowUpRight,
+} from "@phosphor-icons/react";
 import type {
   Document,
   DocumentLocation,

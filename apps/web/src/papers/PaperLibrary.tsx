@@ -18,25 +18,24 @@ import {
   Check,
   CheckSquare,
   List,
-  Table2,
-  FileDown,
-  FolderMinus,
-  FolderPlus,
-  Loader2,
-  Languages,
-  Merge,
-  MoreHorizontal,
+  Table as Table2,
+  FileArrowDown as FileDown,
+  FolderSimpleMinus as FolderMinus,
+  FolderSimplePlus as FolderPlus,
+  CircleNotch as LoaderCircle,
+  Translate as Languages,
+  ArrowsMerge as Merge,
+  DotsThree as Ellipsis,
   Tag,
-  PanelLeft,
-  Search,
+  MagnifyingGlass as Search,
   Star,
-  StickyNote,
-  Highlighter,
-  CircleHelp,
-  Quote,
-  RefreshCw,
-  Trash2,
-} from "lucide-react";
+  Note as StickyNote,
+  HighlighterCircle as Highlighter,
+  Question as CircleHelp,
+  Quotes as Quote,
+  ArrowsClockwise as RefreshCw,
+  Trash,
+} from "@phosphor-icons/react";
 import { api } from "@reader/api";
 import type {
   Document,
@@ -155,8 +154,6 @@ export interface PaperLibraryProps {
   loading: boolean;
   openDocument: (doc: Document) => void;
   moveToBooks: (doc: Document) => void;
-  navOpen: boolean;
-  onToggleNav: () => void;
   onResearchFolder?: (folder: string) => void;
 }
 
@@ -170,8 +167,6 @@ export function PaperLibrary({
   loading,
   openDocument: openFile,
   moveToBooks,
-  navOpen,
-  onToggleNav,
   onResearchFolder,
 }: PaperLibraryProps) {
   const openDocument = (doc: Document) => {
@@ -605,15 +600,6 @@ export function PaperLibrary({
     <main className="library-main paper-library" ref={mainRef}>
       <header className="library-topbar paper-topbar">
         <div className="paper-topbar-title">
-          <Button
-            size="icon-sm"
-            variant="ghost"
-            aria-label="切换侧栏"
-            aria-expanded={navOpen}
-            onClick={onToggleNav}
-          >
-            <PanelLeft />
-          </Button>
           <h1 className="library-title truncate">{title}</h1>
           {onResearchFolder && view.startsWith("folder:") && (
             <Button
@@ -657,7 +643,7 @@ export function PaperLibrary({
                 title="清除当前标签条件"
                 onClick={() => ui.setTagFilter({ ...tagFilter, tags: [] })}
               >
-                <Trash2 />
+                <Trash />
               </Button>
             </div>
           )}
@@ -682,14 +668,14 @@ export function PaperLibrary({
             <div className="paper-topbar-controls">
               <Button
                 size="sm"
-                variant="outline"
+                variant="ghost"
                 onClick={() => setBibImport(true)}
               >
                 导入 .bib
               </Button>
               <Button
                 size="sm"
-                variant="outline"
+                variant="ghost"
                 onClick={() => setBibExport(true)}
               >
                 参考文献…
@@ -737,7 +723,7 @@ export function PaperLibrary({
               </Tabs>
               <Button
                 size="sm"
-                variant={picking ? "secondary" : "outline"}
+                variant={picking ? "secondary" : "ghost"}
                 aria-pressed={picking}
                 disabled={!visible.length && !picking}
                 onClick={() => (picking ? ui.stopPicking() : ui.startPicking())}
@@ -803,7 +789,7 @@ export function PaperLibrary({
                     onClick={() => void exportPickedPDFs()}
                   >
                     {exportingPDFs ? (
-                      <Loader2 className="animate-spin" />
+                      <LoaderCircle className="animate-spin" />
                     ) : (
                       <FileDown />
                     )}
@@ -933,14 +919,14 @@ export function PaperLibrary({
                     disabled={!pickedDocs.length}
                     onClick={() => void trashPapers(pickedDocs, true)}
                   >
-                    <Trash2 />
+                    <Trash />
                   </Button>
                 </div>
               </div>
             )}
             {loading ? (
               <div className="empty-state">
-                <Loader2 className="animate-spin text-muted-foreground" />
+                <LoaderCircle className="animate-spin text-muted-foreground" />
               </div>
             ) : visible.length || table ? (
               view === "duplicates" ? (
@@ -1359,14 +1345,11 @@ function PaperRow({
   );
   const status = (
     <span className="paper-row-status" data-status={doc.readingStatus}>
-      {doc.readingStatus === "reading" && percent > 0
-        ? `${percent}%`
-        : statusLabels[doc.readingStatus]}
+      {statusLabels[doc.readingStatus]}
     </span>
   );
   const counts = (
     <>
-      {!columns && <PaperProcessing job={job} />}
       {doc.noteCount > 0 && (
         <span title={`${doc.noteCount} 条批注`}>
           <StickyNote className="size-3" />
@@ -1400,7 +1383,7 @@ function PaperRow({
             />
           }
         >
-          <MoreHorizontal />
+          <Ellipsis />
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-52">
           {moreMenu}
@@ -1555,6 +1538,11 @@ function PaperRow({
                   {byline}
                 </p>
               )}
+              {job && (
+                <div className="paper-row-job">
+                  <PaperProcessing job={job} />
+                </div>
+              )}
               <JournalRankBadges
                 id={doc.id}
                 venue={doc.metadata.venue || ""}
@@ -1590,6 +1578,13 @@ function PaperRow({
               )}
             </div>
             <div className="paper-row-meta">
+              {status}
+              {percent > 0 && (
+                <span className="paper-row-progress" aria-hidden="true">
+                  <span style={{ width: `${percent}%` }} />
+                </span>
+              )}
+              <span className="paper-row-counts">{counts}</span>
               <span className="paper-row-kind">
                 {(doc.attachments?.length ?? 0) === 0
                   ? "无附件"
@@ -1597,13 +1592,6 @@ function PaperRow({
                     ? `${doc.attachments!.length} 个附件`
                     : doc.type.toUpperCase()}
               </span>
-              {percent > 0 && (
-                <span className="paper-row-progress" aria-hidden="true">
-                  <span style={{ width: `${percent}%` }} />
-                </span>
-              )}
-              <span className="paper-row-counts">{counts}</span>
-              {status}
             </div>
             {more}
           </>

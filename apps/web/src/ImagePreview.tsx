@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Minus, Plus } from "lucide-react";
+import { Minus, Plus } from "@phosphor-icons/react";
 import { blockImageURL } from "@reader/api";
 import type { ImageAttachment } from "@reader/core";
 import { Button } from "@reader/ui/components/button";

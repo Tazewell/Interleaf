@@ -8,7 +8,7 @@ import type {
   ReaderTheme,
   TOCItem,
 } from "@reader/core";
-import { Loader2 } from "lucide-react";
+import { CircleNotch as LoaderCircle } from "@phosphor-icons/react";
 import { toast } from "sonner";
 export function ReaderView({
   document: doc,
@@ -140,7 +140,7 @@ export function ReaderView({
       <div className="reader-host" ref={host} />
       {loading && (
         <div className="reader-loading">
-          <Loader2 className="animate-spin" />
+          <LoaderCircle className="animate-spin" />
           <p>正在排版，准备阅读…</p>
         </div>
       )}

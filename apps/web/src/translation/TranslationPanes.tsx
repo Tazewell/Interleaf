@@ -5,7 +5,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { ArrowLeftRight } from "lucide-react";
+import { ArrowsLeftRight as ArrowRightLeft } from "@phosphor-icons/react";
 import { Button } from "@reader/ui/components/button";
 import {
   ResizableHandle,
@@ -114,7 +114,7 @@ export function TranslationPanes({
           title="交换原文和译文"
           onClick={onSwap}
         >
-          <ArrowLeftRight />
+          <ArrowRightLeft />
         </Button>
       )}
     </div>

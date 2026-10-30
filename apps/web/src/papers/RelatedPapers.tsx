@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { FileText, Plus, X } from "lucide-react";
+import { FileText, Plus, X } from "@phosphor-icons/react";
 import type { Document } from "@reader/core";
 import { api } from "@reader/api";
 import { Button } from "@reader/ui/components/button";

@@ -1,5 +1,8 @@
 import { useState } from "react";
-import { Bold, Loader2 } from "lucide-react";
+import {
+  TextB as Bold,
+  CircleNotch as LoaderCircle,
+} from "@phosphor-icons/react";
 import { defaultTheme, type ReaderTheme } from "@reader/core";
 import { Button } from "@reader/ui/components/button";
 import {
@@ -49,65 +52,67 @@ export function TranslationFontControls({
     }
   };
   return (
-    <div className="grid grid-cols-[max-content_minmax(0,1fr)] items-center gap-x-3 gap-y-4">
-      <span className="text-sm">译文字体</span>
-      <Select
-        value={family}
-        onValueChange={(value) =>
-          value && setTheme({ translationFontFamily: value as string })
-        }
-      >
-        <SelectTrigger
-          size="sm"
-          className="w-full min-w-0"
-          aria-label="译文字体"
+    <div className="appearance-font-controls">
+      <div className="appearance-row">
+        <span>字体</span>
+        <Select
+          value={family}
+          onValueChange={(value) =>
+            value && setTheme({ translationFontFamily: value as string })
+          }
         >
-          <SelectValue>
-            <span
-              className="truncate"
-              style={{ fontFamily: translationFont(family) }}
-            >
-              {translationFontLabel(family)}
-            </span>
-          </SelectValue>
-        </SelectTrigger>
-        <SelectContent className="max-h-72">
-          <SelectItem value="sans-serif">黑体 / 无衬线</SelectItem>
-          <SelectItem
-            value="serif"
-            style={{ fontFamily: translationFont("serif") }}
+          <SelectTrigger
+            size="sm"
+            className="w-44 min-w-0"
+            aria-label="译文字体"
           >
-            宋体 / 衬线
-          </SelectItem>
-          {fonts.length > 0 && (
-            <>
-              <SelectSeparator />
-              <SelectGroup>
-                <SelectLabel>本机字体</SelectLabel>
-                {fonts.map((name) => (
-                  <SelectItem
-                    key={name}
-                    value={name}
-                    style={{ fontFamily: translationFont(name) }}
-                  >
-                    {name}
-                  </SelectItem>
-                ))}
-              </SelectGroup>
-            </>
-          )}
-        </SelectContent>
-      </Select>
-      <div className="col-start-2 flex justify-end gap-2">
+            <SelectValue>
+              <span
+                className="truncate"
+                style={{ fontFamily: translationFont(family) }}
+              >
+                {translationFontLabel(family)}
+              </span>
+            </SelectValue>
+          </SelectTrigger>
+          <SelectContent className="max-h-72">
+            <SelectItem value="sans-serif">黑体 / 无衬线</SelectItem>
+            <SelectItem
+              value="serif"
+              style={{ fontFamily: translationFont("serif") }}
+            >
+              宋体 / 衬线
+            </SelectItem>
+            {fonts.length > 0 && (
+              <>
+                <SelectSeparator />
+                <SelectGroup>
+                  <SelectLabel>本机字体</SelectLabel>
+                  {fonts.map((name) => (
+                    <SelectItem
+                      key={name}
+                      value={name}
+                      style={{ fontFamily: translationFont(name) }}
+                    >
+                      {name}
+                    </SelectItem>
+                  ))}
+                </SelectGroup>
+              </>
+            )}
+          </SelectContent>
+        </Select>
+      </div>
+      <div className="appearance-font-actions">
         {canQueryLocalFonts() && !installed.length && (
           <Button
             size="sm"
             variant="outline"
-            className="min-w-0 flex-1"
+            className="min-w-0"
             disabled={loading}
             onClick={() => void load()}
           >
-            {loading && <Loader2 className="animate-spin" />}
+            {loading && <LoaderCircle className="animate-spin" />}
             读取本机字体
           </Button>
         )}

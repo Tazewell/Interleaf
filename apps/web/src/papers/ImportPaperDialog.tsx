@@ -1,5 +1,8 @@
 import { useEffect, useState } from "react";
-import { FileUp, Loader2 } from "lucide-react";
+import {
+  FileArrowUp as FileUp,
+  CircleNotch as LoaderCircle,
+} from "@phosphor-icons/react";
 import { Button } from "@reader/ui/components/button";
 import { Input } from "@reader/ui/components/input";
 import {
@@ -150,7 +153,7 @@ export function ImportPaperDialog({
             onChange={(e) => setRef(e.target.value)}
           />
           <Button type="submit" disabled={!ref.trim() || busy}>
-            {busy && <Loader2 className="animate-spin" />}
+            {busy && <LoaderCircle className="animate-spin" />}
             {busy ? "下载中" : "导入"}
           </Button>
         </form>

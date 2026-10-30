@@ -4,7 +4,11 @@ import type {
   ProxySettingsState,
   ProxyCheckResult,
 } from "@reader/core";
-import { LoaderCircle, CircleCheck, TriangleAlert } from "lucide-react";
+import {
+  CircleNotch as LoaderCircle,
+  CheckCircle as CircleCheck,
+  Warning as TriangleAlert,
+} from "@phosphor-icons/react";
 import { Button } from "@reader/ui/components/button";
 import { Input } from "@reader/ui/components/input";
 import {

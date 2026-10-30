@@ -1,11 +1,11 @@
 import { useEffect, useState } from "react";
 import {
-  ChevronDown,
-  ChevronUp,
+  CaretDown as ChevronDown,
+  CaretUp as ChevronUp,
   Copy,
-  Download,
-  GripVertical,
-} from "lucide-react";
+  DownloadSimple as Download,
+  DotsSixVertical as GripVertical,
+} from "@phosphor-icons/react";
 import type { Document } from "@reader/core";
 import { Badge } from "@reader/ui/components/badge";
 import { Button } from "@reader/ui/components/button";

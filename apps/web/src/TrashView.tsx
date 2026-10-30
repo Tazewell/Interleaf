@@ -1,5 +1,10 @@
 import { useState } from "react";
-import { BookOpen, FileText, RotateCcw, Trash2 } from "lucide-react";
+import {
+  BookOpen,
+  FileText,
+  ArrowCounterClockwise as RotateCcw,
+  Trash,
+} from "@phosphor-icons/react";
 import type { Document } from "@reader/core";
 import { api } from "@reader/api";
 import { toast } from "sonner";
@@ -70,7 +75,7 @@ export function TrashView({ documents }: { documents: Document[] }) {
           disabled={!documents.length}
           onClick={() => setPurging(documents)}
         >
-          <Trash2 />
+          <Trash />
           清空回收站
         </Button>
       </div>

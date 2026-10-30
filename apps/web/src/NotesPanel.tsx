@@ -2,18 +2,18 @@ import { AnnotationQuote } from "./AnnotationQuote";
 import { useEffect, useRef, useState } from "react";
 import {
   Check,
-  ChevronDown,
-  CircleHelp,
-  Download,
+  CaretDown as ChevronDown,
+  Question as CircleHelp,
+  DownloadSimple as Download,
   Link,
   ListPlus,
-  Loader2,
-  Pencil,
-  Search,
-  Sparkles,
-  StickyNote,
-  Trash2,
-} from "lucide-react";
+  CircleNotch as LoaderCircle,
+  PencilSimple as Pencil,
+  MagnifyingGlass as Search,
+  Sparkle as Sparkles,
+  Note as StickyNote,
+  Trash,
+} from "@phosphor-icons/react";
 import {
   readerLink,
   locationLabel,
@@ -266,7 +266,7 @@ function NoteCard({
             disabled={deleting}
             onClick={onDelete}
           >
-            <Trash2 />
+            <Trash />
           </Button>
         </span>
       </div>
@@ -335,7 +335,7 @@ function NoteCard({
                 onClick={onAnswer}
               >
                 {answering ? (
-                  <Loader2 className="animate-spin" />
+                  <LoaderCircle className="animate-spin" />
                 ) : (
                   <Sparkles />
                 )}

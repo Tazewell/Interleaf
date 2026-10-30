@@ -1,5 +1,11 @@
 import { useState } from "react";
-import { ArrowDown, ArrowUp, Plus, RotateCcw, Trash2 } from "lucide-react";
+import {
+  ArrowDown,
+  ArrowUp,
+  Plus,
+  ArrowCounterClockwise as RotateCcw,
+  Trash,
+} from "@phosphor-icons/react";
 import type { HighlightColor } from "@reader/core";
 import { Button } from "@reader/ui/components/button";
 import { Input } from "@reader/ui/components/input";
@@ -99,7 +105,7 @@ export function HighlightColorsEditor() {
               disabled={palette.length <= 1}
               onClick={() => save(palette.filter((_, i) => i !== index))}
             >
-              <Trash2 />
+              <Trash />
             </Button>
           </span>
         </div>

@@ -1,10 +1,10 @@
 // Legacy labels preserve attribution for saved conversations; new AI runs use API models.
 import { Claude, Kimi, OpenAI } from "@lobehub/icons";
-import { KeyRound } from "lucide-react";
+import { Key as KeyRound } from "@phosphor-icons/react";
 
 // The API agent is not one brand, so it uses a neutral key mark.
 function APIIcon({ size = 24 }: { size?: number }) {
-  return <KeyRound size={size} strokeWidth={1.75} />;
+  return <KeyRound size={size} />;
 }
 function APIAvatar({ size = 20 }: { size?: number; iconClassName?: string }) {
   return (
@@ -17,7 +17,6 @@ function APIAvatar({ size = 20 }: { size?: number; iconClassName?: string }) {
           width: Math.round(size * 0.55),
           height: Math.round(size * 0.55),
         }}
-        strokeWidth={2}
       />
     </span>
   );

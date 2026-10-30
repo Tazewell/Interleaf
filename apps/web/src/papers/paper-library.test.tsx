@@ -94,8 +94,6 @@ function Harness({
         loading={false}
         openDocument={open}
         moveToBooks={() => {}}
-        navOpen={navOpen}
-        onToggleNav={() => {}}
         onResearchFolder={researchFolder}
       />
     </>

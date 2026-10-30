@@ -1,5 +1,10 @@
 import { useEffect, useRef, useState } from "react";
-import { Copy, Download, FileDown, LoaderCircle } from "lucide-react";
+import {
+  Copy,
+  DownloadSimple as Download,
+  FileArrowDown as FileDown,
+  CircleNotch as LoaderCircle,
+} from "@phosphor-icons/react";
 import type { Annotation, Document, Message } from "@reader/core";
 import { api } from "@reader/api";
 import { Button } from "@reader/ui/components/button";

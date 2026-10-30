@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { FolderOpen, LoaderCircle } from "lucide-react";
+import { FolderOpen, CircleNotch as LoaderCircle } from "@phosphor-icons/react";
 import { Button } from "@reader/ui/components/button";
 import {
   Dialog,
@@ -55,16 +55,12 @@ export function LibraryLocationSettings({ open }: { open: boolean }) {
         variant="outline"
         disabled={!directory || busy}
         onClick={() => void move()}
-        className="transition-transform active:scale-[0.98] motion-reduce:transform-none"
       >
         <FolderOpen />
         更改位置
       </Button>
       {error && (
-        <p
-          role="alert"
-          className="mt-3 text-xs text-destructive animate-in fade-in-0 motion-reduce:animate-none"
-        >
+        <p role="alert" className="mt-3 text-xs text-destructive">
           {error}
         </p>
       )}
