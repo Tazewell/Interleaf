@@ -18,7 +18,7 @@
 - [x] Add failing tests for independent update assets, old protocol rejection and old app ownership rejection.
 - [x] Change application identity, public labels, download/update/feedback URLs and data defaults. Keep internal interfaces intact.
 - [x] Update installer scripts, release validation, workflows and current project documentation. Remove stale owner references without inventing new issue/PR links.
-- [ ] Run focused update/protocol/CLI/release tests and typecheck, inspect diff, commit and integrate into the main checkout preserving unrelated edits.
+- [x] Run focused update/protocol/CLI/release tests and typecheck, inspect diff, commit and integrate into the main checkout preserving unrelated edits.
 - [x] Document initial repository/CI signing setup and an installed-old-to-new manual upgrade check.
 
 ## Review focus
@@ -34,3 +34,5 @@
 - Ruling: isolate Connector too; review found the old extension identity and port could route imports to the other application. New public key/ID and port 17842 now have a real-handler regression test.
 - TDD: initial independent update/data/protocol tests failed (3) before implementation; Connector handshake failed (403) before its isolation fix.
 - Verification: 92 related tests pass; desktop/connector/processor builds pass. Full Go run initially needed the worktree processor build; rebuilt and the complete Go suite now passes. Project typecheck passes. Whole-branch review found and fixed a search-fixture mismatch and Connector isolation.
+
+- Completed: main checkout integrated by fast-forward. Main typecheck passes; 156 targeted JS tests across 16 files pass (one worker startup retried alone), complete Go suite passes. Web, desktop, connector and processor production builds pass. No native installer or real installed-version upgrade was exercised.
