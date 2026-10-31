@@ -62,12 +62,16 @@ export function PaperCitationKey({ doc }: { doc: Document }) {
     }
   };
   return (
-    <section className="space-y-2 py-3">
+    <section className="paper-citation-key space-y-2 py-3">
       <div className="flex items-center gap-2">
         <h3 className="text-sm font-medium">引用键</h3>
-        <code className="min-w-0 truncate text-xs">
+        <span
+          className="paper-citation-key-value"
+          data-empty={!doc.citationKey || undefined}
+          title={doc.citationKey}
+        >
           {doc.citationKey || "未分配"}
-        </code>
+        </span>
         <Button size="xs" variant="ghost" onClick={() => void edit()}>
           修改
         </Button>

@@ -1,7 +1,8 @@
-import { useShortcut, loadBindings } from "./shortcuts/shortcuts";
+import { useShortcut, loadBindings, isMac } from "./shortcuts/shortcuts";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   BookOpen,
+  UploadSimple,
   Books as Library,
   Star,
   MagnifyingGlass as Search,
@@ -19,7 +20,6 @@ import {
   BookOpenText,
   Moon,
   DotsThree as Ellipsis,
-  Plus,
   Sun,
 } from "@phosphor-icons/react";
 import { version } from "../../desktop/package.json";
@@ -538,15 +538,25 @@ export function App() {
                 type="button"
                 className="gnav-search"
                 aria-label="快速查找"
+                aria-keyshortcuts={isMac() ? "Meta+K" : "Control+K"}
                 onClick={() => setCommand(true)}
               >
                 <Search />
-                <span>
+                <span className="gnav-search-label">
                   {papers
                     ? "搜索论文标题、作者、DOI、标签"
                     : "搜索标题、作者、标签"}
                 </span>
-                <kbd>⌘ K</kbd>
+                <span className="gnav-shortcut" aria-hidden="true">
+                  <kbd>
+                    {isMac() ? (
+                      <Command weight="regular" className="size-3" />
+                    ) : (
+                      "Ctrl"
+                    )}
+                  </kbd>
+                  <kbd>K</kbd>
+                </span>
               </button>
               <div className="gnav-right">
                 <DropdownMenu>
@@ -620,7 +630,7 @@ export function App() {
                       />
                     }
                   >
-                    <Ellipsis />
+                    <Ellipsis weight="bold" className="size-4" />
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end" className="w-44">
                     <DropdownMenuItem onClick={() => setGuide(true)}>
@@ -645,7 +655,11 @@ export function App() {
                   }
                   disabled={busy}
                 >
-                  {busy ? <LoaderCircle className="animate-spin" /> : <Plus />}
+                  {busy ? (
+                    <LoaderCircle className="size-4 animate-spin motion-reduce:animate-none" />
+                  ) : (
+                    <UploadSimple className="size-4" />
+                  )}
                   {busy ? "导入中…" : "导入"}
                 </Button>
               </div>

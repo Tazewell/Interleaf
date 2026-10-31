@@ -140,7 +140,7 @@ export function ReaderView({
       <div className="reader-host" ref={host} />
       {loading && (
         <div className="reader-loading">
-          <LoaderCircle className="animate-spin" />
+          <LoaderCircle size={24} weight="regular" className="animate-spin" />
           <p>正在排版，准备阅读…</p>
         </div>
       )}

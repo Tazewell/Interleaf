@@ -1,9 +1,11 @@
 import { useEffect, useState } from "react";
 import {
   BookOpen,
-  CheckCircle as CircleCheck,
+  BookOpenText,
+  Book,
+  CheckSquare,
+  Files,
   CaretRight as ChevronRight,
-  Circle,
   Question as CircleHelp,
   Copy,
   Eye,
@@ -102,10 +104,10 @@ import { exportCitations } from "./CitationMenu";
 export const PAPER_DRAG_TYPE = "application/x-reader-papers";
 
 const viewIcons: Record<BuiltinView, typeof Library> = {
-  all: Library,
-  reading: BookOpen,
-  unread: Circle,
-  done: CircleCheck,
+  all: Files,
+  reading: BookOpenText,
+  unread: Book,
+  done: CheckSquare,
   starred: Star,
   processing: LoaderCircle,
   questions: CircleHelp,
@@ -198,7 +200,11 @@ function SidebarRow({
           : undefined
       }
     >
-      <Icon className="size-4" style={color ? { color } : undefined} />
+      <Icon
+        weight="regular"
+        className="size-4"
+        style={color ? { color } : undefined}
+      />
       <span className="min-w-0 flex-1 truncate text-left">{label}</span>
       {pinned && <Pin className="size-3 text-muted-foreground" />}
       {count !== undefined && <span className="nav-count">{count}</span>}

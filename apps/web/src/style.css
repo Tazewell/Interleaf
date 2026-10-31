@@ -233,7 +233,7 @@
     cursor: default;
   }
 }
-/* One icon voice: Phosphor duotone, inherited ink, sizes from utilities. */
+/* One icon voice: Phosphor regular, inherited ink, sizes from utilities. */
 svg[viewBox="0 0 256 256"] {
   vertical-align: middle;
 }
@@ -388,20 +388,35 @@ kbd {
   height: 14px;
   flex: none;
 }
-.gnav-search > span {
+.gnav-search-label {
   flex: 1;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.gnav-search kbd {
+.gnav-shortcut {
+  display: inline-flex;
   flex: none;
-  border: 0;
-  background: transparent;
-  padding: 0;
-  color: var(--ink-faint);
-  letter-spacing: 0.02em;
+  align-items: center;
+  gap: 3px;
+}
+.gnav-search kbd {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 4px;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  background: var(--surface);
+  color: var(--ink-muted);
+  font-family: var(--app-font);
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1;
 }
 .gnav-import {
   height: 28px;
@@ -413,8 +428,8 @@ kbd {
   font-weight: 550;
 }
 .gnav-import svg {
-  width: 14px;
-  height: 14px;
+  width: 16px;
+  height: 16px;
 }
 .library-sidebar {
   --sidebar-width: 216px;
@@ -2082,18 +2097,24 @@ kbd {
 }
 .notes-empty {
   text-align: center;
-  padding: 65px 0;
-  color: var(--muted-foreground);
-  font-size: 11px;
+  padding: 48px 12px;
+  color: var(--ink-muted);
+  font-size: 14px;
+  line-height: 1.6;
 }
 .notes-empty svg {
-  margin: 0 auto 20px;
-  opacity: 0.4;
+  display: block;
+  width: 32px;
+  height: 32px;
+  margin: 0 auto 12px;
+  opacity: 0.5;
 }
 .notes-empty small {
-  font-size: 10px;
   display: block;
-  margin-top: 10px;
+  margin-top: 6px;
+  color: var(--ink-muted);
+  font-size: 13px;
+  line-height: 1.6;
 }
 .notes-facets {
   display: flex;
@@ -4579,4 +4600,32 @@ textarea.paper-title-input {
     opacity: 0.8;
     transform: none;
   }
+}
+
+/* Citation metadata uses the same UI face as the adjacent paper fields. */
+.paper-citation-key {
+  font-family: var(--app-font);
+  font-size: 13px;
+  line-height: 1.5;
+}
+.paper-citation-key h3 {
+  color: var(--ink-muted);
+  font-size: 13px;
+  font-weight: 500;
+}
+.paper-citation-key-value {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--ink);
+  font-family: inherit;
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.paper-citation-key-value[data-empty] {
+  color: var(--ink-muted);
+}
+.paper-citation-key [data-slot="button"] {
+  font-family: inherit;
+  font-size: 12px;
 }

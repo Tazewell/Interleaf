@@ -25,7 +25,7 @@ if (import.meta.hot) import.meta.hot.dispose(removeDiagnostics);
 const root = ReactDOM.createRoot(document.getElementById("root")!);
 const mount = (node: ReactNode) =>
   root.render(
-    <IconContext.Provider value={{ weight: "duotone" }}>
+    <IconContext.Provider value={{ weight: "regular", size: 16 }}>
       {node}
     </IconContext.Provider>,
   );

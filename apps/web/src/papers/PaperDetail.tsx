@@ -536,7 +536,7 @@ function AuthorChips({ doc }: { doc: Document }) {
           aria-label="添加作者"
           onClick={() => setEditing(creators.length)}
         >
-          <Plus />
+          <Plus weight="bold" className="size-3.5" />
         </Button>
       )}
     </div>
@@ -618,7 +618,7 @@ function FolderChips({
             />
           }
         >
-          <Plus />
+          <Plus weight="bold" className="size-3.5" />
         </DropdownMenuTrigger>
         <DropdownMenuContent align="start" className="max-h-80 w-48">
           {flattenCategories(categoryTree(categories))
@@ -694,7 +694,7 @@ function TagChips({ doc }: { doc: Document }) {
           aria-label="添加标签"
           onClick={() => setAdding(true)}
         >
-          <Plus />
+          <Plus weight="bold" className="size-3.5" />
         </Button>
       )}
     </div>

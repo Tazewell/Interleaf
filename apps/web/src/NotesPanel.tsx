@@ -491,7 +491,7 @@ export function NotesPanel({
           )}
           {!visible.length && (
             <div className="notes-empty">
-              <StickyNote />
+              <StickyNote size={32} weight="regular" aria-hidden="true" />
               <p>
                 {query
                   ? "没有匹配的记录"
