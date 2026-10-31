@@ -36,7 +36,7 @@ func migrateEndnotePDF(ctx context.Context, input, work string) (string, endnote
 	var result endnotePDFResult
 	processor, node := os.Getenv("READER_PROCESSOR"), os.Getenv("READER_NODE")
 	if processor == "" || node == "" {
-		return "", result, errors.New("本地 PDF 程序未就绪，请重新构建并启动 Reader")
+		return "", result, errors.New("本地 PDF 程序未就绪，请重新构建并启动 Interleaf")
 	}
 	output, report := filepath.Join(work, "cleaned.pdf"), filepath.Join(work, "marks.json")
 	child, cancel := context.WithTimeout(ctx, 2*time.Minute)
@@ -192,7 +192,7 @@ func (s *Server) importEndnoteEntry(ctx context.Context, e *endnoteEntry, librar
 			return result, err
 		}
 		if migrated == 0 {
-			result.Warnings = append(result.Warnings, "相同 PDF 已在 Reader 中，但此 EndNote 来源尚未迁移；保留现有文档，本次未合并此来源的标题、元数据、标签和笔记，未转换内嵌标记，也未登记此来源。请在 EndNote 中核对未迁移内容")
+			result.Warnings = append(result.Warnings, "相同 PDF 已在 Interleaf 中，但此 EndNote 来源尚未迁移；保留现有文档，本次未合并此来源的标题、元数据、标签和笔记，未转换内嵌标记，也未登记此来源。请在 EndNote 中核对未迁移内容")
 		}
 		return result, nil
 	}

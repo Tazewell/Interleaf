@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-vi.mock("node:os", () => ({ hostname: () => "Reader-PC.office" }));
+vi.mock("node:os", () => ({ hostname: () => "Interleaf-PC.office" }));
 import { windowsProxySettings } from "./windows-proxy";
 import { systemProxyEnvironment } from "./proxy";
 

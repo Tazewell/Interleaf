@@ -24,7 +24,7 @@
 
 ## Codex 与 DeepSeek
 
-Codex 使用现有 CLI 登录：先通过 `config/read` 取得继承 MCP 名称，结束探测进程；工作进程逐项设置 `enabled=false` 并添加本次 Reader MCP。启动前后复核配置，创建 thread 后检查运行时 MCP 工具；成文使用独立无文档工具进程。Reader 不修改全局配置，不读取或复制 CLI 凭证。含该版本无法准确覆盖的 MCP 名称或工具范围不符时明确失败。
+Codex 使用现有 CLI 登录：先通过 `config/read` 取得继承 MCP 名称，结束探测进程；工作进程逐项设置 `enabled=false` 并添加本次 Interleaf MCP。启动前后复核配置，创建 thread 后检查运行时 MCP 工具；成文使用独立无文档工具进程。Interleaf 不修改全局配置，不读取或复制 CLI 凭证。含该版本无法准确覆盖的 MCP 名称或工具范围不符时明确失败。
 
 DeepSeek 使用现有 Chat Completions 请求路径。工具调用参数完整组装、成功结束后才执行；下一轮同时回传 assistant 调用、`tool_call_id` 和 opaque `reasoning_content`。续接字段不显示或落库为推理。工具检测采用随机 nonce 往返，工具 schema 指纹单独校验；文本能力和工具能力互不代替。未检测或不支持工具的模型使用共享处理器做检索辅助回答，界面明确显示该模式。
 

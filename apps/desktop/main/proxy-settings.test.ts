@@ -219,7 +219,7 @@ it("bounds concurrent checks, aborts on quit, and sanitizes native failures", as
   expect(await check).toMatchObject({
     connected: false,
     route: "unknown",
-    message: "无法完成连接检测，请重试或重新打开 Reader。",
+    message: "无法完成连接检测，请重试或重新打开 Interleaf。",
   });
   execute.mockResolvedValue({
     stdout: '{"connected":true,"route":"proxy","elapsedMs":0}',

@@ -18,7 +18,7 @@ distinguished_name = dn
 x509_extensions = ext
 prompt = no
 [dn]
-CN = Reader Self-Signed
+CN = Interleaf Self-Signed
 [ext]
 basicConstraints = critical, CA:false
 keyUsage = critical, digitalSignature
@@ -29,7 +29,7 @@ EOF
   -config "$out/cert.cnf" -keyout "$out/key.pem" -out "$out/cert.pem"
 password=$("$openssl" rand -hex 24)
 # 3DES/SHA-1 PKCS#12 keeps `security import` compatible with LibreSSL and OpenSSL 3.
-"$openssl" pkcs12 -export -name "Reader Self-Signed" \
+"$openssl" pkcs12 -export -name "Interleaf Self-Signed" \
   -inkey "$out/key.pem" -in "$out/cert.pem" -out "$out/reader-sign.p12" \
   -keypbe PBE-SHA1-3DES -certpbe PBE-SHA1-3DES -macalg sha1 \
   -passout "pass:$password"

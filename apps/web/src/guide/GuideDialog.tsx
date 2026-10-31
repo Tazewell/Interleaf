@@ -258,7 +258,7 @@ export function ReleaseNotesDialog({
 }) {
   const [opening, setOpening] = useState(false);
   const visitGitHub = async (issues: boolean) => {
-    const url = `https://github.com/cynicalight/reader${issues ? "/issues/new/choose" : ""}`;
+    const url = `https://github.com/Tazewell/Interleaf${issues ? "/issues/new/choose" : ""}`;
     setOpening(true);
     try {
       if (window.readerDesktop?.openExternal) {
@@ -284,7 +284,7 @@ export function ReleaseNotesDialog({
         className="guide-dialog sm:max-w-md"
       >
         <DialogHeader>
-          <DialogTitle>Reader {version} 更新内容</DialogTitle>
+          <DialogTitle>Interleaf {version} 更新内容</DialogTitle>
           <DialogDescription>
             {items.length ? "本次更新的主要变化" : "已更新到新版本。"}
           </DialogDescription>
@@ -311,7 +311,7 @@ export function ReleaseNotesDialog({
           </ul>
         )}
         <p className="text-sm leading-6 text-muted-foreground">
-          如果 Reader 对你有帮助，欢迎在 GitHub 点个
+          如果 Interleaf 对你有帮助，欢迎在 GitHub 点个
           Star。遇到问题或有建议，也欢迎提交 Issue。
         </p>
         <DialogFooter className="flex-col sm:flex-col">

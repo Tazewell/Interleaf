@@ -18,8 +18,8 @@ const out = process.argv[2];
 if (!out) throw new Error("Usage: node fixtures.mjs OUTPUT_DIRECTORY");
 await mkdir(out, { recursive: true });
 const pdf = await PDFDocument.create();
-pdf.setTitle("Reader synthetic bilingual export fixture");
-pdf.setAuthor("Reader test fixture");
+pdf.setTitle("Interleaf synthetic bilingual export fixture");
+pdf.setAuthor("Interleaf test fixture");
 const roman = await pdf.embedFont(StandardFonts.TimesRoman);
 const bold = await pdf.embedFont(StandardFonts.TimesRomanBold);
 const italic = await pdf.embedFont(StandardFonts.TimesRomanItalic);
@@ -54,7 +54,7 @@ function title(page, text, x, y, size = 13) {
 }
 const p = pdf.addPage([612, 792]);
 title(p, "A Small Study of Local Document Reading", 70, 732, 21);
-p.drawText("Reader synthetic test document", {
+p.drawText("Interleaf synthetic test document", {
   x: 70,
   y: 706,
   size: 10,

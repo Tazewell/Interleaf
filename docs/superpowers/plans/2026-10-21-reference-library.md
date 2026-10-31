@@ -1,4 +1,4 @@
-# Reader Reference Library Implementation Plan
+# Interleaf Reference Library Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
@@ -53,7 +53,7 @@
 
 **Interfaces:**
 - Package bibliography: `Parse(text string) (Database,error)`, Database holds entry kinds/keys/raw field expressions/string macros/preambles; `Render(Database) (string,error)` preserves unedited data; semantic string lookup resolves macros/concatenation with cycle checks.
-- Reader: `Bibliography(ids []string, mode string) (string,error)` on Store; uses Task 1 keys, emits BibTeX or BibLaTeX with preserved unknown expressions/dependencies.
+- Interleaf: `Bibliography(ids []string, mode string) (string,error)` on Store; uses Task 1 keys, emits BibTeX or BibLaTeX with preserved unknown expressions/dependencies.
 - POST `/api/papers/bibliography/preview` accepts `{text:string}`, returns `{entries: [{index,key,title,matchedId?,warnings: string[]}],errors?:...}`.
 - POST `/api/papers/bibliography/import` accepts `{text:string,decisions:[{index,action:'create'|'merge'|'skip',paperId?,citationKey?}],confirmCitationChange?:boolean}`; returns PaperItem[]. Validate all decisions before any writes, preserve manual fields/keys, reject ambiguous unresolved collisions. Register routes in a focused registration function invoked by Handler.
 - POST `/api/papers/bibliography/export` accepts `{ids:string[],mode:'bibtex'|'biblatex'}` returns `{text:string}`. `Store.Bibliography` is also the single source for Task 3 managed exports.

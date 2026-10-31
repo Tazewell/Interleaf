@@ -639,7 +639,7 @@ export function App() {
                     </DropdownMenuItem>
                     <DropdownMenuItem onClick={() => setAbout(true)}>
                       <Info />
-                      关于 Reader
+                      关于 Interleaf
                     </DropdownMenuItem>
                     <DropdownMenuSeparator />
                     <div className="px-1.5 py-1 text-xs text-ink-faint">
@@ -949,7 +949,7 @@ export function App() {
         <Dialog open={about} onOpenChange={setAbout}>
           <DialogContent className="sm:max-w-sm">
             <DialogHeader>
-              <DialogTitle>关于 Reader</DialogTitle>
+              <DialogTitle>关于 Interleaf</DialogTitle>
               <DialogDescription>一千万以内最好的阅读器</DialogDescription>
             </DialogHeader>
             <dl className="flex items-center justify-between text-sm">

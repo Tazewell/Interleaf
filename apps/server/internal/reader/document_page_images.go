@@ -78,7 +78,7 @@ func (s *Server) renderDocumentPages(ctx context.Context, c *documentCorpus, pag
 	if len(missing) > 0 {
 		node, processor := os.Getenv("READER_NODE"), os.Getenv("READER_PROCESSOR")
 		if node == "" || processor == "" {
-			return nil, generationError(ErrorConfiguration, "PDF 页面渲染程序不可用，请重新构建 Reader")
+			return nil, generationError(ErrorConfiguration, "PDF 页面渲染程序不可用，请重新构建 Interleaf")
 		}
 		work, err := os.MkdirTemp(filepath.Join(s.Store.Root, "ai-work"), "page-images-")
 		if err != nil {

@@ -231,7 +231,7 @@ it("waits for flushed reading data, then copies once despite repeated quit event
   expect(migrate).toHaveBeenCalledWith(
     "/userdata",
     "/old/library",
-    "/destination/Reader Library",
+    "/destination/Interleaf Library",
     expect.any(String),
     expect.any(Function),
   );

@@ -13,12 +13,12 @@ it("round-trips document, annotation and page targets", () => {
 it("rejects other schemes, actions and malformed parameters", () => {
   for (const link of [
     `https://open?id=${id}`,
-    `reader://delete?id=${id}`,
-    "reader://open?id=../../etc",
+    `interleaf://delete?id=${id}`,
+    "interleaf://open?id=../../etc",
     "not a link",
   ])
     expect(parseReaderLink(link)).toBeNull();
   expect(
-    parseReaderLink(`reader://open?id=${id}&annotation=x&page=-1&extra=1`),
+    parseReaderLink(`interleaf://open?id=${id}&annotation=x&page=-1&extra=1`),
   ).toEqual({ id });
 });

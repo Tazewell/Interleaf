@@ -20,7 +20,7 @@
 - `pnpm typecheck`、`pnpm test`、`pnpm build` 在最终产品源码上均 exit 0；Go 全套通过，Vitest 170 文件通过、3 文件跳过，1225 测试通过、5 跳过。根检查和原验收没有覆盖上述三个残余，不构成豁免。
 - 新原生验收 `E:/WSL/reader-native-ai-final-fix-acceptance-v2`：20 项通过、40 篇覆盖、69 次受控模型调用、外部 Agent trap 0、非空历史保全。最终研究 PDF 6 页全部渲染、查看、重开；既有双语 4 个 PDF 共 15 页检查保留。受控工程验收不证明真实模型的科学质量。
 - 最终检查、source/mirror/HEAD 字节绑定及退出记录：`E:/WSL/reader-native-ai-logs/final-review-fix/v2`。完整执行台账、独立报告和反例保留于本工作树 `.superpowers/sdd/2026-10-22-native-ai-research/`；因为未通过，不删除该审计目录。
-- 独立样本预览：`E:/Administrator/Desktop/Reader 内置 AI 研究预览.lnk`；人工步骤见 `docs/native-ai-research-validation.md`。样本连接的 endpoint/Key 已清空，用户自行填写。当前为 Linux WSLg 开发预览，未验收 Windows 安装包/原生对话框。
+- 独立样本预览：`E:/Administrator/Desktop/Interleaf 内置 AI 研究预览.lnk`；人工步骤见 `docs/native-ai-research-validation.md`。样本连接的 endpoint/Key 已清空，用户自行填写。当前为 Linux WSLg 开发预览，未验收 Windows 安装包/原生对话框。
 - 主检出 `D:/work/myreader/reader` 保持 `main` / `d64f41a` 干净；没有 push、merge、发布、改版本或构建安装器，也没有访问真实书库或外部凭据。
 
 后续需用户明确授权第二轮修复，再只处理这三个已确认缺口及必要验证，使用同一工作树，保留所有原检查和失败记录。不得按旧“继续 Task 11”文字重新执行已经完成的 Tasks 1～10，也不得把 Task 11 或整体目标标为完成。
@@ -41,7 +41,7 @@
 ## 全程约束
 
 - 中文沟通，按项实施，实施代理不得再派子代理；每项完成后由控制者派独立审查，修复后限定复审，最后做全分支审查。
-- AI 仅使用用户显式配置的 API 地址、Key 和模型；保留 Reader 自有会话、工具循环和任务，不恢复外部 Agent/Pi。不得读取 Codex/Claude 或其它工具的凭据。
+- AI 仅使用用户显式配置的 API 地址、Key 和模型；保留 Interleaf 自有会话、工具循环和任务，不恢复外部 Agent/Pi。不得读取 Codex/Claude 或其它工具的凭据。
 - 本地综述默认不搜索公网；会话联网许可、单次许可和撤销规则继续生效。模型或论文内容不能授予网络权限。
 - 搜索结果只是候选；显式用户导入才改变书库。原文、译文、批注、问答、报告和引用键必须保全。
 - 完整响应及结构/来源校验通过后才提交成功；已显示部分输出后不追加备用答案。成功持久化后才能发送 done。
@@ -69,10 +69,10 @@
 2. 实现 `exploreResearchIdeas(ctx, runID)`、`checkResearchNovelty(ctx, runID, ideaID)` 和 `validateNoveltyReport(...)`。沿用同一个 ResearchRun，将结构化成功单元写入 `research_units`，最终形成 ResearchReport。
 3. 默认生成 3 个 idea，允许用户指定 1～3 个；每个包含问题、机制、假设、具体改动、最近工作、最小实验、基线、消融、证伪条件、资源和逐条 claim。事实、推断、待验证假设明确区分；未知资源标 unknown，不能编造 GPU/费用。
 4. 支持针对明确 idea 的继续精化，并复用当前版本已成功的论文卡，不重做所有论文分析。旧报告引用须重新验证，不能因历史文本存在就视为模型已读。
-5. Reader 执行有预算的检索计划：同义词、机制、相邻领域三类查询，使用 arXiv 与 Crossref；记录真实查询、来源、日期、过滤、失败和排除理由。补读真实候选内容后，再逐 claim 对比。
+5. Interleaf 执行有预算的检索计划：同义词、机制、相邻领域三类查询，使用 arXiv 与 Crossref；记录真实查询、来源、日期、过滤、失败和排除理由。补读真实候选内容后，再逐 claim 对比。
 6. 每条 claim 返回 `high_overlap`、`partial_overlap`、`not_found` 或 `insufficient`，附 relatedWorkIds/evidenceIds、重合、差异与未验证项；总报告含 queryIds/asOf/coverage/caveats。
 7. 方法/实验只有摘要或查询失败、覆盖不足、超预算时必须标不足/未完成。`not_found` 仅表示计划查询成功完成后没有发现支持重合的证据，不代表原创证明。拒绝未读引用、绝对原创或伪造概率。
-8. 联网未授权时给本地范围结论和启用入口。无 function-calling 模型仍由 Reader 执行固定检索/结构化步骤，诚实展示能力；不伪装工具或视觉能力。
+8. 联网未授权时给本地范围结论和启用入口。无 function-calling 模型仍由 Interleaf 执行固定检索/结构化步骤，诚实展示能力；不伪装工具或视觉能力。
 9. 预算耗尽保留已生成候选、成功查询和已核查项；继续任务沿用既有检查点、来源版本、累计调用和所有权屏障。
 
 ### 必须验证
@@ -134,7 +134,7 @@
 - sync 的 `--delete` 未排除 models，必须在最后一次 sync 后再放入已验证模型；后续 sync 后若模型被清掉，按同样流程恢复，不误判为产品故障。
 - 桌面入口 `apps/desktop/main/index.ts`，构建入口 `apps/desktop/dist/main.cjs`；Electron 启动 `apps/desktop/bin/reader-server`、生成 token、loopback port 0、绑定 activeLibrary。
 - 使用任务自有 XDG_CONFIG_HOME/cache/profile/library，实际核对 Electron appData/userData。`READER_DATA` 不是桌面库覆盖，`scripts/dev.mjs` 硬编码仓库 `.reader`/17840，不适合最终隔离预览。
-- 新建 `E:/Administrator/Desktop/Reader 内置 AI 研究预览.lnk`，不改真实启动器/库。核对 Electron/Go 路径、进程、健康/鉴权 API/HTML，无外部 Agent/Pi 进程；移除样本测试 Key。
+- 新建 `E:/Administrator/Desktop/Interleaf 内置 AI 研究预览.lnk`，不改真实启动器/库。核对 Electron/Go 路径、进程、健康/鉴权 API/HTML，无外部 Agent/Pi 进程；移除样本测试 Key。
 - 提供人工操作步骤：API 设置、文件夹综述、联网找论文/查新、来源回跳、预算继续、编辑导出、两种双语 PDF。禁止浏览器自动化视觉验收。
 
 ### 待处理审查债务与文档

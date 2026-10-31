@@ -1,6 +1,6 @@
 module.exports = {
-  appId: "io.github.cynicalight.reader",
-  productName: "Reader",
+  appId: "io.github.tazewell.interleaf",
+  productName: "Interleaf",
   directories: { output: "../../release" },
   files: ["dist/**/*", "package.json"],
   extraResources: [{ from: "staging", to: ".", filter: ["**/*"] }],
@@ -9,7 +9,7 @@ module.exports = {
   compression: "maximum",
   npmRebuild: false,
   publish: null,
-  protocols: [{ name: "Reader", schemes: ["reader"] }],
+  protocols: [{ name: "Interleaf", schemes: ["interleaf"] }],
   mac: {
     // The zip is the Squirrel.Mac in-place update payload.
     target: ["dmg", "zip"],
@@ -22,8 +22,8 @@ module.exports = {
     notarize: false,
     artifactName:
       process.arch === "x64"
-        ? "Reader-${version}-mac-intel-x64.${ext}"
-        : "Reader-${version}-mac-${arch}.${ext}",
+        ? "Interleaf-${version}-mac-intel-x64.${ext}"
+        : "Interleaf-${version}-mac-${arch}.${ext}",
   },
   dmg: {
     sign: false,
@@ -37,7 +37,7 @@ module.exports = {
     icon: "../../assets/icons/windows/icon.ico",
     // Skip only code signing; resource editing still embeds the icon and version info.
     signExecutable: false,
-    artifactName: "Reader-${version}-win-${arch}.${ext}",
+    artifactName: "Interleaf-${version}-win-${arch}.${ext}",
   },
   nsis: {
     oneClick: false,

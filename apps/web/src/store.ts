@@ -24,7 +24,7 @@ export const useReaderStore = create<{
   libraryPreferences: LibraryPreferences;
   trash: Document[];
   setTrash: (trash: Document[]) => void;
-  /** A reader:// target waiting for its document to open. */
+  /** A interleaf:// target waiting for its document to open. */
   linkTarget: ReaderLinkTarget | null;
   setLinkTarget: (target: ReaderLinkTarget | null) => void;
   setLibraryPreferences: (preferences: LibraryPreferences) => void;
@@ -146,7 +146,7 @@ export async function refreshTrash() {
   if (revision === trashRevision)
     useReaderStore.setState({ trash, paperTrash });
 }
-/** Open the document a reader:// link points to, in its own library. */
+/** Open the document a interleaf:// link points to, in its own library. */
 export async function openLinkTarget(target: ReaderLinkTarget) {
   let doc = useReaderStore.getState().documents.find((d) => d.id === target.id);
   if (!doc) {

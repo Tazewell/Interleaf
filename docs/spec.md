@@ -1,4 +1,4 @@
-# Reader v0.1
+# Interleaf v0.1
 
 用户目标：新建 local-first AI 阅读器。Electron + React/TypeScript + Go，使用 shadcn/ui 与 Base UI。EPUB 和 PDF 是一等公民，统一 Document / DocumentLocation / TOC / Annotation，保留本机 Claude Code / Codex CLI 的订阅账号使用方式。
 

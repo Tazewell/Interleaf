@@ -133,7 +133,7 @@ func TestZoteroMigrationRoundTrip(t *testing.T) {
 		t.Fatal("migration must use the default translation threshold")
 	}
 	// Curated Reader data, including removed imported annotations, survives a retry.
-	if _, err = s.Store.DB.Exec(`UPDATE document_notes SET body='Reader 编辑' WHERE document_id=?; DELETE FROM annotations WHERE document_id=?`, doc.ID, doc.ID); err != nil {
+	if _, err = s.Store.DB.Exec(`UPDATE document_notes SET body='Interleaf 编辑' WHERE document_id=?; DELETE FROM annotations WHERE document_id=?`, doc.ID, doc.ID); err != nil {
 		t.Fatal(err)
 	}
 	again, err := s.importZoteroEntry(context.Background(), mustScanZotero(t, dir).Entries[0])
@@ -146,7 +146,7 @@ func TestZoteroMigrationRoundTrip(t *testing.T) {
 		t.Fatal("retry resurrected deleted annotation")
 	}
 	s.Store.DB.QueryRow(`SELECT body FROM document_notes WHERE document_id=?`, doc.ID).Scan(&note)
-	if note != "Reader 编辑" {
+	if note != "Interleaf 编辑" {
 		t.Fatal("retry overwrote notes")
 	}
 	after, err := os.ReadFile(filepath.Join(dir, "zotero.sqlite"))
@@ -215,7 +215,7 @@ func TestZoteroTransactionRollbackAndDuplicateProtection(t *testing.T) {
 	}
 	var doc Document
 	json.Unmarshal(response.Body.Bytes(), &doc)
-	if response = request(t, s, "PATCH", "/api/documents/"+doc.ID, strings.NewReader(`{"title":"Reader 标题","metadata":{"doi":"10.9999/edited"},"tags":["existing"]}`)); response.Code != 200 {
+	if response = request(t, s, "PATCH", "/api/documents/"+doc.ID, strings.NewReader(`{"title":"Interleaf 标题","metadata":{"doi":"10.9999/edited"},"tags":["existing"]}`)); response.Code != 200 {
 		t.Fatal(response.Body.String())
 	}
 	result, err := s.importZoteroEntry(context.Background(), entry)
@@ -223,7 +223,7 @@ func TestZoteroTransactionRollbackAndDuplicateProtection(t *testing.T) {
 		t.Fatal(result, err)
 	}
 	doc, err = s.Store.Document(doc.ID)
-	if err != nil || doc.Title != "Reader 标题" || doc.Metadata.DOI != "10.9999/edited" || len(doc.Tags) != 2 {
+	if err != nil || doc.Title != "Interleaf 标题" || doc.Metadata.DOI != "10.9999/edited" || len(doc.Tags) != 2 {
 		t.Fatal(doc, err)
 	}
 }
@@ -360,7 +360,7 @@ func TestZoteroLockedLibraryCanRetry(t *testing.T) {
 			}
 			docs, err := s.Store.Documents()
 			if err != nil || len(docs) != 0 {
-				t.Fatalf("failed scan changed Reader: %v %v", docs, err)
+				t.Fatalf("failed scan changed Interleaf: %v %v", docs, err)
 			}
 			// Closing the owner's connection models quitting Zotero, without changing
 			// lock settings or copying an active database. The same scan can then retry.
@@ -429,8 +429,8 @@ func TestZoteroImportStripsTitleBraces(t *testing.T) {
 		}
 	})
 	for name, patch := range map[string]string{
-		"manual values": `{"title":"Reader 标题","metadata":{"shortTitle":"我的短标题"}}`,
-		"manual empty":  `{"title":"Reader 标题","metadata":{"shortTitle":""}}`,
+		"manual values": `{"title":"Interleaf 标题","metadata":{"shortTitle":"我的短标题"}}`,
+		"manual empty":  `{"title":"Interleaf 标题","metadata":{"shortTitle":""}}`,
 	} {
 		t.Run(name, func(t *testing.T) {
 			entry := braced(t)
@@ -451,7 +451,7 @@ func TestZoteroImportStripsTitleBraces(t *testing.T) {
 				t.Fatal(result, err)
 			}
 			doc, err = s.Store.Document(doc.ID)
-			if err != nil || doc.Title != "Reader 标题" || doc.Metadata.ShortTitle != want.Metadata.ShortTitle {
+			if err != nil || doc.Title != "Interleaf 标题" || doc.Metadata.ShortTitle != want.Metadata.ShortTitle {
 				t.Fatalf("manual values overwritten: %q %q %v", doc.Title, doc.Metadata.ShortTitle, err)
 			}
 		})

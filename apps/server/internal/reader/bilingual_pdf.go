@@ -684,7 +684,7 @@ func (p *bilingualProgress) Write(data []byte) (int, error) {
 func (s *Server) bilingualProcessor(j *bilingualJob, args []string) error {
 	node, processor := os.Getenv("READER_NODE"), os.Getenv("READER_PROCESSOR")
 	if node == "" || processor == "" {
-		return bilingualFailure("PDF 导出程序不可用，请重新构建 Reader")
+		return bilingualFailure("PDF 导出程序不可用，请重新构建 Interleaf")
 	}
 	child, cancel := context.WithCancel(j.ctx)
 	defer cancel()

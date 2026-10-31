@@ -189,7 +189,7 @@ function ResearchPanelView({
         )}
         {!blocked && capability && capability.tools !== "passed" && (
           <p className="text-sm text-muted-foreground">
-            受限文字模式：由 Reader 控制资料读取，模型不调用工具。
+            受限文字模式：由 Interleaf 控制资料读取，模型不调用工具。
           </p>
         )}
         {capability && !capability.vision && (

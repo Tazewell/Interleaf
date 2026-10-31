@@ -400,7 +400,7 @@ func (s *Server) pdfCorpus(ctx context.Context, d Document, c *documentCorpus) e
 		}
 	}
 	if len(extracted.Pages) == 0 && layoutErr != nil {
-		return generationError(ErrorConfiguration, "全文检索需要本地 PDF 文字提取程序，请重新构建 Reader")
+		return generationError(ErrorConfiguration, "全文检索需要本地 PDF 文字提取程序，请重新构建 Interleaf")
 	}
 	if layoutErr == nil {
 		c.Coverage.TotalUnits = layout.Pages

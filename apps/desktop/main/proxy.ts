@@ -101,7 +101,7 @@ export async function resolveSystemProxyEnvironment(
   } catch {
     // Proxy conversion is optional at startup. Native command failures may
     // contain private configuration, so keep the diagnostic free of raw output.
-    console.warn("无法应用系统代理，Reader 将沿用启动环境。");
+    console.warn("无法应用系统代理，Interleaf 将沿用启动环境。");
     return {
       env: { ...inherited },
       warning: "无法读取或转换系统代理，当前沿用启动环境。可改用手动代理。",

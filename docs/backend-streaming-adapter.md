@@ -1,14 +1,14 @@
 # 后端实施方案：统一 Agent 与 API 流式服务
 
-日期：2026-10-05。执行对象：Reader 后端。状态：基于现有实现的后续交付要求，不代表本文新增能力已经落地。
+日期：2026-10-05。执行对象：Interleaf 后端。状态：基于现有实现的后续交付要求，不代表本文新增能力已经落地。
 
-任务派给新建的 `Reader 流式迁移 · 后端` 会话，使用独立 worktree，不占用正在处理其他工作的 `Backend Infra CI/CD` 会话。执行 B1–B4，在已经完成的协议适配之上继续交付统一服务。适配器接口、目录组织和进程管理细节可自行设计，以可测试性和资源回收为依据；共同契约的冻结项不能单方变更。
+任务派给新建的 `Interleaf 流式迁移 · 后端` 会话，使用独立 worktree，不占用正在处理其他工作的 `Backend Infra CI/CD` 会话。执行 B1–B4，在已经完成的协议适配之上继续交付统一服务。适配器接口、目录组织和进程管理细节可自行设计，以可测试性和资源回收为依据；共同契约的冻结项不能单方变更。
 
 配套文档：[前端流式迁移](./frontend-streaming-migration.md)。[Agent 流式输出约定](./agent-streaming-contract.md) 是当前 wire contract，即前后端实际交换的数据格式。本方案补充后端内部边界和下一步工作，不覆盖其中已实现的事件名称与完成语义。
 
 ## 1. 目标和已完成的基础
 
-前端只调用 Reader 的统一聊天服务，接收原始 Markdown 文本增量、处理状态和终态。后端负责选择连接、读取后端配置、认证、模型参数、Agent 协议、图片输入、流解析、取消、错误分类、备用策略和保存。前端不处理 Codex JSON-RPC、Claude stream-json、Kimi ACP 或上游 API SSE。
+前端只调用 Interleaf 的统一聊天服务，接收原始 Markdown 文本增量、处理状态和终态。后端负责选择连接、读取后端配置、认证、模型参数、Agent 协议、图片输入、流解析、取消、错误分类、备用策略和保存。前端不处理 Codex JSON-RPC、Claude stream-json、Kimi ACP 或上游 API SSE。
 
 基线 `2afe113` 已合入 Codex App Server、Claude Code partial stream-json 和 Kimi ACP 的实际增量提取，以及模拟协议和 HTTP 流测试。文字/图片 Agent 路径已经可以在请求完成前发送 delta。应复用现有 `codex.go`、`claude.go`、`cli.go` 和测试，避免把旧调研的限制当作当前缺陷。
 
@@ -77,7 +77,7 @@ data: {"ok":true}
 
 第一阶段必须适配三种本地 Agent 和项目现有 `text-api`/`image-api` 连接。API 连接按协议选择适配器，初期明确支持现有 OpenAI Chat Completions 兼容格式；未经实现和测试，不声称兼容任意厂商 API。
 
-前端聊天请求不接受或传递 API Key、上游地址、认证头、CLI 参数或文件路径。设置页可以将用户主动输入的 key 写入后端；后续读取只返回 `hasKey` 等状态，不能返回原值或保存在前端持久化状态/日志中。CLI 继续使用自身登录，Reader 不读取 CLI 凭据文件、不模拟 OAuth。
+前端聊天请求不接受或传递 API Key、上游地址、认证头、CLI 参数或文件路径。设置页可以将用户主动输入的 key 写入后端；后续读取只返回 `hasKey` 等状态，不能返回原值或保存在前端持久化状态/日志中。CLI 继续使用自身登录，Interleaf 不读取 CLI 凭据文件、不模拟 OAuth。
 
 连接 registry 和连接 ID 在本轮作为后端内部模型。对外保留现有 provider 选择和配置接口，provider 只表达用户选定的 Agent，不使前端了解认证或协议。内部可保存协议、显示名称、认证引用和已验证能力；前端渲染不按 provider 分支。
 

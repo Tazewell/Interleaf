@@ -18,13 +18,13 @@
 | DeepSeek    | `api.deepseek.com`，根路径或 `/v1`                                         | [Thinking Mode](https://api-docs.deepseek.com/guides/thinking_mode/)：已登记 V4 模型 thinking enabled + reasoning_effort low/high/max；旧 chat/reasoner 别名使用默认模式。                                                                                                                                                                                          |
 | MiniMax     | `api.minimax.io` / `api.minimaxi.com`，根路径或 `/v1`                      | [官方 OpenAI 接口](https://platform.minimax.io/docs/api-reference/text-openai-api)：M3.1 Flash Preview 可调 low/medium/high/xhigh/max；M3/M2.x 不宣称强度可调。设置 reasoning_split，避免思考内容混入回答正文。                                                                                                                                                     |
 
-依据 [Claude effort 文档](https://platform.claude.com/docs/en/build-with-claude/effort)，Fable 5/5.1 与 Mythos 5/5.1 已登记 low/medium/high/xhigh/max，使用 adaptive thinking；遵循 Reader 已登记模型的 32768 输出上限。
+依据 [Claude effort 文档](https://platform.claude.com/docs/en/build-with-claude/effort)，Fable 5/5.1 与 Mythos 5/5.1 已登记 low/medium/high/xhigh/max，使用 adaptive thinking；遵循 Interleaf 已登记模型的 32768 输出上限。
 
 每家的具体模型名单以 `reasoningRule` 为准。未知官方模型保留默认强度并显示“尚无规则”，不将整个新模型系列自动归为已支持。其他厂商的 Anthropic 专用根路径暂不在自动识别表内；可以手动选择 Messages 协议，但不应用未经核对的厂商模型规则。
 
 ## 用户选择与实际参数
 
-UI 保留 low/medium/high/max 偏好；只在有可调能力时启用控件。缺少某档时映射到最近合法档位，等距选择较强的一档；设置与阅读面板显示映射。旧 Claude 的预算映射为 1024/4096/8192/16384 token，这是 Reader 的策略，不是厂商定义的四个离散 effort。预算必须小于 max_tokens。
+UI 保留 low/medium/high/max 偏好；只在有可调能力时启用控件。缺少某档时映射到最近合法档位，等距选择较强的一档；设置与阅读面板显示映射。旧 Claude 的预算映射为 1024/4096/8192/16384 token，这是 Interleaf 的策略，不是厂商定义的四个离散 effort。预算必须小于 max_tokens。
 
 未知中转缺少能力元数据时尝试标准 low/medium/high，max 映射为 high。端点明确发布档位时使用该列表；全部档位无法识别时省略强度并显示未知，不丢弃声明后伪造标准支持。不把 off/on 当作通用 reasoning_effort。
 

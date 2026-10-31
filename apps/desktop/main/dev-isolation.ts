@@ -6,7 +6,7 @@ export function devIsolation({
   env: NodeJS.ProcessEnv;
 }) {
   return {
-    userDataDirectory: isPackaged ? null : "Reader Dev",
+    userDataDirectory: isPackaged ? null : "Interleaf Dev",
     registerProtocol: isPackaged || env.READER_DEV_PROTOCOL === "1",
     enableConnector: isPackaged || env.READER_DEV_CONNECTOR === "1",
   };

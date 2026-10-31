@@ -16,8 +16,8 @@ function checksums(...files: string[]) {
   return files.map((name) => `${"a".repeat(64)}  ${name}`).join("\n");
 }
 const manifest = checksums(
-  "Reader-0.2.0-mac-arm64.dmg",
-  "Reader-0.2.0-win-x64.exe",
+  "Interleaf-0.2.0-mac-arm64.dmg",
+  "Interleaf-0.2.0-win-x64.exe",
 );
 describe("release boundaries", () => {
   it("compares versions numerically and never downgrades", () => {
@@ -45,15 +45,15 @@ describe("release boundaries", () => {
     const mac = selectRelease(release(), "0.1.0", "darwin", "arm64", manifest);
     const windows = selectRelease(release(), "0.1.0", "win32", "x64", manifest);
     expect(mac.status === "available" && mac.update.installer).toBe(
-      "Reader-0.2.0-mac-arm64.dmg",
+      "Interleaf-0.2.0-mac-arm64.dmg",
     );
     expect(windows.status === "available" && windows.update).toEqual({
       version: "0.2.0",
-      installer: "Reader-0.2.0-win-x64.exe",
+      installer: "Interleaf-0.2.0-win-x64.exe",
       downloadURL:
-        "https://github.com/cynicalight/reader/releases/download/v0.2.0/Reader-0.2.0-win-x64.exe",
+        "https://github.com/Tazewell/Interleaf/releases/download/v0.2.0/Interleaf-0.2.0-win-x64.exe",
       checksumURL:
-        "https://github.com/cynicalight/reader/releases/download/v0.2.0/SHA256SUMS.txt",
+        "https://github.com/Tazewell/Interleaf/releases/download/v0.2.0/SHA256SUMS.txt",
     });
     expect(
       selectRelease(release(), "0.1.0", "darwin", "x64", manifest).status,
@@ -70,9 +70,9 @@ describe("release boundaries", () => {
       manifest +
       "\n" +
       checksums(
-        "Reader-0.2.0-mac-arm64.zip",
-        "Reader-0.2.0-mac-intel-x64.dmg",
-        "Reader-0.2.0-mac-intel-x64.zip",
+        "Interleaf-0.2.0-mac-arm64.zip",
+        "Interleaf-0.2.0-mac-intel-x64.dmg",
+        "Interleaf-0.2.0-mac-intel-x64.zip",
       );
     const mac = selectRelease(
       release(),
@@ -82,9 +82,9 @@ describe("release boundaries", () => {
       withArchive,
     );
     expect(mac.status === "available" && mac.update.archive).toEqual({
-      installer: "Reader-0.2.0-mac-arm64.zip",
+      installer: "Interleaf-0.2.0-mac-arm64.zip",
       downloadURL:
-        "https://github.com/cynicalight/reader/releases/download/v0.2.0/Reader-0.2.0-mac-arm64.zip",
+        "https://github.com/Tazewell/Interleaf/releases/download/v0.2.0/Interleaf-0.2.0-mac-arm64.zip",
     });
     const intel = selectRelease(
       release(),
@@ -94,8 +94,8 @@ describe("release boundaries", () => {
       withArchive,
     );
     expect(intel.status === "available" && intel.update).toMatchObject({
-      installer: "Reader-0.2.0-mac-intel-x64.dmg",
-      archive: { installer: "Reader-0.2.0-mac-intel-x64.zip" },
+      installer: "Interleaf-0.2.0-mac-intel-x64.dmg",
+      archive: { installer: "Interleaf-0.2.0-mac-intel-x64.zip" },
     });
     const windows = selectRelease(
       release(),
@@ -113,7 +113,7 @@ describe("release boundaries", () => {
   it("waits for the manifest and matching version's installer", () => {
     for (const text of [
       "",
-      checksums("Reader-0.1.0-mac-arm64.dmg"),
+      checksums("Interleaf-0.1.0-mac-arm64.dmg"),
       checksums("https://example.com/payload.dmg"),
     ])
       expect(
@@ -122,7 +122,7 @@ describe("release boundaries", () => {
   });
   it.each([
     "<html>proxy error</html>",
-    "invalid  Reader-0.2.0-mac-arm64.dmg",
+    "invalid  Interleaf-0.2.0-mac-arm64.dmg",
     manifest + "\n" + manifest,
     " ".repeat(65537),
   ])("rejects malformed, duplicate or oversized manifests", (text) => {
@@ -143,10 +143,10 @@ describe("release boundaries", () => {
   });
   it("requires exactly one matching SHA256", () => {
     const hash = "a".repeat(64);
-    const line = `${hash}  Reader.dmg`;
-    expect(installerChecksum(line, "Reader.dmg")).toBe(hash);
+    const line = `${hash}  Interleaf.dmg`;
+    expect(installerChecksum(line, "Interleaf.dmg")).toBe(hash);
     expect(() => installerChecksum(line, "Other.dmg")).toThrow();
-    expect(() => installerChecksum(`${line}\n${line}`, "Reader.dmg")).toThrow();
+    expect(() => installerChecksum(`${line}\n${line}`, "Interleaf.dmg")).toThrow();
   });
 });
 describe("daily scheduling", () => {
@@ -179,7 +179,7 @@ describe("daily scheduling", () => {
     expect(fetch).toHaveBeenCalledTimes(2);
     expect(fetch).toHaveBeenNthCalledWith(
       1,
-      "https://github.com/cynicalight/reader/releases/latest",
+      "https://github.com/Tazewell/Interleaf/releases/latest",
       expect.objectContaining({
         headers: { Accept: "application/json" },
         redirect: "follow",
@@ -188,7 +188,7 @@ describe("daily scheduling", () => {
     );
     expect(fetch).toHaveBeenNthCalledWith(
       2,
-      "https://github.com/cynicalight/reader/releases/download/v0.2.0/SHA256SUMS.txt",
+      "https://github.com/Tazewell/Interleaf/releases/download/v0.2.0/SHA256SUMS.txt",
       expect.objectContaining({ redirect: "follow", credentials: "omit" }),
     );
     expect(state).toEqual({ lastAttempt: day, lastChecked: day });

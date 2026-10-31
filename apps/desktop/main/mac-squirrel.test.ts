@@ -14,7 +14,7 @@ afterEach(async () => {
 async function archive(bytes: Buffer) {
   const directory = await mkdtemp(join(tmpdir(), "reader-squirrel-test-"));
   temporary.push(directory);
-  const path = join(directory, "Reader.zip");
+  const path = join(directory, "Interleaf.zip");
   await writeFile(path, bytes);
   return path;
 }
@@ -38,18 +38,18 @@ it("updates in place only from a certificate signature", async () => {
   const run = (stderr: string) => async () => ({ stdout: "", stderr });
   expect(
     await canUpdateInPlace(
-      "/Applications/Reader.app",
-      run("Signature size=9000\nAuthority=Reader Self-Signed\n"),
+      "/Applications/Interleaf.app",
+      run("Signature size=9000\nAuthority=Interleaf Self-Signed\n"),
     ),
   ).toBe(true);
   expect(
     await canUpdateInPlace(
-      "/Applications/Reader.app",
+      "/Applications/Interleaf.app",
       run("Signature=adhoc\n"),
     ),
   ).toBe(false);
   expect(
-    await canUpdateInPlace("/Applications/Reader.app", async () => {
+    await canUpdateInPlace("/Applications/Interleaf.app", async () => {
       throw new Error("code object is not signed at all");
     }),
   ).toBe(false);
@@ -58,10 +58,10 @@ it("updates in place only from a certificate signature", async () => {
 it("requests verbose signing details before deciding whether a signed app can update", async () => {
   const run = async (_file: string, args: string[]) => ({
     stderr: args.includes("--verbose=4")
-      ? "Signature size=2055\nAuthority=Reader Self-Signed\n"
+      ? "Signature size=2055\nAuthority=Interleaf Self-Signed\n"
       : "Signature size=2055\n",
   });
-  expect(await canUpdateInPlace("/Applications/Reader.app", run)).toBe(true);
+  expect(await canUpdateInPlace("/Applications/Interleaf.app", run)).toBe(true);
 });
 
 it("serves the verified archive to Squirrel on loopback under a secret path", async () => {

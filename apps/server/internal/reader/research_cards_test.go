@@ -452,7 +452,7 @@ func researchCardModel(t *testing.T, s *Server, mode *string, calls *int) *httpt
 		}
 		marker := strings.Index(wire, "RESEARCH_EVIDENCE_JSON\n")
 		if marker < 0 {
-			t.Error("Reader did not prepare source text")
+			t.Error("Interleaf did not prepare source text")
 			return
 		}
 		var evidence []struct {

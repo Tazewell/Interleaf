@@ -51,7 +51,7 @@ export function installDiagnostics(sessionToken: string) {
   reportDiagnostic({
     level: "info",
     event: "renderer.start",
-    detail: `Reader ${version}`,
+    detail: `Interleaf ${version}`,
   });
   return () => {
     window.removeEventListener("error", error);
@@ -72,7 +72,7 @@ export async function exportDiagnostics(): Promise<boolean> {
   const url = URL.createObjectURL(await response.blob());
   const link = document.createElement("a");
   link.href = url;
-  link.download = `Reader-diagnostics-${new Date().toISOString().replace(/[:.]/g, "-")}.zip`;
+  link.download = `Interleaf-diagnostics-${new Date().toISOString().replace(/[:.]/g, "-")}.zip`;
   link.click();
   setTimeout(() => URL.revokeObjectURL(url), 60_000);
   return true;

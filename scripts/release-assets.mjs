@@ -7,9 +7,9 @@ const { version } = JSON.parse(
   await readFile("apps/desktop/package.json", "utf8"),
 );
 const expected = [
-  `Reader-${version}-mac-arm64.dmg`,
-  `Reader-${version}-mac-arm64.zip`,
-  ...(process.env.MAC_ONLY === "true" ? [] : [`Reader-${version}-win-x64.exe`]),
+  `Interleaf-${version}-mac-arm64.dmg`,
+  `Interleaf-${version}-mac-arm64.zip`,
+  ...(process.env.MAC_ONLY === "true" ? [] : [`Interleaf-${version}-win-x64.exe`]),
 ].sort();
 const actual = (await readdir("release"))
   .filter((file) => file !== "SHA256SUMS.txt")

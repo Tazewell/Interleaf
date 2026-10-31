@@ -14,13 +14,13 @@ const source = windows
   ? join(root, "release/win-unpacked")
   : join(
       root,
-      `release/mac${process.arch === "arm64" ? "-arm64" : ""}/Reader.app`,
+      `release/mac${process.arch === "arm64" ? "-arm64" : ""}/Interleaf.app`,
     );
 const temporary = await mkdtemp(join(tmpdir(), "reader-package-smoke-"));
-const isolated = join(temporary, windows ? "Reader" : "Reader.app");
+const isolated = join(temporary, windows ? "Interleaf" : "Interleaf.app");
 const app = windows ? isolated : join(isolated, "Contents");
 const resources = join(app, windows ? "resources" : "Resources");
-const electron = join(app, windows ? "Reader.exe" : "MacOS/Reader");
+const electron = join(app, windows ? "Interleaf.exe" : "MacOS/Interleaf");
 let child;
 let stopped;
 try {
@@ -46,8 +46,8 @@ try {
       assert.equal(details.status, 0, details.stderr);
       assert.match(
         details.stderr,
-        /^Authority=Reader Self-Signed$/m,
-        "Release must be signed with the fixed Reader certificate",
+        /^Authority=Interleaf Self-Signed$/m,
+        "Release must be signed with the fixed Interleaf certificate",
       );
     }
   }

@@ -147,7 +147,7 @@ func (c *Client) checkURL(u *url.URL) error {
 	return nil
 }
 
-const userAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126 Safari/537.36 Reader"
+const userAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126 Safari/537.36 Interleaf"
 
 func (c *Client) get(ctx context.Context, raw, accept string, limit int64) ([]byte, string, string, error) {
 	resource, err := c.fetchPublic(ctx, raw, accept, limit, "", "", true)

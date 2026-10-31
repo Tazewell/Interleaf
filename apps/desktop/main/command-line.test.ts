@@ -15,7 +15,7 @@ import {
   windowsEnvironment,
 } from "./command-line";
 
-const app = "/Applications/Reader.app/Contents/Resources/bin/reader";
+const app = "/Applications/Interleaf.app/Contents/Resources/bin/reader";
 let directory = "";
 afterEach(async () => {
   if (directory) await rm(directory, { recursive: true, force: true });
@@ -50,11 +50,11 @@ describe.skipIf(process.platform === "win32")("macOS link", () => {
     expect((await macInstall(path, app)).installed).toBe(true);
     expect((await macUninstall(path, app)).installed).toBe(false);
   });
-  it("replaces a link left by a moved Reader.app", async () => {
+  it("replaces a link left by a moved Interleaf.app", async () => {
     const path = await link();
     await macInstall(
       path,
-      "/Users/a/Downloads/Reader.app/Contents/Resources/bin/reader",
+      "/Users/a/Downloads/Interleaf.app/Contents/Resources/bin/reader",
     );
     const status = await macStatus(path, app);
     expect(status).toMatchObject({ installed: false });
@@ -76,25 +76,25 @@ describe.skipIf(process.platform === "win32")("macOS link", () => {
   });
   it("leaves another app's bundled reader alone", async () => {
     const path = await link();
-    const other = await bundle("Other Reader.app", "com.example.reader");
+    const other = await bundle("Other Interleaf.app", "com.example.reader");
     await macInstall(path, other);
     expect((await macStatus(path, app)).conflict).toBe(true);
     await expect(macInstall(path, app)).rejects.toThrow("已被其他程序占用");
     await expect(macUninstall(path, app)).rejects.toThrow("已被其他程序占用");
     expect(await readlink(path)).toBe(other);
   });
-  it("recognises Reader links by bundle ID, or by name once deleted", async () => {
+  it("recognises Interleaf links by bundle ID, or by name once deleted", async () => {
     await link();
     expect(
       await isReaderLink(await bundle("Renamed.app", readerBundleId)),
     ).toBe(true);
-    expect(await isReaderLink(await bundle("Reader.app", "com.example"))).toBe(
+    expect(await isReaderLink(await bundle("Interleaf.app", "com.example"))).toBe(
       false,
     );
     expect(await isReaderLink(await bundle("NoPlist.app"))).toBe(false);
     expect(
       await isReaderLink(
-        "/Volumes/gone/Reader 2.app/Contents/Resources/bin/reader",
+        "/Volumes/gone/Interleaf 2.app/Contents/Resources/bin/reader",
       ),
     ).toBe(true);
     expect(
@@ -109,7 +109,7 @@ describe.skipIf(process.platform === "win32")("macOS link", () => {
 });
 
 describe("Windows user PATH", () => {
-  const bin = "C:\\Users\\a\\AppData\\Local\\Programs\\Reader\\resources\\bin";
+  const bin = "C:\\Users\\a\\AppData\\Local\\Programs\\Interleaf\\resources\\bin";
   it("adds the directory once and keeps other entries verbatim", () => {
     const raw = "%USERPROFILE%\\.local\\bin;C:\\Tools;";
     const added = pathWith(raw, bin);
@@ -160,7 +160,7 @@ describe("development builds", () => {
     const host = {
       platform: "linux" as const,
       packaged: true,
-      binary: "/opt/Reader/resources/bin/reader",
+      binary: "/opt/Interleaf/resources/bin/reader",
       env: {},
     };
     expect((await commandLineStatus(host)).supported).toBe(false);

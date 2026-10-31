@@ -50,7 +50,7 @@ func (s *Server) runLayout(ctx context.Context, d Document, work string, from, t
 	worker := os.Getenv("READER_PROCESSOR")
 	node := os.Getenv("READER_NODE")
 	if worker == "" || node == "" {
-		return errors.New("本地解析程序未启动，请重新构建并打开 Reader")
+		return errors.New("本地解析程序未启动，请重新构建并打开 Interleaf")
 	}
 	if err := os.RemoveAll(work); err != nil {
 		return errors.New("无法清理未完成的解析")
@@ -136,7 +136,7 @@ func (s *Server) runLayout(ctx context.Context, d Document, work string, from, t
 		return errors.New("无法保存解析进度")
 	}
 	if err != nil || scan.Err() != nil {
-		return errors.New("PDF 解析未完成。请检查文件，或重新构建或安装 Reader 后重试")
+		return errors.New("PDF 解析未完成。请检查文件，或重新构建或安装 Interleaf 后重试")
 	}
 	return nil
 }

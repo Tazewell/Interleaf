@@ -25,7 +25,7 @@ describe('native AI runtime packaging', () => {
       expect(read(path), path).not.toMatch(/READER_AGENT|@reader\/agent|@(?:mariozechner|earendil-works)\/pi-|agentPath|agent-path/);
     }
   });
-  it('retains the PDF worker and ordinary Reader client', () => {
+  it('retains the PDF worker and ordinary Interleaf client', () => {
     for (const path of ['scripts/dev.mjs', 'scripts/package-smoke.mjs', 'apps/desktop/main/index.ts']) {
       expect(read(path), path).toContain('READER_NODE');
       expect(read(path), path).toContain('READER_PROCESSOR');

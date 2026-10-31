@@ -22,14 +22,13 @@ import (
 	nethtml "golang.org/x/net/html"
 )
 
-const ConnectorPort = "17841"
-const connectorExtensionOrigin = "chrome-extension://afojfnpkeokahhniipldpdpecaljdnbe"
-const connectorStoreExtensionOrigin = "chrome-extension://dfhdcomjdkaiajiibbkonbonjlnkdjlg"
+const ConnectorPort = "17842"
+const connectorExtensionOrigin = "chrome-extension://dkadbonndellegaomjgahilhpkneblkm"
 
 // The development build pins its ID with a manifest key; the Chrome Web Store
 // build cannot carry that key and is assigned its own ID.
 func connectorOriginAllowed(origin string) bool {
-	return origin == connectorExtensionOrigin || origin == connectorStoreExtensionOrigin
+	return origin == connectorExtensionOrigin
 }
 
 func (s *Server) SetConnectorAvailable(available bool) {
@@ -309,7 +308,7 @@ func (s *Server) connectorImport(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if existing, lookupErr := s.Store.Document(hex.EncodeToString(hash.Sum(nil))[:32]); lookupErr == nil && existing.Library != library {
-		fail(w, 409, "相同 PDF 已在另一个书库，请先在 Reader 中移动")
+		fail(w, 409, "相同 PDF 已在另一个书库，请先在 Interleaf 中移动")
 		return
 	}
 	d, status, err := s.importFile(r.Context(), temp.Name(), "paper.pdf", library, r.FormValue("allowLarge") == "1")
@@ -323,7 +322,7 @@ func (s *Server) connectorImport(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if d.Library != library {
-		fail(w, 409, "相同 PDF 已在另一个书库，请先在 Reader 中移动")
+		fail(w, 409, "相同 PDF 已在另一个书库，请先在 Interleaf 中移动")
 		return
 	}
 	d, err = s.applyFound(d.ID, found, title, "connector", "")

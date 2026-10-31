@@ -28,7 +28,7 @@
 | API 当前有效协议窗口                 | `document_conversations.body.messages` | 原样保留消息、工具调用和配对结果，必要时 compact |
 | 单轮工具、原文、压缩检查点及协议事件 | SQLite `chat_agent_runs`               | 成功/失败审计；不包含私有推理续接字段            |
 
-Reader 不再使用固定最近八条消息或 24KB 历史裁剪。当前模型窗口仍有限：本地完整历史不会因为模型窗口 compact 而删除，但 compact 后模型只获得检查点和保留尾部，不承诺无损记住每个细节。
+Interleaf 不再使用固定最近八条消息或 24KB 历史裁剪。当前模型窗口仍有限：本地完整历史不会因为模型窗口 compact 而删除，但 compact 后模型只获得检查点和保留尾部，不承诺无损记住每个细节。
 
 API 连接、模型或思考配置变化会重新建立对应活动窗口，并从完整可见历史补入记录，避免混用不同模型的私有协议状态。Codex 切换模型时重新连接并恢复同一个原生线程，具体续接由 Codex 管理。现阶段每个文档/提供方保存一个活动绑定，不提供同文档多分支会话 UI。
 
@@ -38,11 +38,11 @@ API 连接、模型或思考配置变化会重新建立对应活动窗口，并�
 
 首次使用持久 `thread/start`，后续调用同一 thread 的 `turn/start`。进程内复用已连接的 App Server；进程重启、切换文档或闲置回收后，使用保存的 thread ID 调用 `thread/resume`。当前最多保留一个活跃 App Server 连接，空闲十分钟释放进程，线程记录仍在。
 
-Reader 继续复用既有 CLI 登录，不读取凭证文件，不修改全局配置。重连时通过当前进程配置重新绑定 Reader MCP 地址，验证生效配置和工具清单。线程只能使用现有四个只读文档工具；工具调用绑定到当前文档与当前请求，上一轮的延迟调用不能越过请求边界。
+Interleaf 继续复用既有 CLI 登录，不读取凭证文件，不修改全局配置。重连时通过当前进程配置重新绑定 Interleaf MCP 地址，验证生效配置和工具清单。线程只能使用现有四个只读文档工具；工具调用绑定到当前文档与当前请求，上一轮的延迟调用不能越过请求边界。
 
-Reader 保存 native pending/committed turn 进度。原生运行失败、取消，或模型完成但 SQLite 保存失败时，下一轮先用 `thread/revert` 回到未提交 turn 之前。若 turn ID 确认丢失，先查询最近 turn 再恢复；无法确认时返回错误，保留历史，不静默新开空线程。
+Interleaf 保存 native pending/committed turn 进度。原生运行失败、取消，或模型完成但 SQLite 保存失败时，下一轮先用 `thread/revert` 回到未提交 turn 之前。若 turn ID 确认丢失，先查询最近 turn 再恢复；无法确认时返回错误，保留历史，不静默新开空线程。
 
-Codex 按 `agentMessage.phase` 输出正式回答；commentary 不作为最终答案。没有 phase 的旧协议等消息或 turn 完成后再确认候选内容。原生 compact 继续由 Codex 决定，Reader 接收事件后允许重新附加概要和当前摘录。
+Codex 按 `agentMessage.phase` 输出正式回答；commentary 不作为最终答案。没有 phase 的旧协议等消息或 turn 完成后再确认候选内容。原生 compact 继续由 Codex 决定，Interleaf 接收事件后允许重新附加概要和当前摘录。
 
 ## 单向接续到 Codex App
 
@@ -50,16 +50,16 @@ Codex 按 `agentMessage.phase` 输出正式回答；commentary 不作为最终�
 
 `POST /api/documents/{id}/codex-handoff` 在既有认证与文档生命周期内执行：
 
-1. 与聊天生成互斥，读取 Reader 的完整已保存消息、原文索引和 Codex `nativeCommittedTurn`。
+1. 与聊天生成互斥，读取 Interleaf 的完整已保存消息、原文索引和 Codex `nativeCommittedTurn`。
 2. 在书库 `handoffs/codex/<快照摘要>/` 下复制原始 PDF/EPUB，保存带原生位置和覆盖范围的 `document.json`、完整 `conversation.json`、`metadata.json` 和 `READING_CONTEXT.md`。
-3. 使用官方 App Server `thread/fork`，以 `lastTurnId` 截止到 Reader 已提交的一轮。新的 `cwd` 指向快照目录，`baseInstructions` 明确后续使用文件快照阅读。此过程不调用 `turn/start`，不向模型请求回答。
+3. 使用官方 App Server `thread/fork`，以 `lastTurnId` 截止到 Interleaf 已提交的一轮。新的 `cwd` 指向快照目录，`baseInstructions` 明确后续使用文件快照阅读。此过程不调用 `turn/start`，不向模型请求回答。
 4. 保存新线程 ID，设置“阅读 · 文档标题”，通过 `codex://threads/<id>` 打开。桌面 IPC 只接受 UUID 线程编号；网页预览交给系统注册的 Codex 协议处理程序。
 
-Codex 原生上下文保留在 fork 中；Reader 完整可见聊天另外保存到 `conversation.json`，覆盖原生线程之外的图片对话或提供方切换记录。接续说明要求先核对这些消息，再根据当前问题读原文。索引不等于完整图片、表格或公式，历史附件描述也不等于原图，需要时核对原始文档副本。
+Codex 原生上下文保留在 fork 中；Interleaf 完整可见聊天另外保存到 `conversation.json`，覆盖原生线程之外的图片对话或提供方切换记录。接续说明要求先核对这些消息，再根据当前问题读原文。索引不等于完整图片、表格或公式，历史附件描述也不等于原图，需要时核对原始文档副本。
 
-Reader 的 MCP 地址、token 环境变量和活动请求绑定不适用于 Codex App。接续不复制这些运行配置，而是使用 Codex 当前可用的文件、搜索和 PDF 工具。关闭 Reader 后快照仍可读取。fork 初始使用只读权限与按需审批；用户在 Codex 中的设置可能改变后续权限。
+Interleaf 的 MCP 地址、token 环境变量和活动请求绑定不适用于 Codex App。接续不复制这些运行配置，而是使用 Codex 当前可用的文件、搜索和 PDF 工具。关闭 Interleaf 后快照仍可读取。fork 初始使用只读权限与按需审批；用户在 Codex 中的设置可能改变后续权限。
 
-这是独立副本：Codex 后续消息不回写 Reader，Reader 后续消息也不会自动更新该副本。已成功准备的相同快照会复用线程，打开失败时重试不会重新复制。更名失败会保留已经返回的线程 ID，重试只补更名。Reader 对话、原生绑定及原文件均不修改。导出快照由用户保留，删除 Reader 原文时不会清理它；它会额外占用原文件及文本快照的磁盘空间。
+这是独立副本：Codex 后续消息不回写 Interleaf，Interleaf 后续消息也不会自动更新该副本。已成功准备的相同快照会复用线程，打开失败时重试不会重新复制。更名失败会保留已经返回的线程 ID，重试只补更名。Interleaf 对话、原生绑定及原文件均不修改。导出快照由用户保留，删除 Interleaf 原文时不会清理它；它会额外占用原文件及文本快照的磁盘空间。
 
 已通过本机 Codex CLI `0.163.0-alpha.10.2` 的真实协议验证：临时 Codex 状态目录与 loopback 合成响应服务创建一轮测试记录，接续后关闭进程，再恢复副本，核对提交轮次、分页聊天历史、工作目录和阅读说明；接续阶段没有请求响应服务。测试不会读取用户 Codex 凭据或访问真实模型。可重复执行：
 
@@ -67,7 +67,7 @@ Reader 的 MCP 地址、token 环境变量和活动请求绑定不适用于 Code
 READER_CODEX_HANDOFF_LIVE=1 go -C apps/server test ./internal/reader -run '^TestCodexHandoffInstalledCLI$' -count=1 -v
 ```
 
-人工验收：在 Reader 完成一次 Codex 文档问答，点击接续按钮，确认 Codex App 打开“阅读 · …”，已有回答可见；关闭 Reader 后追问原文，确认从快照读取；回到 Reader 确认原消息没有改变。没有安装 Codex App 时，应保留准备结果并允许安装后重试。深链入口已核对已安装 App 的实现，原生界面打开和续聊仍需人工验收。
+人工验收：在 Interleaf 完成一次 Codex 文档问答，点击接续按钮，确认 Codex App 打开“阅读 · …”，已有回答可见；关闭 Interleaf 后追问原文，确认从快照读取；回到 Interleaf 确认原消息没有改变。没有安装 Codex App 时，应保留准备结果并允许安装后重试。深链入口已核对已安装 App 的实现，原生界面打开和续聊仍需人工验收。
 
 协议参考：[Codex App Server](https://learn.chatgpt.com/docs/app-server)。持久线程存在于 Codex 存储中不保证立即出现在 App 侧栏；该功能使用明确的线程链接，不依赖侧栏刷新，也不直接编辑 Codex 数据库。
 
@@ -86,7 +86,7 @@ API 接入保存 Chat Completions 协议消息，包括 assistant 工具请求�
 
 压缩调用计入用量。压缩失败或仍然超窗时保留上次提交的活动窗口并明确报错；当前单条用户输入过大时也不静默截断。检查点属于有损派生资料，不能替代精确引文和细节核对。
 
-检查点预算上限为 10,000 个估算 tokens，按实际信息量使用，不要求写满。提示词以完整交接阅读任务为目标，包含关键定义、推导、数值、例子和已经纠正的解释。小窗口时最多使用可用输入预算的约四分之一，并进一步扣除必须保留的工作内容所需空间。生成提示和结果校验使用同一个预算；超过预算返回错误，不静默截短。此预算是 Reader 的文本估算值，不是提供方精确计数或计费值。
+检查点预算上限为 10,000 个估算 tokens，按实际信息量使用，不要求写满。提示词以完整交接阅读任务为目标，包含关键定义、推导、数值、例子和已经纠正的解释。小窗口时最多使用可用输入预算的约四分之一，并进一步扣除必须保留的工作内容所需空间。生成提示和结果校验使用同一个预算；超过预算返回错误，不静默截短。此预算是 Interleaf 的文本估算值，不是提供方精确计数或计费值。
 
 无工具的文字辅助模式将当前问题与补充原文放在同一条用户消息中，避免 compact 把补充资料误当作当前问题而提前总结真实提问。
 
@@ -106,14 +106,14 @@ API 的 content 与 tool_calls 可能在同一流内出现，因此新增可选 
 - Codex 协议测试覆盖 13 个成功轮次、线程恢复、原生 compact 事件、旧来源复用、运行失败和保存失败后的 revert；测试中仅一次 thread/start。
 - 当前摘录去重、版本变化、引用来源、工具结果配对、UTF-8 大记录压缩、可见部分输出后禁止备用均有回归覆盖。
 
-真实模型测试只发送原创合成材料，没有发送用户论文。Codex 三轮使用同一个线程，后续准确复述首轮口令，Reader 重启后继续引用原文条件。DeepSeek 三轮在真实压缩检查点、重启后保留同样要求和原文依据。Codex 的真实取消/revert 与自动 compact 没有强制触发；它们由协议测试覆盖，不能称为真实运行验收。
+真实模型测试只发送原创合成材料，没有发送用户论文。Codex 三轮使用同一个线程，后续准确复述首轮口令，Interleaf 重启后继续引用原文条件。DeepSeek 三轮在真实压缩检查点、重启后保留同样要求和原文依据。Codex 的真实取消/revert 与自动 compact 没有强制触发；它们由协议测试覆盖，不能称为真实运行验收。
 
 真实验证耗时为单次观察，不是性能基准：Codex 三轮约 26.1、3.8、19.9 秒；DeepSeek 三轮约 4.3、0.7、3.6 秒，另有压缩调用成本。原生 turn 内部推理次数与 API 请求数口径不同，不直接比较。
 
-人工验收：在同一文档先提出解释偏好并要求读一段原文；连续追问该解释而不重新提供摘录；重启 Reader 后继续追问并点击来源。长对话达到 API 上下文阈值时应显示整理上下文，历史列表仍完整。独立预览用于人工验收，不使用浏览器自动化。
+人工验收：在同一文档先提出解释偏好并要求读一段原文；连续追问该解释而不重新提供摘录；重启 Interleaf 后继续追问并点击来源。长对话达到 API 上下文阈值时应显示整理上下文，历史列表仍完整。独立预览用于人工验收，不使用浏览器自动化。
 
 ## 协议依据
 
 - [Codex App Server](https://learn.chatgpt.com/docs/app-server)：持久线程、resume、revert 和原生事件；同时核对了当前本机 CLI 生成的 JSON schema。
 - [DeepSeek Thinking Mode](https://api-docs.deepseek.com/guides/thinking_mode/)：带工具的推理续接协议，并通过实际多轮调用验证。
-- [OpenAI Prompt Caching](https://developers.openai.com/api/docs/guides/prompt-caching)：缓存依赖前缀匹配，不以 Reader 会话 ID 为保证。
+- [OpenAI Prompt Caching](https://developers.openai.com/api/docs/guides/prompt-caching)：缓存依赖前缀匹配，不以 Interleaf 会话 ID 为保证。

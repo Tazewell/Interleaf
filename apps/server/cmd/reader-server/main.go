@@ -30,7 +30,7 @@ func main() {
 	data := flag.String("data", ".reader", "local library directory")
 	port := flag.String("port", "17840", "loopback port, 0 for automatic")
 	web := flag.String("web", "", "built web directory")
-	connector := flag.Bool("connector", true, "enable Reader Connector listener")
+	connector := flag.Bool("connector", true, "enable Interleaf Connector listener")
 	probeNetwork := flag.Bool("probe-network", false, "check ChatGPT reachability and exit without opening a library")
 	logs := flag.String("logs", "", "diagnostic log directory")
 	session := flag.String("session", "", "diagnostic session ID")
@@ -96,7 +96,7 @@ func main() {
 		connectorListener, connectorError := net.Listen("tcp", "127.0.0.1:"+reader.ConnectorPort)
 		if connectorError != nil {
 			server.SetConnectorUnavailable("port-in-use")
-			log.Printf("Reader Connector unavailable: %v", connectorError)
+			log.Printf("Interleaf Connector unavailable: %v", connectorError)
 		} else {
 			server.SetConnectorAvailable(true)
 			connectorHTTP := &http.Server{Handler: server.ConnectorHandler(), ReadHeaderTimeout: 10 * time.Second}

@@ -2,7 +2,7 @@
 
 ## 当前运行合同 · 2026-10-23
 
-Reader 的 AI 调用统一使用设置中 version 2 的主要 API 连接。Go 后端管理模型循环、工具、会话与取消；不启动 Codex、Claude Code、Kimi 或 Pi。普通 `reader` 命令行和 PDF Node 处理器仍保留。以下历史章节用于解释已保存数据，涉及外部运行时、备用服务、安装探测或 handoff 的说明已退役，以本节为准。
+Interleaf 的 AI 调用统一使用设置中 version 2 的主要 API 连接。Go 后端管理模型循环、工具、会话与取消；不启动 Codex、Claude Code、Kimi 或 Pi。普通 `reader` 命令行和 PDF Node 处理器仍保留。以下历史章节用于解释已保存数据，涉及外部运行时、备用服务、安装探测或 handoff 的说明已退役，以本节为准。
 
 问答、翻译、图片和研究用途分别解析模型；研究模型留空继承问答。每次任务冻结端点、密钥、模型与思考配置，后续设置编辑不改变正在运行的请求。双语导出在预检时冻结私有配置；全文重译的用途覆盖只作用于任务副本。额度、模型和协议错误不会触发其他服务。
 
@@ -60,7 +60,7 @@ Codex 文档会话保留持久 thread，并在同一 turn 内读取和回答。A
 
 | 项目             | 本轮固定约定                                                                                                                                                                                    |
 | ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 接口与认证       | `POST /api/documents/{documentId}/chat`；Reader 会话 Bearer token；JSON 请求。不是 Agent API Key。                                                                                              |
+| 接口与认证       | `POST /api/documents/{documentId}/chat`；Interleaf 会话 Bearer token；JSON 请求。不是 Agent API Key。                                                                                              |
 | 必填请求字段     | `provider: "codex" \| "claude" \| "kimi" \| "api"`、`prompt: string`、`context: string`；context 可为空。                                                                                       |
 | 可选请求字段     | `references: SourceReference[]`、`attachments: string[]`，省略等价于空数组；附件是当前文档块 ID。不新增 connectionId 或客户端模型/认证字段。                                                    |
 | 事件与 JSON data | `status {status:"reading"\|"reading-image"}`、`delta {text:string}`、`fallback {message:string}`、`error {error:string}`、`done {ok:true}`。仍使用独立 SSE event 行，不另包 type/payload 外壳。 |
@@ -86,7 +86,7 @@ Codex 文档会话保留持久 thread，并在同一 turn 内读取和回答。A
 
 ```http
 POST /api/documents/{documentId}/chat
-Authorization: Bearer <当前 Reader 会话 token>
+Authorization: Bearer <当前 Interleaf 会话 token>
 Content-Type: application/json
 ```
 
@@ -255,7 +255,7 @@ READER_TEST_STREAM_PROVIDER=kimi go test ./internal/reader -run '^TestLiveAgentS
 
 本次本机实测：Codex CLI 0.160.0 返回 193 个片段，首段约 6.1 秒、完成约 10.6 秒；Kimi 返回 214 个片段，首段约 6.2 秒、完成约 11.8 秒。这些是一次请求的记录，不是延迟承诺。Codex 另通过合成图片识别测试。Claude Code 2.1.220 当前未登录，已验证模拟协议，真实生成待具备登录环境后验证。
 
-人工联调可在合并后的仓库运行 `pnpm dev`，打开终端输出的带会话 token 的 Reader 地址。使用已登录的 Agent，分别测试长段落、代码块、公式和图片问题，确认首段提前显示、没有最终全文重复、取消后不再追加、失败后能重新发送。不要求用浏览器自动化验收；界面效果由前端同事人工确认。
+人工联调可在合并后的仓库运行 `pnpm dev`，打开终端输出的带会话 token 的 Interleaf 地址。使用已登录的 Agent，分别测试长段落、代码块、公式和图片问题，确认首段提前显示、没有最终全文重复、取消后不再追加、失败后能重新发送。不要求用浏览器自动化验收；界面效果由前端同事人工确认。
 
 官方协议参考：[Codex App Server](https://learn.chatgpt.com/docs/app-server)、[Claude Code 流式响应](https://code.claude.com/docs/en/headless#stream-responses)。
 
@@ -280,7 +280,7 @@ READER_TEST_STREAM_PROVIDER=kimi go test ./internal/reader -run '^TestLiveAgentS
 
 运行由 Go 服务管理，不依赖发起 POST 或订阅 SSE 的连接。最多同时运行四个会话，每个会话同时只运行一次；超过上限返回 429，同会话重复运行返回 409，均不保存新问题。切换文档、会话、侧栏或断开事件连接不会取消运行。前端按 session 保存独立的消息、思考、候选文本和取消状态，重新进入会话时查询服务端并订阅现有 run，不自动重新 POST。停止应用会取消并等待所有文档任务；重新打开时把残留 running 记录核对为已完成或已中断，由用户显式继续未回答的问题。
 
-自有 Agent 通过 `apps/agent` 的 pi SDK worker 执行模型与工具循环。Go 用私有临时目录启动进程，通过版本化 JSONL stdio 传入配置、已接受的 pi entries 和允许的工具清单；密钥不放入命令行。worker 使用内存凭据、内存 SessionManager 和显式 ResourceLoader，不发现用户 pi 配置、skills、extensions、AGENTS.md 或默认 shell/文件工具。读取工具仍在 Go 中绑定当前文档、版本、权限、预算和审计。API 连接与推理强度规则沿用 Reader，禁止跨源请求和跟随重定向；CLI 后端继续使用自身协议与登录。
+自有 Agent 通过 `apps/agent` 的 pi SDK worker 执行模型与工具循环。Go 用私有临时目录启动进程，通过版本化 JSONL stdio 传入配置、已接受的 pi entries 和允许的工具清单；密钥不放入命令行。worker 使用内存凭据、内存 SessionManager 和显式 ResourceLoader，不发现用户 pi 配置、skills、extensions、AGENTS.md 或默认 shell/文件工具。读取工具仍在 Go 中绑定当前文档、版本、权限、预算和审计。API 连接与推理强度规则沿用 Interleaf，禁止跨源请求和跟随重定向；CLI 后端继续使用自身协议与登录。
 
 每次运行使用独立 worker；Codex 同样使用独立运行缓存，已提交的原生 thread 可在下一轮恢复。pi 的 `prompt` 完成且 `waitForIdle` 收敛、worker 正常退出、最终答案通过来源校验后，Go 才在同一事务提交答案和 continuation。缺少正常终态、取消、超时、伪造引用或保存失败都不覆盖此前的 continuation。`done` 只在答案持久化后发送。运行事件也存入 SQLite，便于重新订阅已结束的 run；临时草稿不作为成功 assistant 消息保存。
 

@@ -42,7 +42,7 @@ func serveBoundDocumentMCP(binding *documentToolBinding) (string, string, func()
 		server.AddTool(&mcp.Tool{Name: d.Name, Description: d.Description, InputSchema: d.Schema, Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true}}, func(ctx context.Context, req *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			agent, attempt := binding.current()
 			if agent == nil {
-				return &mcp.CallToolResult{IsError: true, Content: []mcp.Content{&mcp.TextContent{Text: "No active Reader turn"}}}, nil
+				return &mcp.CallToolResult{IsError: true, Content: []mcp.Content{&mcp.TextContent{Text: "No active Interleaf turn"}}}, nil
 			}
 			ctx, cancel := context.WithCancel(ctx)
 			stop := context.AfterFunc(agent.ctx, cancel)

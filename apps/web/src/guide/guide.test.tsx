@@ -223,14 +223,14 @@ describe("guide host", () => {
     const [version, items] = Object.entries(releaseNotes)[0];
     vi.mocked(api.guidePreferences).mockResolvedValue({});
     await render(true, version);
-    expect(document.body.textContent).toContain(`Reader ${version} 更新内容`);
+    expect(document.body.textContent).toContain(`Interleaf ${version} 更新内容`);
     expect(document.body.textContent).toContain(items[0].title);
     const open = vi
       .spyOn(window, "open")
       .mockReturnValue({ opener: null } as Window);
     await act(async () => button("去 GitHub 点 Star").click());
     expect(open).toHaveBeenCalledWith(
-      "https://github.com/cynicalight/reader",
+      "https://github.com/Tazewell/Interleaf",
       "_blank",
     );
     expect(api.saveGuidePreferences).toHaveBeenCalledWith({
@@ -254,7 +254,7 @@ describe("guide host", () => {
       expect(document.querySelector('[data-slot="dialog-close"]')).toBeNull();
       await act(async () => button("已点 Star，去提 Issue").click());
       expect(openExternal).toHaveBeenCalledWith(
-        "https://github.com/cynicalight/reader/issues/new/choose",
+        "https://github.com/Tazewell/Interleaf/issues/new/choose",
       );
       expect(api.saveGuidePreferences).toHaveBeenCalledWith({
         onboarded: true,

@@ -35,7 +35,7 @@ cd apps/server
 READER_TEST_CODEX=1 go test ./internal/reader -run '^TestLiveCodex$' -v -count=1
 ```
 
-The default automated test suite skips this call. To additionally test a paper image, set `READER_TEST_IMAGE` to its absolute PNG path and optionally `READER_TEST_OUTPUT` to a Markdown destination. The test runs in a fresh temporary working directory, disables shell tools and avoids user/project instruction configuration. It uses the CLI's authentication; Reader does not inspect credentials.
+The default automated test suite skips this call. To additionally test a paper image, set `READER_TEST_IMAGE` to its absolute PNG path and optionally `READER_TEST_OUTPUT` to a Markdown destination. The test runs in a fresh temporary working directory, disables shell tools and avoids user/project instruction configuration. It uses the CLI's authentication; Interleaf does not inspect credentials.
 
 ## Bundled-model validation on 2026-10-12
 

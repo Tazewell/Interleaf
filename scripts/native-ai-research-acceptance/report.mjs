@@ -14,11 +14,11 @@ const fontBytes=readFileSync(new URL('apps/processor/dist/fonts/NotoSansSC.ttf',
 const regular=fontkit.create(new Uint8Array(fontBytes)).getVariation({wght:400});
 pdf.registerFontkit({create:()=>regular});
 const font=await pdf.embedFont(fontBytes,{subset:true});
-pdf.setTitle('Reader actual research acceptance report'); pdf.setAuthor('Reader controlled acceptance');
+pdf.setTitle('Interleaf actual research acceptance report'); pdf.setAuthor('Interleaf controlled acceptance');
 const r=JSON.parse(readFileSync(join(out,'result.json'),'utf8'));
 const summaries = ['noveltyOverlap','noveltyInsufficient'].flatMap(key=>r.evidence[key].novelty.flatMap(n=>n.rows.map(row=>`${key}: ${row.status}\n${row.overlap || row.unverified}\nSources: ${row.evidenceIds.join(', ')}`)));
 const markdown=readFileSync(join(out,'research-report.md'),'utf8')+'\n\n## Actual audited novelty outcomes\n\n'+summaries.join('\n\n');
-let page,y; const newPage=()=>{page=pdf.addPage([595,842]);y=784;page.drawText('Reader / deterministic protocol evidence',{x:44,y:810,size:9,font,color:rgb(.35,.35,.35)});}; newPage();
+let page,y; const newPage=()=>{page=pdf.addPage([595,842]);y=784;page.drawText('Interleaf / deterministic protocol evidence',{x:44,y:810,size:9,font,color:rgb(.35,.35,.35)});}; newPage();
 for(const paragraph of markdown.split('\n')) {
  const title=/^#{1,2} /.test(paragraph), text=paragraph.replace(/^#{1,2} /,''); const size=title?15:10;
  let line=''; const lines=[];

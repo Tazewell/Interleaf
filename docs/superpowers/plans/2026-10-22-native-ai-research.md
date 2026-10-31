@@ -1,8 +1,8 @@
-# Reader 内置 AI 与主题研究实施计划
+# Interleaf 内置 AI 与主题研究实施计划
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Reader 仅凭用户配置的模型 API 提供现有 AI 功能，以及主题文件夹综述、跨论文问答、idea 探索和按需联网查新。
+**Goal:** Interleaf 仅凭用户配置的模型 API 提供现有 AI 功能，以及主题文件夹综述、跨论文问答、idea 探索和按需联网查新。
 
 **Architecture:** 在 Go 内统一模型传输、工具循环、持久会话与可恢复任务，替换外部 Agent/Pi 调度；以 PaperItem 范围快照和实际已读证据支持跨文献综合。研究任务串联本地阅读、arXiv/Crossref 检索及公开论文读取；SQLite 保存成功单元、来源、候选与修订，React 提供主题研究入口和可信引用。
 
@@ -12,7 +12,7 @@
 
 ## Global Constraints
 
-- Reader 通过用户配置的 API 地址、API Key 和模型提供 AI 功能，不再关联或依赖 Codex、Claude Code、Kimi 等外部 Agent。Reader 自己管理会话、上下文、工具调用和任务。
+- Interleaf 通过用户配置的 API 地址、API Key 和模型提供 AI 功能，不再关联或依赖 Codex、Claude Code、Kimi 等外部 Agent。Interleaf 自己管理会话、上下文、工具调用和任务。
 - 第一版使用现有 Go 后端实现模型/工具循环；移除 AI 运行链路中的 CLI 适配器、Codex 持久 thread、Kimi ACP、Claude CLI 及 Pi 调度/依赖。PDF 处理所需的 Node worker、Electron 和非 AI 的 `reader` 命令行仍保留。
 - 第一版采用一个主要 API 连接，并按用途指定模型；研究模型留空时继承问答模型。允许自定义兼容端点和用户明确配置的本地模型端点。
 - 文件夹研究默认遵循当前书库对子文件夹的包含设置，并允许在研究范围中调整；默认选择每篇文献的可读原文附件，避免把译文附件当成第二篇论文。
@@ -121,7 +121,7 @@ OpenAPI 同时定义 NativeAIConfig、Research*、Novelty*；`pnpm api:generate`
 - [x] 实现上述精确配置接口与原子迁移；Settings只将AI区域提为新组件，不重排整个设置；TaskModels/ModelSelector用role，catalog/probe按端点+模型指纹失效。公共端点不接受 legacy provider；迁移parser可读legacy。暂存必要generation桥，写入仍落version2真源。
 - [x] GREEN：上述两条命令、`pnpm api:generate`、`pnpm typecheck` 全成功；审准确配置/组件/生成文件并提交 `feat(ai): add native API configuration and migration`。
 
-## Task 2: Reader 自有模型/工具循环与持久会话
+## Task 2: Interleaf 自有模型/工具循环与持久会话
 
 **Files:** Create `native_ai_loop.go`、`native_ai_conversation.go`、`native_ai_tools.go`、`native_ai_loop_test.go`、`native_ai_conversation_test.go`；Modify `api_chat_tools.go`、`api_conversation_compact.go`、`api_anthropic.go`、`api_agent.go`、`api_stream.go`、`api_page_images.go`、`document_conversation.go`、`chat_context.go`、`chat_sessions.go`、`chat_stream.go`。
 
@@ -246,7 +246,7 @@ OpenAPI 同时定义 NativeAIConfig、Research*、Novelty*；`pnpm api:generate`
 - [x] 完成实际链路：v1迁移→无Agent/Pi启动→API角色设置→单篇原文引用问答/图片与翻译→主题快照→overview/compare→pause/resume与source变化→查新已覆盖/证据不足→候选明确导入去重→编辑/导出→restart/close/move/delete边界。trap外部CLI、READER_AGENT不存在、真实PDF processor仍可用。保存前后比较非空问答/笔记/批注/译文/引用键和原始SHA，不能只测空库。模型输出确定性mock，不冒充真实语言质量。
 - [x] 跑最终 `pnpm typecheck`、`pnpm test`、`pnpm build`；再运行新acceptance到 `E:/WSL/reader-native-ai-acceptance-final` 和现有 `scripts/bilingual-pdf-acceptance/run.sh` 到独立新目录，保持两种PDF布局/公式/字体/9pt/附件/取消全部既有断言。重开PDF并用Poppler渲染、实际查看所有样本页；研究样本核对引用与已知冲突/重合结论。报告全部exit/status、skips/warnings及实际commit，不重复绿灯suite除非产品源码变化或具体疑问。
 - [x] 在用户明确授权的搜索功能范围内做低频arXiv/Crossref在线可用性烟测（各一个小查询，遵守限速、无私人文献/密钥）；失败记录真实状态，不将mock当在线通过。真实模型API只用用户另行提供的配置；无Key时说明质量仍人工验证，不读取外部凭据。
-- [x] 建立独立WSL profile/library和 `E:/Administrator/Desktop/Reader 内置 AI 研究预览.lnk`，启动最终Electron/Go，核对路径/进程/健康接口/HTML、无外部Agent/Pi运行、样本与API测试Key已清空。给用户API设置、文件夹综述、联网查新、来源回跳、预算继续和两种PDF导出人工步骤；禁止浏览器自动化界面验收，不修改真实Reader启动器/库。
+- [x] 建立独立WSL profile/library和 `E:/Administrator/Desktop/Interleaf 内置 AI 研究预览.lnk`，启动最终Electron/Go，核对路径/进程/健康接口/HTML、无外部Agent/Pi运行、样本与API测试Key已清空。给用户API设置、文件夹综述、联网查新、来源回跳、预算继续和两种PDF导出人工步骤；禁止浏览器自动化界面验收，不修改真实Reader启动器/库。
 - [x] 文档记录本轮范围、旧配置/历史迁移、模型Key仅本地保护、联网关键词外发/公开资料范围、摘要/全文与创新性不确定、预算及失败恢复；报告mock/在线/实际OS对话框边界。检查最终diff只含该任务内容，提交 `test(research): verify native AI workflows and isolated WSL preview`。最后完成当前执行方式要求的全分支独立审查及任何修复验证，整体验收通过才报告功能完成。
 
 ## 测试断言锚点

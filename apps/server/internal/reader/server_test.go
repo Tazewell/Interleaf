@@ -218,7 +218,7 @@ func TestLibraryRoundTrip(t *testing.T) {
 						t.Fatal(e)
 					}
 				}
-				w = request(t, s, "GET", "/api/documents/"+doc.ID+"/search?q=Reader", nil)
+				w = request(t, s, "GET", "/api/documents/"+doc.ID+"/search?q=Interleaf", nil)
 				if w.Code != 200 {
 					t.Fatal(w.Body.String())
 				}

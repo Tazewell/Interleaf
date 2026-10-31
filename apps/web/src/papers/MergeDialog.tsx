@@ -282,7 +282,7 @@ export function MergeDialog({
               checked={confirmed}
               onCheckedChange={(v) => setConfirmed(v === true)}
             />
-            我确认旧键不再导出，需要手动更新 LaTeX 引用；Reader 不修改 .tex
+            我确认旧键不再导出，需要手动更新 LaTeX 引用；Interleaf 不修改 .tex
             文件。
           </label>
         )}

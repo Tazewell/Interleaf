@@ -1,6 +1,6 @@
 # 后端流式迁移进度
 
-工作树：`/Users/bu44er/Developer/Projects/Reader-streaming-backend`。分支：`backend/unified-streaming`。共同基线：`85f21938f13914c48131a455cb586d4e964b90c9`。仅修改本工作树拥有的 Go、契约、OpenAPI 和生成类型。未合并、推送或部署。
+工作树：`/Users/bu44er/Developer/Projects/Interleaf-streaming-backend`。分支：`backend/unified-streaming`。共同基线：`85f21938f13914c48131a455cb586d4e964b90c9`。仅修改本工作树拥有的 Go、契约、OpenAPI 和生成类型。未合并、推送或部署。
 
 代码提交：`f7d4f28`（统一 Adapter/GenerationService/聊天生命周期）、`2f7f820`（真流/备用/生命周期验证、OpenAPI 和 fixtures）。2026-10-05 交付前再次核对 main，仍为 `2afe113e8f02593da79b3ad5fbc5c8f1c721a639`。未复制主工作区的未提交产品修改。集成前协调会话需再次检查 main。
 
@@ -90,7 +90,7 @@ apps/desktop/bin/reader-server --data "$(mktemp -d /tmp/reader-streaming-preview
 
 ```sh
 set -e
-cd /Users/bu44er/Developer/Projects/Reader-streaming-backend
+cd /Users/bu44er/Developer/Projects/Interleaf-streaming-backend
 umask 077
 python3 - <<'PY'
 import socket
@@ -120,7 +120,7 @@ Go 仅绑定 `127.0.0.1`。`env -u READER_TOKEN` 使每次启动生成独立会�
 ### 终端 B：使用前端现有 Vite proxy
 
 ```sh
-pnpm --dir /Users/bu44er/Developer/Projects/Reader-streaming-frontend \
+pnpm --dir /Users/bu44er/Developer/Projects/Interleaf-streaming-frontend \
   --filter @reader/web dev --host 127.0.0.1 --port 15174 --strictPort
 ```
 
@@ -128,7 +128,7 @@ pnpm --dir /Users/bu44er/Developer/Projects/Reader-streaming-frontend \
 
 ### 终端 C：初始化前端会话，不输出 token
 
-先等待终端 B 显示就绪，再运行以下人工启动命令。它从本机权限受限文件读取 Reader 会话 token，并打开带 fragment 的地址；不打印该地址，不使用 CLI/API Key，不需要把 token 复制到聊天中。
+先等待终端 B 显示就绪，再运行以下人工启动命令。它从本机权限受限文件读取 Interleaf 会话 token，并打开带 fragment 的地址；不打印该地址，不使用 CLI/API Key，不需要把 token 复制到聊天中。
 
 ```sh
 python3 - <<'PY'

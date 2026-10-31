@@ -1,4 +1,4 @@
-const releaseURL = "https://github.com/cynicalight/reader/releases";
+const releaseURL = "https://github.com/Tazewell/Interleaf/releases";
 export const day = 24 * 60 * 60 * 1000;
 export const retryDelay = 60 * 60 * 1000;
 
@@ -72,7 +72,7 @@ export function selectRelease(
   const target = installerTargets[`${platform}/${arch}`];
   if (!target) throw new Error("当前平台没有官方更新安装包");
   const version = tag.slice(1);
-  const installer = `Reader-${version}-${target}`;
+  const installer = `Interleaf-${version}-${target}`;
   if (checksums.length > 64 * 1024) throw new Error("更新校验清单超过大小限制");
   const files = new Set<string>();
   for (const line of checksums.split(/\r?\n/).filter(Boolean)) {
@@ -93,7 +93,7 @@ export function selectRelease(
     checksumURL,
   };
   if (platform === "darwin") {
-    const archive = `Reader-${version}-${target.replace(/\.dmg$/, ".zip")}`;
+    const archive = `Interleaf-${version}-${target.replace(/\.dmg$/, ".zip")}`;
     if (files.has(archive))
       update.archive = { installer: archive, downloadURL: assetURL(archive) };
   }

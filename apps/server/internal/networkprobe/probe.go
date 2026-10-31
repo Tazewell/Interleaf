@@ -39,7 +39,7 @@ func probe(ctx context.Context, target string, transport *http.Transport) (resul
 		result.Message = "检测地址无效。"
 		return
 	}
-	req.Header.Set("User-Agent", "Reader-Network-Check")
+	req.Header.Set("User-Agent", "Interleaf-Network-Check")
 	proxyAuthentication := errors.New("proxy authentication required")
 	transport.OnProxyConnectResponse = func(_ context.Context, _ *url.URL, _ *http.Request, response *http.Response) error {
 		if response.StatusCode == http.StatusProxyAuthRequired {

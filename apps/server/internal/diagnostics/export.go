@@ -155,7 +155,7 @@ func (s *Store) Export(out io.Writer, library string, environment, settings any)
 	if err != nil {
 		return err
 	}
-	_, err = fmt.Fprintln(w, "Reader 本地诊断包\n包含全部已保留日志；时间采用 UTC。凭据、URL、用户路径及旧翻译日志的模型正文已脱敏。\n未包含书库数据库、PDF/EPUB、聊天和批注。manifest.json 列出缺失文件和脱敏规则。\n反馈时请附上发生时间、操作步骤、预期结果和实际结果。日志无法保证复现依赖特定文档的问题。\n此文件由用户手动导出，没有自动上传。")
+	_, err = fmt.Fprintln(w, "Interleaf 本地诊断包\n包含全部已保留日志；时间采用 UTC。凭据、URL、用户路径及旧翻译日志的模型正文已脱敏。\n未包含书库数据库、PDF/EPUB、聊天和批注。manifest.json 列出缺失文件和脱敏规则。\n反馈时请附上发生时间、操作步骤、预期结果和实际结果。日志无法保证复现依赖特定文档的问题。\n此文件由用户手动导出，没有自动上传。")
 	if err != nil {
 		return err
 	}

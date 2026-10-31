@@ -34,9 +34,9 @@
 
 ## 桌面预览与人工验收
 
-桌面快捷方式：`E:\Administrator\Desktop\Reader 文献管理预览.lnk`。启动脚本：`E:\WSL\reader-reference-preview.sh`。
+桌面快捷方式：`E:\Administrator\Desktop\Interleaf 文献管理预览.lnk`。启动脚本：`E:\WSL\reader-reference-preview.sh`。
 
-预览使用 `/home/admin/.cache/reader-reference-preview` 下的独立配置和临时书库；未迁移或修改原有 Reader 书库。已确认 Reader 窗口、本地鉴权 API 与网页资源正常启动。没有使用浏览器自动化做视觉验收。
+预览使用 `/home/admin/.cache/reader-reference-preview` 下的独立配置和临时书库；未迁移或修改原有 Interleaf 书库。已确认 Interleaf 窗口、本地鉴权 API 与网页资源正常启动。没有使用浏览器自动化做视觉验收。
 
 界面外观、实际操作体验及自己的 Overleaf 项目上传需要人工检查，步骤见 [使用指南](reference-library.md#人工验收步骤)。本地自动导出只更新授权的本地文件，Overleaf 仍需手动上传更新。
 

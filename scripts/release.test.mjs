@@ -44,7 +44,7 @@ async function installers(cwd) {
     "mac-arm64.zip",
     "win-x64.exe",
   ]) {
-    const file = `Reader-0.2.0-${target}`;
+    const file = `Interleaf-0.2.0-${target}`;
     const bytes = Buffer.alloc(1024 * 1024 + 512);
     if (target.endsWith("dmg")) bytes.write("koly", bytes.length - 512);
     else if (target.endsWith("zip")) bytes.write("PK\u0003\u0004", 0);
@@ -87,16 +87,16 @@ test("release refuses missing or unexpected artifacts", async () => {
   const cwd = await fixture();
   expect(run("release-assets.mjs", cwd).status).not.toBe(0);
   await installers(cwd);
-  await rm(join(cwd, "release/Reader-0.2.0-win-x64.exe"));
+  await rm(join(cwd, "release/Interleaf-0.2.0-win-x64.exe"));
   expect(run("release-assets.mjs", cwd).status).not.toBe(0);
   await installers(cwd);
-  await rm(join(cwd, "release/Reader-0.2.0-mac-arm64.zip"));
+  await rm(join(cwd, "release/Interleaf-0.2.0-mac-arm64.zip"));
   expect(run("release-assets.mjs", cwd, { MAC_ONLY: "true" }).status).not.toBe(
     0,
   );
   expect(run("release-assets.mjs", cwd).status).not.toBe(0);
   await installers(cwd);
-  await writeFile(join(cwd, "release/Reader-0.2.0-mac-x64.dmg"), "unexpected");
+  await writeFile(join(cwd, "release/Interleaf-0.2.0-mac-x64.dmg"), "unexpected");
   expect(run("release-assets.mjs", cwd).status).not.toBe(0);
 });
 test("release checks installer format before writing hashes", async () => {
@@ -113,7 +113,7 @@ test("release checks installer format before writing hashes", async () => {
 test("Mac-only release requires the Apple Silicon DMG and update ZIP", async () => {
   const cwd = await fixture();
   const files = await installers(cwd);
-  await rm(join(cwd, "release/Reader-0.2.0-win-x64.exe"));
+  await rm(join(cwd, "release/Interleaf-0.2.0-win-x64.exe"));
   expect(run("release-assets.mjs", cwd).status).not.toBe(0);
   expect(run("release-assets.mjs", cwd, { MAC_ONLY: "true" }).status).toBe(0);
   const hashes = await readFile(join(cwd, "release/SHA256SUMS.txt"), "utf8");
@@ -125,7 +125,7 @@ test("Mac-only release requires the Apple Silicon DMG and update ZIP", async () 
       `${createHash("sha256").update(bytes).digest("hex")}  ${file}\n`,
     );
   await writeFile(
-    join(cwd, "release/Reader-0.2.0-win-x64.exe"),
+    join(cwd, "release/Interleaf-0.2.0-win-x64.exe"),
     files[2].bytes,
   );
   expect(run("release-assets.mjs", cwd, { MAC_ONLY: "true" }).status).not.toBe(
@@ -189,9 +189,9 @@ test.each([0, 1, 2])(
       "release",
       "upload",
       "v0.2.0",
-      "release/Reader-0.2.0-mac-arm64.dmg",
-      "release/Reader-0.2.0-mac-arm64.zip",
-      "release/Reader-0.2.0-win-x64.exe",
+      "release/Interleaf-0.2.0-mac-arm64.dmg",
+      "release/Interleaf-0.2.0-mac-arm64.zip",
+      "release/Interleaf-0.2.0-win-x64.exe",
       "--clobber",
     ]);
     expect(uploads).toHaveLength(failAt === 1 ? 1 : 2);

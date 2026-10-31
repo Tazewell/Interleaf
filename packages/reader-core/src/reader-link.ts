@@ -1,5 +1,5 @@
-/** `reader://open?id=<document>[&annotation=<id>][&page=<n>]` opens a place in the library. */
-export const READER_SCHEME = "reader";
+/** `interleaf://open?id=<document>[&annotation=<id>][&page=<n>]` opens a place in the library. */
+export const READER_SCHEME = "interleaf";
 
 export interface ReaderLinkTarget {
   id: string;

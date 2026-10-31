@@ -21,7 +21,7 @@ export async function verifyModel(path: string, expected = model) {
     (await stat(path)).size !== expected.bytes ||
     (await digest(path)) !== expected.sha256
   )
-    throw new Error("版面模型校验失败，请重新构建或安装 Reader");
+    throw new Error("版面模型校验失败，请重新构建或安装 Interleaf");
 }
 
 // Resolve relative to the worker, independent of cwd and the user's library.
@@ -31,7 +31,7 @@ export async function resolveModel(path = bundledModelPath) {
     await verifyModel(path);
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === "ENOENT")
-      throw new Error("未找到内置版面模型，请重新构建或安装 Reader");
+      throw new Error("未找到内置版面模型，请重新构建或安装 Interleaf");
     throw error;
   }
   return path;

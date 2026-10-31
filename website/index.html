@@ -3,17 +3,17 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Reader — 本地优先的 EPUB / PDF 阅读器</title>
+    <title>Interleaf — 本地优先的 EPUB / PDF 阅读器</title>
     <meta
       name="description"
-      content="Reader 是一个本地优先的 EPUB / PDF 阅读器：论文库与图书库、原文译文对照、批注与引用导出，以及通过你已登录的 Claude Code、Codex 或 Kimi CLI 调用的 AI 助读。"
+      content="Interleaf 是一个本地优先的 EPUB / PDF 阅读器：论文库与图书库、原文译文对照、批注与引用导出，以及通过你已登录的 Claude Code、Codex 或 Kimi CLI 调用的 AI 助读。"
     />
     <meta name="theme-color" content="#faf9f5" media="(prefers-color-scheme: light)" />
     <meta name="theme-color" content="#151514" media="(prefers-color-scheme: dark)" />
-    <meta property="og:title" content="Reader — 本地优先的 EPUB / PDF 阅读器" />
+    <meta property="og:title" content="Interleaf — 本地优先的 EPUB / PDF 阅读器" />
     <meta property="og:description" content="读论文与读书，译文、批注与 AI 助读都回到原文。" />
-    <meta property="og:url" content="https://cynicalight.github.io/reader/" />
-    <meta property="og:image" content="https://cynicalight.github.io/reader/assets/screenshots/pdf-bilingual-ai.webp" />
+    <meta property="og:url" content="https://tazewell.github.io/Interleaf/" />
+    <meta property="og:image" content="https://tazewell.github.io/Interleaf/assets/screenshots/pdf-bilingual-ai.webp" />
     <link rel="icon" href="assets/favicon.ico" sizes="32x32" />
     <link rel="icon" href="assets/favicon.svg" type="image/svg+xml" />
     <link rel="apple-touch-icon" href="assets/apple-touch-icon.png" />
@@ -83,9 +83,9 @@
 
     <header class="nav" id="nav">
       <div class="wrap nav-inner">
-        <a class="brand" href="#top" aria-label="Reader">
+        <a class="brand" href="#top" aria-label="Interleaf">
           <svg viewBox="25.5 17 50 67" aria-hidden="true"><g transform="translate(-2 0)"><path d="M58 21C68 21.5 74 29.5 73 38.5C72 47.5 64.5 53 56.5 52C48.5 51 44 44 45 36C46 27.5 50.5 20.6 58 21Z" fill="#c2643f" /><path d="M35 77C34.4 62 35.4 41 34.6 24M34.6 24C44 22.6 56 22.4 61 27C67 32.5 65 45 56 48.5C50 50.6 42 50.5 35 50M47 50.5C53 58 60 67 68 77.5" fill="none" stroke="currentColor" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round" /></g></svg>
-          Reader
+          Interleaf
         </a>
         <nav class="nav-links" aria-label="页面导航">
           <a href="#demo" data-en="Interface">界面</a>
@@ -99,10 +99,10 @@
             <svg class="icon theme-sun"><use href="#i-sun" /></svg>
             <svg class="icon theme-moon" style="display: none"><use href="#i-moon" /></svg>
           </button>
-          <a class="icon-btn" href="https://github.com/cynicalight/reader" aria-label="GitHub" target="_blank" rel="noopener">
+          <a class="icon-btn" href="https://github.com/Tazewell/Interleaf" aria-label="GitHub" target="_blank" rel="noopener">
             <svg class="icon"><use href="#i-github" /></svg>
           </a>
-          <a class="btn btn-primary btn-sm nav-download" href="https://github.com/cynicalight/reader/releases/latest" target="_blank" rel="noopener" data-en="Download">下载</a>
+          <a class="btn btn-primary btn-sm nav-download" href="https://github.com/Tazewell/Interleaf/releases/latest" target="_blank" rel="noopener" data-en="Download">下载</a>
         </div>
       </div>
     </header>
@@ -124,10 +124,10 @@
             本地优先的 PDF / EPUB 阅读器，分论文库与图书库。论文可以原文译文逐段对照，批注、搜索与 AI 助读都锚定在原文——文档留在本机，AI 通过你已登录的 Claude Code、Codex 或 Kimi CLI 调用。
           </p>
           <div class="hero-cta reveal">
-            <a class="btn btn-primary" href="https://github.com/cynicalight/reader/releases/latest" target="_blank" rel="noopener">
+            <a class="btn btn-primary" href="https://github.com/Tazewell/Interleaf/releases/latest" target="_blank" rel="noopener">
               <svg class="icon"><use href="#i-download" /></svg><span data-en="Download">下载</span>
             </a>
-            <a class="btn btn-ghost" href="https://github.com/cynicalight/reader" target="_blank" rel="noopener">
+            <a class="btn btn-ghost" href="https://github.com/Tazewell/Interleaf" target="_blank" rel="noopener">
               <svg class="icon"><use href="#i-github" /></svg><span data-en="Github">Github</span>
             </a>
           </div>
@@ -150,7 +150,7 @@
           </div>
           <div class="stage reveal" id="stage">
             <div class="stage-scale" id="stage-scale">
-              <div class="window" id="window" data-scene="notes" data-view="src" role="img" aria-label="Reader 阅读界面演示：原文批注、对照翻译与上下文问答">
+              <div class="window" id="window" data-scene="notes" data-view="src" role="img" aria-label="Interleaf 阅读界面演示：原文批注、对照翻译与上下文问答">
                 <div class="win-bar">
                   <div class="lights"><i></i><i></i><i></i></div>
                   <svg class="icon"><use href="#i-back" /></svg>
@@ -302,7 +302,7 @@
           <div class="section-head reveal">
             <div class="kicker">Features</div>
             <h2 data-en="Take one paper,<br />from import to citation.">以一篇论文为例，<br />从导入读到引用。</h2>
-            <p class="lead" data-en="Reader has two modes: a paper library for PDFs, organized, translated and cited as papers, and a book library for EPUBs and long PDFs. Here is one paper, read in the paper library.">Reader 分论文库与图书库两种模式：论文库只收 PDF，按论文整理、翻译与引用；图书库放 EPUB 与长篇 PDF。下面以在论文库中读一篇 PDF 为例。</p>
+            <p class="lead" data-en="Interleaf has two modes: a paper library for PDFs, organized, translated and cited as papers, and a book library for EPUBs and long PDFs. Here is one paper, read in the paper library.">Interleaf 分论文库与图书库两种模式：论文库只收 PDF，按论文整理、翻译与引用；图书库放 EPUB 与长篇 PDF。下面以在论文库中读一篇 PDF 为例。</p>
           </div>
           <div class="bento">
             <article class="card span-2 reveal">
@@ -416,7 +416,7 @@
 
             <article class="card reveal">
               <h3 data-en="The AI account you already have">用你已有的 AI 账户</h3>
-              <p data-en="Reader detects locally installed CLIs and runs a real text and vision test. Pick separate models for chat and translation. No API key, no unofficial OAuth.">检测本机已安装的 CLI，用真实请求测试文本与识图能力；问答与翻译可分别选择模型。无需 API Key，不读取凭据文件。</p>
+              <p data-en="Interleaf detects locally installed CLIs and runs a real text and vision test. Pick separate models for chat and translation. No API key, no unofficial OAuth.">检测本机已安装的 CLI，用真实请求测试文本与识图能力；问答与翻译可分别选择模型。无需 API Key，不读取凭据文件。</p>
               <div class="viz">
                 <div class="providers" id="providers">
                   <div class="prov"><span class="brand-avatar brand-claude" style="--bg: #d97757"><svg><use href="#b-claude" /></svg></span><span class="name">Claude Code</span><span class="caps"><span class="cap"><i class="spin"></i><svg class="icon"><use href="#i-check" /></svg><span data-en="Text">文本</span></span><span class="cap"><i class="spin"></i><svg class="icon"><use href="#i-check" /></svg><span data-en="Vision">识图</span></span></span></div>
@@ -488,10 +488,10 @@
             <button role="tab" aria-selected="false" data-shot="settings" data-en="Agent settings">Agent 设置</button>
           </div>
           <div class="shot-frame reveal" id="shot-frame">
-            <img class="on" data-shot="bilingual" data-light="assets/screenshots/pdf-bilingual-ai.webp" data-dark="assets/screenshots/pdf-bilingual-ai.webp" src="assets/screenshots/pdf-bilingual-ai.webp" alt="Reader 论文对照阅读：左侧目录，中间原文与译文，右侧 AI 助读" loading="lazy" />
-            <img data-shot="library" data-light="assets/screenshots/library-light.webp" data-dark="assets/screenshots/library-dark.webp" src="assets/screenshots/library-light.webp" alt="Reader 书库" loading="lazy" />
-            <img data-shot="pdf" data-light="assets/screenshots/pdf-light.webp" data-dark="assets/screenshots/pdf-dark.webp" src="assets/screenshots/pdf-light.webp" alt="Reader PDF 阅读界面" loading="lazy" />
-            <img data-shot="settings" data-light="assets/screenshots/settings-light.webp" data-dark="assets/screenshots/settings-light.webp" src="assets/screenshots/settings-light.webp" alt="Reader Agent 设置" loading="lazy" />
+            <img class="on" data-shot="bilingual" data-light="assets/screenshots/pdf-bilingual-ai.webp" data-dark="assets/screenshots/pdf-bilingual-ai.webp" src="assets/screenshots/pdf-bilingual-ai.webp" alt="Interleaf 论文对照阅读：左侧目录，中间原文与译文，右侧 AI 助读" loading="lazy" />
+            <img data-shot="library" data-light="assets/screenshots/library-light.webp" data-dark="assets/screenshots/library-dark.webp" src="assets/screenshots/library-light.webp" alt="Interleaf 书库" loading="lazy" />
+            <img data-shot="pdf" data-light="assets/screenshots/pdf-light.webp" data-dark="assets/screenshots/pdf-dark.webp" src="assets/screenshots/pdf-light.webp" alt="Interleaf PDF 阅读界面" loading="lazy" />
+            <img data-shot="settings" data-light="assets/screenshots/settings-light.webp" data-dark="assets/screenshots/settings-light.webp" src="assets/screenshots/settings-light.webp" alt="Interleaf Agent 设置" loading="lazy" />
           </div>
           <p class="shot-caption" data-en="Screenshots with a dark version follow the page's appearance.">有深色版本的截图会跟随本页外观切换。</p>
           <figure class="video reveal">
@@ -543,8 +543,8 @@
               <h3 data-en="Install">安装</h3>
               <p data-en="Download the DMG for Apple Silicon or the EXE for Windows x64. Neither has a developer certificate, so allow the system security prompt the first time. Updates are checked in the app.">macOS（Apple Silicon）下载 DMG，Windows x64 下载 EXE。安装包没有开发者证书，首次打开需允许系统安全提示；之后可在应用内检查更新。</p>
               <div class="code"><button class="icon-btn copy" type="button" aria-label="复制"><svg class="icon"><use href="#i-copy" /></svg></button><span class="c"># or from source</span>
-git clone https://github.com/cynicalight/reader.git
-cd reader && pnpm install
+git clone https://github.com/Tazewell/Interleaf.git
+cd Interleaf && pnpm install
 pnpm desktop</div>
             </div>
             <div class="qs-card reveal">
@@ -575,7 +575,7 @@ codex login</div>
           <div class="faq reveal">
             <details>
               <summary data-en="Do I need an API key?">需要填写 API Key 吗？</summary>
-              <p data-en="No. Reader calls the official Claude Code, Codex or Kimi CLI you have already signed in to. Permissions, quotas, models and billing follow that CLI account.">不需要。Reader 调用你已登录的官方 Claude Code、Codex 或 Kimi CLI；权限、额度、模型与计费都跟随该 CLI 账户。</p>
+              <p data-en="No. Interleaf calls the official Claude Code, Codex or Kimi CLI you have already signed in to. Permissions, quotas, models and billing follow that CLI account.">不需要。Interleaf 调用你已登录的官方 Claude Code、Codex 或 Kimi CLI；权限、额度、模型与计费都跟随该 CLI 账户。</p>
             </details>
             <details>
               <summary data-en="Are my documents uploaded?">我的文档会被上传吗？</summary>
@@ -605,8 +605,8 @@ codex login</div>
         <div class="wrap reveal">
           <h2 data-en="Open a paper.<br />Keep the thread.">打开一篇论文，<br />把思路留在原文旁边。</h2>
           <div class="hero-cta">
-            <a class="btn btn-primary" href="https://github.com/cynicalight/reader/releases/latest" target="_blank" rel="noopener"><svg class="icon"><use href="#i-download" /></svg><span data-en="Download">下载</span></a>
-            <a class="btn btn-ghost" href="https://github.com/cynicalight/reader" target="_blank" rel="noopener"><svg class="icon"><use href="#i-github" /></svg>GitHub</a>
+            <a class="btn btn-primary" href="https://github.com/Tazewell/Interleaf/releases/latest" target="_blank" rel="noopener"><svg class="icon"><use href="#i-download" /></svg><span data-en="Download">下载</span></a>
+            <a class="btn btn-ghost" href="https://github.com/Tazewell/Interleaf" target="_blank" rel="noopener"><svg class="icon"><use href="#i-github" /></svg>GitHub</a>
           </div>
         </div>
       </section>
@@ -614,11 +614,11 @@ codex login</div>
 
     <footer>
       <div class="wrap">
-        <span>Reader · <span data-en="Built with React, Go, Readium and PDF.js">基于 React、Go、Readium 与 PDF.js 构建</span></span>
+        <span>Interleaf · <span data-en="Built with React, Go, Readium and PDF.js">基于 React、Go、Readium 与 PDF.js 构建</span></span>
         <nav>
-          <a href="https://github.com/cynicalight/reader" target="_blank" rel="noopener">GitHub</a>
-          <a href="https://github.com/cynicalight/reader/releases" target="_blank" rel="noopener" data-en="Releases">版本发布</a>
-          <a href="https://github.com/cynicalight/reader/blob/main/docs/roadmap.md" target="_blank" rel="noopener" data-en="Roadmap">路线图</a>
+          <a href="https://github.com/Tazewell/Interleaf" target="_blank" rel="noopener">GitHub</a>
+          <a href="https://github.com/Tazewell/Interleaf/releases" target="_blank" rel="noopener" data-en="Releases">版本发布</a>
+          <a href="https://github.com/Tazewell/Interleaf/blob/main/docs/roadmap.md" target="_blank" rel="noopener" data-en="Roadmap">路线图</a>
           <a href="privacy/" data-en="Connector privacy">Connector 隐私政策</a>
         </nav>
       </div>

@@ -41,7 +41,7 @@ export function startDiagnosticService(
       const window = getWindow();
       const options = {
         title: "导出诊断包",
-        defaultPath: `Reader-diagnostics-${new Date().toISOString().replace(/[:.]/g, "-")}.zip`,
+        defaultPath: `Interleaf-diagnostics-${new Date().toISOString().replace(/[:.]/g, "-")}.zip`,
         filters: [{ name: "诊断包", extensions: ["zip"] }],
       };
       const selected =

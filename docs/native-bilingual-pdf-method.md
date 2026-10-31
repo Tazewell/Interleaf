@@ -1,8 +1,8 @@
 # 原生双语 PDF 的准备与组合方法
 
-Reader 的实现使用 PDF.js 6.3.289、PDF-LIB 1.17.1、`@pdf-lib/fontkit` 1.1.1 和已有原生 Canvas；没有 PDF2zh、BabelDOC、Zotero 或 ONNX 导出依赖。现有 ONNX 版面解析构建保持原样；导出只消费已存在的 manifest。
+Interleaf 的实现使用 PDF.js 6.3.289、PDF-LIB 1.17.1、`@pdf-lib/fontkit` 1.1.1 和已有原生 Canvas；没有 PDF2zh、BabelDOC、Zotero 或 ONNX 导出依赖。现有 ONNX 版面解析构建保持原样；导出只消费已存在的 manifest。
 
-算法研究参考了 [PDFMathTranslate 固定版本的 converter.py](https://github.com/PDFMathTranslate/PDFMathTranslate/blob/7fd3bb7a2ce22f8e584ceb9d744e2a3a63684987/pdf2zh/converter.py)、同版本 `high_level.py` 和 `translator.py`：区域组织段落、数学占位、真实字宽折行、还原公式和先降低行距的方法。实现为独立 TypeScript 代码，没有复制上游 AGPL 源码。Reader 用原始公式像素和严格失败替代公式重建及宽松占位符处理。
+算法研究参考了 [PDFMathTranslate 固定版本的 converter.py](https://github.com/PDFMathTranslate/PDFMathTranslate/blob/7fd3bb7a2ce22f8e584ceb9d744e2a3a63684987/pdf2zh/converter.py)、同版本 `high_level.py` 和 `translator.py`：区域组织段落、数学占位、真实字宽折行、还原公式和先降低行距的方法。实现为独立 TypeScript 代码，没有复制上游 AGPL 源码。Interleaf 用原始公式像素和严格失败替代公式重建及宽松占位符处理。
 
 ## 准备协议
 
@@ -38,4 +38,4 @@ CLI：`--stage prepare --input PDF --layout MANIFEST --prepared JSON [--from N -
 
 `apps/processor/src/bilingual-pdf/engine.test.ts` 使用程序生成的真实 PDF 和真实内置字体，覆盖页数/范围/混合尺寸、CropBox/四种旋转/UserUnit 非对称标记、中文子集回读、动作/批注清洗、缺字、公式令牌与上下标/分数横线、双栏/图题/图像保留、脚注合并、9 pt 与溢出、像素上限、无字页及 CLI 原子失败。
 
-额外用真实论文 _Attention Is All You Need_ 的前六页和 Reader 实际 manifest 做准备及短中文+原占位符的 mock 排版探针，用 Poppler 的 `pdfinfo`、`pdffonts`、`pdftotext` 和页面 PNG 检查。mock 只证明几何/字体/流程，不代表真实 API 翻译质量。无需浏览器自动验收；人工应打开导出 PDF 核对原文清晰度、图表内文字、图/表题、脚注、公式及中文复制搜索。
+额外用真实论文 _Attention Is All You Need_ 的前六页和 Interleaf 实际 manifest 做准备及短中文+原占位符的 mock 排版探针，用 Poppler 的 `pdfinfo`、`pdffonts`、`pdftotext` 和页面 PNG 检查。mock 只证明几何/字体/流程，不代表真实 API 翻译质量。无需浏览器自动验收；人工应打开导出 PDF 核对原文清晰度、图表内文字、图/表题、脚注、公式及中文复制搜索。

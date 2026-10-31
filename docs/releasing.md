@@ -1,12 +1,12 @@
 # 安装包构建与发版
 
-Reader 使用 GitHub Actions 和 electron-builder，发布 GitHub Release 后自动生成以下文件：
+Interleaf 使用 GitHub Actions 和 electron-builder，发布 GitHub Release 后自动生成以下文件：
 
 | 文件                                 | 运行平台                   |
 | ------------------------------------ | -------------------------- |
-| `Reader-<version>-mac-arm64.dmg`     | Apple Silicon Mac          |
-| `Reader-<version>-mac-arm64.zip`     | Mac 应用内原地更新包       |
-| `Reader-<version>-win-x64.exe`       | Windows x64（NSIS）        |
+| `Interleaf-<version>-mac-arm64.dmg`     | Apple Silicon Mac          |
+| `Interleaf-<version>-mac-arm64.zip`     | Mac 应用内原地更新包       |
+| `Interleaf-<version>-win-x64.exe`       | Windows x64（NSIS）        |
 | `SHA256SUMS.txt`                     | 安装包的 SHA-256 校验值    |
 
 当前工作流不构建 Intel Mac、Windows ARM64 或 Linux 安装包。Intel Mac 暂停构建：`onnxruntime-node` 自 1.24 起不再提供 darwin/x64 原生库，包内检查无法加载版面模型。`builder.config.cjs` 与更新检查仍保留 `mac-intel-x64` 命名，恢复时在 `.github/workflows/build.yml`（`macos-15-intel` runner）和 `scripts/release-assets.mjs` 中加回该目标即可。
@@ -25,9 +25,9 @@ gh secret set MAC_SIGN_P12 < ~/reader-mac-sign/reader-sign.p12.base64
 gh secret set MAC_SIGN_P12_PASSWORD < ~/reader-mac-sign/password.txt
 ```
 
-把 `reader-sign.p12` 和 `password.txt` 离线备份后，可删除本机副本。证书有效期 20 年，CN 为 `Reader Self-Signed`。
+把 `reader-sign.p12` 和 `password.txt` 离线备份后，可删除本机副本。证书有效期 20 年，CN 为 `Interleaf Self-Signed`。
 
-`apps/desktop/mac-sign.cjs` 是 electron-builder 的 `mac.sign` 钩子：electron-builder 照常生成签名参数，钩子把证书导入临时钥匙串，替换签名身份后逐个签名嵌套二进制，结束后删除临时钥匙串，不修改登录钥匙串或信任设置。证书无人验证时间戳，签名不请求 Apple 时间戳服务。没有证书时退回 ad-hoc 签名，适用于本地构建和手动试跑；带 Release tag 的构建缺少证书会直接失败，包内检查也会确认签名者为 `Reader Self-Signed`。证书只传给 macOS 构建任务。
+`apps/desktop/mac-sign.cjs` 是 electron-builder 的 `mac.sign` 钩子：electron-builder 照常生成签名参数，钩子把证书导入临时钥匙串，替换签名身份后逐个签名嵌套二进制，结束后删除临时钥匙串，不修改登录钥匙串或信任设置。证书无人验证时间戳，签名不请求 Apple 时间戳服务。没有证书时退回 ad-hoc 签名，适用于本地构建和手动试跑；带 Release tag 的构建缺少证书会直接失败，包内检查也会确认签名者为 `Interleaf Self-Signed`。证书只传给 macOS 构建任务。
 
 ## 发版步骤
 
@@ -73,17 +73,17 @@ macOS 和 Windows 桌面版在“设置 → 诊断”提供三种模式，默认
 
 - **跟随系统**：启动时读取系统代理，传给 Go 服务和 Agent CLI。
 - **手动 HTTP 代理**：填写主机地址与端口，例如 `127.0.0.1` 和 `7890`；使用 Clash 的 HTTP 或 Mixed 端口，不能填写纯 SOCKS 端口。支持 IPv4、IPv6 和主机名，不支持账号密码。
-- **直连**：清除 Reader 子进程继承的显式代理环境；系统 TUN、VPN 或透明路由仍由操作系统管理。
+- **直连**：清除 Interleaf 子进程继承的显式代理环境；系统 TUN、VPN 或透明路由仍由操作系统管理。
 
-点击“保存代理设置”后，配置原子写入用户数据目录的 `proxy-settings.json`，与书库分开保存，不修改操作系统设置。重启后 Go 服务、Agent CLI 和 Electron 应用内更新使用新配置，本机 loopback 请求始终绕过手动代理。点击“重启 Reader”会先照常保存阅读数据；保存失败并选择“返回阅读”会取消这次重启。保存本身不触发退出或重启。重新打开设置会等待正在进行的保存完成，显示最新配置。
+点击“保存代理设置”后，配置原子写入用户数据目录的 `proxy-settings.json`，与书库分开保存，不修改操作系统设置。重启后 Go 服务、Agent CLI 和 Electron 应用内更新使用新配置，本机 loopback 请求始终绕过手动代理。点击“重启 Interleaf”会先照常保存阅读数据；保存失败并选择“返回阅读”会取消这次重启。保存本身不触发退出或重启。重新打开设置会等待正在进行的保存完成，显示最新配置。
 
-“连接检测”固定访问 `https://chatgpt.com/robots.txt`。使用同域名的公开文本资源可减少首页浏览器验证对检测的干扰；它只验证网络可达性，不代表登录或模型调用可用。跟随系统模式检测当前 Go / CLI 已生效的启动配置，切换系统代理后可直接点击重启再检测；手动及直连配置可先检测草稿，再保存并重启。检测不影响正在进行的 API 或 CLI 请求。独立的包内 Go 进程使用与 API 请求相同的环境代理规则，发出不带 API Key 或登录信息的 HEAD 请求；不跟随重定向、不读取正文、不打开书库。网络请求最多 12 秒，检测子进程有 15 秒上限；系统代理读取另有超时，Windows 不显示控制台，退出 Reader 时取消检测。
+“连接检测”固定访问 `https://chatgpt.com/robots.txt`。使用同域名的公开文本资源可减少首页浏览器验证对检测的干扰；它只验证网络可达性，不代表登录或模型调用可用。跟随系统模式检测当前 Go / CLI 已生效的启动配置，切换系统代理后可直接点击重启再检测；手动及直连配置可先检测草稿，再保存并重启。检测不影响正在进行的 API 或 CLI 请求。独立的包内 Go 进程使用与 API 请求相同的环境代理规则，发出不带 API Key 或登录信息的 HEAD 请求；不跟随重定向、不读取正文、不打开书库。网络请求最多 12 秒，检测子进程有 15 秒上限；系统代理读取另有超时，Windows 不显示控制台，退出 Interleaf 时取消检测。
 
 系统模式始终提供重启入口，运行中的请求与检测使用同一份启动配置。结果显示显式代理或直连路由、HTTP 状态及耗时；收到 401、403、405 或服务器错误说明已收到 HTTP 响应，不代表 ChatGPT 登录或模型调用可用。无法连接、证书验证失败、超时和代理 407 认证要求显示为失败，同时保留实际路由及耗时；检测进程未能返回结果时显示路由未知。检测仅证明 ChatGPT 公开资源的网络情况，不替代 Agent / API 的实际调用检测。
 
 桌面应用启动时尝试将手动系统代理转换为 Go 服务和 CLI 子进程的代理环境。Windows 支持 Clash 默认绕过列表中的 IPv4 前缀通配符，例如 `127.*`、`192.168.*`、`10.*` 和 `172.16.*` 至 `172.31.*`，分别生成 CIDR 和 IP 范围写法供 Go、Node HTTP 使用；`*.local` 保留域名后缀绕过。`<local>` 加入 localhost、本机名称及其短名称；环境变量无法完整表达“任意不含点的内网主机名”，这部分仍取决于客户端运行时或额外列出的主机名。
 
-代理读取失败、输出无效，或遇到无法转换的 PAC 时，应用保留原来的启动环境并继续启动，仅输出不含原始配置的控制台提示，不弹出启动错误窗口。Windows 在没有可用手动代理但 `autoDetect: true` 时，也会触发该回退（有手动代理时会应用手动代理）；macOS 的自动发现由系统脚本处理。该回退不保证联网请求成功；实际 API 或 CLI 请求失败仍由对应功能显示错误。Reader 不修改操作系统代理设置，也不要求开启 TUN。
+代理读取失败、输出无效，或遇到无法转换的 PAC 时，应用保留原来的启动环境并继续启动，仅输出不含原始配置的控制台提示，不弹出启动错误窗口。Windows 在没有可用手动代理但 `autoDetect: true` 时，也会触发该回退（有手动代理时会应用手动代理）；macOS 的自动发现由系统脚本处理。该回退不保证联网请求成功；实际 API 或 CLI 请求失败仍由对应功能显示错误。Interleaf 不修改操作系统代理设置，也不要求开启 TUN。
 
 系统代理绕过列表中的单条无法转换规则（如部分通配符 `172.2*`、不规范通配符 `foo*bar` 等）会被跳过，其余有效规则与代理地址仍正常应用；该行为不会在诊断中显示警告。完整回退（整份配置无法读取或包含 PAC / 需要依赖自动发现）会在”设置 → 诊断”显示提示，连接检测展示实际使用的回退结果。Electron 的”跟随系统”仍由 Chromium 处理；PAC 可能只对 Electron 有效。保存的配置损坏时回退到系统模式，并在设置里提示；可以重新保存有效配置。
 
@@ -91,19 +91,19 @@ macOS 和 Windows 桌面版在“设置 → 诊断”提供三种模式，默认
 
 ## 应用内更新
 
-安装后的 Reader 会在启动 15 秒后检查是否已到每日检查时间。应用运行期间也会检查到期时间；应用关闭时不运行后台任务，下次启动会补查。检查时间保存在用户数据目录的 `update-state.json`，重启不会重置每日间隔。失败或 Release 安装包尚未上传完成时，至少间隔一小时再试。开发模式不访问 GitHub。
+安装后的 Interleaf 会在启动 15 秒后检查是否已到每日检查时间。应用运行期间也会检查到期时间；应用关闭时不运行后台任务，下次启动会补查。检查时间保存在用户数据目录的 `update-state.json`，重启不会重置每日间隔。失败或 Release 安装包尚未上传完成时，至少间隔一小时再试。开发模式不访问 GitHub。
 
-更新来源为 `cynicalight/reader` 的最新正式 GitHub Release。通过公开的 `/releases/latest` JSON 响应获取版本号，发现新版本后读取该版本的静态附件 `SHA256SUMS.txt` 来选择安装包，不调用 GitHub REST API，因此不占用匿名 REST API 每个来源 IP 每小时 60 次的查询额度。此入口仍可能遇到网络错误或 GitHub 的访问限制，手动检查失败时可打开发布页下载。仅提示比当前版本更新的正式版，不提示草稿、预发布版或旧版本。Release 必须同时提供当前平台（Apple Silicon Mac、Intel Mac 或 Windows x64）对应的安装包和 `SHA256SUMS.txt`。发布脚本先上传全部安装包，成功后再上传校验清单；清单尚未上传或缺少当前平台的安装包时稍后重试。在“关于 Reader”中可手动检查，手动检查不受每日间隔限制。
+更新来源为 `Tazewell/Interleaf` 的最新正式 GitHub Release。通过公开的 `/releases/latest` JSON 响应获取版本号，发现新版本后读取该版本的静态附件 `SHA256SUMS.txt` 来选择安装包，不调用 GitHub REST API，因此不占用匿名 REST API 每个来源 IP 每小时 60 次的查询额度。此入口仍可能遇到网络错误或 GitHub 的访问限制，手动检查失败时可打开发布页下载。仅提示比当前版本更新的正式版，不提示草稿、预发布版或旧版本。Release 必须同时提供当前平台（Apple Silicon Mac、Intel Mac 或 Windows x64）对应的安装包和 `SHA256SUMS.txt`。发布脚本先上传全部安装包，成功后再上传校验清单；清单尚未上传或缺少当前平台的安装包时稍后重试。在“关于 Interleaf”中可手动检查，手动检查不受每日间隔限制。
 
-macOS 正式版优先原地更新：若当前应用由固定证书签名、Release 提供对应架构的 `mac-arm64.zip` 或 `mac-intel-x64.zip`，后台检查发现新版本时直接下载 zip，不弹窗、不显示进度（手动检查时显示进度；后台下载过程中手动检查也会显示剩余进度）。zip 同样核对 SHA-256，校验后在本机 loopback 上以随机路径临时提供给 Electron `autoUpdater`（Squirrel.Mac）。Squirrel 会再检查新应用的签名是否满足当前应用的指定要求（同一 bundle ID 与同一证书），通过后暂存，暂存完成后删除下载的 zip。随后提示“立即重启 / 稍后”：立即重启会照常保存阅读数据后退出并安装新版本；选择稍后时在下次退出 Reader 时安装。重启前再次检查同一版本不会重复下载。原地更新需要 Reader 所在目录可写；当前应用为 ad-hoc 签名（本地构建、旧版本）、Release 没有 zip，或下载、校验、Squirrel 任一步失败时，回退到下面的 DMG 流程。从 ad-hoc 签名的旧版本升级到首个固定证书版本，需要手动安装一次 DMG。
+macOS 正式版优先原地更新：若当前应用由固定证书签名、Release 提供对应架构的 `mac-arm64.zip` 或 `mac-intel-x64.zip`，后台检查发现新版本时直接下载 zip，不弹窗、不显示进度（手动检查时显示进度；后台下载过程中手动检查也会显示剩余进度）。zip 同样核对 SHA-256，校验后在本机 loopback 上以随机路径临时提供给 Electron `autoUpdater`（Squirrel.Mac）。Squirrel 会再检查新应用的签名是否满足当前应用的指定要求（同一 bundle ID 与同一证书），通过后暂存，暂存完成后删除下载的 zip。随后提示“立即重启 / 稍后”：立即重启会照常保存阅读数据后退出并安装新版本；选择稍后时在下次退出 Interleaf 时安装。重启前再次检查同一版本不会重复下载。原地更新需要 Interleaf 所在目录可写；当前应用为 ad-hoc 签名（本地构建、旧版本）、Release 没有 zip，或下载、校验、Squirrel 任一步失败时，回退到下面的 DMG 流程。从 ad-hoc 签名的旧版本升级到首个固定证书版本，需要手动安装一次 DMG。
 
-其他情况下发现更新后选择“下载安装包”，应用会通过 Electron 网络栈下载文件，使用已生效的 Reader 代理设置，并在本地核对 SHA-256。校验成功后：macOS 打开 DMG，请先退出 Reader，再将新 Reader 拖入 Applications 完成替换，应用不会自动退出；Windows 照常保存阅读数据并退出 Reader，Go 服务停止后，在 Electron `quit` 事件中以 `--updated /S --force-run` 静默运行 NSIS 安装程序。安装程序沿用上次的安装位置与安装模式（全体用户安装时会弹出 UAC），替换原安装目录后重新打开 Reader，书库在用户数据目录中不受影响。安装程序启动约 1.3 秒后会结束仍在运行的 Reader 进程，所以必须在退出流程结束后才启动它。保存失败时若选择“返回阅读”，安装会推迟到下次退出 Reader 时进行，安装后同样自动重新打开。Windows 静默安装不需要代码签名。下载文件保存在用户数据目录的 `updates/` 下；失败的下载会清理，进程被强制关闭可能留下 `.part` 文件。校验值确认文件与 Release 一致，不能替代开发者签名。
+其他情况下发现更新后选择“下载安装包”，应用会通过 Electron 网络栈下载文件，使用已生效的 Interleaf 代理设置，并在本地核对 SHA-256。校验成功后：macOS 打开 DMG，请先退出 Interleaf，再将新 Interleaf 拖入 Applications 完成替换，应用不会自动退出；Windows 照常保存阅读数据并退出 Interleaf，Go 服务停止后，在 Electron `quit` 事件中以 `--updated /S --force-run` 静默运行 NSIS 安装程序。安装程序沿用上次的安装位置与安装模式（全体用户安装时会弹出 UAC），替换原安装目录后重新打开 Interleaf，书库在用户数据目录中不受影响。安装程序启动约 1.3 秒后会结束仍在运行的 Interleaf 进程，所以必须在退出流程结束后才启动它。保存失败时若选择“返回阅读”，安装会推迟到下次退出 Interleaf 时进行，安装后同样自动重新打开。Windows 静默安装不需要代码签名。下载文件保存在用户数据目录的 `updates/` 下；失败的下载会清理，进程被强制关闭可能留下 `.part` 文件。校验值确认文件与 Release 一致，不能替代开发者签名。
 
 显示进度时，任务栏或 Dock 图标按 `Content-Length` 显示下载百分比，应用右下角的提示同时显示进度条、已下载与总大小（MB）及“开启代理加速”的提示；服务器未返回大小时进度条为不确定状态，只显示已下载大小。macOS 原地更新下载完成后，提示变为“正在准备安装”，Squirrel 暂存完成后消失。进度按整百分比（无大小时按 1 MB）推送给界面。
 
 参见 [Electron 自动更新要求](https://www.electronjs.org/docs/latest/api/auto-updater)。
 
-人工检查：安装含此功能的包，打开“关于 Reader → 检查更新”；确认无更新时提示当前版本。随后发布更高版本且安装包上传完成后，再检查并下载；macOS（固定证书版本，位于 Applications）确认出现“已准备就绪”，选择“立即重启”后自动以新版本启动，选择“稍后”则退出再打开后为新版本；Windows 确认 Reader 退出后不显示安装向导，片刻后以新版本自动重新打开，开始菜单和桌面快捷方式仍然可用；全体用户安装的版本确认出现 UAC 提示，同意后同样完成更新。安装后版本变化，原书库和阅读位置仍保留。选择“稍后”应继续阅读；断网时手动检查应提示错误。自动检查与真实系统安装仍需人工验收。
+人工检查：安装含此功能的包，打开“关于 Interleaf → 检查更新”；确认无更新时提示当前版本。随后发布更高版本且安装包上传完成后，再检查并下载；macOS（固定证书版本，位于 Applications）确认出现“已准备就绪”，选择“立即重启”后自动以新版本启动，选择“稍后”则退出再打开后为新版本；Windows 确认 Interleaf 退出后不显示安装向导，片刻后以新版本自动重新打开，开始菜单和桌面快捷方式仍然可用；全体用户安装的版本确认出现 UAC 提示，同意后同样完成更新。安装后版本变化，原书库和阅读位置仍保留。选择“稍后”应继续阅读；断网时手动检查应提示错误。自动检查与真实系统安装仍需人工验收。
 
 ## 自动检查的范围
 

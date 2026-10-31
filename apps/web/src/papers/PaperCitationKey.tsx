@@ -98,7 +98,7 @@ export function PaperCitationKey({ doc }: { doc: Document }) {
             <DialogTitle>修改引用键</DialogTitle>
             <DialogDescription>
               原键 {doc.citationKey || "尚未分配"} 将不再导出。已有 LaTeX
-              引用需要手动修改；Reader 不修改 .tex 文件。
+              引用需要手动修改；Interleaf 不修改 .tex 文件。
             </DialogDescription>
           </DialogHeader>
           <Input

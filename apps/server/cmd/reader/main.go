@@ -15,7 +15,7 @@ import (
 
 var readerVersion = "dev"
 
-const usage = `reader：在终端里读取和导入 Reader 书库中的文档（需要 Reader 正在运行）。
+const usage = `reader：在终端里读取和导入 Interleaf 书库中的文档（需要 Interleaf 正在运行）。
 
 用法：
   reader <命令> [参数] [选项]

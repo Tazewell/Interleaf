@@ -82,7 +82,7 @@ module.exports = async function sign(options) {
   if (!p12) {
     if (process.env.RELEASE_TAG)
       throw new Error(
-        "Release builds must be signed with the fixed Reader certificate (READER_MAC_SIGN_P12).",
+        "Release builds must be signed with the fixed Interleaf certificate (READER_MAC_SIGN_P12).",
       );
     return signAsync(options);
   }

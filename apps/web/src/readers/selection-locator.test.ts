@@ -131,13 +131,13 @@ it("rejects empty selections and invalid saved selectors without throwing", () =
 });
 
 it("returns distinct exact search results for case differences and repeated text", () => {
-  const dom = new JSDOM("<body><p>Reader</p><p>reader</p><p>read.*</p></body>");
+  const dom = new JSDOM("<body><p>Interleaf</p><p>interleaf</p><p>read.*</p></body>");
   const doc = dom.window.document;
   const base = Locator.deserialize({
     href: "chapter.xhtml",
     type: "application/xhtml+xml",
   })!;
-  const results = searchEPUBLocators(doc, base, "READER");
+  const results = searchEPUBLocators(doc, base, "INTERLEAF");
   expect(results).toHaveLength(2);
   expect(
     results.map((locator) => resolveEPUBRange(doc, locator)?.startContainer),
@@ -146,6 +146,6 @@ it("returns distinct exact search results for case differences and repeated text
     doc.querySelectorAll("p")[1]!.firstChild,
   ]);
   expect(searchEPUBLocators(doc, base, "read.*")).toHaveLength(1);
-  expect(searchEPUBLocators(doc, base, "reader", 1)).toHaveLength(1);
+  expect(searchEPUBLocators(doc, base, "interleaf", 1)).toHaveLength(1);
   dom.window.close();
 });

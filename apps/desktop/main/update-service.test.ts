@@ -19,7 +19,7 @@ const mocks = vi.hoisted(() => ({
     isPackaged: true,
     getPath: (name: string) =>
       name === "exe"
-        ? "/Applications/Reader.app/Contents/MacOS/Reader"
+        ? "/Applications/Interleaf.app/Contents/MacOS/Interleaf"
         : "/test/user-data",
     getVersion: () => "0.1.0",
   },
@@ -72,7 +72,7 @@ beforeEach(() => {
   vi.useFakeTimers();
   vi.setSystemTime(day * 10);
   vi.clearAllMocks();
-  assets = ["Reader-0.2.0-mac-arm64.dmg", "Reader-0.2.0-win-x64.exe"];
+  assets = ["Interleaf-0.2.0-mac-arm64.dmg", "Interleaf-0.2.0-win-x64.exe"];
   mocks.inPlace.mockResolvedValue(true);
   mocks.stage.mockResolvedValue(undefined);
   mocks.app.isPackaged = true;
@@ -146,7 +146,7 @@ it("shows download progress in the taskbar and the app, then clears it", async (
   vi.stubGlobal("process", { ...process, platform: "win32", arch: "x64" });
   mocks.spawn.mockReturnValue({ on: vi.fn().mockReturnThis(), unref: vi.fn() });
   mocks.dialog.mockResolvedValue({ response: 0 });
-  downloadWithProgress("C:\\test\\Reader-0.2.0-win-x64.exe");
+  downloadWithProgress("C:\\test\\Interleaf-0.2.0-win-x64.exe");
   const service = await startUpdateService(window);
   stop = service.stop;
   await vi.advanceTimersByTimeAsync(15_000);
@@ -221,7 +221,7 @@ it("caps the taskbar progress when more bytes arrive than announced", async () =
       onProgress?: (received: number, total?: number) => void,
     ) => {
       onProgress?.(3 * 1024 * 1024, 2 * 1024 * 1024);
-      return "C:\\test\\Reader-0.2.0-win-x64.exe";
+      return "C:\\test\\Interleaf-0.2.0-win-x64.exe";
     },
   );
   const service = await startUpdateService(window);
@@ -230,18 +230,18 @@ it("caps the taskbar progress when more bytes arrive than announced", async () =
   expect(window.setProgressBar).toHaveBeenCalledWith(1);
   expect(window.setProgressBar).not.toHaveBeenCalledWith(1.5);
 });
-it("installs the verified Windows update silently after Reader quits", async () => {
+it("installs the verified Windows update silently after Interleaf quits", async () => {
   vi.stubGlobal("process", { ...process, platform: "win32", arch: "x64" });
   const child = { on: vi.fn(), unref: vi.fn() };
   child.on.mockReturnValue(child);
   mocks.spawn.mockReturnValue(child);
   mocks.dialog.mockResolvedValue({ response: 0 });
-  mocks.download.mockResolvedValue("C:\\test\\Reader-0.2.0-win-x64.exe");
+  mocks.download.mockResolvedValue("C:\\test\\Interleaf-0.2.0-win-x64.exe");
   const service = await startUpdateService(window);
   stop = service.stop;
   await service.check();
   expect(mocks.download).toHaveBeenCalledWith(
-    expect.objectContaining({ installer: "Reader-0.2.0-win-x64.exe" }),
+    expect.objectContaining({ installer: "Interleaf-0.2.0-win-x64.exe" }),
     expect.any(String),
     expect.any(Function),
     expect.any(Function),
@@ -256,25 +256,25 @@ it("installs the verified Windows update silently after Reader quits", async () 
   expect(mocks.app.once).toHaveBeenCalledTimes(1);
   mocks.app.once.mock.calls[0][1]();
   expect(mocks.spawn).toHaveBeenCalledWith(
-    "C:\\test\\Reader-0.2.0-win-x64.exe",
+    "C:\\test\\Interleaf-0.2.0-win-x64.exe",
     ["--updated", "/S", "--force-run"],
     { detached: true, stdio: "ignore" },
   );
   expect(child.unref).toHaveBeenCalled();
 });
 it("stages a signed Mac update silently and installs it on restart", async () => {
-  assets.push("Reader-0.2.0-mac-arm64.zip");
-  downloadWithProgress("/test/user-data/updates/x/Reader.zip");
+  assets.push("Interleaf-0.2.0-mac-arm64.zip");
+  downloadWithProgress("/test/user-data/updates/x/Interleaf.zip");
   mocks.dialog.mockResolvedValue({ response: 0 });
   const service = await startUpdateService(window);
   stop = service.stop;
   await vi.advanceTimersByTimeAsync(15_000);
-  expect(mocks.inPlace).toHaveBeenCalledWith("/Applications/Reader.app");
+  expect(mocks.inPlace).toHaveBeenCalledWith("/Applications/Interleaf.app");
   expect(mocks.download).toHaveBeenCalledWith(
     expect.objectContaining({
-      installer: "Reader-0.2.0-mac-arm64.zip",
+      installer: "Interleaf-0.2.0-mac-arm64.zip",
       downloadURL:
-        "https://github.com/cynicalight/reader/releases/download/v0.2.0/Reader-0.2.0-mac-arm64.zip",
+        "https://github.com/Tazewell/Interleaf/releases/download/v0.2.0/Interleaf-0.2.0-mac-arm64.zip",
     }),
     "/test/user-data/updates",
     expect.any(Function),
@@ -282,7 +282,7 @@ it("stages a signed Mac update silently and installs it on restart", async () =>
   );
   expect(mocks.stage).toHaveBeenCalledWith(
     expect.anything(),
-    "/test/user-data/updates/x/Reader.zip",
+    "/test/user-data/updates/x/Interleaf.zip",
   );
   expect(mocks.rm).toHaveBeenCalledWith("/test/user-data/updates/x", {
     recursive: true,
@@ -292,7 +292,7 @@ it("stages a signed Mac update silently and installs it on restart", async () =>
   expect(mocks.dialog).toHaveBeenCalledTimes(1);
   expect(mocks.dialog).toHaveBeenCalledWith(
     window,
-    expect.objectContaining({ message: "Reader 0.2.0 已准备就绪" }),
+    expect.objectContaining({ message: "Interleaf 0.2.0 已准备就绪" }),
   );
   expect(window.setProgressBar).not.toHaveBeenCalledWith(2);
   expect(send).not.toHaveBeenCalledWith(
@@ -307,7 +307,7 @@ it("stages a signed Mac update silently and installs it on restart", async () =>
   expect(mocks.dialog).toHaveBeenCalledTimes(2);
 });
 it("falls back to the DMG when the app cannot replace itself", async () => {
-  assets.push("Reader-0.2.0-mac-arm64.zip");
+  assets.push("Interleaf-0.2.0-mac-arm64.zip");
   mocks.inPlace.mockResolvedValue(false);
   const service = await startUpdateService(window);
   stop = service.stop;
@@ -318,7 +318,7 @@ it("falls back to the DMG when the app cannot replace itself", async () => {
     expect.objectContaining({ buttons: ["下载安装包", "稍后"] }),
   );
   mocks.inPlace.mockResolvedValue(true);
-  mocks.download.mockResolvedValue("/test/user-data/updates/x/Reader.zip");
+  mocks.download.mockResolvedValue("/test/user-data/updates/x/Interleaf.zip");
   mocks.stage.mockRejectedValue(
     new Error("Code signature did not pass validation"),
   );
@@ -367,7 +367,7 @@ it.each([0, 1])(
     );
     if (response === 0)
       expect(mocks.external).toHaveBeenCalledWith(
-        "https://github.com/cynicalight/reader/releases/latest",
+        "https://github.com/Tazewell/Interleaf/releases/latest",
       );
     else expect(mocks.external).not.toHaveBeenCalled();
     expect(mocks.download).not.toHaveBeenCalled();

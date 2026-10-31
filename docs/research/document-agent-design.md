@@ -4,10 +4,10 @@
 
 ## 1. 决策
 
-采用 **Reader 统一文档能力，CLI 复用原生 Agent 循环，普通 API 使用 Reader 有界工具循环**。先实现本地段落检索、目录导航和相邻原文读取，暂不引入向量数据库。工具由 Reader 实际执行；谁负责模型下一步决策，是另一个独立问题。
+采用 **Interleaf 统一文档能力，CLI 复用原生 Agent 循环，普通 API 使用 Interleaf 有界工具循环**。先实现本地段落检索、目录导航和相邻原文读取，暂不引入向量数据库。工具由 Interleaf 实际执行；谁负责模型下一步决策，是另一个独立问题。
 
-- Codex 继续用 Reader 启动的 `codex app-server` 子进程；Claude Code、Kimi 继续走各自原生协议。使用进程／会话范围的 Reader MCP 配置，不写用户全局配置。
-- 登录约束（2026-10-13 用户确认）：复用用户已有 CLI 登录，不为文档 Agent 新建需要单独登录的配置／认证环境。Codex 采用下文的配置探测、逐项禁用和重启复核流程；登录继续由 CLI 自身管理，Reader 不读取、复制或链接凭证。
+- Codex 继续用 Interleaf 启动的 `codex app-server` 子进程；Claude Code、Kimi 继续走各自原生协议。使用进程／会话范围的 Interleaf MCP 配置，不写用户全局配置。
+- 登录约束（2026-10-13 用户确认）：复用用户已有 CLI 登录，不为文档 Agent 新建需要单独登录的配置／认证环境。Codex 采用下文的配置探测、逐项禁用和重启复核流程；登录继续由 CLI 自身管理，Interleaf 不读取、复制或链接凭证。
 - API 首先扩展现有 Chat Completions；具备真实工具往返能力的连接进入 Agent 模式。Responses 是后续独立协议适配，不能把 `/chat/completions` 改个路径视为完成。
 - 所有路径共用 Go `DocumentTools`、语料版本、权限、预算和证据记录。MCP 只是 CLI 到这些能力的协议外壳，API 在 Go 内直接调用。
 - 保留原生 Agent 的检索决策能力，但不开放 shell、任意文件读取、联网、写批注或第三方工具。
@@ -31,26 +31,26 @@
 | [codex_chat.go](../../apps/server/internal/reader/codex_chat.go)                                                                 | SQLite 为已提交历史权威；失败／未保存 turn 丢弃缓存                                               | 保留此约束，新增语料版本、工具策略和证据恢复                                          |
 | [chat_stream.go](../../apps/server/internal/reader/chat_stream.go)、[流式约定](../agent-streaming-contract.md)                   | 增量正文、成功保存后单次 done、正文后不切备用                                                     | 工具步骤必须成为独立事件；中间模型请求完成不是一次用户问答完成                        |
 
-以上为静态源码核查。本轮未运行 Reader 产品或真实推理。CLI 文档、版本和启动参数核查见 [CLI 适配报告](./document-agent-cli-adapters.md)；检索与参考项目见 [检索研究](./document-agent-references.md)。
+以上为静态源码核查。本轮未运行 Interleaf 产品或真实推理。CLI 文档、版本和启动参数核查见 [CLI 适配报告](./document-agent-cli-adapters.md)；检索与参考项目见 [检索研究](./document-agent-references.md)。
 
 ## 3. 两种架构为什么选择第一种
 
-| 维度                   | 原生 CLI 循环＋Reader API 循环（采用）                               | 全部包装成普通模型，由 Reader 统一循环                                   |
+| 维度                   | 原生 CLI 循环＋Interleaf API 循环（采用）                               | 全部包装成普通模型，由 Interleaf 统一循环                                   |
 | ---------------------- | -------------------------------------------------------------------- | ------------------------------------------------------------------------ |
-| Codex／Claude 原生能力 | 保留会话、上下文管理、工具调度与取消机制                             | 需约束或绕开原生循环，再由 Reader 重做                                   |
+| Codex／Claude 原生能力 | 保留会话、上下文管理、工具调度与取消机制                             | 需约束或绕开原生循环，再由 Interleaf 重做                                   |
 | 工具实现一致性         | 一套 DocumentTools；MCP/API 两个薄适配                               | 同样可共用 DocumentTools，不是独有优点                                   |
-| 行为统一               | Reader 控制权限、证据、预算、完成语义；各 runtime 的决策轨迹允许不同 | 更容易统一轮次与消息格式，但需要更广的协议维护                           |
+| 行为统一               | Interleaf 控制权限、证据、预算、完成语义；各 runtime 的决策轨迹允许不同 | 更容易统一轮次与消息格式，但需要更广的协议维护                           |
 | 成本与延迟             | CLI 不额外套逐步 Planner；API 只做必要往返                           | 把 CLI 文本当下一步指令会增加串行往返、状态转换和失败点                  |
 | 登录与产品边界         | 使用现有 CLI 的正式进程接口及其登录机制                              | CLI 协议并不自动成为公共 Responses API；不能读取凭证或调用内部后端来模拟 |
-| 合适时机               | 当前 Reader 已有三种 CLI 和一个 API 接入                             | 未来若主要用户都使用直接模型 API、且确实需要完全一致的编排，再独立评估   |
+| 合适时机               | 当前 Interleaf 已有三种 CLI 和一个 API 接入                             | 未来若主要用户都使用直接模型 API、且确实需要完全一致的编排，再独立评估   |
 
-“模型循环在哪里”与“工具代码在哪里执行”不应捆绑：即使循环在 Codex，搜索也由 Reader Go 服务执行，Codex 只发工具请求并接收受限结果。OpenAI 官方也将应用持有业务数据／工具、app-server 持有 Agent 循环作为产品嵌入模式；这为架构选择提供依据，但不是 Reader 集成已经验证的证据。[Codex as a platform](https://developers.openai.com/blog/codex-as-a-platform)
+“模型循环在哪里”与“工具代码在哪里执行”不应捆绑：即使循环在 Codex，搜索也由 Interleaf Go 服务执行，Codex 只发工具请求并接收受限结果。OpenAI 官方也将应用持有业务数据／工具、app-server 持有 Agent 循环作为产品嵌入模式；这为架构选择提供依据，但不是 Interleaf 集成已经验证的证据。[Codex as a platform](https://developers.openai.com/blog/codex-as-a-platform)
 
 ```mermaid
 flowchart TD
-    UI[Reader 提问与引用导航] --> Run[一次问答的范围、预算和保存]
+    UI[Interleaf 提问与引用导航] --> Run[一次问答的范围、预算和保存]
     Run --> Native[Codex / Claude / Kimi 原生循环]
-    Run --> API[Reader API 工具循环]
+    Run --> API[Interleaf API 工具循环]
     Native --> MCP[仅本次会话可访问的 MCP]
     MCP --> Tools[Go DocumentTools]
     API --> Tools
@@ -155,19 +155,19 @@ type DocumentTools interface {
 
 ### 6.1 CLI：进程配置，应用执行
 
-Reader Go 服务提供经过认证、仅监听 loopback 的 MCP 端点，使用官方 Go MCP SDK 并锁定协议／SDK 版本；不手写完整 MCP 协议。首版选择 Streamable HTTP，避免再加一个持有 SQLite 的常驻进程；校验 Host 和 Origin，拒绝非允许来源，不能把 localhost 当作免认证依据。Kimi 所支持版本若只能使用 stdio，可增加仅转发的子命令，仍只调用同一个 Go 服务，不能再实现一套检索。[MCP transports](https://modelcontextprotocol.io/specification/2025-11-25/basic/transports)
+Interleaf Go 服务提供经过认证、仅监听 loopback 的 MCP 端点，使用官方 Go MCP SDK 并锁定协议／SDK 版本；不手写完整 MCP 协议。首版选择 Streamable HTTP，避免再加一个持有 SQLite 的常驻进程；校验 Host 和 Origin，拒绝非允许来源，不能把 localhost 当作免认证依据。Kimi 所支持版本若只能使用 stdio，可增加仅转发的子命令，仍只调用同一个 Go 服务，不能再实现一套检索。[MCP transports](https://modelcontextprotocol.io/specification/2025-11-25/basic/transports)
 
-认证使用独立随机能力令牌，绑定一个 document／runtime 会话及当前 active attempt。它不是 Reader 主 API token，不能用于其他路由。每次用户 turn 激活新的预算记录；不存在 active attempt 时拒绝读取。失败、取消、超时、删除或 runtime 销毁均撤销授权；跨 Provider 回退重新发令牌。令牌不进入工具参数、提示词、来源 URL 或日志，原生缓存按文档和策略隔离。
+认证使用独立随机能力令牌，绑定一个 document／runtime 会话及当前 active attempt。它不是 Interleaf 主 API token，不能用于其他路由。每次用户 turn 激活新的预算记录；不存在 active attempt 时拒绝读取。失败、取消、超时、删除或 runtime 销毁均撤销授权；跨 Provider 回退重新发令牌。令牌不进入工具参数、提示词、来源 URL 或日志，原生缓存按文档和策略隔离。
 
 Codex 通过 app-server 的进程覆盖或 thread 配置注入；Claude 通过 `--mcp-config`／`--strict-mcp-config` 注入。具体可用参数及冲突见 [CLI 报告](./document-agent-cli-adapters.md)。必须先在空临时工作目录做工具清单和权限探测，再允许 Agent 模式。不得执行 `codex mcp add`、`claude mcp add` 来修改用户配置；不得读取或复制其凭证。
 
-版本事实必须进入实施计划：本机 Codex 为 `0.162.0-alpha.17.2`、Claude 为 `2.1.191`；本机无 Kimi。Codex 上游配置合并对 table 递归叠加，空 `mcp_servers` 不清空继承项；Claude 的 safe-mode 禁用 MCP，直接去掉又会改变自定义内容隔离；所查 Kimi 上游 ACP 启动路径没有应用 Reader 传入的 agent profile。这些是具体协议／源码风险，不等于已经在用户运行环境复现越权。应优先验证 Codex＋一个 API，Claude／Kimi 按版本独立启用。
+版本事实必须进入实施计划：本机 Codex 为 `0.162.0-alpha.17.2`、Claude 为 `2.1.191`；本机无 Kimi。Codex 上游配置合并对 table 递归叠加，空 `mcp_servers` 不清空继承项；Claude 的 safe-mode 禁用 MCP，直接去掉又会改变自定义内容隔离；所查 Kimi 上游 ACP 启动路径没有应用 Interleaf 传入的 agent profile。这些是具体协议／源码风险，不等于已经在用户运行环境复现越权。应优先验证 Codex＋一个 API，Claude／Kimi 按版本独立启用。
 
-Codex 首个接入实验采用明确顺序：启动即关闭 plugins/hooks/apps 的探测进程 → initialize → 只读 `config/read`，不创建 thread、不调用 MCP 状态发现 → 只保留继承 MCP 的名字并退出 → 对每个名字显式设置 `enabled=false`，连同 Reader MCP 配置启动正式进程 → 再复核配置 → 创建 thread。所查源码支持探测读取配置不会自行连接 MCP，但这**尚未经过本机启动副作用验证**；`config/read` 会返回完整有效配置，Reader 必须丢弃不需要的字段、禁止记录或持久化秘密值。
+Codex 首个接入实验采用明确顺序：启动即关闭 plugins/hooks/apps 的探测进程 → initialize → 只读 `config/read`，不创建 thread、不调用 MCP 状态发现 → 只保留继承 MCP 的名字并退出 → 对每个名字显式设置 `enabled=false`，连同 Interleaf MCP 配置启动正式进程 → 再复核配置 → 创建 thread。所查源码支持探测读取配置不会自行连接 MCP，但这**尚未经过本机启动副作用验证**；`config/read` 会返回完整有效配置，Interleaf 必须丢弃不需要的字段、禁止记录或持久化秘密值。
 
 枚举方案还需解决复核后配置变化、thread 启动重新加载的竞态，不能宣称仅凭两次检查已获得严格隔离。实施须在复用既有登录的前提下验证这些边界；若某个版本／环境无法满足，暂不开放其原生文档 Agent，并说明具体不兼容原因。独立配置／认证环境及额外登录不作为备选，不通过复制或链接凭证绕过这一约束。
 
-验收工具限制不能只检查 Reader MCP 的 tools/list：还需确认 runtime 的内置工具、继承 MCP、插件、hooks、skills、子 Agent 与网络能力不扩大范围。`sandbox=read-only` 仅限制写入，不等于没有任意文件读取。无法证明这些边界的 runtime 版本保留现有受限聊天／预检索模式，显示能力限制，不静默开放权限。
+验收工具限制不能只检查 Interleaf MCP 的 tools/list：还需确认 runtime 的内置工具、继承 MCP、插件、hooks、skills、子 Agent 与网络能力不扩大范围。`sandbox=read-only` 仅限制写入，不等于没有任意文件读取。无法证明这些边界的 runtime 版本保留现有受限聊天／预检索模式，显示能力限制，不静默开放权限。
 
 ### 6.2 API：结构化、有界的循环
 
@@ -181,7 +181,7 @@ Codex 首个接入实验采用明确顺序：启动即关闭 plugins/hooks/apps 
 
 Chat Completions 需处理 `delta.tool_calls[index]`、`finish_reason=tool_calls`、`stop` 与 `[DONE]`；Responses 则是 output item、call_id、参数完成和 response 完成事件，并需要保留其要求的续接信息。这两类状态不能用一个“有字符串就是回答”的 decoder 混写。模型返回的 opaque continuation／reasoning items 按官方协议回传，不渲染或当作文档证据。[OpenAI function calling](https://developers.openai.com/api/docs/guides/function-calling)
 
-工具能力检测使用 Reader 自己的无敏感内容测试工具：模型产生合法调用 → 返回随机短 nonce → 模型根据结果完成回答，同时验证流式参数与 ID 匹配。检测键至少包含连接地址／协议、凭证指纹、模型、工具 schema 版本；不保存明文密钥。状态为 unknown/passed/unsupported/failed，网络暂时失败不等于不支持。设置中的现有“检查”流程可承担该探测，避免每条问题先加一次无关请求。
+工具能力检测使用 Interleaf 自己的无敏感内容测试工具：模型产生合法调用 → 返回随机短 nonce → 模型根据结果完成回答，同时验证流式参数与 ID 匹配。检测键至少包含连接地址／协议、凭证指纹、模型、工具 schema 版本；不保存明文密钥。状态为 unknown/passed/unsupported/failed，网络暂时失败不等于不支持。设置中的现有“检查”流程可承担该探测，避免每条问题先加一次无关请求。
 
 不支持工具的模型使用应用预检索＋补取邻段后生成，标为“检索辅助回答”。能力 unknown 不伪装成 Agent；切换模型／连接后重新检测。不因工具能力不足删除原有文字聊天能力。
 
@@ -191,17 +191,17 @@ Chat Completions 需处理 `delta.tool_calls[index]`、`finish_reason=tool_calls
 
 工具循环内，模型可能先说“我先检查方法章节”，再调用工具。不能把这些文字直接拼入最终回答，也不能把一次工具轮结束当 done。
 
-**采用兼容性优先的基线：阅读阶段与最终成文阶段分开。** 阅读阶段保留原生／API 自主循环，工具输出形成 Reader 证据账本；该阶段的模型文字不发送正文 delta。阅读完成后，以用户问题、已提交历史和有界原文证据发起一次禁用所有工具的成文请求，沿用现有增量输出路径。成文时不得新增未经读取的来源；空证据明确回答不足。
+**采用兼容性优先的基线：阅读阶段与最终成文阶段分开。** 阅读阶段保留原生／API 自主循环，工具输出形成 Interleaf 证据账本；该阶段的模型文字不发送正文 delta。阅读完成后，以用户问题、已提交历史和有界原文证据发起一次禁用所有工具的成文请求，沿用现有增量输出路径。成文时不得新增未经读取的来源；空证据明确回答不足。
 
-这会增加一次成文调用及相应延迟／用量，需在实测报告单独记录。它不引入第二个搜索 Planner，也不把 CLI 每次工具决策都外包给 Reader。它解决了 Chat Completions／Claude 等协议无法在首个文字片段到达时确定该消息是否随后发出工具调用的问题。
+这会增加一次成文调用及相应延迟／用量，需在实测报告单独记录。它不引入第二个搜索 Planner，也不把 CLI 每次工具决策都外包给 Interleaf。它解决了 Chat Completions／Claude 等协议无法在首个文字片段到达时确定该消息是否随后发出工具调用的问题。
 
-对不支持同线程可靠关闭工具的 runtime，成文使用隔离的无工具调用／会话，从 SQLite 已提交记录和 Reader 证据重建上下文，不依赖前一会话的隐藏状态。不要声称只改一下 thread 配置就一定生效。原生缓存需要分离阅读会话与最终问答缓存，或首版只复用已有无工具成文缓存；任何阶段失败都不得复用含未提交 turn 的会话。
+对不支持同线程可靠关闭工具的 runtime，成文使用隔离的无工具调用／会话，从 SQLite 已提交记录和 Interleaf 证据重建上下文，不依赖前一会话的隐藏状态。不要声称只改一下 thread 配置就一定生效。原生缓存需要分离阅读会话与最终问答缓存，或首版只复用已有无工具成文缓存；任何阶段失败都不得复用含未提交 turn 的会话。
 
 可选优化：仅在某个版本证明 final-answer phase 在首 delta 前可靠可用、且整个 turn 完成语义符合约定后，让该 adapter 直接流式输出最终消息，省去二次成文。不能仅凭 Codex 存在 `phase` 字段就默认成立；模型／runtime／协议均需验证。
 
 ### 7.2 SSE、证据与事务
 
-- 现有 `status/delta/fallback/error/done` 语义保持。建议增加独立 `activity {phase, tool?, step?, message}` 事件，phase 为 searching/reading/writing，内容由 Reader 生成，工具参数、原文结果、推理和日志不外泄到正文。
+- 现有 `status/delta/fallback/error/done` 语义保持。建议增加独立 `activity {phase, tool?, step?, message}` 事件，phase 为 searching/reading/writing，内容由 Interleaf 生成，工具参数、原文结果、推理和日志不外泄到正文。
 - 这是**待实施的协议变更提案**。同一提交更新流式约定、OpenAPI、生成类型、SDK decoder、前端消费与 fixtures；本文不修改冻结协议或宣称新字段已可用。
 - `read_passage` 生成本次 attempt 的 sourceId。模型使用如 `[S1]` 的标识；后端以实际读取证据解析引用，不接受模型自造的页码、URL 或 locator。来自用户选区的既有引用保留其不同来源类型。
 - 保存引用过的证据快照：原文、sourceId、原生位置、revision、contentHash、提取来源和精度；另存有限的工具执行记录。检索候选摘要本身不直接变成已核验的最终引用。
@@ -256,7 +256,7 @@ MCP 请求本身的 HTTP context 不代表用户聊天仍有效；工具执行�
 1. **检索／工具测试**：gold passage recall@k、必需的多处证据覆盖率、顺序读取可达性、跨文档拒绝、FTS 转义、预算、版本失效；去重不得误删不同位置的同文段。
 2. **协议与生命周期测试**：分片参数、多工具、重复／缺失调用 ID、未知工具、非法 JSON、缺少终态、错误后迟到事件、超时／取消、文档删除、保存失败、备用独立 attempt、断流后消息核对、逐次用量。
 3. **真实 CLI／API 验证**：记录精确 runtime 版本、模型 ID、协议、语料版本、问题、工具参数与返回原文、阅读与成文调用、完成／保存状态、延迟、用量和失败。至少实际观察“搜索→读取→补充搜索／读取→最终回答”；答案碰巧正确不算多步验证。
-4. **人工体验与质量**：提供可访问 Reader 开发预览，检查 PDF／EPUB 引用、取消、未准备原文、仅检索模式、首段提前到达、无重复正文、明暗主题。不用浏览器自动化验收视觉。
+4. **人工体验与质量**：提供可访问 Interleaf 开发预览，检查 PDF／EPUB 引用、取消、未准备原文、仅检索模式、首段提前到达、无重复正文、明暗主题。不用浏览器自动化验收视觉。
 
 实施后按仓库运行 `pnpm typecheck`、`pnpm test`、`pnpm build`。本轮只有研究文档，执行文档内容／链接和 diff 检查，不运行应用构建；不以历史测试结果为本功能背书。
 

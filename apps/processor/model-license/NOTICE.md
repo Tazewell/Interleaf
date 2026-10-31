@@ -1,6 +1,6 @@
 # PP-DocLayoutV3 FP16 ONNX weights
 
-Reader distributes the unmodified `PP-DocLayoutV3-fp16.onnx` weights under
+Interleaf distributes the unmodified `PP-DocLayoutV3-fp16.onnx` weights under
 Apache-2.0. The license text is included in `LICENSE` beside this notice.
 
 - Upstream weights: https://huggingface.co/PaddlePaddle/PP-DocLayoutV3_safetensors
@@ -13,5 +13,5 @@ Apache-2.0. The license text is included in `LICENSE` beside this notice.
 
 The export uses FP16 for the backbone, encoder and decoder, retains FP32 box
 decoding and reading-order postprocessing, and omits the mask/polygon head.
-Reader does not modify the exported weights and is not affiliated with or
+Interleaf does not modify the exported weights and is not affiliated with or
 endorsed by PaddlePaddle.

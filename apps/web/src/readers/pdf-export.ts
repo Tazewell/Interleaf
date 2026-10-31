@@ -150,7 +150,7 @@ function editorValue(
       q[4],
       q[5],
     ]),
-    user: "Reader",
+    user: "Interleaf",
     date: new Date(annotation.createdAt || Date.now()),
     popup: comment
       ? {

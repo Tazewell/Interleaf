@@ -50,9 +50,9 @@ func TestConnectorStatusReason(t *testing.T) {
 func bridgeRequest(s *Server, method, path, secret string, body *bytes.Buffer, contentType string) *httptest.ResponseRecorder {
 	var r *http.Request
 	if body == nil {
-		r = httptest.NewRequest(method, "http://127.0.0.1:17841"+path, nil)
+		r = httptest.NewRequest(method, "http://127.0.0.1:17842"+path, nil)
 	} else {
-		r = httptest.NewRequest(method, "http://127.0.0.1:17841"+path, body)
+		r = httptest.NewRequest(method, "http://127.0.0.1:17842"+path, body)
 	}
 	r.Header.Set("Origin", testExtensionOrigin)
 	if secret != "" {
@@ -183,7 +183,7 @@ func TestConnectorLabelsIncludeSavedEmptyCategoriesAndPaperTags(t *testing.T) {
 func TestConnectorOriginRestriction(t *testing.T) {
 	s := testServer(t)
 	s.SetConnectorAvailable(true)
-	r := httptest.NewRequest("GET", "http://127.0.0.1:17841/v1/status", nil)
+	r := httptest.NewRequest("GET", "http://127.0.0.1:17842/v1/status", nil)
 	r.Header.Set("Origin", "https://evil.example")
 	w := httptest.NewRecorder()
 	s.ConnectorHandler().ServeHTTP(w, r)
@@ -196,7 +196,7 @@ func TestConnectorOriginRestriction(t *testing.T) {
 	if w.Code != 403 {
 		t.Fatalf("other extension origin: %d", w.Code)
 	}
-	for _, origin := range []string{connectorExtensionOrigin, connectorStoreExtensionOrigin} {
+	for _, origin := range []string{connectorExtensionOrigin} {
 		r.Header.Set("Origin", origin)
 		w = httptest.NewRecorder()
 		s.ConnectorHandler().ServeHTTP(w, r)
@@ -210,7 +210,7 @@ func TestConnectorOriginlessBrowserRequestNeedsCredential(t *testing.T) {
 	s := testServer(t)
 	secret := sessionTestConnector(t, s)
 	requestWithoutOrigin := func(path, credential string) int {
-		r := httptest.NewRequest("GET", "http://127.0.0.1:17841"+path, nil)
+		r := httptest.NewRequest("GET", "http://127.0.0.1:17842"+path, nil)
 		if credential != "" {
 			r.Header.Set("Authorization", "Bearer "+credential)
 		}

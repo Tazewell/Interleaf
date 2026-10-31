@@ -88,7 +88,7 @@ it("shows the binary in development builds and errors in place", async () => {
 });
 
 it("tells Windows users to open a new terminal", async () => {
-  desktop(status({ location: "C:\\Reader\\resources\\bin" }), "win32");
+  desktop(status({ location: "C:\\Interleaf\\resources\\bin" }), "win32");
   await render();
   expect(host.textContent).toContain("将加入当前用户的 PATH");
   await act(async () => button().click());

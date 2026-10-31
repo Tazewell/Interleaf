@@ -40,4 +40,4 @@ const sha = execFileSync("git", ["rev-parse", "HEAD"], {
 }).trim();
 if (process.env.GITHUB_OUTPUT)
   await appendFile(process.env.GITHUB_OUTPUT, `sha=${sha}\n`);
-console.log(`Building Reader ${app.version} from ${sha}`);
+console.log(`Building Interleaf ${app.version} from ${sha}`);

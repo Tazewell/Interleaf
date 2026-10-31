@@ -63,7 +63,7 @@ try {
       body: JSON.stringify({
         provider: "codex",
         prompt: "Reply with exactly READER_OK. This is a connection test.",
-        context: "An original Reader sample document.",
+        context: "An original Interleaf sample document.",
       }),
       signal: AbortSignal.timeout(180000),
     });

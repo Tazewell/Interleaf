@@ -187,7 +187,7 @@ func (s *Server) exportDiagnostics(w http.ResponseWriter, r *http.Request) {
 	}
 	s.diagnosticEvent(slog.LevelInfo, "diagnostics.export", "requestId", requestID(r.Context()))
 	w.Header().Set("Content-Type", "application/zip")
-	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="Reader-diagnostics-%s.zip"`, time.Now().UTC().Format("20060102T150405Z")))
+	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="Interleaf-diagnostics-%s.zip"`, time.Now().UTC().Format("20060102T150405Z")))
 	w.Header().Set("Cache-Control", "no-store")
 	if err := s.Diagnostics.Export(w, s.Store.Root, nil, s.diagnosticSettings()); err != nil {
 		s.diagnosticEvent(slog.LevelError, "diagnostics.export_failed", "error", err.Error())

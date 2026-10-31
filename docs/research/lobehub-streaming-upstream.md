@@ -4,9 +4,9 @@
 
 ## 结论
 
-Reader 可以优先评估 **`@lobehub/streamdown`**，它就是目前 Lobe UI 的流式 Markdown 底层，MIT，只有 React/ReactDOM 19 的 peer 依赖。它与 Vercel 的 `streamdown` 是不同包。直接使用这个底层，可以保留 Reader 的 shadcn/Base UI、Go SSE 和现有视觉设计，不需要整套搬入 LobeHub。[包声明][sd-package] [Lobe UI 接线][ui-stream]
+Interleaf 可以优先评估 **`@lobehub/streamdown`**，它就是目前 Lobe UI 的流式 Markdown 底层，MIT，只有 React/ReactDOM 19 的 peer 依赖。它与 Vercel 的 `streamdown` 是不同包。直接使用这个底层，可以保留 Interleaf 的 shadcn/Base UI、Go SSE 和现有视觉设计，不需要整套搬入 LobeHub。[包声明][sd-package] [Lobe UI 接线][ui-stream]
 
-LobeHub 的体验由多层共同形成：传输缓冲、Markdown 展示节奏、未闭合语法修复、完成块复用、流式代码高亮、局部状态订阅、滚动意图管理。只换 Markdown 组件可以补齐格式与部分流畅度；不能改善服务端尚未发出内容时的首字等待。Reader 当前的实际链路与改造范围应以主报告的本地源码调查为准。
+LobeHub 的体验由多层共同形成：传输缓冲、Markdown 展示节奏、未闭合语法修复、完成块复用、流式代码高亮、局部状态订阅、滚动意图管理。只换 Markdown 组件可以补齐格式与部分流畅度；不能改善服务端尚未发出内容时的首字等待。Interleaf 当前的实际链路与改造范围应以主报告的本地源码调查为准。
 
 ## 版本边界
 
@@ -45,7 +45,7 @@ chatService.getChatCompletion
 
 `fetchSSE` 区分 text、reasoning、tool_calls、usage 等事件。`none` 下 text 立即回调；`smooth` 下进入字符队列并由 requestAnimationFrame 按积压调整速度；其他模式（含默认 fadeIn）使用 **300ms 文本缓冲**。结束时停动画、flush 缓冲与队列，再调 onFinish。默认 transitionMode 是 fadeIn；provider 配置、用户配置及请求配置按序合并。因而“它每个 token 都 setState”不符合这个客户端默认路径。[fetchSSE][app-fetch] [配置合并][app-service] [默认配置][app-settings]
 
-`StreamingHandler` 累积 output，再以完整 content 通知更新。transport 将其变成 updateMessage 操作；全局消息 store 应用 reducer、构造 display messages。UI 的 MessageContent 直接订阅指定 block 的 content/hasTools，并以 memo 包裹，避免长内容经过多层 props 传播。这个 app 状态架构较复杂，不宜为了一个 Reader 对话面板复制整套 agent store。[handler][app-handler] [transport][app-transport] [store][app-store] [message component][app-message]
+`StreamingHandler` 累积 output，再以完整 content 通知更新。transport 将其变成 updateMessage 操作；全局消息 store 应用 reducer、构造 display messages。UI 的 MessageContent 直接订阅指定 block 的 content/hasTools，并以 memo 包裹，避免长内容经过多层 props 传播。这个 app 状态架构较复杂，不宜为了一个 Interleaf 对话面板复制整套 agent store。[handler][app-handler] [transport][app-transport] [store][app-store] [message component][app-message]
 
 ## Markdown 和动画的核心
 
@@ -62,7 +62,7 @@ app 的 `useChatMarkdown` 仅在 enableStream、用户 fadeIn 配置、isGenerat
 
 ## 未完成语法、代码、公式
 
-remend 负责尾部不完整 Markdown 的补全处理，应用只应将修复结果用于显示，持久化与复制原文仍以收到的原始内容为准。代码 fence 尚未闭合时继续作为尾部处理。具体不完整表格、强调、链接边界仍应拿 Reader 常见输出做回放测试，不能把修复器描述成完整语法保证。[lexer][sd-lexer]
+remend 负责尾部不完整 Markdown 的补全处理，应用只应将修复结果用于显示，持久化与复制原文仍以收到的原始内容为准。代码 fence 尚未闭合时继续作为尾部处理。具体不完整表格、强调、链接边界仍应拿 Interleaf 常见输出做回放测试，不能把修复器描述成完整语法保证。[lexer][sd-lexer]
 
 LaTeX guard 在结尾公式无法渲染时保留上一次有效内容，降低原始公式或错误闪烁。它是呈现策略，不会提供模型输出的正确性保证；没有先前有效帧时仍返回当前内容。底层不默认添加 remark-math 与 KaTeX 渲染插件，调用方需要提供。UI 另有 KaTeX 0.18 适配实现，说明公式 HTML、字体与 CSS 版本也必须匹配。[guard][sd-main] [包使用方式][sd-readme] [UI KaTeX][ui-katex]
 
@@ -70,32 +70,32 @@ LaTeX guard 在结尾公式无法渲染时保留上一次有效内容，降低�
 
 ## 滚动策略
 
-LobeHub 使用 virtua VList，并有自动滚动开关、回到底部按钮、滚动位置恢复与用户输入意图追踪。AutoScroll 只在 atBottom && isGenerating && !isScrolling 时滚到底部，采用非 smooth 的更新，避免内容每次变化都打断用户阅读。当前 atBottom 阈值为 300px；这是此应用参数，Reader 狭窄侧栏不应直接照搬。[VirtualizedList][app-list] [AutoScroll][app-autoscroll] [阈值][app-scroll-const]
+LobeHub 使用 virtua VList，并有自动滚动开关、回到底部按钮、滚动位置恢复与用户输入意图追踪。AutoScroll 只在 atBottom && isGenerating && !isScrolling 时滚到底部，采用非 smooth 的更新，避免内容每次变化都打断用户阅读。当前 atBottom 阈值为 300px；这是此应用参数，Interleaf 狭窄侧栏不应直接照搬。[VirtualizedList][app-list] [AutoScroll][app-autoscroll] [阈值][app-scroll-const]
 
-发送新消息还涉及占位高度、将新一轮用户消息置顶、ResizeObserver 布局反馈，以及用户向上滚动时取消固定。Reader 初期可以借鉴“只有用户仍贴底才跟随”，无需一开始迁移虚拟化与全部会话置顶逻辑。[conversation scroll][app-scroll]
+发送新消息还涉及占位高度、将新一轮用户消息置顶、ResizeObserver 布局反馈，以及用户向上滚动时取消固定。Interleaf 初期可以借鉴“只有用户仍贴底才跟随”，无需一开始迁移虚拟化与全部会话置顶逻辑。[conversation scroll][app-scroll]
 
 ## 直接复用与限制
 
 | 对象 | 判断 | 原因 |
 | --- | --- | --- |
 | `@lobehub/streamdown@1.4.0` | 优先候选 | MIT、React19、ESM、无 AntD peer，可注入现有 components/plugins/CSS |
-| `@lobehub/ui` 整体 Markdown | 可验证但不宜默认引入 | MIT；peer 包含 AntD6、motion、Lobe icons/emoji，增加 Reader 外观/主题依赖；实际 tree shaking 与包体须构建测量 |
+| `@lobehub/ui` 整体 Markdown | 可验证但不宜默认引入 | MIT；peer 包含 AntD6、motion、Lobe icons/emoji，增加 Interleaf 外观/主题依赖；实际 tree shaking 与包体须构建测量 |
 | UI 高亮 hook/renderer | 后续选择性研究 | 也是 MIT，但依赖 Shiki、主题、styles、内部 helpers，不能只拷一个文件就工作 |
-| app `@lobechat/fetch-sse` | 不作为直接 npm 方案 | private workspace 包，依赖 app model-runtime/types/const；协议也与 Reader 不同 |
+| app `@lobechat/fetch-sse` | 不作为直接 npm 方案 | private workspace 包，依赖 app model-runtime/types/const；协议也与 Interleaf 不同 |
 | app Conversation/Zustand/scroll 文件 | 借鉴机制，不整套搬入 | 绑定 agent runtime/context/operation；app 许可证还有商业衍生分发条件 |
 
 许可证以各自 [app LICENSE][app-license]、[UI LICENSE][ui-license]、[streamdown LICENSE][sd-license] 为准。这里仅报告官方文本：app 使用 LobeHub Community License，基于 Apache 2.0 加条件；UI 与 streamdown 使用 MIT。不能把主 app 许可证套到独立 MIT 包，也不能把主 app 当作无附加条件 Apache 包直接复制。
 
 兼容与风险事项：
 
-- `@lobehub/streamdown` 要求 React/ReactDOM ^19、Node >=22；Vite 能消费 ESM，包没有 Next 专属运行时依赖。Reader 本地 Node/打包配置需要落地时检查，不能只看 React 版本。[package][sd-package]
-- 官方明确：顶层块独立解析，**跨块脚注、reference-style links/images 的定义不能自动互相解析**。Reader 读书问答若依赖引用，应定义自己的引用组件，或在完成后以统一插件整篇静态渲染，并测试切换位移。[官方限制][sd-readme]
-- 当前 CSS reduced-motion 规则仅处理 `.stream-block`，未覆盖 `.stream-char`；调度 hook 没有系统偏好分支。Reader 应在 adapter 根据 reduced motion 关闭平滑/动画或选择静态分支，不能声称直接引入即满足现有要求。[CSS][sd-styles] [调度][sd-smooth]
-- 流式修复、LaTeX guard 都不等于 HTML 清洗。底层默认 raw HTML 作为文本或 skipHtml 删除，默认 URL transform 沿用 react-markdown；若引入 rehypeRaw、自定义 component 或 HTML preview，需要单独维护安全边界。UI 的 allowHtml 分支明确用 rehypeRaw 后接 rehypeSanitize。Reader 初期应不启用 app 的 HTML artifact preview。[CachedMarkdown][sd-cache] [UI HTML 插件顺序][ui-rehype]
+- `@lobehub/streamdown` 要求 React/ReactDOM ^19、Node >=22；Vite 能消费 ESM，包没有 Next 专属运行时依赖。Interleaf 本地 Node/打包配置需要落地时检查，不能只看 React 版本。[package][sd-package]
+- 官方明确：顶层块独立解析，**跨块脚注、reference-style links/images 的定义不能自动互相解析**。Interleaf 读书问答若依赖引用，应定义自己的引用组件，或在完成后以统一插件整篇静态渲染，并测试切换位移。[官方限制][sd-readme]
+- 当前 CSS reduced-motion 规则仅处理 `.stream-block`，未覆盖 `.stream-char`；调度 hook 没有系统偏好分支。Interleaf 应在 adapter 根据 reduced motion 关闭平滑/动画或选择静态分支，不能声称直接引入即满足现有要求。[CSS][sd-styles] [调度][sd-smooth]
+- 流式修复、LaTeX guard 都不等于 HTML 清洗。底层默认 raw HTML 作为文本或 skipHtml 删除，默认 URL transform 沿用 react-markdown；若引入 rehypeRaw、自定义 component 或 HTML preview，需要单独维护安全边界。UI 的 allowHtml 分支明确用 rehypeRaw 后接 rehypeSanitize。Interleaf 初期应不启用 app 的 HTML artifact preview。[CachedMarkdown][sd-cache] [UI HTML 插件顺序][ui-rehype]
 - 不要同时复制 app 的300ms缓冲、旧smooth队列，又默认开启新引擎的延迟展示，而不测总延迟。调度层应有明确职责，传输只聚合必要状态提交，展示引擎处理视觉节奏。[传输][app-fetch] [展示][sd-smooth]
 - 停止、错误、fallback、切会话、卸载、后台标签节流、emoji组合字符、长代码、最终权威答案替换都需回放验证；本次未运行这些验收。
 
-建议最小试验：独立 `AssistantMarkdown` 适配层使用同款 `@lobehub/streamdown`；保留 Reader 的 Go SSE、现有控件与样式；先验证标题/列表/代码/表格/数学和停止/完成收尾；再测长文本提交耗时与贴底行为，按证据决定是否增加 Shiki 流式高亮。这个顺序能隔离渲染收益与服务端首字延迟。
+建议最小试验：独立 `AssistantMarkdown` 适配层使用同款 `@lobehub/streamdown`；保留 Interleaf 的 Go SSE、现有控件与样式；先验证标题/列表/代码/表格/数学和停止/完成收尾；再测长文本提交耗时与贴底行为，按证据决定是否增加 Shiki 流式高亮。这个顺序能隔离渲染收益与服务端首字延迟。
 
 [app-package]: https://github.com/lobehub/lobehub/blob/08232e8efa324659d67a216b5e51bca5963ae19b/package.json
 [app-lock]: https://github.com/lobehub/lobehub/blob/08232e8efa324659d67a216b5e51bca5963ae19b/apps/desktop/pnpm-lock.yaml#L10025-L10040

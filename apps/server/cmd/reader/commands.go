@@ -135,7 +135,7 @@ func runStatus(c *client, f *options, args []string, out io.Writer) error {
 	if f.json {
 		return writeJSON(out, map[string]any{"running": true, "url": c.base, "version": c.version, "library": c.library, "documents": len(docs)})
 	}
-	fmt.Fprintf(out, "Reader %s 正在运行（%s）\n书库：%s\n文档：%d 份\n", c.version, c.base, c.library, len(docs))
+	fmt.Fprintf(out, "Interleaf %s 正在运行（%s）\n书库：%s\n文档：%d 份\n", c.version, c.base, c.library, len(docs))
 	return nil
 }
 
@@ -403,7 +403,7 @@ func runRead(c *client, f *options, args []string, out io.Writer) error {
 		return writeJSON(out, text)
 	}
 	if !text.Parsed {
-		return exitError{1, "这份 PDF 还没有完成版面解析，暂时读不到正文。论文导入后会自动解析，请等待解析完成；解析失败时可在 Reader 中重试。"}
+		return exitError{1, "这份 PDF 还没有完成版面解析，暂时读不到正文。论文导入后会自动解析，请等待解析完成；解析失败时可在 Interleaf 中重试。"}
 	}
 	fmt.Fprintf(out, "# %s\n", d.Title)
 	unit, untranslated := 0, 0
@@ -439,7 +439,7 @@ func runRead(c *client, f *options, args []string, out io.Writer) error {
 		fmt.Fprintf(out, "\n（%d 段尚未翻译）\n", untranslated)
 	}
 	if len(text.ParsedPages) > 0 {
-		fmt.Fprintf(out, "\n（这本书只解析了 %d 页；在 Reader 中翻译对应章节后可读到更多）\n", len(text.ParsedPages))
+		fmt.Fprintf(out, "\n（这本书只解析了 %d 页；在 Interleaf 中翻译对应章节后可读到更多）\n", len(text.ParsedPages))
 	}
 	return nil
 }

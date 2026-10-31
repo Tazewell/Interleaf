@@ -18,7 +18,7 @@ const papers = {
 for (const [id, lines] of Object.entries(papers)) {
   const pdf = await PDFDocument.create();
   const font = await pdf.embedFont(StandardFonts.Helvetica);
-  pdf.setTitle(lines[0]); pdf.setAuthor('Reader deterministic acceptance fixture');
+  pdf.setTitle(lines[0]); pdf.setAuthor('Interleaf deterministic acceptance fixture');
   const page = pdf.addPage([612, 792]);
   lines.forEach((line, i) => page.drawText(line, { x: 50, y: 730 - i * 45, size: i ? 11 : 16, font }));
   page.drawRectangle({ x: 70, y: 350, width: 100, height: 120, color: rgb(.25, .45, .65) });

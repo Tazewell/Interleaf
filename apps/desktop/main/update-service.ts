@@ -58,12 +58,12 @@ export async function startUpdateService(window: BrowserWindow) {
         stdio: "ignore",
       })
         .on("error", (error) =>
-          console.warn("Reader installer:", error.message),
+          console.warn("Interleaf installer:", error.message),
         )
         .unref();
     } catch (error) {
       console.warn(
-        "Reader installer:",
+        "Interleaf installer:",
         error instanceof Error ? error.message : String(error),
       );
     }
@@ -99,9 +99,9 @@ export async function startUpdateService(window: BrowserWindow) {
   const offerRestart = async (version: string) => {
     const selected = await dialog.showMessageBox(window, {
       type: "info",
-      message: `Reader ${version} 已准备就绪`,
+      message: `Interleaf ${version} 已准备就绪`,
       detail:
-        "重启 Reader 即可完成更新。选择“稍后”时，会在退出 Reader 后自动安装。",
+        "重启 Interleaf 即可完成更新。选择“稍后”时，会在退出 Interleaf 后自动安装。",
       buttons: ["立即重启", "稍后"],
       defaultId: 0,
       cancelId: 1,
@@ -138,7 +138,7 @@ export async function startUpdateService(window: BrowserWindow) {
       }
     } catch (error) {
       console.warn(
-        "Reader in-place update:",
+        "Interleaf in-place update:",
         error instanceof Error ? error.message : String(error),
       );
       return false;
@@ -159,7 +159,7 @@ export async function startUpdateService(window: BrowserWindow) {
         ? dialog
             .showMessageBox(window, {
               message: "开发模式不检查更新",
-              detail: "请在安装后的 Reader 中检查更新。",
+              detail: "请在安装后的 Interleaf 中检查更新。",
             })
             .then(() => {})
         : Promise.resolve();
@@ -193,11 +193,11 @@ export async function startUpdateService(window: BrowserWindow) {
         const windows = process.platform === "win32";
         const selected = await dialog.showMessageBox(window, {
           type: "info",
-          message: `Reader ${result.update.version} 可用`,
+          message: `Interleaf ${result.update.version} 可用`,
           detail: `${
             windows
-              ? `当前版本：${app.getVersion()}。下载并校验后，Reader 会保存阅读数据并退出，自动安装后重新打开。`
-              : `当前版本：${app.getVersion()}。下载并校验后将打开 DMG，请将 Reader 拖入 Applications 完成更新。安装前请退出当前 Reader。`
+              ? `当前版本：${app.getVersion()}。下载并校验后，Interleaf 会保存阅读数据并退出，自动安装后重新打开。`
+              : `当前版本：${app.getVersion()}。下载并校验后将打开 DMG，请将 Interleaf 拖入 Applications 完成更新。安装前请退出当前 Interleaf。`
           }\n\n安装包从 GitHub 下载，速度较慢时可开启代理加速。`,
           buttons: [windows ? "下载并安装" : "下载安装包", "稍后"],
           defaultId: 0,
@@ -241,7 +241,7 @@ export async function startUpdateService(window: BrowserWindow) {
             if (!downloading && selected.response === 0 && alive()) {
               try {
                 await shell.openExternal(
-                  "https://github.com/cynicalight/reader/releases/latest",
+                  "https://github.com/Tazewell/Interleaf/releases/latest",
                 );
               } catch {
                 if (alive())
@@ -249,13 +249,13 @@ export async function startUpdateService(window: BrowserWindow) {
                     type: "error",
                     message: "无法打开发布页",
                     detail:
-                      "请在浏览器中访问 https://github.com/cynicalight/reader/releases/latest",
+                      "请在浏览器中访问 https://github.com/Tazewell/Interleaf/releases/latest",
                   });
               }
             }
           } else
             console.warn(
-              "Reader update:",
+              "Interleaf update:",
               error instanceof Error ? error.message : String(error),
             );
         }

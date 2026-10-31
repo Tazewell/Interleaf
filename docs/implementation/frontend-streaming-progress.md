@@ -1,6 +1,6 @@
 # 前端流式迁移交付记录
 
-工作树：`/Users/bu44er/Developer/Projects/Reader-streaming-frontend`。分支：`frontend/lobehub-streaming`。共同基线：`85f21938f13914c48131a455cb586d4e964b90c9`。前端实施仅修改自己拥有的文件；后端 Go、OpenAPI、生成类型和契约通过用户最新授权的任务分支合并引入。未复制主工作区未提交产品代码；不合入 main、不推送、不部署。
+工作树：`/Users/bu44er/Developer/Projects/Interleaf-streaming-frontend`。分支：`frontend/lobehub-streaming`。共同基线：`85f21938f13914c48131a455cb586d4e964b90c9`。前端实施仅修改自己拥有的文件；后端 Go、OpenAPI、生成类型和契约通过用户最新授权的任务分支合并引入。未复制主工作区未提交产品代码；不合入 main、不推送、不部署。
 
 **交付边界：F1–F4 代码已接入正式聊天，自动检查和 Codex/Kimi 真实 HTTP 文字/图片联调通过；人工视觉/滚动验收、Claude 登录后的真实验证及最终协调集成未完成。因此不宣称“迁移验收完成”。**
 

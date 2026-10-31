@@ -1,6 +1,6 @@
 {
   "openapi": "3.1.0",
-  "info": { "title": "Reader Local API", "version": "0.1.0" },
+  "info": { "title": "Interleaf Local API", "version": "0.1.0" },
   "security": [{ "session": [] }],
   "paths":
     {
@@ -2244,7 +2244,7 @@
         {
           "post":
             {
-              "description": "Copy one previewed PDF, convert supported embedded marks into Reader annotations and remove only those marks from the copy. Source files are unchanged.",
+              "description": "Copy one previewed PDF, convert supported embedded marks into Interleaf annotations and remove only those marks from the copy. Source files are unchanged.",
               "requestBody":
                 {
                   "required": true,
@@ -8287,7 +8287,7 @@
                   "efforts":
                     {
                       "type": "object",
-                      "description": "Reader effort by provider and model ID. Defaults to medium; adapted to SDK-native values on invocation.",
+                      "description": "Interleaf effort by provider and model ID. Defaults to medium; adapted to SDK-native values on invocation.",
                       "additionalProperties":
                         {
                           "type": "object",

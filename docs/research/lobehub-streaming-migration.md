@@ -1,14 +1,14 @@
-# LobeHub 流式渲染迁移到 Reader 的评估
+# LobeHub 流式渲染迁移到 Interleaf 的评估
 
-调研日期：2026-10-05。Reader 基线：`922f17b4be5c8b33eff52c8e9c00ab91466ea983` 加当前工作区。调研开始时 `App.tsx`、`Settings.tsx`、`style.css` 已有未提交修改；本次不修改产品代码。
+调研日期：2026-10-05。Interleaf 基线：`922f17b4be5c8b33eff52c8e9c00ab91466ea983` 加当前工作区。调研开始时 `App.tsx`、`Settings.tsx`、`style.css` 已有未提交修改；本次不修改产品代码。
 
 ## 结论与证据边界
 
-可以迁移流式 Markdown 的渲染能力。建议保留 Reader 的 Go 服务、POST SSE、Base UI 和文档引用模型，先用独立渲染包验证，再接入输出调度和滚动控制。直接复制 LobeHub 整个聊天模块会引入不必要的业务状态、组件体系和许可条件。
+可以迁移流式 Markdown 的渲染能力。建议保留 Interleaf 的 Go 服务、POST SSE、Base UI 和文档引用模型，先用独立渲染包验证，再接入输出调度和滚动控制。直接复制 LobeHub 整个聊天模块会引入不必要的业务状态、组件体系和许可条件。
 
 “业界最好”是体验判断。本次没有跨产品基准、真实浏览器性能采样或桌面视觉验收，不能据源码确认该排名。本文的“已确认”指源码与依赖声明；收益和工期均是待验证的工程判断。
 
-LobeHub 具体实现、固定版本源码链接与许可证证据见 [上游调查](./lobehub-streaming-upstream.md)。以下重点说明 Reader 的接入位置和迁移边界。
+LobeHub 具体实现、固定版本源码链接与许可证证据见 [上游调查](./lobehub-streaming-upstream.md)。以下重点说明 Interleaf 的接入位置和迁移边界。
 
 ## 应该迁移哪一层
 
@@ -16,20 +16,20 @@ LobeHub 当前代码把接收文本、平滑展示、Markdown 和滚动分层实
 
 | 方案 | 适配判断 | 本次建议 |
 | --- | --- | --- |
-| 直接用 `@lobehub/streamdown` | 同款底层；1.4.0 为 MIT、ESM，React/React DOM 19 peer，Node ≥22；不依赖 Ant Design。代码高亮、公式和交互控件需外部渲染器。 | 优先做小范围验证。保留 Reader 的 Base UI 和设计变量，在本地适配组件中封装。 |
+| 直接用 `@lobehub/streamdown` | 同款底层；1.4.0 为 MIT、ESM，React/React DOM 19 peer，Node ≥22；不依赖 Ant Design。代码高亮、公式和交互控件需外部渲染器。 | 优先做小范围验证。保留 Interleaf 的 Base UI 和设计变量，在本地适配组件中封装。 |
 | 用 `@lobehub/ui` Markdown | 更接近 LobeHub 的完整 Markdown 表现，已有高亮等集成；会引入其 UI、样式和相关依赖。 | 作为效果对照；实际体积、主题冲突和 primitive 适配通过构建后再决定，不能声称必然更重多少 KB。 |
-| 复制应用的聊天模块 | 包含平滑、状态和滚动实现，但与 LobeHub 业务耦合；应用根许可证有额外条件。 | 不建议整体复制。借鉴分层与状态转换，按 Reader 需求实现调度。 |
-| Vercel `streamdown` | 是另一个包，不是 LobeHub 底层。提供不完整 Markdown 处理、memo、可选公式/代码/CJK 插件；文档按 shadcn 设计变量集成。 | 若同款引擎的限制不适合 Reader，再进行对照验证；本次未做实测比较。 |
+| 复制应用的聊天模块 | 包含平滑、状态和滚动实现，但与 LobeHub 业务耦合；应用根许可证有额外条件。 | 不建议整体复制。借鉴分层与状态转换，按 Interleaf 需求实现调度。 |
+| Vercel `streamdown` | 是另一个包，不是 LobeHub 底层。提供不完整 Markdown 处理、memo、可选公式/代码/CJK 插件；文档按 shadcn 设计变量集成。 | 若同款引擎的限制不适合 Interleaf，再进行对照验证；本次未做实测比较。 |
 
 版本范围须区分：LobeHub 调研 commit 为 `08232e8efa324659d67a216b5e51bca5963ae19b`；根 package 声明范围不等于线上版本。受跟踪的桌面锁文件解析为 `@lobehub/ui@5.54.0` 与 `@lobehub/streamdown@1.4.0`。本次未确认线上网站实际部署版本。底层源码与 UI 版本证据见上游调查。
 
-Vercel 候选来源：[官方 README](https://github.com/vercel/streamdown/blob/1ddd8f4accd87dfc0e933f257c9d6ffe0fa85ccc/README.md)、[包声明](https://github.com/vercel/streamdown/blob/1ddd8f4accd87dfc0e933f257c9d6ffe0fa85ccc/packages/streamdown/package.json)、[Apache-2.0 许可](https://github.com/vercel/streamdown/blob/1ddd8f4accd87dfc0e933f257c9d6ffe0fa85ccc/LICENSE)。该快照包版本为 2.7.0；仅作为备选资料，不是 Reader 新增依赖。
+Vercel 候选来源：[官方 README](https://github.com/vercel/streamdown/blob/1ddd8f4accd87dfc0e933f257c9d6ffe0fa85ccc/README.md)、[包声明](https://github.com/vercel/streamdown/blob/1ddd8f4accd87dfc0e933f257c9d6ffe0fa85ccc/packages/streamdown/package.json)、[Apache-2.0 许可](https://github.com/vercel/streamdown/blob/1ddd8f4accd87dfc0e933f257c9d6ffe0fa85ccc/LICENSE)。该快照包版本为 2.7.0；仅作为备选资料，不是 Interleaf 新增依赖。
 
-同款引擎有两个特别影响 Reader 的限制：跨 Markdown 块的脚注/引用式链接需要额外处理；reduced motion 的现有样式未覆盖全部字符动画。第一阶段应验证自定义处理或完成后整文档静态渲染，并在 Reader 的适配层禁用相关动画。论文的真实 `SourceReferences` 继续独立保留。流式转静态时也要检查重排，不能假设两个解析路径最终 DOM 完全一致。
+同款引擎有两个特别影响 Interleaf 的限制：跨 Markdown 块的脚注/引用式链接需要额外处理；reduced motion 的现有样式未覆盖全部字符动画。第一阶段应验证自定义处理或完成后整文档静态渲染，并在 Interleaf 的适配层禁用相关动画。论文的真实 `SourceReferences` 继续独立保留。流式转静态时也要检查重排，不能假设两个解析路径最终 DOM 完全一致。
 
 许可证结论限定为源码文本：独立 UI 和流式包标记 MIT；应用使用 LobeHub Community License，包含商业衍生分发条件。正式采用时应保留所选包的版权和许可证，并核对新增依赖；不能把独立包的许可推及整个应用。
 
-## Reader 当前真实链路
+## Interleaf 当前真实链路
 
 ```text
 Claude/Codex CLI，或图片/Kimi/备用 API
@@ -57,13 +57,13 @@ Claude/Codex CLI，或图片/Kimi/备用 API
 这里的“首字延迟”指发送问题后到用户看到第一段答案的时间。前端平滑只能处理已经到达的文本。
 
 1. **纯文本 Claude**：[eventText](../../apps/server/internal/reader/ai.go#L74) 接受 `content_block_delta/text_delta`，可以逐段发送。
-2. **纯文本 Codex**：同一函数只接受 `item.completed` 的 `agent_message`。这是当前 Reader 适配的边界；没有证据说明所有 Codex 接口都只能整段输出。本次未调研替代 Codex 协议。
+2. **纯文本 Codex**：同一函数只接受 `item.completed` 的 `agent_message`。这是当前 Interleaf 适配的边界；没有证据说明所有 Codex 接口都只能整段输出。本次未调研替代 Codex 协议。
 3. **图片附件或 Kimi**：[路由](../../apps/server/internal/reader/ai.go#L131) 进入 imageChat；[generateWithConfig](../../apps/server/internal/reader/connections.go#L279) 调用主 provider 时传入 `nil` 增量回调，成功后一次 `delta(text)`。即使底层 CLI 能产生增量，这条主路径也会缓冲。
 4. **备用 HTTP API**：[invokeAPI](../../apps/server/internal/reader/connections.go#L322) 明确发送 `stream: false`，收到完整 JSON 后一次回调。
 
 目前缓冲主 provider 的行为能避免失败后将主 provider 的半截答案与备用答案拼接，这是从调用关系得到的推断。若要改成真实流，需要同时定义 fallback 的替换语义：已经显示的旧片段如何撤回、如何区分新 attempt，或者开始输出后是否还允许自动切换。不能只把 `nil` 改成 `delta`。
 
-## 建议的 Reader 模块边界
+## 建议的 Interleaf 模块边界
 
 以下是拟议结构，尚未创建这些产品文件。
 
@@ -79,7 +79,7 @@ Claude/Codex CLI，或图片/Kimi/备用 API
 
 调度先做按帧合并，避免把每个网络片段都变成独立的 React 更新。采用同款引擎时，优先由引擎内部承担平滑展示，本地 hook 负责接收、轻量合并与生命周期；不要同时叠加 app 的 300ms 缓冲、自写打字队列和引擎平滑。若要自定义节奏，先关闭或统一内置策略。只有大块到达确实造成跳变时，再调整有最大延迟的自适应补放；不要让用户已经收到的长答案继续等待数十秒。中文与 emoji 使用字素边界，不能按 UTF-16 单元任意切割。关闭页面、切换文档、取消时清理动画回调，并用 request/attempt 标识拒收旧回调。尊重 reduced motion。
 
-历史消息可以 memo；块级缓存由成熟 Markdown 引擎承担。不要自己用空行切分后把所有旧块永久冻结：表格头、列表延续和引用式链接都可能受后续输入影响。初期不需要为 Reader 引入复杂消息树或列表虚拟化；先测量较长会话。
+历史消息可以 memo；块级缓存由成熟 Markdown 引擎承担。不要自己用空行切分后把所有旧块永久冻结：表格头、列表延续和引用式链接都可能受后续输入影响。初期不需要为 Interleaf 引入复杂消息树或列表虚拟化；先测量较长会话。
 
 ## 接入时需要明确的行为
 
@@ -87,7 +87,7 @@ Claude/Codex CLI，或图片/Kimi/备用 API
 
 桌面目前 [拒绝新窗口和跨源导航](../../apps/desktop/main/index.ts#L206)。若希望点击外链，需实现受控的协议校验与系统浏览器打开流程；普通 `<a target="_blank">` 不能视为已完成桌面适配。Mermaid、HTML 预览、artifact 执行不属于第一阶段需求。
 
-Reader 的 SSE 分帧目前针对自己的 Go 输出：LF 分隔、单行 JSON。迁移渲染包不要求更换该协议。若后续接收外部 SSE，应增加 CRLF、多行 data、UTF-8 分片等覆盖，或采用专门解析器。保留缺失 done 时的错误，避免将异常断流当作保存成功。
+Interleaf 的 SSE 分帧目前针对自己的 Go 输出：LF 分隔、单行 JSON。迁移渲染包不要求更换该协议。若后续接收外部 SSE，应增加 CRLF、多行 data、UTF-8 分片等覆盖，或采用专门解析器。保留缺失 done 时的错误，避免将异常断流当作保存成功。
 
 ## 推荐实施顺序与验收
 

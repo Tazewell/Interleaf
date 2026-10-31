@@ -304,7 +304,7 @@ func (s *Server) Handler() http.Handler {
 		if strings.HasPrefix(r.URL.Path, "/api/") && r.URL.Path != "/api/health" {
 			provided := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
 			if subtle.ConstantTimeCompare([]byte(provided), []byte(s.Token)) != 1 {
-				fail(w, 401, "请使用启动时提供的 Reader 地址")
+				fail(w, 401, "请使用启动时提供的 Interleaf 地址")
 				return
 			}
 		}

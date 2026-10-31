@@ -596,7 +596,7 @@ export function Workspace({
     void go?.catch((e) => toast.error(e.message));
   };
   useEffect(() => {
-    // Follow a reader:// link once the reader and annotations are ready.
+    // Follow a interleaf:// link once the reader and annotations are ready.
     if (linkTarget?.id !== doc.id || !adapter || !annotationsLoaded) return;
     useReaderStore.getState().setLinkTarget(null);
     if (linkTarget.annotation) {

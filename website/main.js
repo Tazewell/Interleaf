@@ -47,7 +47,7 @@
   translatable.forEach((el) => (el.dataset.zh = el.innerHTML));
   const titles = {
     zh: document.title,
-    en: "Reader — A local-first EPUB / PDF reader",
+    en: "Interleaf — A local-first EPUB / PDF reader",
   };
   const setLang = (lang) => {
     root.lang = lang === "en" ? "en" : "zh-CN";

@@ -18,7 +18,7 @@ func LockLibrary(root string) (func(), error) {
 		return nil, err
 	}
 	if !ok {
-		return nil, fmt.Errorf("书库已在另一个 Reader 实例中打开，请先关闭该实例")
+		return nil, fmt.Errorf("书库已在另一个 Interleaf 实例中打开，请先关闭该实例")
 	}
 	return func() { _ = lock.Unlock() }, nil
 }

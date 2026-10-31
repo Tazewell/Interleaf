@@ -19,12 +19,12 @@ import type { CommandLineStatus } from "../../../packages/reader-core/src/comman
 const run = promisify(execFile);
 export const macLink = "/usr/local/bin/reader";
 
-export const readerBundleId = "io.github.cynicalight.reader";
+export const readerBundleId = "io.github.tazewell.interleaf";
 
 /**
- * Whether a link target is the command of some copy of Reader.app, so a new
- * install may replace it. An existing bundle must carry Reader's bundle ID; a
- * bundle since moved or deleted is recognised by its Reader.app name only.
+ * Whether a link target is the command of some copy of Interleaf.app, so a new
+ * install may replace it. An existing bundle must carry Interleaf's bundle ID; a
+ * bundle since moved or deleted is recognised by its Interleaf.app name only.
  */
 export async function isReaderLink(target: string) {
   const bundle = /^(.*\.app)\/Contents\/Resources\/bin\/reader$/.exec(
@@ -40,10 +40,10 @@ export async function isReaderLink(target: string) {
       await lstat(bundle);
       return false;
     } catch {
-      return /^Reader(?: \d+)?\.app$/.test(basename(bundle));
+      return /^Interleaf(?: \d+)?\.app$/.test(basename(bundle));
     }
   }
-  // electron-builder writes XML; anything else is not treated as Reader's.
+  // electron-builder writes XML; anything else is not treated as Interleaf's.
   const id = /<key>CFBundleIdentifier<\/key>\s*<string>([^<]*)<\/string>/.exec(
     plist,
   )?.[1];
@@ -70,7 +70,7 @@ export async function macStatus(
 }
 
 function conflictError(location: string) {
-  return new Error(`${location} 已被其他程序占用，Reader 没有改动它`);
+  return new Error(`${location} 已被其他程序占用，Interleaf 没有改动它`);
 }
 function permissionDenied(error: unknown) {
   const code = (error as NodeJS.ErrnoException).code;

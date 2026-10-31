@@ -100,7 +100,7 @@ func TestCopyLibraryRejectsQuestionMarkPathsBeforeCopying(t *testing.T) {
 		t.Skip("Windows does not allow question marks in directory names")
 	}
 	source := migrationSource(t)
-	for _, relative := range []string{"Reader?Library", filepath.Join("parent?question", "Reader Library")} {
+	for _, relative := range []string{"Interleaf?Library", filepath.Join("parent?question", "Interleaf Library")} {
 		t.Run(relative, func(t *testing.T) {
 			target := filepath.Join(t.TempDir(), relative)
 			if err := os.MkdirAll(filepath.Dir(target), 0700); err != nil {
@@ -225,8 +225,8 @@ func TestCopyLibraryRecoversCommittedWAL(t *testing.T) {
 
 func TestLibraryDatabaseURI(t *testing.T) {
 	for path, want := range map[string]string{
-		"C:/Reader Library/reader.sqlite":   "file:///C:/Reader%20Library/reader.sqlite?mode=rw",
-		"/tmp/Reader Library/reader.sqlite": "file:///tmp/Reader%20Library/reader.sqlite?mode=rw",
+		"C:/Interleaf Library/reader.sqlite":   "file:///C:/Interleaf%20Library/reader.sqlite?mode=rw",
+		"/tmp/Interleaf Library/reader.sqlite": "file:///tmp/Interleaf%20Library/reader.sqlite?mode=rw",
 	} {
 		if got := libraryDatabaseURI(path); got != want {
 			t.Fatalf("%s: got %s, want %s", path, got, want)

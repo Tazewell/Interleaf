@@ -1,8 +1,8 @@
+import identity from "./identity.json" with { type: "json" };
 import { build } from "esbuild";
 import { mkdir, copyFile, writeFile } from "node:fs/promises";
 const out = new URL("./dist/", import.meta.url);
-const developmentKey =
-  "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAwrWL9dQje+1GYqcoLTBtHlOL1iMHXibRVLZoH2gO9sLCGUfKVqTP/UXbJcWIf5PZN8C1N7VtXVKP7DwhdgKSjDkka6e47ClNy8I86eOvGSC+cLbVtbbk1jd2T4NWVzLACh4ghPMucXSBi0Qo4umoPy7lWkiYp1wCR9Ihdp3LtHjWR8ObGMRjCLZVMM2Otlkcqb0WHRsaUEfX/OayZbDawOmSi1MNns/aZOB83Qvqo+lJVYaFgfpLKzTNsf1MkXr14ELAZHJ/oXTuaET1W9Cb/ZN99oslGbhheUsIVZkRbKa9L7p9ziwy/BpzIaCFLzY/r6idu4Vhwtt42G0MOaaSAQIDAQAB";
+const developmentKey = identity.developmentKey;
 await mkdir(out, { recursive: true });
 await build({
   entryPoints: ["src/popup.tsx"],
@@ -43,9 +43,9 @@ await writeFile(
       ...(process.env.READER_CONNECTOR_DEV_KEY === "1"
         ? { key: developmentKey }
         : {}),
-      name: "Reader Connector",
+      name: "Interleaf Connector",
       version: "0.1.0",
-      description: "将网页中的 PDF 论文收录到本机 Reader",
+      description: "将网页中的 PDF 论文收录到本机 Interleaf",
       icons: { 128: "icon.png" },
       action: { default_popup: "popup.html", default_icon: "icon.png" },
       background: { service_worker: "worker.js" },

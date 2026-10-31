@@ -1,8 +1,9 @@
 /// <reference types="chrome" />
+import identity from "../identity.json";
 import { useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { detectPage, type Candidate, type Detection } from "./detect";
-const bridge = "http://127.0.0.1:17841";
+const bridge = `http://127.0.0.1:${identity.port}`;
 const outdatedReaderMessage = "请重启 pnpm desktop，更新本机分类和标签接口";
 const cleanDate = (value: unknown) => {
   const match = String(value || "").match(
@@ -45,7 +46,7 @@ function App() {
           const session = await fetch(bridge + "/v1/session", {
             method: "POST",
           });
-          if (!session.ok) throw Error("无法连接 Reader");
+          if (!session.ok) throw Error("无法连接 Interleaf");
           credential = (await session.json()).secret;
           await chrome.storage.local.set({ secret: credential });
           response = await fetch(bridge + "/v1/labels", {
@@ -53,7 +54,7 @@ function App() {
           });
         }
         if (response.status === 404) throw Error(outdatedReaderMessage);
-        if (!response.ok) throw Error("无法读取 Reader 论文库");
+        if (!response.ok) throw Error("无法读取 Interleaf 论文库");
         const labels = (await response.json()) as {
           folders: string[];
           tags: string[];
@@ -65,7 +66,7 @@ function App() {
         setMessage(
           error instanceof Error && error.message === outdatedReaderMessage
             ? error.message
-            : "请先打开 Reader 桌面应用",
+            : "请先打开 Interleaf 桌面应用",
         );
         setMessageTone("error");
       }
@@ -437,9 +438,9 @@ function App() {
   return (
     <>
       <main>
-        <h1>Reader Connector</h1>
+        <h1>Interleaf Connector</h1>
         {!secret ? (
-          <p>正在连接本机 Reader…</p>
+          <p>正在连接本机 Interleaf…</p>
         ) : (
           <>
             <p>
@@ -521,7 +522,7 @@ function App() {
             disabled={busy || !selected.length}
             onClick={() => void save()}
           >
-            {busy ? "正在处理…" : `收录 ${selected.length} 篇到 Reader`}
+            {busy ? "正在处理…" : `收录 ${selected.length} 篇到 Interleaf`}
           </button>
         </div>
       )}

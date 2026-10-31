@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** 在 Reader 桌面版用用户配置的 API 翻译并导出并排、交替双语 PDF，保留论文布局和公式，并完成实际文件与生命周期测试。
+**Goal:** 在 Interleaf 桌面版用用户配置的 API 翻译并导出并排、交替双语 PDF，保留论文布局和公式，并完成实际文件与生命周期测试。
 
 **Architecture:** Go 冻结原文、版面、译文和 API 配置并管理可取消任务。processor 用 PDF.js 获取物理几何和原始公式像素，独立实现 PDF2zh 的区域段落、公式占位和测宽回排方法，再用 PDF-LIB 和嵌入字体生成可搜索中文、组合原文矢量页面。Electron 只负责原生保存，React 沿用现有导出对话框。
 
@@ -12,7 +12,7 @@
 
 ## Global Constraints
 
-- 中文交互，原生 Reader 实现；不引入 Zotero/PDF2zh/PDF2zh_next/BabelDOC 运行时、CLI、服务或排版核心，不复制上游代码。
+- 中文交互，原生 Interleaf 实现；不引入 Zotero/PDF2zh/PDF2zh_next/BabelDOC 运行时、CLI、服务或排版核心，不复制上游代码。
 - 两种模式 `side-by-side`、`alternating`；前者 N→N、宽度 2W+12 pt，后者 N→2N；原文面板不缩小，单个译文页与原页物理尺寸相同。
 - 文字层横排 PDF；无文字页必须显式选“保留原文”或阻止继续；无 OCR。表格内部、图内文字、代码、算法、参考文献保留。
 - 正文至少 9 pt；测量、碰撞检测、公式复位；不能截断或把失败页静默换成英文。译文无隐藏英文文字对象。

@@ -303,7 +303,7 @@ func TestConnectionFailures(t *testing.T) {
 		t.Fatalf("stale token: %v", err)
 	}
 	if out, err := runCLI(t, "help"); err != nil || !strings.Contains(out, "reader <命令>") {
-		t.Fatal("help needs no running Reader")
+		t.Fatal("help needs no running Interleaf")
 	}
 	if _, err := runCLI(t, "launch"); exitCode(err) != 2 {
 		t.Fatal("unknown command accepted")

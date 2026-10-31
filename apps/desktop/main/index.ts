@@ -167,8 +167,8 @@ async function startServer() {
       if (window && !quitting) {
         void diagnostics!
           .failure(
-            "Reader 本地服务已停止",
-            "已保存的文档和笔记仍保留在本地。可先导出诊断包，再重新打开 Reader。",
+            "Interleaf 本地服务已停止",
+            "已保存的文档和笔记仍保留在本地。可先导出诊断包，再重新打开 Interleaf。",
           )
           .then(() => {
             flushed = true;
@@ -239,7 +239,7 @@ async function importPaths(
   window?.webContents.send("reader:library-changed");
   return large;
 }
-// reader:// links reach one window. The renderer claims queued links once its
+// interleaf:// links reach one window. The renderer claims queued links once its
 // listener exists; later links are sent directly.
 const primary = app.requestSingleInstanceLock();
 if (!primary) app.quit();
@@ -355,7 +355,7 @@ app
       height: 940,
       minWidth: 1000,
       minHeight: 660,
-      title: "Reader",
+      title: "Interleaf",
       ...(process.platform === "darwin"
         ? {
             titleBarStyle: "hidden" as const,
@@ -380,7 +380,7 @@ app
       });
       if (!quitting)
         void diagnostics!
-          .failure("Reader 界面已停止", "可先导出诊断包，再重新打开 Reader。")
+          .failure("Interleaf 界面已停止", "可先导出诊断包，再重新打开 Interleaf。")
           .then(() => {
             flushed = true;
             app.quit();
@@ -458,7 +458,7 @@ app
               type: "error",
               message: "书库迁移失败",
               detail: `${(error as Error).message}\n原书库已保留，将重新打开原来的位置。`,
-              buttons: ["重新打开 Reader"],
+              buttons: ["重新打开 Interleaf"],
             });
             move.resolve(false);
           }
@@ -556,13 +556,13 @@ app
       choosingLibrary = true;
       try {
         const selected = await dialog.showOpenDialog(window!, {
-          title: "选择书库保存位置（将在其中新建 Reader Library）",
+          title: "选择书库保存位置（将在其中新建 Interleaf Library）",
           properties: ["openDirectory", "createDirectory"],
         });
         if (selected.canceled || !selected.filePaths[0]) return false;
         const destination = join(
           await realpath(selected.filePaths[0]),
-          "Reader Library",
+          "Interleaf Library",
         );
         // The server's SQLite DSN treats ? as the start of query parameters.
         if (destination.includes("?"))
@@ -570,14 +570,14 @@ app
         try {
           await lstat(destination);
           throw new Error(
-            "所选位置已有 Reader Library 文件夹，请选择其他位置。",
+            "所选位置已有 Interleaf Library 文件夹，请选择其他位置。",
           );
         } catch (error) {
           if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
         }
         const confirmed = await dialog.showMessageBox(window!, {
           type: "question",
-          message: "迁移书库并重启 Reader？",
+          message: "迁移书库并重启 Interleaf？",
           detail: `新位置：${destination}\nPDF、笔记、批注和阅读记录将一起复制。原书库保留。`,
           buttons: ["迁移并重启", "取消"],
           defaultId: 0,
@@ -862,10 +862,10 @@ app
     diagnostics?.record("desktop.start_failed", error);
     if (diagnostics)
       await diagnostics.failure(
-        "无法打开 Reader",
+        "无法打开 Interleaf",
         "可导出启动日志供开发者排查，然后退出重试。",
       );
-    else dialog.showErrorBox("无法打开 Reader", String(error));
+    else dialog.showErrorBox("无法打开 Interleaf", String(error));
     flushed = true;
     app.quit();
   });
@@ -893,7 +893,7 @@ app.on("before-quit", (event) => {
         restartRequested = false;
         diagnostics?.record("desktop.stop_failed", error);
         dialog.showErrorBox(
-          "Reader 尚未退出",
+          "Interleaf 尚未退出",
           `本地服务未确认停止，未重新启动。\n${String(error)}`,
         );
         // Cleanup success and process closure are separate barriers. Keep the

@@ -232,11 +232,11 @@ func (s *Server) importZoteroEntryTo(ctx context.Context, e *zoteroEntry, librar
 	}
 	if !fresh {
 		if stat, err := os.Stat(s.Store.File(d)); err != nil || !stat.Mode().IsRegular() {
-			return result, errors.New("Reader 中已有记录的原文件缺失，请先检查该文档")
+			return result, errors.New("Interleaf 中已有记录的原文件缺失，请先检查该文档")
 		}
 	}
 	if !fresh && d.DeletedAt != "" {
-		return result, errors.New("相同文件已在 Reader 回收站中，请先恢复后再导入")
+		return result, errors.New("相同文件已在 Interleaf 回收站中，请先恢复后再导入")
 	}
 	sourceID := "zotero:" + e.ID
 	var exists int
@@ -257,7 +257,7 @@ func (s *Server) importZoteroEntryTo(ctx context.Context, e *zoteroEntry, librar
 		result.Status = "imported"
 	} else {
 		result.Status = "merged"
-		result.Warnings = append(result.Warnings, "复用 Reader 中的相同文件；现有标题、信息、笔记和批注优先保留")
+		result.Warnings = append(result.Warnings, "复用 Interleaf 中的相同文件；现有标题、信息、笔记和批注优先保留")
 		if d.Library != "papers" {
 			result.Warnings = append(result.Warnings, "相同文件在图书库中，保留原库位置")
 		}
@@ -377,7 +377,7 @@ func (s *Server) importZoteroEntryTo(ctx context.Context, e *zoteroEntry, librar
 	}()
 	if fresh {
 		if _, err = os.Stat(dest); err == nil {
-			return result, errors.New("Reader 中存在未登记的同名文件，请先检查数据目录")
+			return result, errors.New("Interleaf 中存在未登记的同名文件，请先检查数据目录")
 		}
 		if !errors.Is(err, os.ErrNotExist) {
 			return result, err

@@ -44,7 +44,7 @@ it("exports chosen parts in reading order with answers", () => {
     doc,
     data,
     ["info", "paperNote", "highlights", "questions", "bookmarks"],
-    (a) => `reader://open?id=p&annotation=${a.id}`,
+    (a) => `interleaf://open?id=p&annotation=${a.id}`,
   );
   expect(md).toBe(
     [
@@ -53,10 +53,10 @@ it("exports chosen parts in reading order with answers", () => {
       "## 论文笔记",
       "Main idea",
       "## 批注",
-      "### 第 1 页 · 划线 [↗](reader://open?id=p&annotation=h)\n\n> key claim",
-      "### 第 2 页 · 问题 [↗](reader://open?id=p&annotation=q)\n\n> line two\n> line three\n\n**问：** Why?\n\n**AI 答：**\n\nBecause **softmax**.",
+      "### 第 1 页 · 划线 [↗](interleaf://open?id=p&annotation=h)\n\n> key claim",
+      "### 第 2 页 · 问题 [↗](interleaf://open?id=p&annotation=q)\n\n> line two\n> line three\n\n**问：** Why?\n\n**AI 答：**\n\nBecause **softmax**.",
       "## 书签",
-      "- [第 3 页](reader://open?id=p&annotation=b)",
+      "- [第 3 页](interleaf://open?id=p&annotation=b)",
     ].join("\n\n") + "\n",
   );
 });
@@ -88,7 +88,7 @@ it("omits the duplicate document heading when combining notes with translation",
 });
 
 it("quotes annotations into the paper note once, in reading order", () => {
-  const link = (a: Annotation) => `reader://open?id=p&annotation=${a.id}`;
+  const link = (a: Annotation) => `interleaf://open?id=p&annotation=${a.id}`;
   const marks = [
     mark({
       id: "q",
@@ -111,10 +111,10 @@ it("quotes annotations into the paper note once, in reading order", () => {
   expect(digest).toBe(
     [
       "### 批注摘录 · 2026/10/8",
-      "- [第 2 页](reader://open?id=p&annotation=h)：“multi head”",
+      "- [第 2 页](interleaf://open?id=p&annotation=h)：“multi head”",
       "  key idea",
       "  second line",
-      "- [第 4 页](reader://open?id=p&annotation=q) 问题：Why scale?（关于“dk”）",
+      "- [第 4 页](interleaf://open?id=p&annotation=q) 问题：Why scale?（关于“dk”）",
     ].join("\n"),
   );
   expect(annotationDigest(marks, digest, link, date)).toBe("");

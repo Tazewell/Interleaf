@@ -6,7 +6,7 @@ import { expect, it } from "vitest";
 import { downloadUpdate } from "./update-download";
 const update = {
   version: "0.2.0",
-  installer: "Reader-0.2.0-mac-arm64.dmg",
+  installer: "Interleaf-0.2.0-mac-arm64.dmg",
   downloadURL: "https://github.com/installer",
   checksumURL: "https://github.com/checksum",
 };

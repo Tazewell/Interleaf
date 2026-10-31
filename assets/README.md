@@ -1,6 +1,6 @@
 # 品牌素材
 
-Reader 的 logo 与应用图标。所有文件由 `scripts/build-brand-assets.mjs` 生成，图形只在该脚本中定义；修改后在 macOS 上运行 `node scripts/build-brand-assets.mjs`（需要 Homebrew 的 `librsvg` 与 `imagemagick`），不要手工编辑生成结果。
+Interleaf 的 logo 与应用图标。所有文件由 `scripts/build-brand-assets.mjs` 生成，图形只在该脚本中定义；修改后在 macOS 上运行 `node scripts/build-brand-assets.mjs`（需要 Homebrew 的 `librsvg` 与 `imagemagick`），不要手工编辑生成结果。
 
 | 路径 | 用途 |
 | --- | --- |
