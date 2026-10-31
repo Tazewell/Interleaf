@@ -207,8 +207,8 @@ export const guideTopics: GuideTopic[] = [
     steps: [
       {
         id: "cli",
-        title: "安装 reader 命令",
-        body: "在「设置 → Agent → 命令行工具」中安装 reader 命令后，可以在终端检索、阅读和导入书库中的文档，也可以让 Claude Code、Codex 等 Agent 直接调用。使用时需要保持纸间打开。",
+        title: "安装 interleaf 命令",
+        body: "在「设置 → Agent → 命令行工具」中安装 interleaf 命令后，可以在终端检索、阅读和导入书库中的文档，也可以让 Claude Code、Codex 等 Agent 直接调用。使用时需要保持纸间打开。",
         scene: "cli",
       },
     ],

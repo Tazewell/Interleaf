@@ -1,8 +1,8 @@
 import { Component, type ReactNode, type ErrorInfo } from "react";
-import { diagnosticError } from "../../../packages/reader-core/src/diagnostics";
+import { diagnosticError } from "../../../packages/interleaf-core/src/diagnostics";
 import { reportDiagnostic } from "./diagnostics";
 import { DiagnosticExport } from "./DiagnosticExport";
-import { Button } from "@reader/ui/components/button";
+import { Button } from "@interleaf/ui/components/button";
 
 type Props = { fallback: ReactNode; resetKey?: unknown; children?: ReactNode };
 type State = { failed: boolean; resetKey: unknown };

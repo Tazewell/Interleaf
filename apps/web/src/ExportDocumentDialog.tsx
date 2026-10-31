@@ -5,17 +5,17 @@ import {
   FileArrowDown as FileDown,
   CircleNotch as LoaderCircle,
 } from "@phosphor-icons/react";
-import type { Annotation, Document, Message } from "@reader/core";
-import { api } from "@reader/api";
-import { Button } from "@reader/ui/components/button";
-import { Checkbox } from "@reader/ui/components/checkbox";
+import type { Annotation, Document, Message } from "@interleaf/core";
+import { api } from "@interleaf/api";
+import { Button } from "@interleaf/ui/components/button";
+import { Checkbox } from "@interleaf/ui/components/checkbox";
 import {
   Dialog,
   DialogContent,
   DialogDescription,
   DialogHeader,
   DialogTitle,
-} from "@reader/ui/components/dialog";
+} from "@interleaf/ui/components/dialog";
 import { copyText } from "./chat/clipboard";
 import {
   defaultExportParts,
@@ -30,7 +30,7 @@ import { BilingualPDFExport } from "./BilingualPDFExport";
 
 type DocumentExportPart = "translation" | ExportPart;
 const labels = { translation: "译文", ...exportParts };
-const storageKey = "reader.notes-export";
+const storageKey = "interleaf.notes-export";
 function savedParts(): DocumentExportPart[] {
   try {
     const value: unknown = JSON.parse(localStorage.getItem(storageKey) || "");

@@ -1,8 +1,8 @@
 import { expect, it, vi } from "vitest";
-import type { DocumentLocation } from "@reader/core";
+import type { DocumentLocation } from "@interleaf/core";
 import { referenceCards, contextReferences } from "./references";
 import { ReferenceNavigation } from "./reference-navigation";
-import { pdfQuotePoint } from "./readers/pdf-reference-location";
+import { pdfQuotePoint } from "./engines/pdf-reference-location";
 
 it("uses exact saved locations for selected passages and bounds long previews", () => {
   const location: DocumentLocation = {

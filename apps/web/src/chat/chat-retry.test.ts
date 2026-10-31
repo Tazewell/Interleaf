@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import type { Message } from "@reader/core";
-import type { ChatStreamEvent } from "@reader/api";
+import type { Message } from "@interleaf/core";
+import type { ChatStreamEvent } from "@interleaf/api";
 import {
   ChatSession,
   chatRetryAction,

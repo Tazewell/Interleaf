@@ -1,7 +1,7 @@
 import type {
   NativePDFBounds,
   NativePDFFormula,
-} from "../../../../packages/reader-core/src/bilingual-pdf";
+} from "../../../../packages/interleaf-core/src/bilingual-pdf";
 
 export interface SourceSpan {
   text: string;

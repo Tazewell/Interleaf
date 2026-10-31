@@ -1,9 +1,9 @@
 import { useEffect, useState } from "react";
-import { researchAPI } from "@reader/api";
-import type { ResearchTopic } from "@reader/core";
-import { Button } from "@reader/ui/components/button";
-import { Input } from "@reader/ui/components/input";
-import { Checkbox } from "@reader/ui/components/checkbox";
+import { researchAPI } from "@interleaf/api";
+import type { ResearchTopic } from "@interleaf/core";
+import { Button } from "@interleaf/ui/components/button";
+import { Input } from "@interleaf/ui/components/input";
+import { Checkbox } from "@interleaf/ui/components/checkbox";
 import { researchSignal } from "./research-session";
 export function ResearchScope({
   topic,

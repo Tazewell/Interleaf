@@ -32,7 +32,7 @@ KEY = 'owned-deterministic-test-key'
 MODELS = {role: 'acceptance-' + role for role in ['chat', 'translation', 'vision', 'research']}
 STATE = {'modelCalls': 0, 'searchCalls': {'arxiv': 0, 'crossref': 0}, 'requests': [], 'errors': [], 'mode': 'full', 'block': False, 'cardSources': []}
 ENTERED, RELEASE = threading.Event(), threading.Event()
-RESULT = {'implementationCommit': os.environ.get('READER_IMPLEMENTATION_COMMIT', ''), 'checks': {}, 'scope': {}, 'artifacts': {}, 'warnings': [], 'scientificQuality': 'unverified: deterministic model, no user model key supplied'}
+RESULT = {'implementationCommit': os.environ.get('INTERLEAF_IMPLEMENTATION_COMMIT', ''), 'checks': {}, 'scope': {}, 'artifacts': {}, 'warnings': [], 'scientificQuality': 'unverified: deterministic model, no user model key supplied'}
 SERVER = None
 
 
@@ -130,12 +130,12 @@ def model_answer(text):
         return {'query': 'variance weighted graph propagation'}
     if 'RESEARCH_NETWORK_CANDIDATES_JSON\n' in text:
         return {'candidateIds': [x['id'] for x in data('RESEARCH_NETWORK_CANDIDATES_JSON') if x.get('doi') in ['10.1000/b2', '10.1000/abstract-b2']][:1]}
-    if 'READER_TOOL_PROBE' in text or '工具' in text and 'probe' in text:
+    if 'INTERLEAF_TOOL_PROBE' in text or '工具' in text and 'probe' in text:
         return 'Tool unavailable in deterministic fixture'
     if '输入资料：\n' in text and '只输出 JSONL' in text:
         data = json.loads(text.rsplit('输入资料：\n', 1)[1])
         return '\n'.join(json.dumps({'blockId': p['blockId'], 'sourceHash': p['sourceHash'], 'sentences': [{'source': p['source'], 'target': '确定性测试译文：图传播校准结果。'}]}, ensure_ascii=False) for p in data['batch']['paragraphs']) + '\n'
-    if 'READER_OK' in text: return 'READER_OK'
+    if 'INTERLEAF_OK' in text: return 'INTERLEAF_OK'
     return 'ok'
 
 
@@ -162,9 +162,9 @@ class Model(http.server.BaseHTTPRequestHandler):
             tool_messages = [m for m in req['messages'] if m.get('role') == 'tool']
             names = [t['function']['name'] for t in req.get('tools', [])]
             call = None
-            if 'Call reader_probe once' in text:
+            if 'Call interleaf_probe once' in text:
                 if tool_messages: answer = tool_messages[-1]['content']
-                else: call = ('reader_probe', {})
+                else: call = ('interleaf_probe', {})
             elif 'one horizontal row of 8 colored squares' in text:
                 answer = vision_probe_answer(req['messages'])
             elif req['model'] == MODELS['chat'] and 'read_passage' in names:
@@ -250,7 +250,7 @@ def api(method, path, body=None, expected=200, content_type='application/json'):
 
 def start():
     global SERVER, DISC
-    SERVER = subprocess.Popen([str(ROOT / 'apps/desktop/bin/reader-server'), '--data', str(LIB), '--port', '0', '--connector=false', '--web', str(ROOT / 'apps/web/dist'), '--shutdown-on-stdin'], cwd=OUT, env=ENV, stdin=subprocess.PIPE, stdout=open(OUT / 'server-private.log', 'ab'), stderr=subprocess.STDOUT)
+    SERVER = subprocess.Popen([str(ROOT / 'apps/desktop/bin/interleaf-server'), '--data', str(LIB), '--port', '0', '--connector=false', '--web', str(ROOT / 'apps/web/dist'), '--shutdown-on-stdin'], cwd=OUT, env=ENV, stdin=subprocess.PIPE, stdout=open(OUT / 'server-private.log', 'ab'), stderr=subprocess.STDOUT)
     def discover():
         assert SERVER.poll() is None, 'server exited; inspect owned server-private.log'
         p = LIB / 'server.json'
@@ -325,22 +325,22 @@ def terminal(run, status='completed'):
 
 
 def snapshot(run):
-    with sqlite3.connect(LIB / 'reader.sqlite') as db:
+    with sqlite3.connect(LIB / 'interleaf.sqlite') as db:
         return json.loads(db.execute('SELECT body FROM research_snapshots WHERE id=?', (run['snapshotId'],)).fetchone()[0])
 
 
 def preservation(doc):
-    with sqlite3.connect(LIB / 'reader.sqlite') as db:
+    with sqlite3.connect(LIB / 'interleaf.sqlite') as db:
         rows = {t: db.execute(f'SELECT * FROM {t} WHERE document_id=? ORDER BY rowid', (doc['id'],)).fetchall() for t in ['messages', 'annotations', 'document_notes', 'translations', 'translation_previous', 'document_conversations']}
         key = db.execute('SELECT citation_key FROM paper_items WHERE id=?', (doc['paperId'],)).fetchone()[0]
     return {'rows': rows, 'citationKey': key, 'originalSHA256': sha(LIB / 'papers' / (doc['id'] + '.pdf'))}
 
 
 assert ROOT not in OUT.parents and ROOT != OUT
-assert re.fullmatch('[a-f0-9]{40}', RESULT['implementationCommit']), 'set READER_IMPLEMENTATION_COMMIT to actual source HEAD'
+assert re.fullmatch('[a-f0-9]{40}', RESULT['implementationCommit']), 'set INTERLEAF_IMPLEMENTATION_COMMIT to actual source HEAD'
 RESULT['implementationState'] = 'Product HEAD; acceptance harness bytes recorded independently (may be uncommitted at execution)'
 RESULT['acceptanceSourceHashes'] = {str(p.relative_to(ROOT)): sha(p) for p in (ROOT / 'scripts/native-ai-research-acceptance').iterdir() if p.is_file()}
-RESULT['builtServerSHA256'] = sha(ROOT / 'apps/desktop/bin/reader-server')
+RESULT['builtServerSHA256'] = sha(ROOT / 'apps/desktop/bin/interleaf-server')
 assert not LIB.exists(), 'use a new output directory; never overwrite an existing acceptance library'
 LIB.mkdir()
 legacy = {'version': 1, 'config': {'primary': 'codex', 'models': {'codex': 'legacy'}, 'translationPrompt': 'Keep my translation prompt'}}
@@ -358,8 +358,8 @@ for server in [model, proxy]:
 trap = OUT / 'trap'; trap.mkdir()
 for name in ['codex', 'claude', 'kimi', 'pi']:
     p = trap / name; p.write_text('#!/bin/sh\nprintf "%s\\n" "$0" >> "' + str(OUT / 'external-agent-calls.log') + '"\nexit 97\n'); p.chmod(0o700)
-ENV = {k: v for k, v in os.environ.items() if not k.startswith('READER_') and k.lower() not in ['http_proxy', 'https_proxy', 'all_proxy', 'no_proxy']}
-ENV.update(PATH=str(trap) + ':' + os.environ['PATH'], READER_NODE=shutil.which('node'), READER_PROCESSOR=str(ROOT / 'apps/processor/dist/main.mjs'), SSL_CERT_FILE=str(tlsdir / 'cert.pem'), HTTP_PROXY=f'http://127.0.0.1:{proxy.server_port}', HTTPS_PROXY=f'http://127.0.0.1:{proxy.server_port}', NO_PROXY='127.0.0.1,localhost')
+ENV = {k: v for k, v in os.environ.items() if not k.startswith('INTERLEAF_') and k.lower() not in ['http_proxy', 'https_proxy', 'all_proxy', 'no_proxy']}
+ENV.update(PATH=str(trap) + ':' + os.environ['PATH'], INTERLEAF_NODE=shutil.which('node'), INTERLEAF_PROCESSOR=str(ROOT / 'apps/processor/dist/main.mjs'), SSL_CERT_FILE=str(tlsdir / 'cert.pem'), HTTP_PROXY=f'http://127.0.0.1:{proxy.server_port}', HTTPS_PROXY=f'http://127.0.0.1:{proxy.server_port}', NO_PROXY='127.0.0.1,localhost')
 save()
 try:
     start()
@@ -385,7 +385,7 @@ try:
     trash = paper('Recycled paper', 'Graph'); api('POST', '/api/papers/' + trash['id'] + '/trash', {}, 200)
     paper('Outside scope', 'Other')
     doc = docs['A']; stamp = '2026-10-22T00:00:00Z'
-    with sqlite3.connect(LIB / 'reader.sqlite') as db:
+    with sqlite3.connect(LIB / 'interleaf.sqlite') as db:
         message = {'id': uid(), 'documentId': doc['id'], 'role': 'assistant', 'content': 'Historical answer remains byte-identical', 'createdAt': stamp}
         db.execute('INSERT INTO messages VALUES(?,?,?,?)', (message['id'], doc['id'], json.dumps(message), stamp))
         annotation = {'id': uid(), 'documentId': doc['id'], 'kind': 'note', 'note': 'Existing note', 'location': {'type': 'pdf', 'page': 1}, 'quote': 'uniform', 'color': '#facc15', 'createdAt': stamp, 'tags': []}
@@ -451,7 +451,7 @@ try:
     for i in range(40): paper(f'Batch {i:02}: graph evidence', 'Forty', f'Paper {i:02} measures graph calibration with fixed split {i:02}.')
     forty = topic('Forty'); batch = create(forty, session(forty), 'overview')
     control(batch, 'start'); all_done = terminal(batch)
-    with sqlite3.connect(LIB / 'reader.sqlite') as db:
+    with sqlite3.connect(LIB / 'interleaf.sqlite') as db:
         RESULT['fullCoverage'] = db.execute('SELECT count(DISTINCT paper_id) FROM research_cards WHERE paper_id IN (SELECT id FROM paper_items WHERE folders=?) AND json_extract(body,\'$.readCoverage.readUnits\')>0', ('["Forty"]',)).fetchone()[0]
     check('fullCoverage', RESULT['fullCoverage'] == 40 and all_done['coverage']['pendingPapers'] == 0, all_done['coverage'])
     paper_count = len(api('GET', '/api/papers'))
@@ -490,7 +490,7 @@ try:
     interrupted_move = blocked_run(forty, session(forty))
     stop(); unblock(); check('close', SERVER.returncode == 0)
     destination = OUT / 'migrated-library'
-    subprocess.run([str(ROOT / 'apps/desktop/bin/reader-server'), '--data', str(LIB), '--migrate-library', str(destination)], check=True, env=ENV, stdout=subprocess.DEVNULL)
+    subprocess.run([str(ROOT / 'apps/desktop/bin/interleaf-server'), '--data', str(LIB), '--migrate-library', str(destination)], check=True, env=ENV, stdout=subprocess.DEVNULL)
     old_lib = LIB; LIB = destination
     start(); check('move', preservation(doc) == before and api('GET', '/api/research/runs/' + interrupted_move['id'])['status'] == 'interrupted' and api('GET', '/api/research/reports/' + edit['id'])['content'] == edit['content'])
     active_delete = blocked_run(tid, sid)
@@ -500,7 +500,7 @@ try:
     STATE['mode'] = 'throttle'
     limited = create(forty, session(forty), 'overview', 'allow-task')
     control(limited, 'start'); terminal(limited)
-    with sqlite3.connect(LIB / 'reader.sqlite') as db:
+    with sqlite3.connect(LIB / 'interleaf.sqlite') as db:
         audits = [json.loads(x[0]) for x in db.execute('SELECT body FROM research_searches WHERE run_id=?', (limited['id'],))]
     check('rateLimit', any(x.get('status') == 'limited' for x in audits), audits)
     STATE['mode'] = 'full'

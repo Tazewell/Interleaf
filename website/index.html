@@ -26,7 +26,7 @@
     <link rel="stylesheet" href="styles.css" />
     <script>
       try {
-        const t = localStorage.getItem("reader-site-theme");
+        const t = localStorage.getItem("interleaf-site-theme");
         if (t === "light" || t === "dark") document.documentElement.dataset.theme = t;
       } catch {}
     </script>
@@ -496,8 +496,8 @@
           <p class="shot-caption" data-en="Screenshots with a dark version follow the page's appearance.">有深色版本的截图会跟随本页外观切换。</p>
           <figure class="video reveal">
             <video controls playsinline preload="metadata" width="1920" height="1080" aria-labelledby="demo-video-caption">
-              <source src="assets/reader-explainer-zh.mp4" type="video/mp4" />
-              <a href="assets/reader-explainer-zh.mp4" download data-en="Download video">下载视频</a>
+              <source src="assets/interleaf-explainer-zh.mp4" type="video/mp4" />
+              <a href="assets/interleaf-explainer-zh.mp4" download data-en="Download video">下载视频</a>
             </video>
             <figcaption id="demo-video-caption" data-en="Demo video">演示视频</figcaption>
           </figure>
@@ -519,7 +519,7 @@
           </div>
           <div class="tree reveal" id="tree">
             <div class="row">library/</div>
-            <div class="row">├── reader.sqlite   <span class="c" data-en="# metadata, notes, chats, FTS index"># 元数据、批注、对话、全文索引</span></div>
+            <div class="row">├── interleaf.sqlite   <span class="c" data-en="# metadata, notes, chats, FTS index"># 元数据、批注、对话、全文索引</span></div>
             <div class="row">├── books/          <span class="c" data-en="# original EPUB files"># 原始 EPUB</span></div>
             <div class="row">├── papers/         <span class="c" data-en="# original PDF files"># 原始 PDF</span></div>
             <div class="row">├── models/         <span class="c" data-en="# verified local layout model"># 经校验的本地版面模型</span></div>

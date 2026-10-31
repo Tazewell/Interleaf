@@ -281,10 +281,10 @@ func publicDocumentBody(body io.Reader, declared, kind string, limit int64) (io.
 
 type publicBufferedConn struct {
 	net.Conn
-	reader *bufio.Reader
+	interleaf *bufio.Reader
 }
 
-func (c *publicBufferedConn) Read(p []byte) (int, error) { return c.reader.Read(p) }
+func (c *publicBufferedConn) Read(p []byte) (int, error) { return c.interleaf.Read(p) }
 
 // Tunnel both HTTP and HTTPS: net/http's ordinary WriteProxy uses req.Host
 // for the absolute request-target, undoing IP pinning when preserving Host.
@@ -334,8 +334,8 @@ func publicProxyTunnel(ctx context.Context, p PublicConfig, proxy *url.URL, targ
 	if err = request.Write(conn); err != nil {
 		return nil, err
 	}
-	reader := bufio.NewReader(io.LimitReader(conn, 32<<10))
-	response, err := http.ReadResponse(reader, request)
+	interleaf := bufio.NewReader(io.LimitReader(conn, 32<<10))
+	response, err := http.ReadResponse(interleaf, request)
 	if err != nil {
 		return nil, fmt.Errorf("代理 CONNECT 未完成: %w", err)
 	}
@@ -344,11 +344,11 @@ func publicProxyTunnel(ctx context.Context, p PublicConfig, proxy *url.URL, targ
 	}
 	// ReadResponse has consumed only CONNECT headers. Copy buffered bytes then
 	// discard the header limit so it cannot cap the tunneled document body.
-	buffered := make([]byte, reader.Buffered())
-	_, _ = io.ReadFull(reader, buffered)
+	buffered := make([]byte, interleaf.Buffered())
+	_, _ = io.ReadFull(interleaf, buffered)
 	conn.SetDeadline(time.Time{})
 	ok = true
-	return &publicBufferedConn{Conn: conn, reader: bufio.NewReader(io.MultiReader(bytes.NewReader(buffered), conn))}, nil
+	return &publicBufferedConn{Conn: conn, interleaf: bufio.NewReader(io.MultiReader(bytes.NewReader(buffered), conn))}, nil
 }
 
 type publicBodyError struct{ err error }

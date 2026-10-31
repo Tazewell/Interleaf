@@ -1,13 +1,13 @@
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { vi } from "vitest";
-import { api, researchAPI } from "@reader/api";
+import { api, researchAPI } from "@interleaf/api";
 import type {
   ResearchCoverage,
   ResearchReport,
   ResearchRun,
   ResearchTopic,
-} from "@reader/core";
+} from "@interleaf/core";
 import { useReaderStore } from "../store";
 import { resetResearchLibrary } from "./research-session";
 import { usePaperUI } from "../papers/state";
@@ -83,7 +83,7 @@ export function mockAPI() {
   resetResearchLibrary();
   usePaperUI.setState({ researchTopicId: null, researchTarget: null });
   vi.spyOn(api, "agentModels").mockResolvedValue([]);
-  const messages: import("@reader/core").ResearchMessage[] = [];
+  const messages: import("@interleaf/core").ResearchMessage[] = [];
   vi.spyOn(researchAPI, "getTopic").mockImplementation(async (id) => ({
     ...topic,
     id,

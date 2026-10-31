@@ -1,7 +1,7 @@
 import { useEffect, useState, useSyncExternalStore } from "react";
-import { researchAPI } from "@reader/api";
-import type { ResearchRun, ResearchTopic } from "@reader/core";
-import { Button } from "@reader/ui/components/button";
+import { researchAPI } from "@interleaf/api";
+import type { ResearchRun, ResearchTopic } from "@interleaf/core";
+import { Button } from "@interleaf/ui/components/button";
 import {
   researchEpoch,
   researchSignal,

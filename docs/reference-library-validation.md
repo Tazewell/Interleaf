@@ -4,7 +4,7 @@
 
 ## 自动验证
 
-在 Ubuntu WSL 的完整 Linux 依赖环境运行，发行版存放于 E 盘。使用原生测试目录 `/home/admin/.cache/reader-reference-check`；584 个源码文件与实现工作树核对一致（仅忽略 CRLF/LF 差异）。
+在 Ubuntu WSL 的完整 Linux 依赖环境运行，发行版存放于 E 盘。使用原生测试目录 `/home/admin/.cache/interleaf-reference-check`；584 个源码文件与实现工作树核对一致（仅忽略 CRLF/LF 差异）。
 
 - `pnpm typecheck`：通过。
 - `pnpm test`：通过，Go 全部包通过；Vitest 164 个文件、1094 项测试通过，3 个文件、5 项测试沿用原有跳过。
@@ -14,7 +14,7 @@
 - 真实服务、鉴权 HTTP、临时 SQLite 书库：25 项检查通过，覆盖 PDF 重复导入、混合 EPUB 书籍、无附件文献、合并字段事务回滚、附件独立笔记/批注/进度、稳定引用键、BibTeX/BibLaTeX 依赖、自动更新、外部编辑保护、移出/回收/恢复与重启，以及只选择结构化作者时保留独立显示名、显式显示名选择优先。
 - 通过真实 HTTP 导出的含机构作者、宏和 crossref 的 `.bib`，分别完成 `pdflatex -no-shell-escape` + BibTeX/Biber + 两轮 pdflatex 编译。
 
-最终日志位于 WSL 的 `/home/admin/.cache/reader-reference-final-typecheck.log`、`reader-reference-final-test.log`、`reader-reference-build.log` 和 `reader-reference-final-acceptance.log`。它们是本机测试产物，不加入版本控制。
+最终日志位于 WSL 的 `/home/admin/.cache/interleaf-reference-final-typecheck.log`、`interleaf-reference-final-test.log`、`interleaf-reference-build.log` 和 `interleaf-reference-final-acceptance.log`。它们是本机测试产物，不加入版本控制。
 
 ## 审阅与提交
 
@@ -34,9 +34,9 @@
 
 ## 桌面预览与人工验收
 
-桌面快捷方式：`E:\Administrator\Desktop\Interleaf 文献管理预览.lnk`。启动脚本：`E:\WSL\reader-reference-preview.sh`。
+桌面快捷方式：`E:\Administrator\Desktop\Interleaf 文献管理预览.lnk`。启动脚本：`E:\WSL\interleaf-reference-preview.sh`。
 
-预览使用 `/home/admin/.cache/reader-reference-preview` 下的独立配置和临时书库；未迁移或修改原有 Interleaf 书库。已确认 Interleaf 窗口、本地鉴权 API 与网页资源正常启动。没有使用浏览器自动化做视觉验收。
+预览使用 `/home/admin/.cache/interleaf-reference-preview` 下的独立配置和临时书库；未迁移或修改原有 Interleaf 书库。已确认 Interleaf 窗口、本地鉴权 API 与网页资源正常启动。没有使用浏览器自动化做视觉验收。
 
 界面外观、实际操作体验及自己的 Overleaf 项目上传需要人工检查，步骤见 [使用指南](reference-library.md#人工验收步骤)。本地自动导出只更新授权的本地文件，Overleaf 仍需手动上传更新。
 

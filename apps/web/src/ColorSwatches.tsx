@@ -1,11 +1,11 @@
 import { useState } from "react";
 import { Check } from "@phosphor-icons/react";
-import { Button } from "@reader/ui/components/button";
+import { Button } from "@interleaf/ui/components/button";
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
-} from "@reader/ui/components/popover";
+} from "@interleaf/ui/components/popover";
 import { highlightPalette } from "./annotations";
 import { useReaderStore } from "./store";
 

@@ -21,7 +21,7 @@ ZIP 包含：
 - `manifest.json`：格式版本、导出时间、文件列表与修改时间、缺失/跳过的文件、日志写入失败次数、保留与脱敏规则。
 - `README.txt`：供用户反馈时填写发生时间、操作步骤、预期和实际结果的提示。
 
-日志按时间及 `sessionId`、`requestId`、后台 `taskId`、模型调用 `attemptId` 关联。HTTP 响应头 `X-Reader-Request-ID` 连接前后端；不改变聊天 SSE 事件和完成保存语义。日志记录阶段与结果，不记录滚动、鼠标移动或每个生成片段。
+日志按时间及 `sessionId`、`requestId`、后台 `taskId`、模型调用 `attemptId` 关联。HTTP 响应头 `X-Interleaf-Request-ID` 连接前后端；不改变聊天 SSE 事件和完成保存语义。日志记录阶段与结果，不记录滚动、鼠标移动或每个生成片段。
 
 ## 脱敏与边界
 

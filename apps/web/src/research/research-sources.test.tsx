@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { act } from "react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import { api, researchAPI } from "@reader/api";
+import { api, researchAPI } from "@interleaf/api";
 import { paper } from "../papers/fixtures";
 import { ResearchPanel } from "./ResearchPanel";
 import { ResearchReport } from "./ResearchReport";
@@ -15,7 +15,7 @@ import {
   run,
   type,
 } from "./test-helpers";
-import type { ResearchEvidence } from "@reader/core";
+import type { ResearchEvidence } from "@interleaf/core";
 import { resetResearchLibrary } from "./research-session";
 const evidence: ResearchEvidence = {
   id: "a".repeat(32),

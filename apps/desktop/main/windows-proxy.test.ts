@@ -82,8 +82,8 @@ describe("Windows system proxy", () => {
         `172.${16 + i}.0.0-172.${16 + i}.255.255`,
       ]).flat(),
       ".local",
-      "reader-pc.office",
-      "reader-pc",
+      "interleaf-pc.office",
+      "interleaf-pc",
     ]);
     expect(bypass).not.toContain("*");
     expect(parent).toEqual({ HTTPS_PROXY: "http://old:80", NO_PROXY: "*" });
@@ -116,8 +116,8 @@ describe("Windows system proxy", () => {
     });
     const bypass = env.NO_PROXY!.split(",");
     expect(bypass).toContain("localhost");
-    expect(bypass).toContain("reader-pc.office");
-    expect(bypass).toContain("reader-pc");
+    expect(bypass).toContain("interleaf-pc.office");
+    expect(bypass).toContain("interleaf-pc");
     expect(bypass).toContain(".example.org");
   });
   it("accepts <local> case-insensitively and deduplicates local hosts", () => {
@@ -126,7 +126,7 @@ describe("Windows system proxy", () => {
         proxy: "localhost:7890",
         bypass: "localhost;<LOCAL>;<local>",
       }).NO_PROXY,
-    ).toBe("localhost,127.0.0.1,::1,reader-pc.office,reader-pc");
+    ).toBe("localhost,127.0.0.1,::1,interleaf-pc.office,interleaf-pc");
   });
   it.each([
     null,

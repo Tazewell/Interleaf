@@ -16,9 +16,9 @@ import { DiagnosticLogs, diagnosticSettings } from "./diagnostics";
 import {
   diagnosticError,
   validateDiagnosticEvent,
-} from "../../../packages/reader-core/src/diagnostics";
+} from "../../../packages/interleaf-core/src/diagnostics";
 
-declare const READER_BUILD_COMMIT: string;
+declare const INTERLEAF_BUILD_COMMIT: string;
 
 export function startDiagnosticService(
   getWindow: () => BrowserWindow | undefined,
@@ -55,7 +55,7 @@ export function startDiagnosticService(
       let temporary: string | undefined;
       try {
         temporary = await mkdtemp(
-          join(dirname(selected.filePath), ".reader-diagnostics-"),
+          join(dirname(selected.filePath), ".interleaf-diagnostics-"),
         );
         const output = join(temporary, "bundle.zip");
         const result = await logs.export(
@@ -65,8 +65,8 @@ export function startDiagnosticService(
             mode: "desktop",
             appVersion: version,
             buildCommit:
-              typeof READER_BUILD_COMMIT === "string"
-                ? READER_BUILD_COMMIT
+              typeof INTERLEAF_BUILD_COMMIT === "string"
+                ? INTERLEAF_BUILD_COMMIT
                 : "unknown",
             packaged: app.isPackaged,
             platform: platform(),

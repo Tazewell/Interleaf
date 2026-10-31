@@ -13,9 +13,9 @@ if [[ "${2:-}" != --checks-only ]]; then
   node scripts/native-ai-research-acceptance/fixtures.mjs "$output"
   python3 scripts/native-ai-research-acceptance/acceptance.py "$root" "$output"
   node scripts/native-ai-research-acceptance/report.mjs "$output"
-  (cd apps/server && go test -c -o "$output/reader-tests" ./internal/reader)
-  pnpm --filter @reader/processor exec esbuild ../desktop/main/library-location.ts \
+  (cd apps/server && go test -c -o "$output/interleaf-tests" ./internal/interleaf)
+  pnpm --filter @interleaf/processor exec esbuild ../desktop/main/library-location.ts \
     --bundle --platform=node --format=esm --outfile="$output/library-location.mjs"
-  node scripts/native-ai-research-acceptance/desktop-join.mjs "$output" "$root/apps/desktop/bin/reader-server"
+  node scripts/native-ai-research-acceptance/desktop-join.mjs "$output" "$root/apps/desktop/bin/interleaf-server"
 fi
 node scripts/native-ai-research-acceptance/inspect.mjs "$output"

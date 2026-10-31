@@ -3,7 +3,7 @@ import {
   DownloadSimple as Download,
   CircleNotch as LoaderCircle,
 } from "@phosphor-icons/react";
-import { Button } from "@reader/ui/components/button";
+import { Button } from "@interleaf/ui/components/button";
 import { exportDiagnostics } from "./diagnostics";
 
 /** Self-contained so it works inside the last-resort error boundary. */

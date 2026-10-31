@@ -18,31 +18,31 @@ import type {
   Document,
   PaperItemType,
   PaperMetadataField,
-} from "@reader/core";
-import { Button } from "@reader/ui/components/button";
-import { api, publicationURL } from "@reader/api";
+} from "@interleaf/core";
+import { Button } from "@interleaf/ui/components/button";
+import { api, publicationURL } from "@interleaf/api";
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
-} from "@reader/ui/components/dialog";
-import { Input } from "@reader/ui/components/input";
-import { Textarea } from "@reader/ui/components/textarea";
+} from "@interleaf/ui/components/dialog";
+import { Input } from "@interleaf/ui/components/input";
+import { Textarea } from "@interleaf/ui/components/textarea";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@reader/ui/components/select";
+} from "@interleaf/ui/components/select";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from "@reader/ui/components/dropdown-menu";
+} from "@interleaf/ui/components/dropdown-menu";
 import { useReaderStore } from "../store";
 import { libraryPapers } from "./projection";
 import {

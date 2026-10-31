@@ -41,7 +41,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
   delete (Element.prototype as Partial<Element>).animate;
 });
-const layers = () => document.querySelectorAll(".reader-sentence-hover-layer");
+const layers = () => document.querySelectorAll(".interleaf-sentence-hover-layer");
 it("uses compositor opacity without ancestor style writes or JS animation frames", async () => {
   const writes = vi.spyOn(host.style, "setProperty");
   const frames = vi.spyOn(window, "requestAnimationFrame");

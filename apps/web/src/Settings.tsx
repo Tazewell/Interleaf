@@ -13,30 +13,30 @@ import {
 import { DiagnosticExport } from "./DiagnosticExport";
 import { LibraryLocationSettings } from "./LibraryLocationSettings";
 import { CommandLineSettings } from "./CommandLineSettings";
-import { api } from "@reader/api";
-import type { LibraryMode, JournalRankConfig, PaperColumn } from "@reader/core";
-import { Button } from "@reader/ui/components/button";
-import { Input } from "@reader/ui/components/input";
+import { api } from "@interleaf/api";
+import type { LibraryMode, JournalRankConfig, PaperColumn } from "@interleaf/core";
+import { Button } from "@interleaf/ui/components/button";
+import { Input } from "@interleaf/ui/components/input";
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
   DialogDescription,
-} from "@reader/ui/components/dialog";
+} from "@interleaf/ui/components/dialog";
 import {
   Select,
   SelectTrigger,
   SelectValue,
   SelectContent,
   SelectItem,
-} from "@reader/ui/components/select";
+} from "@interleaf/ui/components/select";
 import {
   Tabs,
   TabsContent,
   TabsList,
   TabsTrigger,
-} from "@reader/ui/components/tabs";
+} from "@interleaf/ui/components/tabs";
 import { HighlightColorsEditor } from "./HighlightColorsEditor";
 import { ProxySettings } from "./ProxySettings";
 import {
@@ -45,7 +45,7 @@ import {
   useReaderStore,
 } from "./store";
 import { libraryModes } from "./LibraryModeSwitcher";
-import { Checkbox } from "@reader/ui/components/checkbox";
+import { Checkbox } from "@interleaf/ui/components/checkbox";
 import { toast } from "sonner";
 import { columnLabels, defaultColumns, toggleColumn } from "./papers/model";
 import { savePaperPreferences } from "./papers/actions";
@@ -91,7 +91,7 @@ export function Settings({
       });
       setJournalRank(saved);
       setJournalKey("");
-      window.dispatchEvent(new Event("reader:journal-rank-config"));
+      window.dispatchEvent(new Event("interleaf:journal-rank-config"));
     } catch (error) {
       toast.error((error as Error).message);
     } finally {
@@ -138,7 +138,7 @@ export function Settings({
             className="settings-panel"
             keepMounted
           >
-            {window.readerDesktop?.proxySettings && (
+            {window.interleafDesktop?.proxySettings && (
               <div className="mb-6">
                 <ProxySettings open={open} />
               </div>
@@ -339,7 +339,7 @@ export function Settings({
             </section>
           </TabsContent>
           <TabsContent value="papers" className="settings-panel" keepMounted>
-            {window.readerDesktop?.libraryLocation && (
+            {window.interleafDesktop?.libraryLocation && (
               <div className="mb-6">
                 <LibraryLocationSettings open={open} />
               </div>
@@ -528,7 +528,7 @@ export function Settings({
                       variant="outline"
                       onClick={() =>
                         window.dispatchEvent(
-                          new Event("reader:journal-rank-refresh"),
+                          new Event("interleaf:journal-rank-refresh"),
                         )
                       }
                     >

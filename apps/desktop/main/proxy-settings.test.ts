@@ -31,7 +31,7 @@ import {
 
 let directory: string;
 beforeEach(async () => {
-  directory = await mkdtemp(join(tmpdir(), "reader-proxy-"));
+  directory = await mkdtemp(join(tmpdir(), "interleaf-proxy-"));
   execute.mockReset();
   resolveSystem.mockReset();
   resolveSystem.mockImplementation(async (env) => ({ env: { ...env } }));
@@ -173,7 +173,7 @@ it.each(["win32", "darwin"] as const)(
     });
     const result = await service.check(
       { mode: "manual", host: "127.0.0.1", port: 7890 },
-      "/bin/reader-server",
+      "/bin/interleaf-server",
     );
     expect(result).toMatchObject({
       connected: true,
@@ -181,7 +181,7 @@ it.each(["win32", "darwin"] as const)(
       status: 403,
     });
     expect(execute).toHaveBeenCalledWith(
-      "/bin/reader-server",
+      "/bin/interleaf-server",
       ["--probe-network"],
       expect.objectContaining({
         cwd: directory,
@@ -209,9 +209,9 @@ it("bounds concurrent checks, aborts on quit, and sanitizes native failures", as
         ),
       ),
   );
-  const check = service.check({ mode: "direct" }, "/bin/reader-server");
+  const check = service.check({ mode: "direct" }, "/bin/interleaf-server");
   await expect(
-    service.check({ mode: "direct" }, "/bin/reader-server"),
+    service.check({ mode: "direct" }, "/bin/interleaf-server"),
   ).rejects.toThrow("正在检测");
   // Let resolution reach the subprocess before aborting it.
   await vi.waitFor(() => expect(execute).toHaveBeenCalled());
@@ -225,7 +225,7 @@ it("bounds concurrent checks, aborts on quit, and sanitizes native failures", as
     stdout: '{"connected":true,"route":"proxy","elapsedMs":0}',
   });
   expect(
-    (await service.check({ mode: "direct" }, "/bin/reader-server")).connected,
+    (await service.check({ mode: "direct" }, "/bin/interleaf-server")).connected,
   ).toBe(false);
 });
 

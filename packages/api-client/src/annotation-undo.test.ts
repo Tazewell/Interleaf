@@ -1,6 +1,6 @@
 import { afterEach, expect, it, vi } from "vitest";
 import { api, configureAPI } from "./index";
-import type { Annotation } from "@reader/core";
+import type { Annotation } from "@interleaf/core";
 afterEach(() => vi.unstubAllGlobals());
 it("queues undo after writes and keeps a stable window session", async () => {
   configureAPI("test");
@@ -35,9 +35,9 @@ it("queues undo after writes and keeps a stable window session", async () => {
   await undo;
   expect(fetch).toHaveBeenCalledTimes(2);
   expect(fetch.mock.calls[1][0]).toBe("/api/documents/doc/annotations/undo");
-  const first = fetch.mock.calls[0][1].headers["X-Reader-Undo-Session"];
+  const first = fetch.mock.calls[0][1].headers["X-Interleaf-Undo-Session"];
   expect(first).toBeTruthy();
-  expect(fetch.mock.calls[1][1].headers["X-Reader-Undo-Session"]).toBe(first);
+  expect(fetch.mock.calls[1][1].headers["X-Interleaf-Undo-Session"]).toBe(first);
 });
 it("a failed save does not block the next undo", async () => {
   const fetch = vi

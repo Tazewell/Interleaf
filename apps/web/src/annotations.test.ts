@@ -1,5 +1,5 @@
 import { expect, it } from "vitest";
-import type { Annotation } from "@reader/core";
+import type { Annotation } from "@interleaf/core";
 import { activeAnnotation, applySavedAnnotation } from "./annotations";
 const a: Annotation = {
   id: "a",

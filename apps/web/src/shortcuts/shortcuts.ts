@@ -1,9 +1,19 @@
 import { useEffect, useSyncExternalStore } from "react";
-import { api } from "@reader/api";
+import { api } from "@interleaf/api";
 
 export const shortcutActions = [
-  { id: "readerLeft", name: "阅读模式－左侧栏", scope: "reader", key: "l" },
-  { id: "readerRight", name: "阅读模式－右侧栏", scope: "reader", key: "j" },
+  {
+    id: "interleafLeft",
+    name: "阅读模式－左侧栏",
+    scope: "interleaf",
+    key: "l",
+  },
+  {
+    id: "interleafRight",
+    name: "阅读模式－右侧栏",
+    scope: "interleaf",
+    key: "j",
+  },
   { id: "libraryLeft", name: "主界面－左侧栏", scope: "library", key: "l" },
   { id: "search", name: "搜索", scope: "all", key: "f" },
 ] as const;
@@ -12,8 +22,8 @@ export type Binding = { key: string; shift: boolean };
 export type Bindings = Record<ShortcutId, Binding>;
 
 export const isMac = () =>
-  window.readerDesktop?.platform
-    ? window.readerDesktop.platform === "darwin"
+  window.interleafDesktop?.platform
+    ? window.interleafDesktop.platform === "darwin"
     : /Mac|iPhone|iPad/.test(navigator.platform);
 export const defaults = (): Bindings =>
   Object.fromEntries(
@@ -31,7 +41,14 @@ export function normalizeBindings(saved: unknown): Bindings {
   const result = defaults();
   if (saved && typeof saved === "object") {
     for (const { id } of shortcutActions) {
-      const value = (saved as Record<string, Binding>)[id];
+      const stored = saved as Record<string, Binding>;
+      const legacy =
+        id === "interleafLeft"
+          ? "readerLeft"
+          : id === "interleafRight"
+            ? "readerRight"
+            : id;
+      const value = stored[id] ?? stored[legacy];
       if (
         value &&
         typeof value.key === "string" &&
@@ -128,9 +145,9 @@ export function useShortcut(
         event.isComposing ||
         event.repeat ||
         (event.target instanceof Element &&
-          event.target.closest("[data-reader-floating-preview]")) ||
+          event.target.closest("[data-interleaf-floating-preview]")) ||
         document.querySelector(
-          '[role="dialog"]:not([data-reader-floating-preview]), [role="alertdialog"]',
+          '[role="dialog"]:not([data-interleaf-floating-preview]), [role="alertdialog"]',
         )
       )
         return;
@@ -146,7 +163,7 @@ export function useShortcut(
 export function forwardReaderShortcut(event: KeyboardEvent) {
   if (event.defaultPrevented || event.isComposing || event.repeat) return;
   if (
-    !["readerLeft", "readerRight", "search"].some((id) =>
+    !["interleafLeft", "interleafRight", "search"].some((id) =>
       matches(event, id as ShortcutId),
     )
   )

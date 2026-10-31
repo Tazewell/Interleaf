@@ -20,12 +20,12 @@ Squirrel.Mac 只安装与当前应用出自同一证书的更新。所有正式�
 首次启用时在本机执行一次，输出目录必须不存在：
 
 ```sh
-scripts/create-mac-sign-cert.sh ~/reader-mac-sign
-gh secret set MAC_SIGN_P12 < ~/reader-mac-sign/reader-sign.p12.base64
-gh secret set MAC_SIGN_P12_PASSWORD < ~/reader-mac-sign/password.txt
+scripts/create-mac-sign-cert.sh ~/interleaf-mac-sign
+gh secret set MAC_SIGN_P12 < ~/interleaf-mac-sign/interleaf-sign.p12.base64
+gh secret set MAC_SIGN_P12_PASSWORD < ~/interleaf-mac-sign/password.txt
 ```
 
-把 `reader-sign.p12` 和 `password.txt` 离线备份后，可删除本机副本。证书有效期 20 年，CN 为 `Interleaf Self-Signed`。
+把 `interleaf-sign.p12` 和 `password.txt` 离线备份后，可删除本机副本。证书有效期 20 年，CN 为 `Interleaf Self-Signed`。
 
 `apps/desktop/mac-sign.cjs` 是 electron-builder 的 `mac.sign` 钩子：electron-builder 照常生成签名参数，钩子把证书导入临时钥匙串，替换签名身份后逐个签名嵌套二进制，结束后删除临时钥匙串，不修改登录钥匙串或信任设置。证书无人验证时间戳，签名不请求 Apple 时间戳服务。没有证书时退回 ad-hoc 签名，适用于本地构建和手动试跑；带 Release tag 的构建缺少证书会直接失败，包内检查也会确认签名者为 `Interleaf Self-Signed`。证书只传给 macOS 构建任务。
 
@@ -39,7 +39,7 @@ gh secret set MAC_SIGN_P12_PASSWORD < ~/reader-mac-sign/password.txt
 
 触发事件为 `release: published`，适用于正式版和预发布版。保存草稿、单独推送 tag 或修改 Release 描述不会触发。Release 页面会先发布，安装包稍后上传；任一构建失败时上传任务不会运行。GitHub 资产上传不是事务操作，上传过程中网络失败可能留下部分文件；修复后重新运行工作流会覆盖同名资产。不要移动已发布的 tag；代码修复请发布新版本。
 
-只发布 macOS 测试版时，在创建 Release 的描述中加入 `<!-- reader:mac-only -->`。工作流只运行 macOS 构建，并要求 Release 恰好包含 Apple Silicon 的 DMG、原地更新 ZIP 和校验值；Windows 用户不会收到这个版本的安装包。
+只发布 macOS 测试版时，在创建 Release 的描述中加入 `<!-- interleaf:mac-only -->`。工作流只运行 macOS 构建，并要求 Release 恰好包含 Apple Silicon 的 DMG、原地更新 ZIP 和校验值；Windows 用户不会收到这个版本的安装包。
 
 工作流使用仓库自动提供的 `GITHUB_TOKEN` 和上述两个 macOS 签名 secrets，无需 PAT。构建任务只有 `contents: read`，上传任务才有 `contents: write`。若以后由另一个工作流创建 Release，需要注意：默认 `GITHUB_TOKEN` 产生的事件通常不会触发新的工作流；应改为显式调用构建工作流，或调整发布入口。
 
@@ -63,7 +63,7 @@ pnpm package      # 构建 DMG 或 NSIS 安装包，并执行相同检查
 
 处理器构建先按 `apps/processor/model.json` 的固定 revision 获取权重，并核对 67,372,587 字节的大小和 SHA256。通过校验后才将临时文件发布到 `apps/processor/models/` 构建缓存；网络中断、大小或哈希不符会清理临时文件并停止构建；进程被强制终止时可能留下 `.part` 文件，但不会作为模型使用。已有缓存每次校验，损坏时需删除该缓存文件后重建；不静默覆盖。构建将当前模型和 `model-license/` 下的许可、来源说明复制到 `dist/models/`，打包时放入应用资源的 `processor/models/`，不放进 `app.asar`。权重、构建缓存和安装包均不进入 Git，Git 只管理模型规格、脚本与许可说明。
 
-构建机器首次需要联网，之后可复用已校验的缓存。GitHub Actions 按模型规格文件的哈希缓存权重。完全离线构建时，将环境变量 `READER_BUILD_LAYOUT_MODEL` 设为已有权重的绝对路径；该文件必须与固定模型的大小和 SHA256 一致，校验失败不会回退下载。`pnpm dev`、`pnpm desktop` 和单独的处理器构建使用同一流程；`pnpm install`、类型检查和普通单元测试不获取权重。
+构建机器首次需要联网，之后可复用已校验的缓存。GitHub Actions 按模型规格文件的哈希缓存权重。完全离线构建时，将环境变量 `INTERLEAF_BUILD_LAYOUT_MODEL` 设为已有权重的绝对路径；该文件必须与固定模型的大小和 SHA256 一致，校验失败不会回退下载。`pnpm dev`、`pnpm desktop` 和单独的处理器构建使用同一流程；`pnpm install`、类型检查和普通单元测试不获取权重。
 
 运行时从处理器旁的 `models/` 读取模型并核对完整性，不联网获取，也不在每个书库复制权重。缺失或损坏时解析失败，需要重新构建或安装应用。旧版书库里的模型缓存保留，但不再使用或自动删除。
 

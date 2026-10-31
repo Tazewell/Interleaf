@@ -13,14 +13,14 @@ import {
   Plus,
   X,
 } from "@phosphor-icons/react";
-import type { DocumentLocation, LinkPreview } from "@reader/core";
-import { Button } from "@reader/ui/components/button";
-import { Popover, PopoverContent } from "@reader/ui/components/popover";
+import type { DocumentLocation, LinkPreview } from "@interleaf/core";
+import { Button } from "@interleaf/ui/components/button";
+import { Popover, PopoverContent } from "@interleaf/ui/components/popover";
 import {
   Dialog,
   DialogContent,
   DialogTitle,
-} from "@reader/ui/components/dialog";
+} from "@interleaf/ui/components/dialog";
 
 interface Frame {
   x: number;
@@ -226,7 +226,7 @@ export function LinkPreviewPanel({
         }}
       >
         <DialogContent
-          data-reader-floating-preview=""
+          data-interleaf-floating-preview=""
           showOverlay={false}
           showCloseButton={false}
           initialFocus={true}

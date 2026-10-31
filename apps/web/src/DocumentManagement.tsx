@@ -6,25 +6,25 @@ import {
   Trash,
   X,
 } from "@phosphor-icons/react";
-import type { Document, DocumentCategory } from "@reader/core";
-import { api } from "@reader/api";
-import { Button } from "@reader/ui/components/button";
-import { Badge } from "@reader/ui/components/badge";
-import { Input } from "@reader/ui/components/input";
+import type { Document, DocumentCategory } from "@interleaf/core";
+import { api } from "@interleaf/api";
+import { Button } from "@interleaf/ui/components/button";
+import { Badge } from "@interleaf/ui/components/badge";
+import { Input } from "@interleaf/ui/components/input";
 import {
   Select,
   SelectTrigger,
   SelectValue,
   SelectContent,
   SelectItem,
-} from "@reader/ui/components/select";
+} from "@interleaf/ui/components/select";
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
   DialogDescription,
-} from "@reader/ui/components/dialog";
+} from "@interleaf/ui/components/dialog";
 import { toast } from "sonner";
 import { refreshLibrary } from "./store";
 import {

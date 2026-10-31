@@ -1,5 +1,5 @@
 {
-  "name": "@reader/connector",
+  "name": "@interleaf/connector",
   "private": true,
   "type": "module",
   "scripts": { "build": "node build.mjs" },

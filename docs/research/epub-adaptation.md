@@ -14,7 +14,7 @@ EPUB 容器包括 `META-INF/container.xml`、OPF package、内容文档和资源
 
 建议职责分离：服务端读取容器、元数据、目录与资源，清洗主动内容并提供资源地址；Readium 在浏览器内显示 XHTML/CSS、分页或滚动并处理选区；应用保存批注与笔记。提取的纯文本可以用于搜索或 AI，但不应替代「原文」中的 EPUB 版式。Readium TS 的 Navigator 消费 Publication/资源，不能把安装 Navigator 当作已经完成服务端 EPUB 解析。[Readium 包职责][readium-repo]
 
-后端继续使用已经锁定的 `github.com/readium/go-toolkit v0.16.1`。本项目的 `prepareEPUB` 先检查 ZIP 资源数量与解压大小，再通过 `epub.NewParser(...).Parse` 构造 Publication，以 `p.Get` 读取资源、`p.Positions` 生成位置列表。这条链路已经有样本导入测试，无需为适配正文交互另写 OPF/NCX 解析器。Go Toolkit 的在线 README 较简略，版本行为应结合安装的模块源码和项目测试确认。[Go Toolkit][go-toolkit] [本地集成](../../apps/server/internal/reader/epub.go)
+后端继续使用已经锁定的 `github.com/readium/go-toolkit v0.16.1`。本项目的 `prepareEPUB` 先检查 ZIP 资源数量与解压大小，再通过 `epub.NewParser(...).Parse` 构造 Publication，以 `p.Get` 读取资源、`p.Positions` 生成位置列表。这条链路已经有样本导入测试，无需为适配正文交互另写 OPF/NCX 解析器。Go Toolkit 的在线 README 较简略，版本行为应结合安装的模块源码和项目测试确认。[Go Toolkit][go-toolkit] [本地集成](../../apps/server/internal/interleaf/epub.go)
 
 ## 候选技术比较
 
@@ -88,25 +88,25 @@ Readium 使用 `postMessage` 消息、channel ID 与命令确认在父页面/fra
 
 | 层次               | 已有代码证据                                                                                                                                        | 能确认的能力与边界                                                                                              |
 | ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
-| 导入与解析         | [epub.go](../../apps/server/internal/reader/epub.go) 的 `prepareEPUB`；[server.go](../../apps/server/internal/reader/server.go) 的 `importDocument` | Go Readium 解析 manifest、readingOrder、TOC、positions；输出清洗后的资源及章节搜索文本                          |
-| 资源与存储         | [server.go](../../apps/server/internal/reader/server.go) 的 `resource / saveAnnotation / annotations`                                               | 资源 capability 校验；原文件与派生缓存分离；批注 JSON 存入 SQLite，已有 EPUB 位置类型                           |
-| 原文区域           | [Workspace.tsx](../../apps/web/src/Workspace.tsx) 的 `ReadingView` 分支；[ReaderView.tsx](../../apps/web/src/ReaderView.tsx)                        | PDF 使用 `PDFReadingView`，EPUB 使用 `ReaderView`，占用同一 reading-pane；引擎按格式动态加载                    |
-| 阅读与主题         | [epub.ts](../../apps/web/src/readers/epub.ts) 的 `open / getTOC / next / previous / setTheme`                                                       | 已接 Readium，传入字号、字体、行距、页边距、滚动和主题；实际复杂书籍表现尚未人工验收                            |
-| 划词与精确位置     | [selection-locator.ts](../../apps/web/src/readers/selection-locator.ts)                                                                             | 保存两端 CSS 路径、文本节点索引、字符偏移，以及选中文本和前后各 64 个 UTF-16 code unit；支持区分 DOM 中重复句子 |
-| 高亮与下划线       | [epub.ts](../../apps/web/src/readers/epub.ts) 的 `highlight`                                                                                        | 已将批注转换为 Readium Decoration，按 annotation ID 更新同一组；笔记也用高亮表示，书签不绘制                    |
+| 导入与解析         | [epub.go](../../apps/server/internal/interleaf/epub.go) 的 `prepareEPUB`；[server.go](../../apps/server/internal/interleaf/server.go) 的 `importDocument` | Go Readium 解析 manifest、readingOrder、TOC、positions；输出清洗后的资源及章节搜索文本                          |
+| 资源与存储         | [server.go](../../apps/server/internal/interleaf/server.go) 的 `resource / saveAnnotation / annotations`                                               | 资源 capability 校验；原文件与派生缓存分离；批注 JSON 存入 SQLite，已有 EPUB 位置类型                           |
+| 原文区域           | [Workspace.tsx](../../apps/web/src/Workspace.tsx) 的 `ReadingView` 分支；[InterleafView.tsx](../../apps/web/src/InterleafView.tsx)                        | PDF 使用 `PDFReadingView`，EPUB 使用 `InterleafView`，占用同一 reading-pane；引擎按格式动态加载                    |
+| 阅读与主题         | [epub.ts](../../apps/web/src/engines/epub.ts) 的 `open / getTOC / next / previous / setTheme`                                                       | 已接 Readium，传入字号、字体、行距、页边距、滚动和主题；实际复杂书籍表现尚未人工验收                            |
+| 划词与精确位置     | [selection-locator.ts](../../apps/web/src/engines/selection-locator.ts)                                                                             | 保存两端 CSS 路径、文本节点索引、字符偏移，以及选中文本和前后各 64 个 UTF-16 code unit；支持区分 DOM 中重复句子 |
+| 高亮与下划线       | [epub.ts](../../apps/web/src/engines/epub.ts) 的 `highlight`                                                                                        | 已将批注转换为 Readium Decoration，按 annotation ID 更新同一组；笔记也用高亮表示，书签不绘制                    |
 | 笔记与 AI 选区操作 | [Workspace.tsx](../../apps/web/src/Workspace.tsx) 的 `annotate / SelectionToolbar` 与 notes-list                                                    | 两格式共用创建、列表、删除、点击回原文和选区翻译/解释/引用到对话；不需要另建 EPUB 笔记系统                      |
-| 领域接口           | [reader-core](../../packages/reader-core/src/index.ts) 的 `ReaderAdapter / EPUBLocation / Annotation`                                               | EPUB 是 href + locator + progression，PDF 是 page + rects；已有统一业务接口                                     |
+| 领域接口           | [interleaf-core](../../packages/interleaf-core/src/index.ts) 的 `ReaderAdapter / EPUBLocation / Annotation`                                               | EPUB 是 href + locator + progression，PDF 是 page + rects；已有统一业务接口                                     |
 
 真实调用链如下：
 
 ```text
 导入 EPUB
   → Go prepareEPUB：解析包、清洗资源、生成 manifest/positions/章节文本
-  → Workspace 原文区域 → ReaderView → EPUBReaderAdapter.open
+  → Workspace 原文区域 → InterleafView → EPUBReaderAdapter.open
   → Readium iframe 排版 XHTML
   → textSelected → selectionLocator → ReaderSelection
   → 共用划词工具栏 → annotate → API → SQLite
-  → annotations 更新 → ReaderView.highlight
+  → annotations 更新 → InterleafView.highlight
   → Readium applyDecorations：在书内恢复高亮/下划线
 ```
 
@@ -130,7 +130,7 @@ Readium 使用 `postMessage` 消息、channel ID 与命令确认在父页面/fra
 | 顺序 | 可独立验证的交付                                                                                     | 主要文件                                                               |
 | ---- | ---------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
 | 1    | 保持现有原文区域入口，补齐选区归一化和 DOM 范围往返；高亮/下划线/笔记在重新打开后仍指向同一文字      | `readers/selection-locator.ts`、`readers/epub.ts` 及对应测试           |
-| 2    | 将笔记跳转与高亮恢复使用的精确锚点对齐；接通正文高亮点击、导航完成后的临时提示；重复内容不能静默误跳 | `readers/epub.ts`、`reader-core`、`ReaderView.tsx`、`Workspace.tsx`    |
+| 2    | 将笔记跳转与高亮恢复使用的精确锚点对齐；接通正文高亮点击、导航完成后的临时提示；重复内容不能静默误跳 | `readers/epub.ts`、`interleaf-core`、`InterleafView.tsx`、`Workspace.tsx`    |
 | 3    | 补齐内层 locator 校验、旧数据兼容、定位失败状态和搜索匹配消歧                                        | Go `server.go`、`epub.go`、搜索接口；如改协议，同步 OpenAPI 与生成类型 |
 | 4    | 按样本矩阵处理重排、字体、脚注、固定版式与阅读方向差异，完成桌面人工验收                             | EPUB adapter、资源处理与针对性 fixture                                 |
 
@@ -141,10 +141,10 @@ Readium 使用 `postMessage` 消息、channel ID 与命令确认在父页面/fra
 2026-10-05 在本地 macOS checkout 实际运行：
 
 ```sh
-pnpm exec vitest run apps/web/src/readers/epub-selection.test.ts apps/web/src/readers/selection-locator.test.ts
+pnpm exec vitest run apps/web/src/engines/epub-selection.test.ts apps/web/src/engines/selection-locator.test.ts
 
 cd apps/server
-go test ./internal/reader -run '^(TestLibraryRoundTrip|TestAuthBoundaries|TestRejectInvalidImports|TestContentSanitization|TestLocationValidation|TestEPUBDeclaredMediaTypeSanitized|TestSVGRemainsSVG)$' -count=1
+go test ./internal/interleaf -run '^(TestLibraryRoundTrip|TestAuthBoundaries|TestRejectInvalidImports|TestContentSanitization|TestLocationValidation|TestEPUBDeclaredMediaTypeSanitized|TestSVGRemainsSVG)$' -count=1
 ```
 
 结果：前端 2 个测试文件、4 个用例通过；后端 7 个指定顶层测试通过，包含 EPUB/PDF 导入、进度与批注存取、资源接口和内容清洗边界。前端选区测试使用模拟 Navigator；DOM range 测试证明序列化保留第二处重复句子的节点路径，尚未证明真实 Navigator 跳转与重排恢复。后端批注往返也不等于真实选区完整 Locator 的端到端验证。

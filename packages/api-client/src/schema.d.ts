@@ -1750,7 +1750,7 @@ export interface paths {
                 query?: never;
                 header: {
                     /** @description Desktop main-only capability; never exposed to renderer */
-                    "X-Reader-Export-Capability": string;
+                    "X-Interleaf-Export-Capability": string;
                 };
                 path?: never;
                 cookie?: never;
@@ -3223,7 +3223,7 @@ export interface paths {
             parameters: {
                 query?: never;
                 header: {
-                    "X-Reader-Undo-Session": string;
+                    "X-Interleaf-Undo-Session": string;
                 };
                 path: {
                     id: string;
@@ -3314,7 +3314,7 @@ export interface paths {
                 query?: never;
                 header?: {
                     /** @description Opt into per-window annotation undo history. */
-                    "X-Reader-Undo-Session"?: string;
+                    "X-Interleaf-Undo-Session"?: string;
                 };
                 path: {
                     id: string;
@@ -3378,7 +3378,7 @@ export interface paths {
                 query?: never;
                 header?: {
                     /** @description Opt into per-window annotation undo history. */
-                    "X-Reader-Undo-Session"?: string;
+                    "X-Interleaf-Undo-Session"?: string;
                 };
                 path: {
                     id: string;
@@ -3415,7 +3415,7 @@ export interface paths {
                 query?: never;
                 header?: {
                     /** @description Opt into per-window annotation undo history. */
-                    "X-Reader-Undo-Session"?: string;
+                    "X-Interleaf-Undo-Session"?: string;
                 };
                 path: {
                     id: string;
@@ -4144,7 +4144,7 @@ export interface paths {
                     };
                     content: {
                         "application/json": {
-                            /** @description Server sanitized reader-mode HTML; no publisher CSS */
+                            /** @description Server sanitized interleaf-mode HTML; no publisher CSS */
                             html: string;
                         };
                     };

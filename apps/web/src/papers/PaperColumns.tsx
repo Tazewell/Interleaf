@@ -11,14 +11,14 @@ import {
   Columns as Columns3,
   DotsSixVertical as GripVertical,
 } from "@phosphor-icons/react";
-import type { PaperColumn, PaperLibraryPreferences } from "@reader/core";
-import { Button } from "@reader/ui/components/button";
-import { Checkbox } from "@reader/ui/components/checkbox";
+import type { PaperColumn, PaperLibraryPreferences } from "@interleaf/core";
+import { Button } from "@interleaf/ui/components/button";
+import { Checkbox } from "@interleaf/ui/components/checkbox";
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
-} from "@reader/ui/components/popover";
+} from "@interleaf/ui/components/popover";
 import { savePaperPreferences } from "./actions";
 import {
   columnOrder,
@@ -112,7 +112,7 @@ export function usePaperColumns(prefs: PaperLibraryPreferences) {
       }}
       onDragStart={(event) => {
         event.stopPropagation();
-        event.dataTransfer.setData("application/x-reader-paper-column", column);
+        event.dataTransfer.setData("application/x-interleaf-paper-column", column);
         event.dataTransfer.effectAllowed = "move";
         const surface =
           event.currentTarget.closest<HTMLElement>("[data-column]");

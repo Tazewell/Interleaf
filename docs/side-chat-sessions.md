@@ -8,7 +8,7 @@
 
 ## 开发验证
 
-在任务 worktree 执行 `pnpm install --frozen-lockfile`、`pnpm typecheck`、`pnpm test`、`pnpm build`。`pnpm dev` 会同时构建并启用 pi worker；直接启动 Go 时需设置 `READER_NODE` 与 `READER_AGENT`，后者指向 `apps/agent/dist/main.mjs` 的绝对路径。
+在任务 worktree 执行 `pnpm install --frozen-lockfile`、`pnpm typecheck`、`pnpm test`、`pnpm build`。`pnpm dev` 会同时构建并启用 pi worker；直接启动 Go 时需设置 `INTERLEAF_NODE` 与 `INTERLEAF_AGENT`，后者指向 `apps/agent/dist/main.mjs` 的绝对路径。
 
 1. 导入 PDF 或 EPUB，确认默认会话里的旧消息、来源跳转、批注关联保持可用。
 2. 新建两个会话，分别问两个不同问题。在 A 出流时切到 B 发送，确认两者都继续运行。

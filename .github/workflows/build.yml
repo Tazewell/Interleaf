@@ -31,8 +31,8 @@ jobs:
       # No Apple or Windows credentials. macOS uses the fixed self-signed
       # certificate (apps/desktop/mac-sign.cjs) so in-place updates verify.
       CSC_FOR_PULL_REQUEST: "true"
-      READER_MAC_SIGN_P12: ${{ startsWith(matrix.target, 'mac-') && secrets.MAC_SIGN_P12 || '' }}
-      READER_MAC_SIGN_P12_PASSWORD: ${{ startsWith(matrix.target, 'mac-') && secrets.MAC_SIGN_P12_PASSWORD || '' }}
+      INTERLEAF_MAC_SIGN_P12: ${{ startsWith(matrix.target, 'mac-') && secrets.MAC_SIGN_P12 || '' }}
+      INTERLEAF_MAC_SIGN_P12_PASSWORD: ${{ startsWith(matrix.target, 'mac-') && secrets.MAC_SIGN_P12_PASSWORD || '' }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
@@ -52,13 +52,13 @@ jobs:
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: apps/processor/models
-          key: reader-layout-model-${{ hashFiles('apps/processor/model.json') }}
+          key: interleaf-layout-model-${{ hashFiles('apps/processor/model.json') }}
       - name: Build installers and verify packaged runtimes
         run: pnpm package
       - name: Store verified installers
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: reader-${{ matrix.target }}
+          name: interleaf-${{ matrix.target }}
           path: |
             release/Interleaf-*-${{ matrix.target }}.dmg
             release/Interleaf-*-${{ matrix.target }}.zip

@@ -6,9 +6,9 @@ import {
   ArrowCounterClockwise as RotateCcw,
   Translate as Languages,
 } from "@phosphor-icons/react";
-import type { EPUBLocation, LibraryMode, Processing } from "@reader/core";
-import { api } from "@reader/api";
-import { Button } from "@reader/ui/components/button";
+import type { EPUBLocation, LibraryMode, Processing } from "@interleaf/core";
+import { api } from "@interleaf/api";
+import { Button } from "@interleaf/ui/components/button";
 import {
   AlertDialog,
   AlertDialogTrigger,
@@ -18,7 +18,7 @@ import {
   AlertDialogDescription,
   AlertDialogFooter,
   AlertDialogCancel,
-} from "@reader/ui/components/alert-dialog";
+} from "@interleaf/ui/components/alert-dialog";
 import { toast } from "sonner";
 import type { PageRange } from "./chapters";
 

@@ -30,7 +30,7 @@ EPUB 导入后只提取正文，不自动全文翻译。工具栏的“翻译本
 
 ```sh
 pnpm build
-./apps/desktop/bin/reader-server --data .reader/epub-web-preview --port 0 --web apps/web/dist
+./apps/desktop/bin/interleaf-server --data .interleaf/epub-web-preview --port 0 --web apps/web/dist
 ```
 
 在浏览器打开启动日志中的 `<url>/#token=<token>`。预览使用独立书库，不要使用正式书库验证导入和删除。2026-10-09 已在本机启动该预览，导入 `MAKE.epub` 和原创批注验收样本。重启后使用新启动日志中的地址和 token。
@@ -39,7 +39,7 @@ pnpm build
 
 - 修正根元素版式识别：`body .quote`、`:root > h1` 及伪元素样式不再误拒整本书，新增选择器边界测试。此检查不计算完整 CSS 层叠，也不识别仅在 `:is()` / `:where()` 参数中声明的根元素。
 - 长段落以可见字符的 Range 保持阅读位置，新增字号和栏宽重排的合成几何回归。
-- 最终 `pnpm typecheck`、`pnpm build`、Go 全套通过。Vitest 484 项通过、4 项跳过；`paper-library.test.tsx` 与 `windows-proxy-reader.test.ts` 各失败一项，已在主线 `43d5466` 复现相同失败。
+- 最终 `pnpm typecheck`、`pnpm build`、Go 全套通过。Vitest 484 项通过、4 项跳过；`paper-library.test.tsx` 与 `windows-proxy-interleaf.test.ts` 各失败一项，已在主线 `43d5466` 复现相同失败。
 - 真实 HTTP 检查覆盖 MAKE 的 127 章、1,499 个文字/图片块、80 张图片，以及原创样本的 3 章、19 个块；HTML 块 ID 对齐、图片可读与 API 鉴权通过。使用最终构建重启后，两本书的全部章节接口再次通过。
 - 独立预览设置为默认打开「图书库」，避免首次进入空的「论文库」。尚未进行浏览器排版、触控板或桌面视觉验收；模型整书翻译也未在本轮验证。
 
@@ -122,7 +122,7 @@ EPUB 固定使用 Readium 滚动模式，包括已有 `scroll: false` 的偏好�
 
 ## 人工验收
 
-运行 `python3 scripts/create-epub-check.py` 生成 `.reader/epub-check.epub`。文件完全使用项目原创测试文字，包含重复句子、跨节点内容、中文/emoji/ruby、长段落与脚注。
+运行 `python3 scripts/create-epub-check.py` 生成 `.interleaf/epub-check.epub`。文件完全使用项目原创测试文字，包含重复句子、跨节点内容、中文/emoji/ruby、长段落与脚注。
 
 1. 打开「EPUB 批注验收样本」，给第一章第二处重复句添加高亮、下划线或笔记。
 2. 调整字号、行距及窗口宽度，上下滚动跨章，再关闭并重新打开。
@@ -133,7 +133,7 @@ EPUB 固定使用 Readium 滚动模式，包括已有 `scroll: false` 的偏好�
 可在独立测试书库启动已构建的预览，端口 `0` 会自动选择空闲本机端口：
 
 ```sh
-./apps/desktop/bin/reader-server --data .reader/epub-preview --port 0 --web apps/web/dist
+./apps/desktop/bin/interleaf-server --data .interleaf/epub-preview --port 0 --web apps/web/dist
 ```
 
 启动行返回 `url` 与当前会话 `token`，使用 `<url>/#token=<token>` 打开。此命令使用隔离书库。正式 Electron 的字体、原生窗口与缩放仍需人工检查。

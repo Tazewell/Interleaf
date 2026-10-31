@@ -4,8 +4,8 @@ import type {
   PDFSentenceLink,
   ReaderSelection,
   TranslationBlock,
-} from "@reader/core";
-import { sentenceAnchor } from "@reader/core";
+} from "@interleaf/core";
+import { sentenceAnchor } from "@interleaf/core";
 
 export function sentenceLink(
   links: PDFSentenceLink[],

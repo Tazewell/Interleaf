@@ -1,4 +1,4 @@
-import type { Document, PaperItem } from "@reader/core";
+import type { Document, PaperItem } from "@interleaf/core";
 /** Display rows keep a real primary file ID, with a guarded synthetic ID only for empty items. */
 export function projectPapers(
   items: PaperItem[],

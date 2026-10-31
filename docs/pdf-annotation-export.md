@@ -32,7 +32,7 @@
 
 ## 实现
 
-`apps/web/src/readers/pdf-export.ts` 通过 PDF.js 的 `annotationStorage` 写入新批注，再用 `saveDocument()` 做增量保存：原始字节保持为文件前缀，新对象和交叉引用追加在末尾，已有的 PDF 批注和书签保留。高亮带外观流，不依赖阅读器自行生成。`apps/web/src/annotated-pdf-export.ts` 读取批注与对话（问题的回答），按需加载 PDF.js 后导出并下载。
+`apps/web/src/engines/pdf-export.ts` 通过 PDF.js 的 `annotationStorage` 写入新批注，再用 `saveDocument()` 做增量保存：原始字节保持为文件前缀，新对象和交叉引用追加在末尾，已有的 PDF 批注和书签保留。高亮带外观流，不依赖阅读器自行生成。`apps/web/src/annotated-pdf-export.ts` 读取批注与对话（问题的回答），按需加载 PDF.js 后导出并下载。
 
 PDF.js 新建批注的数据格式属于其内部格式（`pdfjs_internal_editor_` 前缀与编辑器序列化字段），升级 `pdfjs-dist` 时由测试兜底。
 

@@ -1,5 +1,5 @@
-import type { DocumentLocation } from "@reader/core";
-import { api } from "@reader/api";
+import type { DocumentLocation } from "@interleaf/core";
+import { api } from "@interleaf/api";
 type Progress = { progress: DocumentLocation; percentage: number };
 let latest: { id: string; patch: Progress; version: number } | undefined;
 const versions = new Map<string, number>();

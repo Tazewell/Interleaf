@@ -6,7 +6,7 @@ Interleaf 的实现使用 PDF.js 6.3.289、PDF-LIB 1.17.1、`@pdf-lib/fontkit` 1
 
 ## 准备协议
 
-`prepareNativePDF({input,layout,fromPage?,toPage?})` 的 `layout` 是既有 `schemaVersion:1` manifest 文件路径；校验 `inputSHA256`、总页数、区域 ID 和归一化 bounds，直接从原 PDF 获取文字。`prepared.revision` 是原始 manifest **字节**的 SHA-256，仅表示版面快照；`originalSha256` 表示原文身份。段落 `sourceHash` 独立计算于 `reader-native-pdf-v1`、原生段 ID、带占位符源文、物理 bounds 和公式 bounds，不复用阅读译文的 hash。最终任务身份还需调用方冻结导出器/字体版本、目标译文及 options。
+`prepareNativePDF({input,layout,fromPage?,toPage?})` 的 `layout` 是既有 `schemaVersion:1` manifest 文件路径；校验 `inputSHA256`、总页数、区域 ID 和归一化 bounds，直接从原 PDF 获取文字。`prepared.revision` 是原始 manifest **字节**的 SHA-256，仅表示版面快照；`originalSha256` 表示原文身份。段落 `sourceHash` 独立计算于 `interleaf-native-pdf-v1`、原生段 ID、带占位符源文、物理 bounds 和公式 bounds，不复用阅读译文的 hash。最终任务身份还需调用方冻结导出器/字体版本、目标译文及 options。
 
 所有 bounds 使用 PDF.js 可见页面的物理点，顶左原点，已经处理可见 CropBox 与 MediaBox 的交集、旋转和 UserUnit。原文面板通过剪裁 Form XObject、CropBox 平移及旋转/UserUnit 变换保持原尺寸。不会复制文档 JavaScript、页面动作或批注；译文面板只有清洗后的像素背景、公式图像和新文字层。
 

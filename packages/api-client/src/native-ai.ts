@@ -4,7 +4,7 @@ import type {
   NativeAIConfig,
   NativeAIConfigUpdate,
   NativeAICheck,
-} from "@reader/core";
+} from "@interleaf/core";
 import { request } from "./transport";
 
 export const nativeAI = {

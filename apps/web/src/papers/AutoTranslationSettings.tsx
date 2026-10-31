@@ -1,5 +1,5 @@
-import type { ReaderTheme } from "@reader/core";
-import { Slider } from "@reader/ui/components/slider";
+import type { ReaderTheme } from "@interleaf/core";
+import { Slider } from "@interleaf/ui/components/slider";
 
 export function AutoTranslationSettings({
   theme,

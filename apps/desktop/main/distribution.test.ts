@@ -4,11 +4,11 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { selectRelease } from "./updates";
 import { devIsolation } from "./dev-isolation";
-import { isReaderLink } from "./command-line";
+import { isInterleafLink } from "./command-line";
 import {
-  readerLink,
-  parseReaderLink,
-} from "../../../packages/reader-core/src/reader-link";
+  interleafLink,
+  parseInterleafLink,
+} from "../../../packages/interleaf-core/src/interleaf-link";
 
 const temporary: string[] = [];
 afterEach(async () => {
@@ -47,8 +47,8 @@ it("isolates development data from the original application", () => {
 
 it("creates Interleaf links and refuses the original application protocol", () => {
   const id = "a".repeat(32);
-  expect(readerLink({ id, page: 2 })).toBe(`interleaf://open?id=${id}&page=2`);
-  expect(parseReaderLink(`reader://open?id=${id}`)).toBeNull();
+  expect(interleafLink({ id, page: 2 })).toBe(`interleaf://open?id=${id}&page=2`);
+  expect(parseInterleafLink(`reader://open?id=${id}`)).toBeNull();
 });
 
 it("does not claim a command installed by another application", async () => {
@@ -58,9 +58,9 @@ it("does not claim a command installed by another application", async () => {
   await mkdir(join(bundle, "Contents"), { recursive: true });
   await writeFile(
     join(bundle, "Contents", "Info.plist"),
-    "<plist><dict><key>CFBundleIdentifier</key><string>io.github.legacy.reader</string></dict></plist>",
+    "<plist><dict><key>CFBundleIdentifier</key><string>io.github.legacy.interleaf</string></dict></plist>",
   );
   expect(
-    await isReaderLink(join(bundle, "Contents/Resources/bin/reader")),
+    await isInterleafLink(join(bundle, "Contents/Resources/bin/interleaf")),
   ).toBe(false);
 });

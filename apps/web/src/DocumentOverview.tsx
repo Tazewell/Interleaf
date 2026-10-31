@@ -10,16 +10,16 @@ import type {
   DocumentLocation,
   DocumentOverview,
   OverviewJob,
-} from "@reader/core";
-import { api } from "@reader/api";
-import { Button } from "@reader/ui/components/button";
+} from "@interleaf/core";
+import { api } from "@interleaf/api";
+import { Button } from "@interleaf/ui/components/button";
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
   DialogDescription,
-} from "@reader/ui/components/dialog";
+} from "@interleaf/ui/components/dialog";
 
 const labels: Record<OverviewJob["status"], string> = {
   missing: "尚未生成概要",

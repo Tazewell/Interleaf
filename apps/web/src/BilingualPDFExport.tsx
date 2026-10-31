@@ -3,12 +3,12 @@ import type {
   BilingualPDFJob,
   BilingualPDFOptions,
   Document,
-} from "@reader/core";
-import { api } from "@reader/api";
-import { Button } from "@reader/ui/components/button";
-import { Checkbox } from "@reader/ui/components/checkbox";
-import { Input } from "@reader/ui/components/input";
-import { RadioGroup, RadioGroupItem } from "@reader/ui/components/radio-group";
+} from "@interleaf/core";
+import { api } from "@interleaf/api";
+import { Button } from "@interleaf/ui/components/button";
+import { Checkbox } from "@interleaf/ui/components/checkbox";
+import { Input } from "@interleaf/ui/components/input";
+import { RadioGroup, RadioGroupItem } from "@interleaf/ui/components/radio-group";
 
 type Session = {
   active: boolean;
@@ -39,7 +39,7 @@ export function BilingualPDFExport({ document: doc }: { document: Document }) {
     doc.type !== "pdf" ||
     doc.metadataOnly ||
     doc.deletedAt ||
-    !window.readerDesktop?.saveBilingualPDF
+    !window.interleafDesktop?.saveBilingualPDF
   )
     return null;
   return <ExportArea key={`${doc.id}:${doc.paperId || ""}`} document={doc} />;
@@ -70,7 +70,7 @@ function ExportArea({ document: doc }: { document: Document }) {
     if (!s.cleanup) {
       const input = { documentId: doc.id, jobId: s.jobId };
       s.cleanup = Promise.all([
-        window.readerDesktop?.cancelBilingualPDFSave?.(input),
+        window.interleafDesktop?.cancelBilingualPDFSave?.(input),
         api.cancelBilingualPDF(doc.id, s.jobId),
       ]).then(
         () => {},
@@ -119,7 +119,7 @@ function ExportArea({ document: doc }: { document: Document }) {
     mounted.current = true;
     // Effects may be replayed in development StrictMode.
     if (!session.current.active) session.current = newSession();
-    const unsubscribe = window.readerDesktop?.onLibraryChanged?.(() => {
+    const unsubscribe = window.interleafDesktop?.onLibraryChanged?.(() => {
       void reset();
     });
     return () => {
@@ -281,7 +281,7 @@ function ExportArea({ document: doc }: { document: Document }) {
     try {
       if (retryAttachment) await attachFile(s);
       else {
-        const result = await window.readerDesktop!.saveBilingualPDF!({
+        const result = await window.interleafDesktop!.saveBilingualPDF!({
           documentId: doc.id,
           jobId: job.id,
         });

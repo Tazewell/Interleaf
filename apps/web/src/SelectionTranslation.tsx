@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
-import type { ReaderSelection } from "@reader/core";
-import { api } from "@reader/api";
-import { Popover, PopoverContent } from "@reader/ui/components/popover";
+import type { ReaderSelection } from "@interleaf/core";
+import { api } from "@interleaf/api";
+import { Popover, PopoverContent } from "@interleaf/ui/components/popover";
 
 export function SelectionTranslation({
   selection,

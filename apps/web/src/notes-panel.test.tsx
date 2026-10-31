@@ -2,11 +2,11 @@
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import { api } from "@reader/api";
-import type { Annotation, Message } from "@reader/core";
+import { api } from "@interleaf/api";
+import type { Annotation, Message } from "@interleaf/core";
 import { NotesPanel, documentOrder } from "./NotesPanel";
 import { paper } from "./papers/fixtures";
-vi.mock("@reader/api", () => ({
+vi.mock("@interleaf/api", () => ({
   api: {
     documentNote: vi.fn(async () => ({ body: "" })),
     saveDocumentNote: vi.fn(async (_id: string, body: string) => ({ body })),

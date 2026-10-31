@@ -2,14 +2,14 @@
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import type { Processing } from "@reader/core";
+import type { Processing } from "@interleaf/core";
 import { AssistanceControls } from "./AssistanceControls";
-import { api } from "@reader/api";
+import { api } from "@interleaf/api";
 import { toast } from "sonner";
 vi.mock("sonner", () => ({
   toast: Object.assign(vi.fn(), { error: vi.fn() }),
 }));
-vi.mock("@reader/api", () => ({
+vi.mock("@interleaf/api", () => ({
   api: {
     assistance: vi.fn(async () => undefined),
     setAssistance: vi.fn(),

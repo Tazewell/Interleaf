@@ -16,7 +16,7 @@ const source = windows
       root,
       `release/mac${process.arch === "arm64" ? "-arm64" : ""}/Interleaf.app`,
     );
-const temporary = await mkdtemp(join(tmpdir(), "reader-package-smoke-"));
+const temporary = await mkdtemp(join(tmpdir(), "interleaf-package-smoke-"));
 const isolated = join(temporary, windows ? "Interleaf" : "Interleaf.app");
 const app = windows ? isolated : join(isolated, "Contents");
 const resources = join(app, windows ? "resources" : "Resources");
@@ -61,7 +61,7 @@ try {
   assert.equal(native.status, 0, "Packaged native processor smoke failed");
   const token = randomBytes(32).toString("hex");
   child = spawn(
-    join(resources, "bin", `reader-server${windows ? ".exe" : ""}`),
+    join(resources, "bin", `interleaf-server${windows ? ".exe" : ""}`),
     [
       "--port",
       "0",
@@ -74,9 +74,9 @@ try {
       cwd: temporary,
       env: {
         ...process.env,
-        READER_TOKEN: token,
-        READER_NODE: electron,
-        READER_PROCESSOR: join(resources, "processor/main.mjs"),
+        INTERLEAF_TOKEN: token,
+        INTERLEAF_NODE: electron,
+        INTERLEAF_PROCESSOR: join(resources, "processor/main.mjs"),
       },
       stdio: ["ignore", "pipe", "inherit"],
     },
@@ -123,11 +123,11 @@ try {
   assert.equal((await request("/samples/reading-notes.pdf")).status, 200);
   // The command line finds the running service through the library directory.
   const cli = spawnSync(
-    join(resources, "bin", `reader${windows ? ".exe" : ""}`),
+    join(resources, "bin", `interleaf${windows ? ".exe" : ""}`),
     ["status", "--json"],
     {
       cwd: temporary,
-      env: { ...process.env, READER_DATA: join(temporary, "library") },
+      env: { ...process.env, INTERLEAF_DATA: join(temporary, "library") },
       encoding: "utf8",
       timeout: 20000,
     },

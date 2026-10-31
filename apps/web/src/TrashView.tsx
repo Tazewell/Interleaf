@@ -5,10 +5,10 @@ import {
   ArrowCounterClockwise as RotateCcw,
   Trash,
 } from "@phosphor-icons/react";
-import type { Document } from "@reader/core";
-import { api } from "@reader/api";
+import type { Document } from "@interleaf/core";
+import { api } from "@interleaf/api";
 import { toast } from "sonner";
-import { Button } from "@reader/ui/components/button";
+import { Button } from "@interleaf/ui/components/button";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -18,7 +18,7 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from "@reader/ui/components/alert-dialog";
+} from "@interleaf/ui/components/alert-dialog";
 import { refreshTrash, useReaderStore, libraryMode } from "./store";
 import { restoreLibraryDocuments } from "./library-actions";
 

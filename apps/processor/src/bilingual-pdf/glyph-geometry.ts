@@ -1,6 +1,6 @@
 import type { PDFPageProxy } from "pdfjs-dist";
 import type { TextItem } from "pdfjs-dist/types/src/display/api";
-import type { NativePDFBounds } from "../../../../packages/reader-core/src/bilingual-pdf";
+import type { NativePDFBounds } from "../../../../packages/interleaf-core/src/bilingual-pdf";
 
 type Matrix = number[];
 interface State {

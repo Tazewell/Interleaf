@@ -1,4 +1,4 @@
-import { selectionContext } from "../readers/selection-context";
+import { selectionContext } from "../engines/selection-context";
 import { epubSentenceLocation } from "./epub-links";
 import type {
   PDFBlock,
@@ -8,8 +8,8 @@ import type {
   ReaderSelection,
   TranslationBlock,
   TranslationLocation,
-} from "@reader/core";
-import { sentenceAnchor } from "@reader/core";
+} from "@interleaf/core";
+import { sentenceAnchor } from "@interleaf/core";
 
 export function translatedSelection(
   host: HTMLElement,

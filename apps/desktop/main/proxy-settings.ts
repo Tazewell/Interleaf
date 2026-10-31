@@ -8,7 +8,7 @@ import type {
   ProxySettings,
   ProxySettingsState,
   ProxyCheckResult,
-} from "../../../packages/reader-core/src/proxy-settings";
+} from "../../../packages/interleaf-core/src/proxy-settings";
 import { resolveSystemProxyEnvironment, systemProxyEnvironment } from "./proxy";
 
 const execute = promisify(execFile);

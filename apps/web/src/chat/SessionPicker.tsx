@@ -1,22 +1,22 @@
 import { useEffect, useState } from "react";
 import { Plus, PencilSimple, CircleNotch } from "@phosphor-icons/react";
-import { api } from "@reader/api";
-import type { DocumentChatSession } from "@reader/core";
-import { Button } from "@reader/ui/components/button";
+import { api } from "@interleaf/api";
+import type { DocumentChatSession } from "@interleaf/core";
+import { Button } from "@interleaf/ui/components/button";
 import {
   Select,
   SelectTrigger,
   SelectValue,
   SelectContent,
   SelectItem,
-} from "@reader/ui/components/select";
+} from "@interleaf/ui/components/select";
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
-} from "@reader/ui/components/dialog";
-import { Input } from "@reader/ui/components/input";
+} from "@interleaf/ui/components/dialog";
+import { Input } from "@interleaf/ui/components/input";
 import { toast } from "sonner";
 
 const statusLabels = {

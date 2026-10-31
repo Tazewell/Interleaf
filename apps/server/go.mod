@@ -1,4 +1,4 @@
-module reader.local/server
+module interleaf.local/server
 
 go 1.26.5
 

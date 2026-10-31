@@ -1,5 +1,5 @@
-import type { Processing } from "@reader/core";
-import { Button } from "@reader/ui/components/button";
+import type { Processing } from "@interleaf/core";
+import { Button } from "@interleaf/ui/components/button";
 
 export function TranslationJobStatus({
   processing,

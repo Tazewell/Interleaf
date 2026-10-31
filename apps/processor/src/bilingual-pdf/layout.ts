@@ -2,7 +2,7 @@ import type { PDFFont } from "pdf-lib";
 import type {
   NativePDFBounds,
   NativePDFFormula,
-} from "../../../../packages/reader-core/src/bilingual-pdf";
+} from "../../../../packages/interleaf-core/src/bilingual-pdf";
 import { validateFormulaTokens } from "./formula";
 import { textInkMetrics } from "./runtime";
 

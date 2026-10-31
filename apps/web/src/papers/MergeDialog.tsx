@@ -4,9 +4,9 @@ import type {
   PaperPatch,
   PaperMetadataField,
   BibliographyExport,
-} from "@reader/core";
-import { api } from "@reader/api";
-import { Button } from "@reader/ui/components/button";
+} from "@interleaf/core";
+import { api } from "@interleaf/api";
+import { Button } from "@interleaf/ui/components/button";
 import {
   Dialog,
   DialogContent,
@@ -14,16 +14,16 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "@reader/ui/components/dialog";
-import { RadioGroup, RadioGroupItem } from "@reader/ui/components/radio-group";
-import { Checkbox } from "@reader/ui/components/checkbox";
+} from "@interleaf/ui/components/dialog";
+import { RadioGroup, RadioGroupItem } from "@interleaf/ui/components/radio-group";
+import { Checkbox } from "@interleaf/ui/components/checkbox";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@reader/ui/components/select";
+} from "@interleaf/ui/components/select";
 import { toast } from "sonner";
 import { refreshLibrary, refreshTrash } from "../store";
 import { paperByline } from "./format";

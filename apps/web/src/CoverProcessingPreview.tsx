@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import type { Processing } from "@reader/core";
-import { Button } from "@reader/ui/components/button";
+import type { Processing } from "@interleaf/core";
+import { Button } from "@interleaf/ui/components/button";
 import { CoverProcessing } from "./ProcessingStatus";
 
 const base: Processing = {

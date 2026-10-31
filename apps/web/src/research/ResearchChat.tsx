@@ -1,14 +1,14 @@
 import { useEffect, useState } from "react";
-import type { ResearchRunInput } from "@reader/core";
-import { Button } from "@reader/ui/components/button";
-import { Textarea } from "@reader/ui/components/textarea";
+import type { ResearchRunInput } from "@interleaf/core";
+import { Button } from "@interleaf/ui/components/button";
+import { Textarea } from "@interleaf/ui/components/textarea";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@reader/ui/components/select";
+} from "@interleaf/ui/components/select";
 import { MessageMarkdown } from "../chat/MessageMarkdown";
 import type { ResearchState } from "./research-session";
 const labels = {

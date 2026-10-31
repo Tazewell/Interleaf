@@ -1,13 +1,13 @@
 import { useState } from "react";
-import { Button } from "@reader/ui/components/button";
-import { Input } from "@reader/ui/components/input";
+import { Button } from "@interleaf/ui/components/button";
+import { Input } from "@interleaf/ui/components/input";
 import {
   Dialog,
   DialogContent,
   DialogDescription,
   DialogHeader,
   DialogTitle,
-} from "@reader/ui/components/dialog";
+} from "@interleaf/ui/components/dialog";
 
 /** Names a new category or tag; `count` papers receive it on save. */
 export function CategoryDialog({

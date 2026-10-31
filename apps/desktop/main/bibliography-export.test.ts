@@ -11,7 +11,7 @@ afterEach(async () => {
   );
 });
 async function directory() {
-  const p = await mkdtemp(join(tmpdir(), "reader-bib-export-"));
+  const p = await mkdtemp(join(tmpdir(), "interleaf-bib-export-"));
   directories.push(p);
   return p;
 }

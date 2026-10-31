@@ -23,23 +23,23 @@ import {
   Sun,
 } from "@phosphor-icons/react";
 import { version } from "../../desktop/package.json";
-import { api, RequestError, researchAPI } from "@reader/api";
+import { api, RequestError, researchAPI } from "@interleaf/api";
 import {
   LargePaperConfirmation,
   LargePaperDialog,
   type LargePaper,
 } from "./LargePaperDialog";
-import type { Document, LibraryMode } from "@reader/core";
-import { Button } from "@reader/ui/components/button";
-import { Input } from "@reader/ui/components/input";
-import { TooltipProvider } from "@reader/ui/components/tooltip";
+import type { Document, LibraryMode } from "@interleaf/core";
+import { Button } from "@interleaf/ui/components/button";
+import { Input } from "@interleaf/ui/components/input";
+import { TooltipProvider } from "@interleaf/ui/components/tooltip";
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
   DialogDescription,
-} from "@reader/ui/components/dialog";
+} from "@interleaf/ui/components/dialog";
 import { Toaster, toast } from "sonner";
 import {
   DropdownMenu,
@@ -49,7 +49,7 @@ import {
   DropdownMenuRadioItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from "@reader/ui/components/dropdown-menu";
+} from "@interleaf/ui/components/dropdown-menu";
 import {
   useReaderStore,
   refreshLibrary,
@@ -212,7 +212,7 @@ export function App() {
     document.documentElement.classList.toggle("dark", dark);
     document.documentElement.dataset.theme = resolvedTheme.mode;
     document.documentElement.style.colorScheme = dark ? "dark" : "light";
-    void window.readerDesktop
+    void window.interleafDesktop
       ?.setAppearance(theme.appearance ?? "system")
       .catch((e) => toast.error(e.message));
   }, [resolvedTheme.mode, theme.appearance]);
@@ -239,9 +239,9 @@ export function App() {
       : "";
   };
   const chooseFiles = (folder = currentPaperFolder()) => {
-    if (window.readerDesktop) {
+    if (window.interleafDesktop) {
       setBusy(true);
-      void window.readerDesktop
+      void window.interleafDesktop
         .importFiles(currentMode(), folder)
         .then((large) => {
           setLargePapers(large);
@@ -262,7 +262,7 @@ export function App() {
       if (library === "books") switchMode("books");
       const desktop = papers.flatMap((p) => (p.id ? [p.id] : []));
       if (desktop.length)
-        await window.readerDesktop?.importLargePapers(
+        await window.interleafDesktop?.importLargePapers(
           desktop,
           library,
           library === "papers" ? largePaperFolder : "",
@@ -289,7 +289,7 @@ export function App() {
   };
   useEffect(() => {
     if (loading) return;
-    return window.readerDesktop?.onOpenLink?.((target) => {
+    return window.interleafDesktop?.onOpenLink?.((target) => {
       void openLinkTarget(target)
         .then((found) => {
           if (!found) toast.error("找不到这份文档，它可能已被删除或在回收站中");
@@ -299,7 +299,7 @@ export function App() {
   }, [loading]);
   useEffect(
     () =>
-      window.readerDesktop?.onLibraryChanged(() => {
+      window.interleafDesktop?.onLibraryChanged(() => {
         resetResearchLibrary();
         ++researchSelection.current;
         researchOpening.current = null;
@@ -470,7 +470,7 @@ export function App() {
     <TooltipProvider>
       <div
         className="app"
-        data-platform={window.readerDesktop?.platform}
+        data-platform={window.interleafDesktop?.platform}
         onDragOver={(e) => {
           e.preventDefault();
         }}
@@ -968,14 +968,14 @@ export function App() {
               <dt className="text-muted-foreground">版本</dt>
               <dd>{version}</dd>
             </dl>
-            {window.readerDesktop?.checkForUpdates && (
+            {window.interleafDesktop?.checkForUpdates && (
               <Button
                 variant="outline"
                 disabled={checkingUpdates}
                 onClick={() => {
                   setCheckingUpdates(true);
                   void window
-                    .readerDesktop!.checkForUpdates()
+                    .interleafDesktop!.checkForUpdates()
                     .catch((error) => toast.error(String(error)))
                     .finally(() => setCheckingUpdates(false));
                 }}

@@ -1,13 +1,13 @@
 import { beforeEach, expect, it, vi } from "vitest";
-import { api } from "@reader/api";
-import type { PaperItem } from "@reader/core";
+import { api } from "@interleaf/api";
+import type { PaperItem } from "@interleaf/core";
 import { paper } from "./fixtures";
 import { projectPapers } from "./projection";
 import { patchPapers } from "./actions";
 import { formatCitations } from "./citation";
 import { useReaderStore } from "../store";
 import { removeLibraryDocuments } from "../library-actions";
-vi.mock("@reader/api", () => ({
+vi.mock("@interleaf/api", () => ({
   api: {
     update: vi.fn(),
     updatePaper: vi.fn(),

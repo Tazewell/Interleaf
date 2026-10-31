@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import { Button } from "@reader/ui/components/button";
-import { TooltipProvider } from "@reader/ui/components/tooltip";
+import { Button } from "@interleaf/ui/components/button";
+import { TooltipProvider } from "@interleaf/ui/components/tooltip";
 import {
   GuideDialog,
   OnboardingDialog,

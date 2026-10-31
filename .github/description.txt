@@ -1,1 +1,1 @@
-Local-first EPUB/PDF reader with annotations and AI assistance through Claude Code and Codex CLI. Built with React, TypeScript, shadcn/ui, Go, and Electron.
+Interleaf (纸间): local-first EPUB/PDF reading, annotations, translation and research through user-configured model APIs. Built with React, TypeScript, Go, and Electron.

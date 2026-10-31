@@ -26,7 +26,7 @@ Download installers from [GitHub Releases](https://github.com/Tazewell/Interleaf
 - **Book and paper libraries**: manage books and papers separately and move documents between them. The book library accepts EPUB / PDF; the paper library accepts PDFs up to 50 MB and 150 pages, asking first above 50 pages.
 - **Paper metadata**: edit authors, year, venue, DOI, arXiv ID, abstract, and more; online lookup never overwrites manual edits. Nested categories, tags with smart tag categories, list and sortable table views, reading status, batch actions, duplicate detection and merging, and two-way related papers.
 - **Journal ranks**: with an easyScholar key configured, show journal rank badges next to paper titles and choose which ranking systems to display.
-- **Several ways to add papers**: import by identifier, URL, or title; capture PDFs, metadata, and offline page snapshots from paper pages or search results with the [Interleaf Connector](docs/reader-connector.md) Chrome extension (Chinese); or [migrate from a local Zotero library](docs/zotero-migration.md) (Chinese), including PDFs, metadata, collections, tags, notes, and convertible annotations.
+- **Several ways to add papers**: import by identifier, URL, or title; capture PDFs, metadata, and offline page snapshots from paper pages or search results with the [Interleaf Connector](docs/interleaf-connector.md) Chrome extension (Chinese); or [migrate from a local Zotero library](docs/zotero-migration.md) (Chinese), including PDFs, metadata, collections, tags, notes, and convertible annotations.
 - **Citations**: copy or batch-export GB/T 7714, APA, BibTeX, and RIS citations.
 - **Trash**: deleted documents keep their files, annotations, and conversations until permanently deleted, and can be undone or restored.
 
@@ -125,13 +125,13 @@ Original files are stored on the filesystem. Document metadata, progress, annota
 | ----------------------------------- | ------------------------------------------------------------------------------------------------ |
 | Installed desktop app               | Electron `userData/library/`; typically `~/Library/Application Support/Interleaf/library/` on macOS |
 | Unpackaged desktop (`pnpm desktop`) | `~/Library/Application Support/Interleaf Dev/library/` on macOS                                     |
-| Browser development (`pnpm dev`)    | `.reader/` in the project root                                                                   |
+| Browser development (`pnpm dev`)    | `.interleaf/` in the project root                                                                   |
 
 If you previously used `pnpm desktop` as your daily app, your old library is at `~/Library/Application Support/Interleaf/library/`. You can copy it to the new directory while Interleaf is closed.
 
 ```text
 library/
-├── reader.sqlite       # Metadata, reading records, conversations, settings, and full-text index
+├── interleaf.sqlite       # Metadata, reading records, conversations, settings, and full-text index
 ├── books/              # Original EPUB files
 ├── papers/             # Original PDF files
 ├── cache/              # EPUB resources; Markdown, images, and drafts under PDF analysis
@@ -150,9 +150,9 @@ pnpm dev
 
 The terminal prints a URL in the form `http://127.0.0.1:5173/#token=…`. Open the complete URL. Vite proxies requests to the Go service at `127.0.0.1:17840`. This token authenticates access to the local service; it is not an AI account credential. Do not share URLs containing the token.
 
-Development runs leave the connector port disabled unless `READER_DEV_CONNECTOR=1` is set. Unpackaged desktop runs register `interleaf://` only with `READER_DEV_PROTOCOL=1`.
+Development runs leave the connector port disabled unless `INTERLEAF_DEV_CONNECTOR=1` is set. Unpackaged desktop runs register `interleaf://` only with `INTERLEAF_DEV_PROTOCOL=1`.
 
-`pnpm dev`, `pnpm desktop` and `pnpm build` prepare the pinned layout model before running. The first build downloads approximately 67 MB; later builds verify and reuse the ignored `apps/processor/models/` cache. For an offline build, set `READER_BUILD_LAYOUT_MODEL` to the absolute path of an existing copy of the pinned weights; size and SHA256 verification still apply. Installation, type checking and ordinary unit tests do not download the model.
+`pnpm dev`, `pnpm desktop` and `pnpm build` prepare the pinned layout model before running. The first build downloads approximately 67 MB; later builds verify and reuse the ignored `apps/processor/models/` cache. For an offline build, set `INTERLEAF_BUILD_LAYOUT_MODEL` to the absolute path of an existing copy of the pinned weights; size and SHA256 verification still apply. Installation, type checking and ordinary unit tests do not download the model.
 
 ```sh
 pnpm typecheck     # TypeScript type checking
@@ -178,7 +178,7 @@ apps/
 └── connector/     # Interleaf Connector Chrome extension
 packages/
 ├── ui/            # shadcn/ui + Base UI components
-├── reader-core/   # Document, Location, TOC, Annotation, ReaderAdapter
+├── interleaf-core/   # Document, Location, TOC, Annotation, ReaderAdapter
 └── api-client/    # OpenAPI types and API client
 docs/              # Scope, roadmap, API contract, and verification notes
 website/           # Static project website and README screenshots

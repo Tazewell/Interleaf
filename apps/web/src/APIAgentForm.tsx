@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
-import type { APIConnection } from "@reader/core";
-import { Button } from "@reader/ui/components/button";
-import { Input } from "@reader/ui/components/input";
+import type { APIConnection } from "@interleaf/core";
+import { Button } from "@interleaf/ui/components/button";
+import { Input } from "@interleaf/ui/components/input";
 
 import {
   Select,
@@ -9,7 +9,7 @@ import {
   SelectValue,
   SelectContent,
   SelectItem,
-} from "@reader/ui/components/select";
+} from "@interleaf/ui/components/select";
 const protocols = {
   auto: "中转站的非官方api默认使用openai协议",
   openai: "OpenAI Chat Completions",

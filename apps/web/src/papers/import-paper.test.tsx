@@ -2,15 +2,15 @@
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import { api } from "@reader/api";
+import { api } from "@interleaf/api";
 import { toast } from "sonner";
 import { ImportPaperDialog } from "./ImportPaperDialog";
 import { looksLikeReference } from "./actions";
 import { usePaperUI } from "./state";
 import { useReaderStore } from "../store";
 import { paper } from "./fixtures";
-vi.mock("@reader/api", async (importOriginal) => ({
-  RequestError: (await importOriginal<typeof import("@reader/api")>())
+vi.mock("@interleaf/api", async (importOriginal) => ({
+  RequestError: (await importOriginal<typeof import("@interleaf/api")>())
     .RequestError,
   api: {
     resolveDocument: vi.fn(),
@@ -214,7 +214,7 @@ it("keeps the dialog open and reports a failed lookup", async () => {
 it.each(["papers", "books"] as const)(
   "asks before importing a large reference into %s",
   async (library) => {
-    const { RequestError } = await import("@reader/api");
+    const { RequestError } = await import("@interleaf/api");
     const { LargePaperConfirmation } = await import("../LargePaperDialog");
     const { importReference } = await import("./actions");
     await act(async () => root.render(<LargePaperConfirmation />));

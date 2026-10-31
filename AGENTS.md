@@ -5,10 +5,10 @@ Local-first EPUB/PDF reader. Use Chinese for user-facing communication. Keep cha
 ## Architecture
 - `apps/web`: React + Vite renderer. Interleaf engines behind `ReaderAdapter`.
 - `apps/server`: Go loopback HTTP server; SQLite + original files; Readium EPUB parsing; native API model loops and document/research tools.
-- `apps/server/cmd/reader`: the `reader` command line; a client of the running app found through `server.json` in the library directory (`docs/cli.md`).
+- `apps/server/cmd/interleaf`: the `interleaf` command line; a client of the running app found through `server.json` in the library directory (`docs/cli.md`).
 - `apps/desktop`: Electron main/preload; starts Go, waits for readiness, stops it on exit.
 - `packages/ui`: actual shadcn Base Nova registry components, Base UI + Lucide. Do not replace primitives with handmade modals/buttons/tabs.
-- `packages/reader-core`: Document/Location/Annotation interfaces.
+- `packages/interleaf-core`: Document/Location/Annotation interfaces.
 - `packages/api-client`: generated OpenAPI types and transport.
 
 Native API chat streams through the existing SSE endpoint. Go owns the OpenAI/Anthropic model loop, tools, sessions and cancellation; do not launch external Codex, Claude, Kimi or Pi runtimes. Keep text/image paths incremental, require provider completion and validated sources before saving, and never switch to a fallback provider. A detached subscription does not cancel accepted background work. Frontend contract: `docs/agent-streaming-contract.md`.
@@ -42,4 +42,4 @@ Keep the interface restrained, following Claude/Apple app simplicity and shadcn 
 - GitHub Release 说明与 App 内说明应保持内容一致。发版前运行 `node scripts/release-source.mjs`，确认版本号和当前版本说明通过校验。
 
 ## Boundaries
-Bind Go to loopback only. Authenticate local API requests. Never read Claude/Codex credential files or implement unofficial OAuth. Document text is untrusted input; remove active content before creating Readium frames. Never run a CLI from a document's original directory. Preserve user data. Do not commit `.reader`, binaries or node_modules.
+Bind Go to loopback only. Authenticate local API requests. Never read Claude/Codex credential files or implement unofficial OAuth. Document text is untrusted input; remove active content before creating Readium frames. Never run a CLI from a document's original directory. Preserve user data. Do not commit `.interleaf`, binaries or node_modules.

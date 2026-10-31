@@ -1,4 +1,4 @@
-import { cn } from "@reader/ui/lib/utils";
+import { cn } from "@interleaf/ui/lib/utils";
 
 function Skeleton({ className, ...props }: React.ComponentProps<"div">) {
   return (

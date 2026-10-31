@@ -4,7 +4,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { ImagePreview } from "./ImagePreview";
 
-vi.mock("@reader/api", () => ({
+vi.mock("@interleaf/api", () => ({
   blockImageURL: () => "/image.png",
 }));
 

@@ -41,7 +41,7 @@ ScrollArea 仅扩展真实 Viewport ref/props。`useChatScroll` 监听实际滚�
 
 生产构建同机比较基线 85f2193（git archive 到本工作树忽略目录，显式 SDK/UI 别名）与最终前端：入口 JS 612,520→621,395 字节，增加 8,875；Python gzip 198,086→201,173，增加 3,087。新增 Markdown 异步 JS 498,193（gzip 150,333），高亮核心 93,038（29,941），WASM 622,336（230,448）；CodeBlock 1,324，MathFormula 390，另有语言/主题 chunks。所有 JS 合计 1,720,668→3,590,621，增加 1,869,953；KaTeX 多格式字体合计 1,072,948 字节。CSS 基线扫描路径有差异，不作不可靠差值。Vite 仍提示 >500kB chunk。所有 Markdown/高亮资源不在初始入口强制加载，开发预览/benchmark 不进入生产导航。
 
-复现数值：先启动下述开发预览，再运行 `READER_BENCHMARK_OUTPUT=<绝对输出路径> pnpm --filter @reader/desktop exec electron ../../apps/web/scripts/streaming-benchmark.cjs`。会执行六种样本，结束后退出自己的 Electron。
+复现数值：先启动下述开发预览，再运行 `INTERLEAF_BENCHMARK_OUTPUT=<绝对输出路径> pnpm --filter @interleaf/desktop exec electron ../../apps/web/scripts/streaming-benchmark.cjs`。会执行六种样本，结束后退出自己的 Electron。
 
 ## F4：正式对话与冻结契约
 
@@ -61,21 +61,21 @@ done 立即停止生成，再 GET messages。关联要求开始前 ID 集合、�
 
 原始数字见 [live JSONL](./frontend-streaming-live.jsonl)。取消数值是前端请求退出/查询返回时间，不声称上游进程在该时间内完成清理；后端资源回收证据见其报告。共用后端 `docs/fixtures/agent-streaming-v1.json` 四组（success/fallback/partial-error/missing-terminal）逐字节消费通过。备用商业 API 未用真实密钥调用，不声称厂商端验证。Kimi 首次 smoke 的“助手总数=1”断言失败是重复导入相同文件被去重后复用历史导致，已改为以请求前记录数为基线，重跑通过；产品的前置 ID 关联在该运行中正常。
 
-`backend-integration.test.ts` 默认跳过模型调用。复现需显式设置 `READER_INTEGRATION_READY=<0600 preview.json>`、`READER_INTEGRATION_PROVIDER=codex|kimi|claude`；共享 fixtures 可用 `READER_INTEGRATION_FIXTURES=<后端fixtures绝对路径>`。图片另设 `READER_INTEGRATION_IMAGE=streaming-synthetic-image` 并用 `-t 'real image'`。可设 `READER_INTEGRATION_OUTPUT=<绝对路径>` 记录无正文/无密钥 JSONL。token 不打印、不进 Git，不读取 CLI 凭据文件。
+`backend-integration.test.ts` 默认跳过模型调用。复现需显式设置 `INTERLEAF_INTEGRATION_READY=<0600 preview.json>`、`INTERLEAF_INTEGRATION_PROVIDER=codex|kimi|claude`；共享 fixtures 可用 `INTERLEAF_INTEGRATION_FIXTURES=<后端fixtures绝对路径>`。图片另设 `INTERLEAF_INTEGRATION_IMAGE=streaming-synthetic-image` 并用 `-t 'real image'`。可设 `INTERLEAF_INTEGRATION_OUTPUT=<绝对路径>` 记录无正文/无密钥 JSONL。token 不打印、不进 Git，不读取 CLI 凭据文件。
 
 ## 检查、预览与人工验收
 
 正式检查：`pnpm typecheck` 通过；`pnpm test` Go 全部包通过，最终 Vitest 21 文件通过 / 1 文件默认跳过，78 测试通过 / 3 个 opt-in 联调测试默认跳过；`pnpm build` 通过。初次全量测试发现 SSR 测试卸载后高亮模块仍加载，已移入客户端 effect，并全量复跑无错误。测试覆盖传输分片、未完成 Markdown、终态去重、失败/取消保留、旧请求/查询隔离、同步失败重试、稳定行 key、减少动态与后台恢复、滚动意图/清理。JSDOM 不代表真实布局通过。
 
-开发回放：`pnpm --filter @reader/web dev --port 15173`；已监听且 HTTP 200：[http://127.0.0.1:15173/__streaming](http://127.0.0.1:15173/__streaming)。不读取书库、不调用模型，默认开启 silky 动画，提供 Markdown 综合示例、脚注与引用边界、四种分片和三档大样本。
+开发回放：`pnpm --filter @interleaf/web dev --port 15173`；已监听且 HTTP 200：[http://127.0.0.1:15173/__streaming](http://127.0.0.1:15173/__streaming)。不读取书库、不调用模型，默认开启 silky 动画，提供 Markdown 综合示例、脚注与引用边界、四种分片和三档大样本。
 
-正式前端+已交付后端预览：`http://127.0.0.1:50351`，独立临时库，服务进程存活期间可用。状态文件（0600）：`/var/folders/1g/3yj40ngn5b33fs9gg0wzvms00000gn/T/reader-frontend-preview-3gM2qF/preview.json`。包含本机临时 token，未提交。以此命令打开带认证的本机页面（不打印 token）：
+正式前端+已交付后端预览：`http://127.0.0.1:50351`，独立临时库，服务进程存活期间可用。状态文件（0600）：`/var/folders/1g/3yj40ngn5b33fs9gg0wzvms00000gn/T/interleaf-frontend-preview-3gM2qF/preview.json`。包含本机临时 token，未提交。以此命令打开带认证的本机页面（不打印 token）：
 
 ```sh
-node -e 'const r=JSON.parse(require("fs").readFileSync(process.argv[1],"utf8")); require("child_process").spawn("open",[r.url+"/#token="+r.token]);' /var/folders/1g/3yj40ngn5b33fs9gg0wzvms00000gn/T/reader-frontend-preview-3gM2qF/preview.json
+node -e 'const r=JSON.parse(require("fs").readFileSync(process.argv[1],"utf8")); require("child_process").spawn("open",[r.url+"/#token="+r.token]);' /var/folders/1g/3yj40ngn5b33fs9gg0wzvms00000gn/T/interleaf-frontend-preview-3gM2qF/preview.json
 ```
 
-重新启动：`node apps/web/scripts/start-streaming-preview.cjs <已验证后端reader-server绝对路径>`。该脚本只新建临时库、使用本前端 dist、自动选 loopback 端口并写 0600 状态文件。可运行 `python3 apps/web/scripts/seed-streaming-image.py <新preview.json>` 准备合成图片；只允许该脚本新建的临时库，不覆盖已有条目。
+重新启动：`node apps/web/scripts/start-streaming-preview.cjs <已验证后端interleaf-server绝对路径>`。该脚本只新建临时库、使用本前端 dist、自动选 loopback 端口并写 0600 状态文件。可运行 `python3 apps/web/scripts/seed-streaming-image.py <新preview.json>` 准备合成图片；只允许该脚本新建的临时库，不覆盖已有条目。
 
 人工顺序：四种分片比较最终正文/链接；250px 侧栏深浅主题检查代码、表格、公式；生成中上翻选择复制并调整宽度，确认不拉回；回到底部恢复；系统减少动态；生成时停止检查尾字；后台恢复不补播；真实对话确认首段提前、最终无重复、取消、失败和同步重试。记录操作者/版本/结果。脚注晚到与终态替换位置、侧栏展开收起、Electron 实机尚未确认。未使用浏览器自动化作视觉验收。
 

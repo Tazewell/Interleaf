@@ -2,7 +2,7 @@
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { beforeEach, afterEach, expect, it, vi } from "vitest";
-import type { Message } from "@reader/core";
+import type { Message } from "@interleaf/core";
 import { AssistantPanel } from "./AssistantPanel";
 import {
   ChatSession,

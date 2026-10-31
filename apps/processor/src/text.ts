@@ -1,4 +1,4 @@
-import { pdfFontAscent } from "../../../packages/reader-core/src/pdf-text";
+import { pdfFontAscent } from "../../../packages/interleaf-core/src/pdf-text";
 import type { PDFPageProxy } from "pdfjs-dist";
 import type { TextSpan } from "./layout";
 

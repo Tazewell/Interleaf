@@ -2,13 +2,13 @@
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { beforeEach, afterEach, expect, it, vi } from "vitest";
-import { api } from "@reader/api";
+import { api } from "@interleaf/api";
 import { BibliographyImportDialog } from "./BibliographyImportDialog";
 import { BibliographyExportDialog } from "./BibliographyExportDialog";
 import { downloadText } from "../download";
 import { useReaderStore } from "../store";
 import { paper } from "./fixtures";
-vi.mock("@reader/api", () => ({
+vi.mock("@interleaf/api", () => ({
   api: {
     previewBibliography: vi.fn(async () => ({
       entries: [
@@ -49,7 +49,7 @@ beforeEach(() => {
   document.body.append(h);
   root = createRoot(h);
   useReaderStore.setState({ paperItems: [], libraryPreferences: {} });
-  delete window.readerDesktop;
+  delete window.interleafDesktop;
 });
 afterEach(async () => {
   await act(async () => root.unmount());
@@ -110,10 +110,10 @@ it("downloads a folder bibliography in browsers without offering arbitrary path 
 });
 it("uses only the desktop native chooser capability for managed export", async () => {
   const configure = vi.fn(async () => null);
-  window.readerDesktop = {
+  window.interleafDesktop = {
     platform: "win32",
     configureBibliographyExport: configure,
-  } as unknown as typeof window.readerDesktop;
+  } as unknown as typeof window.interleafDesktop;
   await act(async () =>
     root.render(
       <BibliographyExportDialog

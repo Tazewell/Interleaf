@@ -3,7 +3,7 @@ import type {
   Message,
   SourceReference,
   TOCItem,
-} from "@reader/core";
+} from "@interleaf/core";
 
 export interface ReferenceCard {
   sourceId?: string;

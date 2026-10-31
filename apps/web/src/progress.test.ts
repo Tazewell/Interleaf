@@ -1,6 +1,6 @@
 import { afterEach, expect, it, vi } from "vitest";
 const update = vi.hoisted(() => vi.fn());
-vi.mock("@reader/api", () => ({ api: { update } }));
+vi.mock("@interleaf/api", () => ({ api: { update } }));
 afterEach(() => {
   vi.resetModules();
   update.mockReset();

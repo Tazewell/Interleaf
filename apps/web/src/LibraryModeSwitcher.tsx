@@ -1,12 +1,12 @@
 import { Check, CaretDown as ChevronDown } from "@phosphor-icons/react";
-import type { LibraryMode } from "@reader/core";
-import { Button } from "@reader/ui/components/button";
+import type { LibraryMode } from "@interleaf/core";
+import { Button } from "@interleaf/ui/components/button";
 import {
   DropdownMenu,
   DropdownMenuTrigger,
   DropdownMenuContent,
   DropdownMenuItem,
-} from "@reader/ui/components/dropdown-menu";
+} from "@interleaf/ui/components/dropdown-menu";
 
 export const libraryModes: Record<
   LibraryMode,

@@ -7,7 +7,7 @@ import type {
   PaperSort,
   Processing,
   ReadingStatus,
-} from "@reader/core";
+} from "@interleaf/core";
 import { matchTagBoard } from "../library";
 import {
   paperCreators,

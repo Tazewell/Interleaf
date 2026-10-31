@@ -1,4 +1,4 @@
-import { api } from "@reader/api";
+import { api } from "@interleaf/api";
 import { flushProgress } from "./progress";
 import { useReaderStore } from "./store";
 
@@ -8,7 +8,7 @@ export function installCloseFlush() {
     void flushProgress().catch(() => {});
   };
   window.addEventListener("pagehide", flush);
-  const removeClose = window.readerDesktop?.onBeforeClose(async () => {
+  const removeClose = window.interleafDesktop?.onBeforeClose(async () => {
     await flushProgress();
     await api.saveSettings(useReaderStore.getState().theme);
   });

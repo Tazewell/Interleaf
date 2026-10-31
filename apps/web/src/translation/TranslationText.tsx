@@ -1,7 +1,7 @@
 import { FormulaRow } from "./FormulaRow";
-import type { PDFBlock, Processing, TranslationBlock } from "@reader/core";
-import { blockImageURL } from "@reader/api";
-import { Button } from "@reader/ui/components/button";
+import type { PDFBlock, Processing, TranslationBlock } from "@interleaf/core";
+import { blockImageURL } from "@interleaf/api";
+import { Button } from "@interleaf/ui/components/button";
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { ReadingLinkNavigation } from "../reading-links";
 import { ErrorBoundary } from "../ErrorBoundary";

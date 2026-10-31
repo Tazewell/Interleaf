@@ -11,8 +11,8 @@ case "$output/" in
 esac
 cd "$root"
 node scripts/bilingual-pdf-acceptance/fixtures.mjs "$output"
-pnpm --filter @reader/processor exec esbuild ../desktop/main/bilingual-pdf-export.ts \
+pnpm --filter @interleaf/processor exec esbuild ../desktop/main/bilingual-pdf-export.ts \
   --bundle --platform=node --format=esm --packages=external --outfile="$output/native-save.mjs"
-(cd apps/server && go build -o "$output/reader-server" ./cmd/reader-server)
+(cd apps/server && go build -o "$output/interleaf-server" ./cmd/interleaf-server)
 python3 scripts/bilingual-pdf-acceptance/acceptance.py "$root" "$output"
 node scripts/bilingual-pdf-acceptance/inspect.mjs "$output"

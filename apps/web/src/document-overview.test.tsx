@@ -2,10 +2,10 @@
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import { api } from "@reader/api";
-import type { Document, DocumentOverview } from "@reader/core";
+import { api } from "@interleaf/api";
+import type { Document, DocumentOverview } from "@interleaf/core";
 import { DocumentOverviewDialog } from "./DocumentOverview";
-vi.mock("@reader/api", () => ({
+vi.mock("@interleaf/api", () => ({
   api: {
     documentOverview: vi.fn(),
     generateOverview: vi.fn(),

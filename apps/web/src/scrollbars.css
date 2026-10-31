@@ -3,7 +3,7 @@
   scrollbar-width: thin;
   scrollbar-color: transparent transparent;
 }
-[data-reader-scrolling] {
+[data-interleaf-scrolling] {
   scrollbar-color: color-mix(in srgb, var(--ink, #17181c) 32%, transparent)
     transparent;
 }
@@ -21,7 +21,7 @@
   border-radius: 8px;
   background-clip: padding-box;
 }
-[data-reader-scrolling]::-webkit-scrollbar-thumb {
+[data-interleaf-scrolling]::-webkit-scrollbar-thumb {
   background-color: color-mix(in srgb, var(--ink, #17181c) 32%, transparent);
 }
 [data-slot="scroll-area-scrollbar"] {
@@ -29,7 +29,7 @@
   pointer-events: none;
   transition: opacity var(--motion-base) var(--ease-out);
 }
-[data-slot="scroll-area"]:has(> [data-reader-scrolling])
+[data-slot="scroll-area"]:has(> [data-interleaf-scrolling])
   > [data-slot="scroll-area-scrollbar"],
 [data-slot="scroll-area-scrollbar"]:active {
   opacity: 1;

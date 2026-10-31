@@ -2,8 +2,8 @@
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import { api } from "@reader/api";
-import type { Document, PaperItem, Processing } from "@reader/core";
+import { api } from "@interleaf/api";
+import type { Document, PaperItem, Processing } from "@interleaf/core";
 import { useReaderStore } from "../store";
 import { PaperLibrary } from "./PaperLibrary";
 import { PaperSidebar } from "./PaperSidebar";
@@ -16,7 +16,7 @@ import { exportAnnotatedPDFWithToast } from "../annotated-pdf-export";
 vi.mock("../annotated-pdf-export", () => ({
   exportAnnotatedPDFWithToast: vi.fn(async () => 1),
 }));
-vi.mock("@reader/api", () => ({
+vi.mock("@interleaf/api", () => ({
   api: {
     snapshotStatus: vi.fn(async () => ({ available: false })),
     journalRankConfig: vi.fn(async () => ({

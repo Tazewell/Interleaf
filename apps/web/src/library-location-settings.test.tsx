@@ -36,7 +36,7 @@ it("shows the active location and keeps editing blocked while moving", async () 
         }),
     ),
   };
-  vi.stubGlobal("readerDesktop", api);
+  vi.stubGlobal("interleafDesktop", api);
   await render();
   expect(host.textContent).toContain("/current/library");
   await act(async () => host.querySelector("button")!.click());
@@ -47,7 +47,7 @@ it("shows the active location and keeps editing blocked while moving", async () 
   expect(host.querySelector("button")!.disabled).toBe(false);
 });
 it("shows errors and allows retry without changing the displayed location", async () => {
-  vi.stubGlobal("readerDesktop", {
+  vi.stubGlobal("interleafDesktop", {
     platform: "darwin",
     libraryLocation: async () => "/current/library",
     moveLibrary: async () => {

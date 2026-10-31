@@ -1,5 +1,5 @@
 import { useMemo, useSyncExternalStore } from "react";
-import { defaultTheme, type ReaderTheme } from "@reader/core";
+import { defaultTheme, type ReaderTheme } from "@interleaf/core";
 const query = "(prefers-color-scheme: dark)";
 function subscribe(callback: () => void) {
   const media = window.matchMedia(query);

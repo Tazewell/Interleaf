@@ -45,7 +45,7 @@ await mkdir(staging, { recursive: true });
 run(process.execPath, [
   pnpm,
   "--filter",
-  "@reader/processor",
+  "@interleaf/processor",
   "deploy",
   "--prod",
   "--config.inject-workspace-packages=true",
@@ -63,7 +63,7 @@ await cp(join(root, "apps/web/dist"), join(staging, "web"), {
   recursive: true,
 });
 await mkdir(join(staging, "bin"));
-for (const name of ["reader-server", "reader"]) {
+for (const name of ["interleaf-server", "interleaf"]) {
   const binary = `${name}${process.platform === "win32" ? ".exe" : ""}`;
   await cp(join(desktop, "bin", binary), join(staging, "bin", binary));
 }

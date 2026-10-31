@@ -13,7 +13,7 @@
 ## Global Constraints
 
 - Interleaf 通过用户配置的 API 地址、API Key 和模型提供 AI 功能，不再关联或依赖 Codex、Claude Code、Kimi 等外部 Agent。Interleaf 自己管理会话、上下文、工具调用和任务。
-- 第一版使用现有 Go 后端实现模型/工具循环；移除 AI 运行链路中的 CLI 适配器、Codex 持久 thread、Kimi ACP、Claude CLI 及 Pi 调度/依赖。PDF 处理所需的 Node worker、Electron 和非 AI 的 `reader` 命令行仍保留。
+- 第一版使用现有 Go 后端实现模型/工具循环；移除 AI 运行链路中的 CLI 适配器、Codex 持久 thread、Kimi ACP、Claude CLI 及 Pi 调度/依赖。PDF 处理所需的 Node worker、Electron 和非 AI 的 `interleaf` 命令行仍保留。
 - 第一版采用一个主要 API 连接，并按用途指定模型；研究模型留空时继承问答模型。允许自定义兼容端点和用户明确配置的本地模型端点。
 - 文件夹研究默认遵循当前书库对子文件夹的包含设置，并允许在研究范围中调整；默认选择每篇文献的可读原文附件，避免把译文附件当成第二篇论文。
 - 联网权限归研究会话，默认关闭；用户明确提出联网查新/找论文即开启该次任务权限。普通本地综述不会自行调用论文搜索服务。模型 API 请求与论文检索联网是两类不同的网络行为。
@@ -38,7 +38,7 @@
 
 任务依赖是一条主线：`1→2→3→4→5→6→7→8→9→10→11`。前三项交付独立可用的原生 AI；4—6 交付可用的本地主题研究 HTTP 功能；7—9 扩展联网与 idea；10 提供完整界面；11 整体验收。统一计划保留跨阶段接口，不把它们拆成互不约束的项目。
 
-源工作树：`C:/Users/Administrator/.codex/worktrees/native-ai-research/reader`。实施时建立专用 native mirror `/home/admin/.cache/reader-native-ai-check`，WSL Ubuntu 的磁盘在 E:；不在 C: 安装 node_modules。开发辅助同步脚本 `E:/WSL/reader-native-ai-sync.sh` 只同步本工作树到上述专用镜像，排除 `.git/node_modules/.reader/.superpowers/dist/bin`；不得复用旧双语同步脚本覆盖另一分支。依赖使用现有 pnpm store，锁文件变化后在 native mirror 安装/校验。
+源工作树：`C:/Users/Administrator/.codex/worktrees/native-ai-research/reader`。实施时建立专用 native mirror `/home/admin/.cache/interleaf-native-ai-check`，WSL Ubuntu 的磁盘在 E:；不在 C: 安装 node_modules。开发辅助同步脚本 `E:/WSL/interleaf-native-ai-sync.sh` 只同步本工作树到上述专用镜像，排除 `.git/node_modules/.interleaf/.superpowers/dist/bin`；不得复用旧双语同步脚本覆盖另一分支。依赖使用现有 pnpm store，锁文件变化后在 native mirror 安装/校验。
 
 WSL PATH 固定为 `/home/admin/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin`。需要 Git 元数据时，从本工作树 `git rev-parse --git-dir` 的实际值转换为 WSL 路径（当前 reader2），设置 `GIT_DIR` 与镜像 `GIT_WORK_TREE`；不要硬抄 reader1。新镜像首次执行前确认同基线，然后跑现有 focused tests；记录 baseline 失败，勿把旧警告称为新改动成功。
 
@@ -48,7 +48,7 @@ WSL PATH 固定为 `/home/admin/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/s
 
 ### A. 内置 AI（Task 1 定义配置，Task 2 定义运行接口，Task 3 完成退役）
 
-- `packages/reader-core/src/native-ai.ts`：`AIModelRole = 'chat'|'translation'|'vision'|'research'`；`NativeAIConfig {version:2;connection:{protocol:'openai'|'anthropic';url:string;hasKey:boolean};models:Partial<Record<AIModelRole,string>>;efforts:Partial<Record<AIModelRole,ReasoningEffort>>;apiModels:string[];translationPrompt?:string;needsConfiguration?:string}`。新用途和公开配置从 core index 导出。
+- `packages/interleaf-core/src/native-ai.ts`：`AIModelRole = 'chat'|'translation'|'vision'|'research'`；`NativeAIConfig {version:2;connection:{protocol:'openai'|'anthropic';url:string;hasKey:boolean};models:Partial<Record<AIModelRole,string>>;efforts:Partial<Record<AIModelRole,ReasoningEffort>>;apiModels:string[];translationPrompt?:string;needsConfiguration?:string}`。新用途和公开配置从 core index 导出。
 - `NativeAIConfigUpdate` 的公开字段同上（不接收 hasKey），另含 `connection.key?:string|null`：省略仅在规范化端点/协议未变时保留旧 Key；字符串替换，null 明确清空。端点变更且未提供 key 时存为待配置/无 Key，不把旧 Key 转发；明确无 Key 的本地端点可使用。新增 GET/PUT 仍使用 `/api/ai/config`，读响应从不含 key。
 - `native_ai_config.go`：`(*Server).nativeAIConfig() (NativeAIConfig,error)`、`saveNativeAIConfig(NativeAIConfigUpdate) (NativeAIConfig,error)`、`resolveNativeTask(context.Context,NativeAIConfig,modelTask) (nativeTaskSnapshot,error)`；snapshot 拥有私有 `APIConnection`、已选 model/effort、能力/窗口及配置指纹，不能作为 HTTP 输出。模型列表/测试仍走已存在的本地 AI API，Task 1 在 OpenAPI 中固定用途参数为 role；不再要求 provider 参数。
 - 模型HTTP合同：`GET /api/ai/models?role=...` 返回现有AgentModel数组（类型名可保留，语义为API模型），`POST /api/ai/check {role,model?,waitSeconds?}` 返回现有AICapability及对应模型身份/指纹，waitSeconds1..60默认15；只在用户点击检测时运行推理探针。旧primary是API时按原用途迁移；旧primary为CLI但有备用API时保留候选/Key并设置needsConfiguration，先由用户保存确认主要连接，不在升级启动时产生新API费用。
@@ -62,7 +62,7 @@ WSL PATH 固定为 `/home/admin/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/s
 
 ### B. 研究实体、任务与证据（Tasks 4—6）
 
-- `packages/reader-core/src/research.ts` 与 `research_types.go` 同步约定：`ResearchTopic {id,title,folder,includeChildren,networkAllowed,scopeState:'active'|'detached',createdAt,updatedAt}`；`ResearchSnapshot {id,topicId,revision,members:ResearchMember[],createdAt}`。Member `{paperId,documentId?,citationKey,title,sourceHash?,corpusRevision?,coverage:'fulltext'|'abstract'|'metadata'|'unavailable',reason?}`。每篇 PaperItem 只取一份原文；revision 是有序成员/内容/解析/元数据的摘要，不依赖绝对磁盘路径。
+- `packages/interleaf-core/src/research.ts` 与 `research_types.go` 同步约定：`ResearchTopic {id,title,folder,includeChildren,networkAllowed,scopeState:'active'|'detached',createdAt,updatedAt}`；`ResearchSnapshot {id,topicId,revision,members:ResearchMember[],createdAt}`。Member `{paperId,documentId?,citationKey,title,sourceHash?,corpusRevision?,coverage:'fulltext'|'abstract'|'metadata'|'unavailable',reason?}`。每篇 PaperItem 只取一份原文；revision 是有序成员/内容/解析/元数据的摘要，不依赖绝对磁盘路径。
 - `ResearchSession {id,topicId,title,networkAllowed,createdAt,updatedAt}`；networkAllowed 从 topic 创建时继承，可在会话修改。`ResearchEvidence {id,topicId,snapshotId,runId,paperId?,documentId?,candidateId?,kind:'local-passage'|'local-page'|'remote-abstract'|'remote-html'|'remote-page';revision,contentHash,location,excerpt,readAt,availability:'valid'|'stale'|'removed'}`；不在跨论文间复用裸 blockId。
 - `ResearchRunInput {userMessageId:string;question:string;mode:'question'|'overview'|'compare'|'ideas'|'novelty';ideaId?:string;network:'inherit'|'allow-task'|'deny';budget:ResearchBudget}`，userMessageId 为32位小写hex。客户端明确的联网找论文/查新动作发送 allow-task；模型输出、网页或关键词命中不授予权限。自由输入时，仅会话已允许联网才能由模型按需检索；未允许时给出启用联网的可行动提示。
 - `ResearchRunInput.urls?:string[]` 最多8个、每个最长4096字符，来自用户明确粘贴的论文链接/输入附件而非模型或网页派生URL；仅在已授予联网时登记为该run的用户候选，由同一公开HTTP规则解析。`read_online_paper`仍只接受已登记candidateId，不接受模型任意URL。
@@ -111,13 +111,13 @@ OpenAPI 同时定义 NativeAIConfig、Research*、Novelty*；`pnpm api:generate`
 
 ## Task 1: 原生配置、迁移及 AI 设置
 
-**Files:** Create `packages/reader-core/src/native-ai.ts`、`apps/server/internal/reader/native_ai_{config,migration}.go`、`native_ai_config_test.go`、`apps/web/src/ai/AISettings.tsx`、`apps/web/src/ai/ai-settings.test.tsx`、`packages/api-client/src/{native-ai,transport}.ts`；Modify `connections.go`、`api_agent.go`、`models.go`、`model_defaults.go`、`packages/reader-core/src/index.ts`、`packages/api-client/src/index.ts`、`apps/web/src/Settings.tsx`、`TaskModels.tsx`、`ModelSelector.tsx`、`store.ts`、`docs/openapi.yaml` 与 generated schema。
+**Files:** Create `packages/interleaf-core/src/native-ai.ts`、`apps/server/internal/interleaf/native_ai_{config,migration}.go`、`native_ai_config_test.go`、`apps/web/src/ai/AISettings.tsx`、`apps/web/src/ai/ai-settings.test.tsx`、`packages/api-client/src/{native-ai,transport}.ts`；Modify `connections.go`、`api_agent.go`、`models.go`、`model_defaults.go`、`packages/interleaf-core/src/index.ts`、`packages/api-client/src/index.ts`、`apps/web/src/Settings.tsx`、`TaskModels.tsx`、`ModelSelector.tsx`、`store.ts`、`docs/openapi.yaml` 与 generated schema。
 
 **Interfaces:** 产生 A 中 NativeAIConfig/Update、nativeAIConfig/saveNativeAIConfig/resolveNativeTask；保留仅服务端临时 legacy bridge。Task 2 消费 frozen snapshot；Task 3 移除 bridge，不再引入另一套配置持久源。
 
 - [x] 写 `TestNativeAIConfigMigrationAndKeyEdits`：v1.API优先完整迁移；TextAPI唯一且无API时可迁移，冲突/仅CLI则needsConfiguration；遗漏Key只在同端点保留，换端点不复用，null清空；旧文件备份一次/重启幂等/0600，故障原文件不损坏。断言 `publicJSON` 不含 `"sk-test-secret"`，只有hasKey；迁移不碰旧问答/笔记/译文。
 - [x] 写 UI 测试 `configures one connection and role models without external Agent controls`，断言无SDK/登录/安装选项，研究继承问答、模型列表失败仍保留手填值、保存模型不清Key；用现有连接probe测试补 secret/error/localhost模型端点边界。
-- [x] RED：`cd apps/server && go test ./internal/reader -run TestNativeAIConfig -count=1`；`pnpm exec vitest run apps/web/src/ai/ai-settings.test.tsx`。预期新类型/路由/行为缺失而失败。
+- [x] RED：`cd apps/server && go test ./internal/interleaf -run TestNativeAIConfig -count=1`；`pnpm exec vitest run apps/web/src/ai/ai-settings.test.tsx`。预期新类型/路由/行为缺失而失败。
 - [x] 实现上述精确配置接口与原子迁移；Settings只将AI区域提为新组件，不重排整个设置；TaskModels/ModelSelector用role，catalog/probe按端点+模型指纹失效。公共端点不接受 legacy provider；迁移parser可读legacy。暂存必要generation桥，写入仍落version2真源。
 - [x] GREEN：上述两条命令、`pnpm api:generate`、`pnpm typecheck` 全成功；审准确配置/组件/生成文件并提交 `feat(ai): add native API configuration and migration`。
 
@@ -131,33 +131,33 @@ OpenAPI 同时定义 NativeAIConfig、Research*、Novelty*；`pnpm api:generate`
 
 - [x] 写 `TestNativeLoopOpenAIAndAnthropicCompletion`，使用同一套transcript fixture验证文字/工具/图片、分片参数、未知/重复工具ID、明确finish、断流、取消；配套 `TestNativeSessionDocumentCompletionCommitsAtomically` 用实际 SQLite assistant 行数、运行审计及会话窗口验证保存屏障：每次流事件及显式保存入口前均保持未提交，只有正常终态和来源校验通过后的事务成功才出现一次保存；不使用独立局部变量模拟保存计数。失败后无Fallback/第二模型调用，draft/reasoning已可见时同样如此。
 - [x] 写 `TestNativeSessionRebuildAndCompaction`：以可见历史重建旧CLI/Pi会话，保留消息ID/来源/阅读位置；不消费piEntries/thread ID；换端点或模型重建窗口；压缩只切完整调用-结果组，失败不覆盖历史；SessionID非空也不调用Pi。
-- [x] RED：`go test ./internal/reader -run 'TestNative(Loop|Session)' -count=1`（server目录）。预期当前Pi分支/缺失nativeLoop失败。
+- [x] RED：`go test ./internal/interleaf -run 'TestNative(Loop|Session)' -count=1`（server目录）。预期当前Pi分支/缺失nativeLoop失败。
 - [x] 抽取现有 Go API 循环为 runNativeLoop；单文献活动状态以versioned native connection key保存，完整回答/证据/窗口/审计沿用一次事务。原始历史与跨provider可见记录保留；api_stream/api_agent中全部SessionID路径用同一native循环；未支持工具/图片时用已有文字辅助而非假称可看图。
-- [x] GREEN：上述焦点 + `go test ./internal/reader -run 'Test(Document|API|Chat)'`、`pnpm exec vitest run apps/web/src/chat/chat-session.test.ts apps/web/src/chat/streaming-lifecycle.test.tsx`、typecheck；提交 `feat(ai): own native model and document tool sessions`。
+- [x] GREEN：上述焦点 + `go test ./internal/interleaf -run 'Test(Document|API|Chat)'`、`pnpm exec vitest run apps/web/src/chat/chat-session.test.ts apps/web/src/chat/streaming-lifecycle.test.tsx`、typecheck；提交 `feat(ai): own native model and document tool sessions`。
 
 ## Task 3: 全功能用途路由与外部 Agent/Pi 退役
 
-**Files:** Create `native_ai_generation.go`、`native_ai_lifecycle.go`、`native_ai_generation_test.go`、`scripts/native-ai-runtime.test.ts`；Modify `generation.go`、`model_defaults.go`、`translation_codex.go`（替换为 `translation_api.go`）、`translation_batch.go`、`document_overview_generation.go`、`formula.go`、`organization.go`、`image_chat.go`、`ai.go`、`diagnostics.go`、`server.go`、`document_management.go`、`document_reading.go`、`chat_context.go`、`chat_sessions.go`、`bilingual_pdf_translation.go`、`apps/desktop/main/index.ts`、`scripts/{dev,package,package-smoke}.mjs`、`package.json`、`pnpm-lock.yaml`、`apps/web/src/{CommandLineSettings,ProviderIdentity}.tsx`、`chat/{AssistantPanel,AnswerActions}.tsx`。先迁出共享生命周期/证据代码，再删除 `apps/server/internal/reader/{codex,codex_chat,codex_document,codex_handoff,document_codex_session,claude,cli,pi_agent}.go` 中已退役实现、`apps/agent`、`apps/desktop/main/agent-path.ts`、`apps/web/src/chat/CodexHandoffButton.tsx` 及对应专用测试；保留 `cli_api.go`/`cmd/reader` 这一独立的Reader客户端，不按文件名含cli就机械删除。
+**Files:** Create `native_ai_generation.go`、`native_ai_lifecycle.go`、`native_ai_generation_test.go`、`scripts/native-ai-runtime.test.ts`；Modify `generation.go`、`model_defaults.go`、`translation_codex.go`（替换为 `translation_api.go`）、`translation_batch.go`、`document_overview_generation.go`、`formula.go`、`organization.go`、`image_chat.go`、`ai.go`、`diagnostics.go`、`server.go`、`document_management.go`、`document_reading.go`、`chat_context.go`、`chat_sessions.go`、`bilingual_pdf_translation.go`、`apps/desktop/main/index.ts`、`scripts/{dev,package,package-smoke}.mjs`、`package.json`、`pnpm-lock.yaml`、`apps/web/src/{CommandLineSettings,ProviderIdentity}.tsx`、`chat/{AssistantPanel,AnswerActions}.tsx`。先迁出共享生命周期/证据代码，再删除 `apps/server/internal/interleaf/{codex,codex_chat,codex_document,codex_handoff,document_codex_session,claude,cli,pi_agent}.go` 中已退役实现、`apps/agent`、`apps/desktop/main/agent-path.ts`、`apps/web/src/chat/CodexHandoffButton.tsx` 及对应专用测试；保留 `cli_api.go`/`cmd/reader` 这一独立的Reader客户端，不按文件名含cli就机械删除。
 
 **Interfaces:** `(*Server).nativeGenerationService(config NativeAIConfig,task modelTask) (*GenerationService,error)`；`nativeTranslationSession` 保持顺序批次复用与close；将 `Server.Close()` 从codex_chat.go迁至native_ai_lifecycle.go，保留document task cancel/join与双语清理；以后所有AI调用只消费NativeAIConfig/snapshot。`GenerationService.Generate`/ProviderEvent调用侧签名保留；research用途默认chat模型。
 
-- [x] 写 `TestNativeTasksWithoutAgentRuntimes`：仅有本地mock API、PATH中codex/claude/kimi为一调用就记录失败的trap、READER_AGENT不存在；聊天/多会话、翻译、概要、公式/图片、分类、双语preflight/start都成功，无trap。`TestNativeCloseJoinsAllAIIO` 在删除/close/迁移边界阻塞API，断言返回前已join，无迟到保存。
-- [x] 写 runtime packaging test：build/dev/desktop/package引用闭包不含READER_AGENT、@reader/agent或pi依赖；仍传READER_NODE/processor及字体。测试旧CLI历史可读、legacy JSON只能迁移，CmdReader普通CLI/API不丢失，模型/额度失败不触发任何外部fallback。
-- [x] RED：`go test ./internal/reader -run 'TestNative(Tasks|Close)' -count=1`；`pnpm exec vitest run scripts/native-ai-runtime.test.ts`，预期现有硬断言/CLI/Pi/资源引用失败。
+- [x] 写 `TestNativeTasksWithoutAgentRuntimes`：仅有本地mock API、PATH中codex/claude/kimi为一调用就记录失败的trap、INTERLEAF_AGENT不存在；聊天/多会话、翻译、概要、公式/图片、分类、双语preflight/start都成功，无trap。`TestNativeCloseJoinsAllAIIO` 在删除/close/迁移边界阻塞API，断言返回前已join，无迟到保存。
+- [x] 写 runtime packaging test：build/dev/desktop/package引用闭包不含INTERLEAF_AGENT、@interleaf/agent或pi依赖；仍传INTERLEAF_NODE/processor及字体。测试旧CLI历史可读、legacy JSON只能迁移，CmdReader普通CLI/API不丢失，模型/额度失败不触发任何外部fallback。
+- [x] RED：`go test ./internal/interleaf -run 'TestNative(Tasks|Close)' -count=1`；`pnpm exec vitest run scripts/native-ai-runtime.test.ts`，预期现有硬断言/CLI/Pi/资源引用失败。
 - [x] 将所有用途迁到nativeGenerationService并移除Task1桥；替换translationService对codexChatAdapter的类型断言；保留有效stream/protocol/数据保全测试，删除仅证明已退役特性的测试。更新用量provider显示、HTTP诊断脱敏及SSE/CLI说明，移除Codex handoff按钮和安装路径探测。将双语验收脚本配置步骤适配version2，保留所有实际PDF断言。
 - [x] GREEN：上述焦点、`go test ./...`、`pnpm exec vitest run scripts/native-ai-runtime.test.ts apps/web/src/ai/ai-settings.test.tsx apps/web/src/BilingualPDFExport.test.tsx`、typecheck；检查prod依赖图和build脚本，提交 `refactor(ai): retire external Agent and Pi runtimes`。
 
 ## Task 4: 主题研究存储、范围快照与资料变更
 
-**Files:** Create `research_types.go`、`research_migration.go`、`research_store.go`、`research_scope.go`、`research_routes.go`、`research_scope_test.go`、`research_migration_test.go`、`packages/reader-core/src/research.ts`、`packages/api-client/src/research.ts`；Modify `store.go`、`libraries.go`、`paper_items.go`、`merge.go`、`document_management.go`、`server.go`、core index/OpenAPI/generated schema。
+**Files:** Create `research_types.go`、`research_migration.go`、`research_store.go`、`research_scope.go`、`research_routes.go`、`research_scope_test.go`、`research_migration_test.go`、`packages/interleaf-core/src/research.ts`、`packages/api-client/src/research.ts`；Modify `store.go`、`libraries.go`、`paper_items.go`、`merge.go`、`document_management.go`、`server.go`、core index/OpenAPI/generated schema。
 
 **Interfaces:** 定义B中所有实体存储类型，先交付topic/session CRUD与快照；共享snapshotResearchScope、`(*Store).migrateResearch() error`、`(*Store).invalidateResearchDocument(ctx context.Context,documentID,reason string) error`。后者取消/清理的Server协调在Task6接上，Task4先实现事务失效。现有 `changeLibraryLabels('folders')` 的同一资料事务更新研究绑定，不另造重复分类API。
 
 - [x] 写 `TestResearchScopeMembersAndRevisions`：子文件夹开/关、非活动文献、一个PaperItem多个原文/译文附件、仅元数据、无可读原件、不确定两个原文时的明确选择；相同内容的范围重算revision稳定；原文替换/成员变化使revision不同。原文选择顺序：原文primary→唯一其他可读original；多个候选不猜译本或随机附件，标unavailable并给原因。
 - [x] 写 `TestResearchFolderRenameDeleteAndPaperMerge` 与migration测试：大小写/子路径匹配沿用library分类语义，rename保持topicID，删除分类只detached而保留报告；Paper合并redirect去重、引用键不写回；永久删源清掉可读取payload并标removed但其他报告仍在。初始化/重复迁移/失败回滚不改变旧表/文件/笔记。
-- [x] RED：`go test ./internal/reader -run 'TestResearch(Scope|Folder|Migration)' -count=1`。
+- [x] RED：`go test ./internal/interleaf -run 'TestResearch(Scope|Folder|Migration)' -count=1`。
 - [x] 实现12表迁移、索引/唯一约束及topic/session CRUD；快照在一致数据库读事务中解析成员，在校验原文版本后存入研究表；数据变更与研究失效处于同一事务/提交协议。避免外键删除原文时清除跨论文用户成果。
-- [x] GREEN：上述焦点、`go test ./internal/reader -run 'Test(Paper|Library|Research)'`、api:generate/typecheck；提交 `feat(research): persist topics and versioned paper scopes`。
+- [x] GREEN：上述焦点、`go test ./internal/interleaf -run 'Test(Paper|Library|Research)'`、api:generate/typecheck；提交 `feat(research): persist topics and versioned paper scopes`。
 
 ## Task 5: 跨论文读工具与可复用证据条目
 
@@ -167,7 +167,7 @@ OpenAPI 同时定义 NativeAIConfig、Research*、Novelty*；`pnpm api:generate`
 
 - [x] 写 `TestResearchToolsIsolateSameBlockIDs`：两篇PDF均有p1-b1，证据ID不同；越范围paperId与伪造sourceId拒绝；跨PDF/EPUB定位不互换；FTS查询绑定参数；页图仅视觉能力可用时注册。大结果返回nextCursor，不把未读片段记已读。
 - [x] 写 `TestResearchCardsCoverageCacheAndInvalidation`：fulltext/abstract/metadata分级、不同模型/提示/原文hash不能命中旧卡；冲突论文结论各有自己的证据；源删除/替换后cache拒读。无工具模型由Reader先检索/按页读原文再提供有来源的文字辅助，不取消主题研究能力。
-- [x] RED：`go test ./internal/reader -run 'TestResearch(Tools|Cards)' -count=1`。
+- [x] RED：`go test ./internal/interleaf -run 'TestResearch(Tools|Cards)' -count=1`。
 - [x] 实现按snapshot过滤的FTS5查询/逐篇公平排序，复用现有corpus与PDF/Readium定位；论文过长以cursor分片提取证据条目并合并，仅保存完成且校验的字段；来源缺失或事实字段只靠标题则失败/明确metadata。正文/页图读取注册beginDocumentTask并在完成后release。
 - [x] GREEN：焦点加现有 `TestDocumentTools`、native loop tests、typecheck；提交 `feat(research): read scoped papers with traceable evidence`。
 
@@ -179,20 +179,20 @@ OpenAPI 同时定义 NativeAIConfig、Research*、Novelty*；`pnpm api:generate`
 
 - [x] 写 `TestResearchRunIdempotencyAndLostResponse`：同session+userMessageId+body返回同run，改变body409；create不调用模型，start重复不重复执行；start响应丢失经GET取回completed报告。`TestResearchResumeSuccessfulUnits`：预算耗尽/主动pause/cancel/重启interrupted，已成功paper单元不重算；首次resume很快再次paused后，重试相同control requestId也不再开预算；新requestId的显式resume才做剩余单元，旧成功报告保留。`TestResearchUserReportRevision`：编辑保存新版本且不调用模型，旧版不变，用户版本清楚标识、未知引用不能变成可信跳转。
 - [x] 写 `TestResearchLifecycleCommitBarrier`：close/删除/迁移在HTTP、读页图、最终保存前取消并join；worker不在持有任务注册时反取importMu，不造成delete→join→importMu循环。新文献/模型/快照变化继续旧run返回409，旧部分证据保留为历史但不混入；页面SSE断开不自动取消显式后台run。
-- [x] RED：`go test ./internal/reader -run 'TestResearch(Run|Resume|Lifecycle)' -count=1`。
+- [x] RED：`go test ./internal/interleaf -run 'TestResearch(Run|Resume|Lifecycle)' -count=1`。
 - [x] 依共享预算实现持久状态机、两槽调度器/每topic唯一活动run、成功单元事务及事件序号；用户问题先持久化且同请求复用。运行中事件可暂存受8MiB上限约束，断线读当前snapshot/后续事件；超过可回放窗口给reset状态让客户端读报告，不重启生成。报告/来源/会话窗口/成功消息在一次事务提交，done在commit后发送。
-- [x] GREEN：焦点race `go test -race ./internal/reader -run 'TestResearch(Run|Resume|Lifecycle)' -count=1`、Go相关suite/api:generate/typecheck；提交 `feat(research): run resumable topic reviews with durable reports`。
+- [x] GREEN：焦点race `go test -race ./internal/interleaf -run 'TestResearch(Run|Resume|Lifecycle)' -count=1`、Go相关suite/api:generate/typecheck；提交 `feat(research): run resumable topic reviews with durable reports`。
 
 ## Task 7: 公共论文搜索、读取与网络边界
 
-**Files:** Create `apps/server/internal/scholar/{search,public_http,rate_limit}.go` 与同名 `_test.go`；Modify `scholar.go`、`sources.go`，保留既有按标识符导入；新增 `apps/server/internal/reader/research_remote.go`、`research_remote_test.go`。
+**Files:** Create `apps/server/internal/scholar/{search,public_http,rate_limit}.go` 与同名 `_test.go`；Modify `scholar.go`、`sources.go`，保留既有按标识符导入；新增 `apps/server/internal/interleaf/research_remote.go`、`research_remote_test.go`。
 
 **Interfaces:** 实现 C 中 Search/FetchPublic/Candidate/PublicResource 与公开资料客户端，后续Task8调用。`(*Server).readResearchRemote(ctx context.Context,runID,candidateID string) ([]ResearchEvidence,error)`：只读取经检索登记或用户明确给出的候选URL，在owned work目录中解析；公开PDF可走现有processor/corpus底层，但不调用会创建PaperItem的import API。优先同标识符本地已存在原文并重查版本。
 
 - [x] 写 `TestScholarSearchPaginationIdentityAndVersions`：arXiv Atom/Crossref JSON分页、日期过滤/未知日期、相同DOI/版本arXiv去重与版本保留；同名不同作者/DOI不自动合并；响应200但正文错误/截断/超大小/畸形分页须失败。合法空数组与网络错误可区分。
 - [x] 写 `TestPublicFetchRejectsResolvedPrivateTargets`：hostname初次公网后重绑私网、IPv4/IPv6/映射IPv4、redirect、userinfo/非HTTP协议被拒，真实dial不能落内网；模型API仍可localhost。测试无Authorization/x-api-key泄漏、正文限额按解压后计、HTML主动内容移除、PDF真实签名/解析错误和abstract-only降级。
 - [x] 写 `TestScholarGlobalLimiterAndCancel`：两个run共用arXiv单槽/至少3秒；Crossref Retry-After与最多2次重试计入预算；关闭/取消中断排队和body读；使用注入clock而非让suite真实睡眠。代理为用户可信出口时不得将其localhost误判成论文目标；最终目标必须固定在已验证公网IP（含CONNECT路径），不能证明时明确失败而非绕过校验。
-- [x] RED：`cd apps/server && go test ./internal/scholar ./internal/reader -run 'Test(ScholarSearch|ScholarGlobal|PublicFetch|ResearchRemote)' -count=1`。
+- [x] RED：`cd apps/server && go test ./internal/scholar ./internal/interleaf -run 'Test(ScholarSearch|ScholarGlobal|PublicFetch|ResearchRemote)' -count=1`。
 - [x] 实现Go标准库HTTP/XML/JSON适配器、规范化、限速、取消和owned缓存，补现有scholar仅检查字面IP而未固定实际dial的缺口。缓存用URL/标识符/内容hash，存fetchedAt/版本；临时PDF不作为书库文献，正常下载保留安全目录和解析生命周期。普通检索缓存/查新刷新按共享合同执行，不默认调用S2等未登记来源。
 - [x] GREEN：上述焦点与旧 `go test ./internal/scholar`、typecheck；提交 `feat(research): search and read public scholarly sources`。
 
@@ -205,7 +205,7 @@ OpenAPI 同时定义 NativeAIConfig、Research*、Novelty*；`pnpm api:generate`
 - [x] 写 `TestResearchNetworkPermissionAndRevocation`：默认本地overview/query没有任何搜索HTTP；用户allow-task才可联网；文献或模型工具参数不能开启；关闭时取消/join，迟到response不能写成已读证据，其他本地卡/历史仍保留。用户显式urls可安全登记/读取，模型任意URL不行；query只发必要关键词，不发源PDF/私密笔记/模型Key。
 - [x] 写 `TestResearchCandidatesDoNotImportUntilChosen`：搜索/读取前后PaperItem、Document和citationKey不变，用户显式import才新增/去重；相同requestId重复返回同Document，原主附件不变，同名不同论文不误并。导入后删除本地原件，旧candidate不得通过缓存绕过失效；不同topic的candidate ID不能导入/读取。
 - [x] 写 `TestResearchRemoteEvidenceLevels`：网页摘要、HTML全文、PDF页保留真实层级/位置，跨论文同块ID不串联；429/一个源失败保留成功源且report列出不足，来源ID并非模型任意URL。候选PDF下载取消/退出/迁移会join，不出现迟到导入。
-- [x] RED：`go test ./internal/reader -run 'TestResearch(Network|Candidates|RemoteEvidence)' -count=1`。
+- [x] RED：`go test ./internal/interleaf -run 'TestResearch(Network|Candidates|RemoteEvidence)' -count=1`。
 - [x] 扩展已有job与nativeToolset，不建第二套调度；search/read请求在执行前及提交前再查许可/资料；搜索日志不保存密钥，导入记录按requestId事务去重。search result只可生成候选，不给模型write/import/delete工具。
 - [x] GREEN：上述焦点race、scholar suite、api:generate/typecheck；提交 `feat(research): connect authorized online evidence and candidate imports`。
 
@@ -218,7 +218,7 @@ OpenAPI 同时定义 NativeAIConfig、Research*、Novelty*；`pnpm api:generate`
 - [x] 写 `TestResearchIdeasHaveMechanismAndFalsification`：确定性mock输出3个候选，均有problem/mechanism/hypotheses/changes/minimumExperiment/baselines/ablations/falsification/resources；空洞标题/无证据归因/缺实验字段使该单元失败且旧结果保留；明确未知资源可用unknown，不造GPU/费用数字。用户选择一个idea后可继续精化而不重跑所有已成功论文卡。
 - [x] 写 `TestResearchNoveltyFindsKnownOverlap`：本地A提出技术X，联网B全文已覆盖X；真实mock搜索和读取路径生成high_overlap并列出B的已读片段，不能仍输出not_found。新增同义词/机制/相邻领域的3类查询，至少两个来源，记录日期/过滤和排除理由。
 - [x] 写 `TestResearchNoveltyInsufficientEvidence`：仅摘要、失败源、未覆盖查询或超预算时，方法/实验claim为insufficient或显示未完成；不能因标题不相似给新颖保证。`not_found`只表示计划查询均执行成功且未发现可支持重合的证据；不等于证明创新。非法/未读citation、绝对原创/伪造概率结论被结构验证拒绝或明确要求修订，不保存成功报告。
-- [x] RED：`go test ./internal/reader -run 'TestResearch(Ideas|Novelty)' -count=1`。
+- [x] RED：`go test ./internal/interleaf -run 'TestResearch(Ideas|Novelty)' -count=1`。
 - [x] 用受约束JSON输出明确分开论文事实/推断/待验假设；后台执行有预算的真实查询计划，补读后生成逐claim对比。无function-calling模型仍可由Reader运行固定检索/读取流水线和结构化模型步骤，UI标为文字检索辅助；不伪装其有工具或视觉能力。联网未授权则给本地范围结论和启用入口，不悄悄提升权限。
 - [x] GREEN：上述焦点、Tasks5—8相关研究suite、api:generate/typecheck；提交 `feat(research): ground idea exploration and novelty checks in evidence`。
 
@@ -243,8 +243,8 @@ OpenAPI 同时定义 NativeAIConfig、Research*、Novelty*；`pnpm api:generate`
 
 - [x] 先写失败的acceptance断言及可复现fixture：主题内A/B/C三篇PDF（A含原文+译文附件；A/B同块名但结论冲突；C的方法被远程B2覆盖）、子文件夹一篇EPUB、一篇仅元数据文献；另有回收站/范围外文献。活动范围默认5篇，关闭子级为4；另用40篇小文献验证分批覆盖不只取前N篇。远程fixture有arXiv/Crossref分页、同名不同ID、正式版/预印本、仅摘要及限流错误。
 - [x] RED：先运行focused harness模式 `bash scripts/native-ai-research-acceptance/run.sh OUT --checks-only`（脚本需支持该标志且不自动修fixture）。未实现的真实链路断言应失败；已有成功功能不人为改错求RED。此前TDD已证明的路径记录引用，不再重复制造失败。
-- [x] 完成实际链路：v1迁移→无Agent/Pi启动→API角色设置→单篇原文引用问答/图片与翻译→主题快照→overview/compare→pause/resume与source变化→查新已覆盖/证据不足→候选明确导入去重→编辑/导出→restart/close/move/delete边界。trap外部CLI、READER_AGENT不存在、真实PDF processor仍可用。保存前后比较非空问答/笔记/批注/译文/引用键和原始SHA，不能只测空库。模型输出确定性mock，不冒充真实语言质量。
-- [x] 跑最终 `pnpm typecheck`、`pnpm test`、`pnpm build`；再运行新acceptance到 `E:/WSL/reader-native-ai-acceptance-final` 和现有 `scripts/bilingual-pdf-acceptance/run.sh` 到独立新目录，保持两种PDF布局/公式/字体/9pt/附件/取消全部既有断言。重开PDF并用Poppler渲染、实际查看所有样本页；研究样本核对引用与已知冲突/重合结论。报告全部exit/status、skips/warnings及实际commit，不重复绿灯suite除非产品源码变化或具体疑问。
+- [x] 完成实际链路：v1迁移→无Agent/Pi启动→API角色设置→单篇原文引用问答/图片与翻译→主题快照→overview/compare→pause/resume与source变化→查新已覆盖/证据不足→候选明确导入去重→编辑/导出→restart/close/move/delete边界。trap外部CLI、INTERLEAF_AGENT不存在、真实PDF processor仍可用。保存前后比较非空问答/笔记/批注/译文/引用键和原始SHA，不能只测空库。模型输出确定性mock，不冒充真实语言质量。
+- [x] 跑最终 `pnpm typecheck`、`pnpm test`、`pnpm build`；再运行新acceptance到 `E:/WSL/interleaf-native-ai-acceptance-final` 和现有 `scripts/bilingual-pdf-acceptance/run.sh` 到独立新目录，保持两种PDF布局/公式/字体/9pt/附件/取消全部既有断言。重开PDF并用Poppler渲染、实际查看所有样本页；研究样本核对引用与已知冲突/重合结论。报告全部exit/status、skips/warnings及实际commit，不重复绿灯suite除非产品源码变化或具体疑问。
 - [x] 在用户明确授权的搜索功能范围内做低频arXiv/Crossref在线可用性烟测（各一个小查询，遵守限速、无私人文献/密钥）；失败记录真实状态，不将mock当在线通过。真实模型API只用用户另行提供的配置；无Key时说明质量仍人工验证，不读取外部凭据。
 - [x] 建立独立WSL profile/library和 `E:/Administrator/Desktop/Interleaf 内置 AI 研究预览.lnk`，启动最终Electron/Go，核对路径/进程/健康接口/HTML、无外部Agent/Pi运行、样本与API测试Key已清空。给用户API设置、文件夹综述、联网查新、来源回跳、预算继续和两种PDF导出人工步骤；禁止浏览器自动化界面验收，不修改真实Reader启动器/库。
 - [x] 文档记录本轮范围、旧配置/历史迁移、模型Key仅本地保护、联网关键词外发/公开资料范围、摘要/全文与创新性不确定、预算及失败恢复；报告mock/在线/实际OS对话框边界。检查最终diff只含该任务内容，提交 `test(research): verify native AI workflows and isolated WSL preview`。最后完成当前执行方式要求的全分支独立审查及任何修复验证，整体验收通过才报告功能完成。

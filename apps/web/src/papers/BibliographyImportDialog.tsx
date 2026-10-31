@@ -1,18 +1,18 @@
 import { useState } from "react";
-import type { BibliographyPreview, BibliographyDecision } from "@reader/core";
-import { api } from "@reader/api";
+import type { BibliographyPreview, BibliographyDecision } from "@interleaf/core";
+import { api } from "@interleaf/api";
 import { toast } from "sonner";
-import { Button } from "@reader/ui/components/button";
-import { Input } from "@reader/ui/components/input";
-import { Checkbox } from "@reader/ui/components/checkbox";
-import { Textarea } from "@reader/ui/components/textarea";
+import { Button } from "@interleaf/ui/components/button";
+import { Input } from "@interleaf/ui/components/input";
+import { Checkbox } from "@interleaf/ui/components/checkbox";
+import { Textarea } from "@interleaf/ui/components/textarea";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@reader/ui/components/select";
+} from "@interleaf/ui/components/select";
 import {
   Dialog,
   DialogContent,
@@ -20,7 +20,7 @@ import {
   DialogTitle,
   DialogDescription,
   DialogFooter,
-} from "@reader/ui/components/dialog";
+} from "@interleaf/ui/components/dialog";
 import { refreshLibrary, useReaderStore } from "../store";
 export function BibliographyImportDialog({ onClose }: { onClose: () => void }) {
   const papers = useReaderStore((s) => s.paperItems) || [];

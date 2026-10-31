@@ -1,12 +1,12 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { ArrowsClockwise as RefreshCw } from "@phosphor-icons/react";
-import { api } from "@reader/api";
+import { api } from "@interleaf/api";
 import type {
   JournalRankBadge,
   JournalRankConfig,
   JournalRankResult,
-} from "@reader/core";
-import { Button } from "@reader/ui/components/button";
+} from "@interleaf/core";
+import { Button } from "@interleaf/ui/components/button";
 
 function tone(badge: JournalRankBadge) {
   const value = badge.value.trim().toUpperCase();

@@ -1,15 +1,15 @@
 import { useEffect, useState } from "react";
 import { Minus, Plus } from "@phosphor-icons/react";
-import { blockImageURL } from "@reader/api";
-import type { ImageAttachment } from "@reader/core";
-import { Button } from "@reader/ui/components/button";
+import { blockImageURL } from "@interleaf/api";
+import type { ImageAttachment } from "@interleaf/core";
+import { Button } from "@interleaf/ui/components/button";
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
   DialogDescription,
-} from "@reader/ui/components/dialog";
+} from "@interleaf/ui/components/dialog";
 export function imageLabel(image: ImageAttachment) {
   const kind = /formula|equation/.test(image.label)
     ? "公式"

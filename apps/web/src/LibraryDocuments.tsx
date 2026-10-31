@@ -12,18 +12,18 @@ import {
   FileArrowDown as FileDown,
 } from "@phosphor-icons/react";
 import { exportAnnotatedPDFWithToast } from "./annotated-pdf-export";
-import type { Document, LibraryMode, Processing } from "@reader/core";
-import { api } from "@reader/api";
+import type { Document, LibraryMode, Processing } from "@interleaf/core";
+import { api } from "@interleaf/api";
 import { toast } from "sonner";
-import { Button } from "@reader/ui/components/button";
-import { Checkbox } from "@reader/ui/components/checkbox";
+import { Button } from "@interleaf/ui/components/button";
+import { Checkbox } from "@interleaf/ui/components/checkbox";
 import {
   ContextMenu,
   ContextMenuTrigger,
   ContextMenuContent,
   ContextMenuItem,
   ContextMenuSeparator,
-} from "@reader/ui/components/context-menu";
+} from "@interleaf/ui/components/context-menu";
 import { DocumentBadges } from "./DocumentManagement";
 import { ProcessingUsageDialog } from "./ProcessingUsage";
 import {

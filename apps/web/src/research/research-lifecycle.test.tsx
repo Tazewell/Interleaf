@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { act } from "react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import { researchAPI } from "@reader/api";
+import { researchAPI } from "@interleaf/api";
 import { ResearchPanel } from "./ResearchPanel";
 import { ResearchNavigation } from "./ResearchNavigation";
 import { usePaperUI } from "../papers/state";

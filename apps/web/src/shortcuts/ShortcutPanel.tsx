@@ -1,6 +1,6 @@
 import { useState } from "react";
-import { Button } from "@reader/ui/components/button";
-import { Input } from "@reader/ui/components/input";
+import { Button } from "@interleaf/ui/components/button";
+import { Input } from "@interleaf/ui/components/input";
 import {
   bindingError,
   bindingFromEvent,

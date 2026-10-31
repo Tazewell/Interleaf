@@ -1,4 +1,4 @@
-import type { Document } from "@reader/core";
+import type { Document } from "@interleaf/core";
 
 /** A paper-library document for tests. */
 export const paper = (patch: Partial<Document> = {}): Document => ({

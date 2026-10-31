@@ -65,7 +65,7 @@ export function remarkChatCitations({
               known.has(id)
                 ? ({
                     type: "link",
-                    url: `#reader-evidence?source=${id}`,
+                    url: `#interleaf-evidence?source=${id}`,
                     children: [text(label)],
                   } satisfies Link)
                 : text(label),

@@ -1,5 +1,5 @@
 import { expect, it } from "vitest";
-import type { Annotation, Message } from "@reader/core";
+import type { Annotation, Message } from "@interleaf/core";
 import { annotationDigest, exportCounts, notesMarkdown } from "./notes-export";
 import { paper } from "./papers/fixtures";
 

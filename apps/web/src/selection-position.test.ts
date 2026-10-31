@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { expect, it, vi } from "vitest";
 import { toolbarPosition } from "./SelectionToolbar";
-import { selectionAnchor } from "./readers/selection-anchor";
+import { selectionAnchor } from "./engines/selection-anchor";
 it("places the toolbar next to the release point and flips above the bottom edge", () => {
   const pane = { left: 300, top: 60, right: 1000, bottom: 800 };
   const size = { width: 340, height: 44 };

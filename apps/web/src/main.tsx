@@ -1,7 +1,7 @@
 import ReactDOM from "react-dom/client";
 import type { ReactNode } from "react";
 import { IconContext } from "@phosphor-icons/react";
-import { configureAPI } from "@reader/api";
+import { configureAPI } from "@interleaf/api";
 import { App } from "./App";
 import { installCloseFlush } from "./close-flush";
 import { AppCrash, ErrorBoundary } from "./ErrorBoundary";
@@ -9,14 +9,19 @@ import "@fontsource-variable/inter/wght.css";
 import "./style.css";
 import { installDiagnostics } from "./diagnostics";
 import { installScrollbars } from "./scrollbars";
+import { migrateLegacyStorage } from "./legacy-storage";
+try {
+  migrateLegacyStorage(localStorage);
+  migrateLegacyStorage(sessionStorage);
+} catch {}
 const removeScrollbars = installScrollbars(document);
 if (import.meta.hot) import.meta.hot.dispose(removeScrollbars);
 const token =
   new URLSearchParams(location.hash.slice(1)).get("token") ||
-  sessionStorage.getItem("reader-session") ||
+  sessionStorage.getItem("interleaf-session") ||
   "";
 if (token) {
-  sessionStorage.setItem("reader-session", token);
+  sessionStorage.setItem("interleaf-session", token);
   history.replaceState(null, "", location.pathname + location.search);
 }
 configureAPI(token);

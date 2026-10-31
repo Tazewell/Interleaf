@@ -1,5 +1,5 @@
 import { expect, it } from "vitest";
-import type { Document, Processing } from "@reader/core";
+import type { Document, Processing } from "@interleaf/core";
 import { paper } from "./fixtures";
 import { relatedCandidates } from "./RelatedPapers";
 import {

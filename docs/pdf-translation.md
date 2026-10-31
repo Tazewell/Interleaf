@@ -67,7 +67,7 @@
 重点覆盖翻译中断恢复、失败重试、来源变更、句子范围、同步回环、点击定位、尺寸变化及动画中断。
 完成 `pnpm typecheck`、`pnpm test`、`pnpm build`。不使用浏览器自动化进行视觉验收；用真实双栏和混排论文手动检查。
 
-`apps/web/src/readers/fixtures/oze-sentence-alignment.json` 保留 Oze 第 6 页 `p6-b4` 的实际解析文本、缓存句子及 PDF.js 文字片段与坐标，用于复现下标错位和末行裁切。回归测试检查实际 PDF 字符范围，不能仅以规则排版的手写句子代替真实论文数据。
+`apps/web/src/engines/fixtures/oze-sentence-alignment.json` 保留 Oze 第 6 页 `p6-b4` 的实际解析文本、缓存句子及 PDF.js 文字片段与坐标，用于复现下标错位和末行裁切。回归测试检查实际 PDF 字符范围，不能仅以规则排版的手写句子代替真实论文数据。
 
 ## 原文块修复
 

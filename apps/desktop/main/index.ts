@@ -18,13 +18,13 @@ import {
 } from "./library-location";
 import { randomBytes } from "node:crypto";
 import { homedir } from "node:os";
-import { annotationUndoShortcut } from "../../../packages/reader-core/src/undo-shortcut";
-import { zoomCommand } from "../../../packages/reader-core/src/zoom-shortcut";
+import { annotationUndoShortcut } from "../../../packages/interleaf-core/src/undo-shortcut";
+import { zoomCommand } from "../../../packages/interleaf-core/src/zoom-shortcut";
 import {
-  READER_SCHEME,
-  parseReaderLink,
-  type ReaderLinkTarget,
-} from "../../../packages/reader-core/src/reader-link";
+  INTERLEAF_SCHEME,
+  parseInterleafLink,
+  type InterleafLinkTarget,
+} from "../../../packages/interleaf-core/src/interleaf-link";
 import { writeClipboardImage, writeClipboardText } from "./clipboard";
 import {
   ProxySettingsService,
@@ -75,19 +75,19 @@ function stopOwnedServer() {
 let pendingLibraryMove:
   { destination: string; resolve: (moved: boolean) => void } | undefined;
 const root = resolve(__dirname, "../..");
-function bundledBinary(name: "reader-server" | "reader") {
+function bundledBinary(name: "interleaf-server" | "interleaf") {
   const file = process.platform === "win32" ? `${name}.exe` : name;
   return app.isPackaged
     ? join(process.resourcesPath, "bin", file)
     : join(root, "desktop", "bin", file);
 }
 function serverBinary() {
-  return bundledBinary("reader-server");
+  return bundledBinary("interleaf-server");
 }
 const commandLineHost = () => ({
   platform: process.platform,
   packaged: app.isPackaged,
-  binary: bundledBinary("reader"),
+  binary: bundledBinary("interleaf"),
   env: process.env,
 });
 async function startServer() {
@@ -120,10 +120,10 @@ async function startServer() {
     {
       env: {
         ...childEnv,
-        READER_TOKEN: serverToken,
-        READER_EXPORT_CAPABILITY: bibliographyExportCapability,
-        READER_NODE: process.execPath,
-        READER_PROCESSOR: app.isPackaged
+        INTERLEAF_TOKEN: serverToken,
+        INTERLEAF_EXPORT_CAPABILITY: bibliographyExportCapability,
+        INTERLEAF_NODE: process.execPath,
+        INTERLEAF_PROCESSOR: app.isPackaged
           ? join(process.resourcesPath, "processor", "main.mjs")
           : join(root, "processor", "dist", "main.mjs"),
       },
@@ -236,26 +236,26 @@ async function importPaths(
       large.push({ id, name, pages: failure.pages });
     }
   }
-  window?.webContents.send("reader:library-changed");
+  window?.webContents.send("interleaf:library-changed");
   return large;
 }
 // interleaf:// links reach one window. The renderer claims queued links once its
 // listener exists; later links are sent directly.
 const primary = app.requestSingleInstanceLock();
 if (!primary) app.quit();
-const pendingLinks: ReaderLinkTarget[] = [];
+const pendingLinks: InterleafLinkTarget[] = [];
 let linksClaimed = false;
 function openLink(link: string) {
-  const target = parseReaderLink(link);
+  const target = parseInterleafLink(link);
   if (!target) return;
   if (linksClaimed && window && !window.isDestroyed()) {
-    window.webContents.send("reader:open-link", target);
+    window.webContents.send("interleaf:open-link", target);
     if (window.isMinimized()) window.restore();
     window.focus();
   } else pendingLinks.push(target);
 }
 const linkArgument = (argv: string[]) =>
-  argv.find((arg) => arg.toLowerCase().startsWith(`${READER_SCHEME}://`));
+  argv.find((arg) => arg.toLowerCase().startsWith(`${INTERLEAF_SCHEME}://`));
 app.on("open-url", (event, link) => {
   event.preventDefault();
   openLink(link);
@@ -289,22 +289,22 @@ app
       () => window,
       () => activeLibrary,
     );
-    ipcMain.on("reader:diagnostic-event", (event, value) =>
+    ipcMain.on("interleaf:diagnostic-event", (event, value) =>
       diagnostics!.receive(event, value),
     );
-    ipcMain.on("reader:diagnostic-settings", (event, value) =>
+    ipcMain.on("interleaf:diagnostic-settings", (event, value) =>
       diagnostics!.receiveSettings(event, value),
     );
-    ipcMain.handle("reader:export-diagnostics", (event) =>
+    ipcMain.handle("interleaf:export-diagnostics", (event) =>
       diagnostics!.invoke(event),
     );
     // Development runs need the entry script registered beside Electron.
     if (isolation.registerProtocol) {
       if (process.defaultApp && process.argv.length >= 2)
-        app.setAsDefaultProtocolClient(READER_SCHEME, process.execPath, [
+        app.setAsDefaultProtocolClient(INTERLEAF_SCHEME, process.execPath, [
           resolve(process.argv[1]),
         ]);
-      else app.setAsDefaultProtocolClient(READER_SCHEME);
+      else app.setAsDefaultProtocolClient(INTERLEAF_SCHEME);
     }
     proxySettings = await ProxySettingsService.open(
       app.getPath("userData"),
@@ -399,7 +399,7 @@ app
       if (closing) return;
       closing = true;
       const stoppedBilingualSave = bilingualPDFSave?.stop();
-      window!.webContents.send("reader:flush");
+      window!.webContents.send("interleaf:flush");
       const timer = setTimeout(() => {
         void finish("保存超时，请重试。");
       }, 10000);
@@ -416,7 +416,7 @@ app
         if (finished) return;
         finished = true;
         clearTimeout(timer);
-        ipcMain.removeListener("reader:flushed", handler);
+        ipcMain.removeListener("interleaf:flushed", handler);
         await stoppedBilingualSave;
         if (error) {
           // A failed flush must never produce a migrated, stale snapshot.
@@ -466,7 +466,7 @@ app
         flushed = true;
         window?.close();
       };
-      ipcMain.on("reader:flushed", handler);
+      ipcMain.on("interleaf:flushed", handler);
     });
     // Let the renderer handle reading shortcuts; editable fields keep native undo.
     window.webContents.on("before-input-event", (_event, input) => {
@@ -501,11 +501,11 @@ app
     window.webContents.on("will-attach-webview", (event) =>
       event.preventDefault(),
     );
-    ipcMain.handle("reader:clipboard-write", (event, text: unknown) =>
+    ipcMain.handle("interleaf:clipboard-write", (event, text: unknown) =>
       writeClipboardText(event, text, window?.webContents, url),
     );
     ipcMain.handle(
-      "reader:clipboard-write-image",
+      "interleaf:clipboard-write-image",
       (event, data: unknown, text: unknown) =>
         writeClipboardImage(event, data, text, window?.webContents, url),
     );
@@ -539,18 +539,18 @@ app
       });
     }
     configureBilingualSave();
-    ipcMain.handle("reader:save-bilingual-pdf", (event, input: unknown) =>
+    ipcMain.handle("interleaf:save-bilingual-pdf", (event, input: unknown) =>
       bilingualPDFSave!.save(event, input),
     );
     ipcMain.handle(
-      "reader:cancel-bilingual-pdf-save",
+      "interleaf:cancel-bilingual-pdf-save",
       (event, input: unknown) => bilingualPDFSave!.cancel(event, input),
     );
-    ipcMain.handle("reader:library-location", (event) => {
+    ipcMain.handle("interleaf:library-location", (event) => {
       settingsSender(event);
       return activeLibrary;
     });
-    ipcMain.handle("reader:move-library", async (event) => {
+    ipcMain.handle("interleaf:move-library", async (event) => {
       settingsSender(event);
       if (choosingLibrary || closing || restartRequested) return false;
       choosingLibrary = true;
@@ -593,34 +593,34 @@ app
         choosingLibrary = false;
       }
     });
-    ipcMain.handle("reader:proxy-settings", (event) => {
+    ipcMain.handle("interleaf:proxy-settings", (event) => {
       settingsSender(event);
       return proxySettings.state();
     });
-    ipcMain.handle("reader:save-proxy-settings", (event, value: unknown) => {
+    ipcMain.handle("interleaf:save-proxy-settings", (event, value: unknown) => {
       settingsSender(event);
       return proxySettings.save(value);
     });
-    ipcMain.handle("reader:check-proxy", (event, value: unknown) => {
+    ipcMain.handle("interleaf:check-proxy", (event, value: unknown) => {
       settingsSender(event);
       return proxySettings.check(value, serverBinary());
     });
-    ipcMain.handle("reader:command-line", (event) => {
+    ipcMain.handle("interleaf:command-line", (event) => {
       settingsSender(event);
       return commandLineStatus(commandLineHost());
     });
-    ipcMain.handle("reader:set-command-line", (event, installed: unknown) => {
+    ipcMain.handle("interleaf:set-command-line", (event, installed: unknown) => {
       settingsSender(event);
       if (typeof installed !== "boolean") throw new Error("Invalid request");
       return setCommandLine(commandLineHost(), installed);
     });
-    ipcMain.handle("reader:restart", (event) => {
+    ipcMain.handle("interleaf:restart", (event) => {
       settingsSender(event);
       if (closing || restartRequested) return;
       restartRequested = true;
       app.quit();
     });
-    ipcMain.handle("reader:appearance", (event, appearance: unknown) => {
+    ipcMain.handle("interleaf:appearance", (event, appearance: unknown) => {
       if (
         event.sender !== window?.webContents ||
         event.senderFrame !== window.webContents.mainFrame
@@ -638,7 +638,7 @@ app
       window.setBackgroundColor(windowBackground(appearance));
     });
     ipcMain.handle(
-      "reader:document-file",
+      "interleaf:document-file",
       async (event, id: unknown, type: unknown, action: unknown) => {
         if (
           event.sender !== window?.webContents ||
@@ -665,7 +665,7 @@ app
         }
       },
     );
-    ipcMain.handle("reader:take-links", (event) => {
+    ipcMain.handle("interleaf:take-links", (event) => {
       if (
         event.sender !== window?.webContents ||
         event.senderFrame !== window.webContents.mainFrame
@@ -674,7 +674,7 @@ app
       linksClaimed = true;
       return pendingLinks.splice(0);
     });
-    ipcMain.handle("reader:open-external", async (event, url: unknown) => {
+    ipcMain.handle("interleaf:open-external", async (event, url: unknown) => {
       if (
         event.sender !== window?.webContents ||
         event.senderFrame !== window.webContents.mainFrame
@@ -692,7 +692,7 @@ app
       )
         throw new Error("Invalid sender");
     };
-    ipcMain.handle("reader:find-endnote", async (event, id: unknown) => {
+    ipcMain.handle("interleaf:find-endnote", async (event, id: unknown) => {
       checkEndnoteSender(event);
       if (typeof id !== "string" || id.length > 100)
         throw new Error("Invalid search");
@@ -717,13 +717,13 @@ app
         if (endnoteSearch === search) endnoteSearch = undefined;
       }
     });
-    ipcMain.handle("reader:cancel-endnote-search", (event, id: unknown) => {
+    ipcMain.handle("interleaf:cancel-endnote-search", (event, id: unknown) => {
       checkEndnoteSender(event);
       if (endnoteSearch && endnoteSearch.id === id)
         endnoteSearch.controller.abort();
     });
     ipcMain.handle(
-      "reader:choose-endnote",
+      "interleaf:choose-endnote",
       async (event, directory: unknown) => {
         checkEndnoteSender(event);
         const selected = await dialog.showOpenDialog(window!, {
@@ -742,7 +742,7 @@ app
         return selected.canceled ? null : selected.filePaths[0] || null;
       },
     );
-    ipcMain.handle("reader:choose-zotero-directory", async (event) => {
+    ipcMain.handle("interleaf:choose-zotero-directory", async (event) => {
       if (
         event.sender !== window?.webContents ||
         event.senderFrame !== window.webContents.mainFrame
@@ -755,7 +755,7 @@ app
       return selected.canceled ? null : selected.filePaths[0] || null;
     });
     ipcMain.handle(
-      "reader:import",
+      "interleaf:import",
       async (event, library: unknown, folder: unknown) => {
         if (
           event.sender !== window?.webContents ||
@@ -779,7 +779,7 @@ app
       },
     );
     ipcMain.handle(
-      "reader:import-large",
+      "interleaf:import-large",
       async (event, ids: unknown, library: unknown, folder: unknown) => {
         if (
           event.sender !== window?.webContents ||
@@ -802,7 +802,7 @@ app
       },
     );
     ipcMain.handle(
-      "reader:configure-bibliography-export",
+      "interleaf:configure-bibliography-export",
       async (event, options: unknown) => {
         if (
           event.sender !== window?.webContents ||
@@ -834,7 +834,7 @@ app
               headers: {
                 Authorization: `Bearer ${serverToken}`,
                 "Content-Type": "application/json",
-                "X-Reader-Export-Capability": bibliographyExportCapability,
+                "X-Interleaf-Export-Capability": bibliographyExportCapability,
               },
               body: JSON.stringify(target),
             });
@@ -849,7 +849,7 @@ app
     await window.loadURL(`${url}/#token=${serverToken}`);
     if (pendingFiles.length) await importPaths(pendingFiles.splice(0));
     updateService = await startUpdateService(window);
-    ipcMain.handle("reader:check-updates", (event) => {
+    ipcMain.handle("interleaf:check-updates", (event) => {
       if (
         event.sender !== window?.webContents ||
         event.senderFrame !== window.webContents.mainFrame

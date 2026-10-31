@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
-import { api, researchAPI } from "@reader/api";
-import type { DocumentLocation, ResearchEvidence } from "@reader/core";
-import { Button } from "@reader/ui/components/button";
+import { api, researchAPI } from "@interleaf/api";
+import type { DocumentLocation, ResearchEvidence } from "@interleaf/core";
+import { Button } from "@interleaf/ui/components/button";
 import { researchSignal } from "./research-session";
 import { ResearchCitationNavigation } from "./citations";
 import { researchLocationLabel } from "./research-locations";

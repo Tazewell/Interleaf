@@ -3,24 +3,24 @@ import type {
   Document,
   BibliographyMode,
   BibliographyExport,
-} from "@reader/core";
-import { api } from "@reader/api";
-import { Button } from "@reader/ui/components/button";
-import { Checkbox } from "@reader/ui/components/checkbox";
+} from "@interleaf/core";
+import { api } from "@interleaf/api";
+import { Button } from "@interleaf/ui/components/button";
+import { Checkbox } from "@interleaf/ui/components/checkbox";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@reader/ui/components/select";
+} from "@interleaf/ui/components/select";
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
   DialogDescription,
-} from "@reader/ui/components/dialog";
+} from "@interleaf/ui/components/dialog";
 import { downloadText } from "../download";
 import { ensurePaperCitationKeys, useReaderStore } from "../store";
 import { savePaperPreferences } from "./actions";
@@ -73,7 +73,7 @@ export function BibliographyExportDialog({
           : f.toLowerCase() === folder.toLowerCase(),
       ),
   );
-  const native = window.readerDesktop?.configureBibliographyExport;
+  const native = window.interleafDesktop?.configureBibliographyExport;
   return (
     <Dialog open onOpenChange={(v) => !v && !busy && onClose()}>
       <DialogContent className="sm:max-w-xl max-h-[85vh] overflow-y-auto">

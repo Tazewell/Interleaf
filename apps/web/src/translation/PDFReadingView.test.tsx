@@ -13,7 +13,7 @@ import {
   type SearchResult,
   type TranslationBlock,
   type Processing,
-} from "@reader/core";
+} from "@interleaf/core";
 const fixture = vi.hoisted(() => ({
   events: undefined as ReaderEvents | undefined,
   ready: undefined as ReaderAdapter | undefined,
@@ -28,7 +28,7 @@ const fixture = vi.hoisted(() => ({
   signal: undefined as AbortSignal | undefined,
   processing: undefined as Processing | undefined,
 }));
-vi.mock("@reader/api", () => ({
+vi.mock("@interleaf/api", () => ({
   api: {
     assistance: vi.fn(async () => undefined),
     translationStream: vi.fn(
@@ -100,8 +100,8 @@ const adapter = {
   focusSentences: vi.fn(async () => {}),
   hoverBlock: vi.fn(),
 } as unknown as ReaderAdapter;
-vi.mock("../ReaderView", () => ({
-  ReaderView: ({
+vi.mock("../InterleafView", () => ({
+  InterleafView: ({
     events,
     onReady,
   }: {
@@ -197,7 +197,7 @@ it("shows a single failed-job message and retries only after an explicit click",
     fixture.push!({ event: "snapshot", data: fixture.translations }),
   );
   await click("对照");
-  const { api } = await import("@reader/api");
+  const { api } = await import("@interleaf/api");
   expect(api.process).not.toHaveBeenCalled();
   expect(host.textContent).not.toContain("正在翻译中");
   expect(host.textContent?.split("请先确认 AI 连接配置")).toHaveLength(2);
@@ -316,7 +316,7 @@ it("keeps the translated selection and navigation metadata without marking the o
   window.getSelection()!.addRange(range);
   document.dispatchEvent(new Event("selectionchange"));
   expect(
-    [...highlights.get("reader-translation-selection")!][0].toString(),
+    [...highlights.get("interleaf-translation-selection")!][0].toString(),
   ).toBe("第二句。");
   expect(
     host
@@ -358,7 +358,7 @@ it("keeps the translated selection and navigation metadata without marking the o
   await act(async () => fixture.ready!.clearSelection());
   expect(events.selection).toHaveBeenLastCalledWith(null);
   document.dispatchEvent(new Event("selectionchange"));
-  expect(highlights.has("reader-translation-selection")).toBe(false);
+  expect(highlights.has("interleaf-translation-selection")).toBe(false);
 });
 it("focuses the visible middle translation once when entering parallel mode", async () => {
   vi.stubGlobal("matchMedia", () => ({ matches: true }));
@@ -486,7 +486,7 @@ it("links block hover in both directions and clears it without changing sentence
   await act(async () =>
     fixture.events!.blockHover?.({
       id: "p1-b1",
-    } as import("@reader/core").PDFBlock),
+    } as import("@interleaf/core").PDFBlock),
   );
   const block = host.querySelector<HTMLElement>(
     '[data-translation-block="p1-b1"]',

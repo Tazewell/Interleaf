@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { expect, it } from "vitest";
-import type { Annotation, TranslationBlock } from "@reader/core";
+import type { Annotation, TranslationBlock } from "@interleaf/core";
 import { textRange, translatedAnnotationRanges } from "./annotations";
 
 it("restores a translated mark across formatted text nodes without changing text", () => {

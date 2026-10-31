@@ -9,25 +9,25 @@ import {
 } from "node:fs/promises";
 import { basename, dirname, join, win32 } from "node:path";
 import { promisify } from "node:util";
-import type { CommandLineStatus } from "../../../packages/reader-core/src/command-line";
+import type { CommandLineStatus } from "../../../packages/interleaf-core/src/command-line";
 
-// Puts the bundled `reader` command on the user's PATH. macOS links it from
+// Puts the bundled `interleaf` command on the user's PATH. macOS links it from
 // /usr/local/bin, which login shells include by default, like VS Code's `code`.
 // Windows adds the bundled bin directory to the user PATH. Both point into the
 // installed app, so updates replace the command together with the app.
 
 const run = promisify(execFile);
-export const macLink = "/usr/local/bin/reader";
+export const macLink = "/usr/local/bin/interleaf";
 
-export const readerBundleId = "io.github.tazewell.interleaf";
+export const interleafBundleId = "io.github.tazewell.interleaf";
 
 /**
  * Whether a link target is the command of some copy of Interleaf.app, so a new
  * install may replace it. An existing bundle must carry Interleaf's bundle ID; a
  * bundle since moved or deleted is recognised by its Interleaf.app name only.
  */
-export async function isReaderLink(target: string) {
-  const bundle = /^(.*\.app)\/Contents\/Resources\/bin\/reader$/.exec(
+export async function isInterleafLink(target: string) {
+  const bundle = /^(.*\.app)\/Contents\/Resources\/bin\/interleaf$/.exec(
     target,
   )?.[1];
   if (!bundle) return false;
@@ -47,7 +47,7 @@ export async function isReaderLink(target: string) {
   const id = /<key>CFBundleIdentifier<\/key>\s*<string>([^<]*)<\/string>/.exec(
     plist,
   )?.[1];
-  return id === readerBundleId;
+  return id === interleafBundleId;
 }
 
 export async function macStatus(
@@ -60,7 +60,7 @@ export async function macStatus(
     if (!info.isSymbolicLink()) return { ...status, conflict: true };
     const current = await readlink(link);
     if (current === target) return { ...status, installed: true };
-    return (await isReaderLink(current))
+    return (await isInterleafLink(current))
       ? status
       : { ...status, conflict: true };
   } catch (error) {
@@ -154,7 +154,7 @@ export function pathWithout(raw: string, directory: string) {
 // mode is part of the script, never taken from the inherited environment.
 function windowsScript(write: boolean) {
   const action = write
-    ? String.raw`$key.SetValue('Path', $env:READER_PATH_VALUE, [Microsoft.Win32.RegistryValueKind]::ExpandString)
+    ? String.raw`$key.SetValue('Path', $env:INTERLEAF_PATH_VALUE, [Microsoft.Win32.RegistryValueKind]::ExpandString)
     Add-Type -Namespace ReaderCli -Name Native -MemberDefinition '[DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern IntPtr SendMessageTimeout(IntPtr hWnd, uint msg, UIntPtr wParam, string lParam, uint flags, uint timeout, out UIntPtr result);'
     $result = [UIntPtr]::Zero
     [void][ReaderCli.Native]::SendMessageTimeout([IntPtr]0xffff, 0x1A, [UIntPtr]::Zero, 'Environment', 2, 5000, [ref]$result)`
@@ -171,12 +171,12 @@ try {
 `;
 }
 
-/** The PowerShell environment: inherited READER_PATH_* variables never reach it. */
+/** The PowerShell environment: inherited INTERLEAF_PATH_* variables never reach it. */
 export function windowsEnvironment(env: NodeJS.ProcessEnv, write?: string) {
   const clean = Object.fromEntries(
-    Object.entries(env).filter(([key]) => !/^READER_PATH_/i.test(key)),
+    Object.entries(env).filter(([key]) => !/^INTERLEAF_PATH_/i.test(key)),
   );
-  return write === undefined ? clean : { ...clean, READER_PATH_VALUE: write };
+  return write === undefined ? clean : { ...clean, INTERLEAF_PATH_VALUE: write };
 }
 
 async function windowsUserPath(
@@ -215,7 +215,7 @@ async function windowsUserPath(
 export interface CommandLineHost {
   platform: NodeJS.Platform;
   packaged: boolean;
-  /** The bundled `reader` executable. */
+  /** The bundled `interleaf` executable. */
   binary: string;
   env: NodeJS.ProcessEnv;
 }

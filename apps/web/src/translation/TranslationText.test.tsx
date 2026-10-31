@@ -2,7 +2,7 @@
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import type { PDFBlock, Processing, TranslationBlock } from "@reader/core";
+import type { PDFBlock, Processing, TranslationBlock } from "@interleaf/core";
 import { TranslationText } from "./TranslationText";
 let host: HTMLDivElement, root: Root;
 const base: PDFBlock = {

@@ -1,7 +1,7 @@
 "use client";
 
 import { Progress as ProgressPrimitive } from "@base-ui/react/progress";
-import { cn } from "@reader/ui/lib/utils";
+import { cn } from "@interleaf/ui/lib/utils";
 
 function Progress({
   className,

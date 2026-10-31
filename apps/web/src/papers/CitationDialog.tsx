@@ -6,25 +6,25 @@ import {
   DownloadSimple as Download,
   DotsSixVertical as GripVertical,
 } from "@phosphor-icons/react";
-import type { Document } from "@reader/core";
-import { Badge } from "@reader/ui/components/badge";
-import { Button } from "@reader/ui/components/button";
-import { Textarea } from "@reader/ui/components/textarea";
+import type { Document } from "@interleaf/core";
+import { Badge } from "@interleaf/ui/components/badge";
+import { Button } from "@interleaf/ui/components/button";
+import { Textarea } from "@interleaf/ui/components/textarea";
 import {
   Dialog,
   DialogContent,
   DialogDescription,
   DialogHeader,
   DialogTitle,
-} from "@reader/ui/components/dialog";
+} from "@interleaf/ui/components/dialog";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@reader/ui/components/select";
-import { Tabs, TabsList, TabsTrigger } from "@reader/ui/components/tabs";
+} from "@interleaf/ui/components/select";
+import { Tabs, TabsList, TabsTrigger } from "@interleaf/ui/components/tabs";
 import { copyText } from "../chat/clipboard";
 import { downloadText } from "../download";
 import { useReaderStore } from "../store";

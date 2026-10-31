@@ -9,9 +9,9 @@ import type {
   Message,
   ReaderAdapter,
   TOCItem,
-} from "@reader/core";
-import { Button } from "@reader/ui/components/button";
-import { api } from "@reader/api";
+} from "@interleaf/core";
+import { Button } from "@interleaf/ui/components/button";
+import { api } from "@interleaf/api";
 import {
   referenceCards,
   referenceLabel,

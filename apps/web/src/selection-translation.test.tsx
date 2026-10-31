@@ -2,10 +2,10 @@
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import type { ReaderSelection } from "@reader/core";
-import { api } from "@reader/api";
+import type { ReaderSelection } from "@interleaf/core";
+import { api } from "@interleaf/api";
 import { SelectionTranslation } from "./SelectionTranslation";
-vi.mock("@reader/api", () => ({ api: { translateSelection: vi.fn() } }));
+vi.mock("@interleaf/api", () => ({ api: { translateSelection: vi.fn() } }));
 const first: ReaderSelection = {
   text: "one",
   context: { before: "before", after: "after" },

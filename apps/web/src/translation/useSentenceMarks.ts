@@ -10,7 +10,7 @@ import type {
   ReaderAnnotationTarget,
   SearchResult,
   TranslationBlock,
-} from "@reader/core";
+} from "@interleaf/core";
 import { translatedAnnotationRanges } from "./annotations";
 import { sourcePassage, translatedSentenceRanges } from "./sentence-links";
 import { searchRanges } from "./search-ranges";
@@ -40,7 +40,7 @@ export function useSentenceMarks(
   searchQuery = "",
   searchResults: SearchResult[] = [],
 ) {
-  const prefix = `reader-sentences-${useId().replace(/[^a-zA-Z0-9]/g, "")}`;
+  const prefix = `interleaf-sentences-${useId().replace(/[^a-zA-Z0-9]/g, "")}`;
   const latest = useRef({
     blocks,
     translations,

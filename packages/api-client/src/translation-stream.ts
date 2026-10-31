@@ -1,4 +1,4 @@
-import type { TranslationBlock } from "@reader/core";
+import type { TranslationBlock } from "@interleaf/core";
 
 export type TranslationEvent =
   | { event: "snapshot"; data: TranslationBlock[] }

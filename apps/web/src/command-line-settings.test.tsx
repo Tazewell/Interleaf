@@ -2,7 +2,7 @@
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import type { CommandLineStatus } from "@reader/core";
+import type { CommandLineStatus } from "@interleaf/core";
 import { CommandLineSettings } from "./CommandLineSettings";
 
 let root: Root;
@@ -10,7 +10,7 @@ let host: HTMLDivElement;
 const status = (value: Partial<CommandLineStatus>): CommandLineStatus => ({
   supported: true,
   installed: false,
-  location: "/usr/local/bin/reader",
+  location: "/usr/local/bin/interleaf",
   ...value,
 });
 function desktop(initial: CommandLineStatus, platform = "darwin") {
@@ -22,7 +22,7 @@ function desktop(initial: CommandLineStatus, platform = "darwin") {
       installed,
     })),
   };
-  vi.stubGlobal("readerDesktop", api);
+  vi.stubGlobal("interleafDesktop", api);
   return api;
 }
 const render = (open = true) =>
@@ -51,11 +51,11 @@ it("installs and uninstalls the command", async () => {
   expect(host.textContent).toContain("可能需要输入密码");
   await act(async () => button().click());
   expect(api.setCommandLine).toHaveBeenCalledWith(true);
-  expect(host.textContent).toContain("已安装：/usr/local/bin/reader");
-  expect(button().textContent).toContain("卸载 reader 命令");
+  expect(host.textContent).toContain("已安装：/usr/local/bin/interleaf");
+  expect(button().textContent).toContain("卸载 interleaf 命令");
   await act(async () => button().click());
   expect(api.setCommandLine).toHaveBeenLastCalledWith(false);
-  expect(button().textContent).toContain("安装 reader 命令");
+  expect(button().textContent).toContain("安装 interleaf 命令");
 });
 
 it("waits until the settings open", async () => {
@@ -74,11 +74,11 @@ it("does not touch another program's reader", async () => {
 
 it("shows the binary in development builds and errors in place", async () => {
   desktop(
-    status({ supported: false, location: "/repo/apps/desktop/bin/reader" }),
+    status({ supported: false, location: "/repo/apps/desktop/bin/interleaf" }),
   );
   await render();
   expect(host.querySelector("button")).toBeNull();
-  expect(host.textContent).toContain("/repo/apps/desktop/bin/reader");
+  expect(host.textContent).toContain("/repo/apps/desktop/bin/interleaf");
 
   const api = desktop(status({}), "win32");
   api.setCommandLine.mockRejectedValueOnce(new Error("已取消"));

@@ -1,12 +1,12 @@
 import { useEffect, useRef, useState } from "react";
-import type { Annotation, ReaderAnnotationTarget } from "@reader/core";
+import type { Annotation, ReaderAnnotationTarget } from "@interleaf/core";
 import { PencilSimple as Pencil } from "@phosphor-icons/react";
-import { Button } from "@reader/ui/components/button";
+import { Button } from "@interleaf/ui/components/button";
 import {
   Popover,
   PopoverContent,
   PopoverTitle,
-} from "@reader/ui/components/popover";
+} from "@interleaf/ui/components/popover";
 
 export function AnnotationHoverCard({
   target,

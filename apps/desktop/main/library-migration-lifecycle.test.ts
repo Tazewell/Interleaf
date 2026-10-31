@@ -28,7 +28,7 @@ const event = () => ({
   sender: window.webContents,
   senderFrame: window.webContents.mainFrame,
 });
-const move = () => handlers.get("reader:move-library")!(event());
+const move = () => handlers.get("interleaf:move-library")!(event());
 
 beforeEach(async (context) => {
   const startupFailure = context.task.name.includes("startup failure");
@@ -197,7 +197,7 @@ beforeEach(async (context) => {
     await vi.waitFor(() => expect(stop).toHaveBeenCalledOnce());
   else
     await vi.waitFor(() =>
-      expect(handlers.has("reader:check-updates")).toBe(true),
+      expect(handlers.has("interleaf:check-updates")).toBe(true),
     );
 });
 afterEach(() => {
@@ -216,13 +216,13 @@ it("waits for flushed reading data, then copies once despite repeated quit event
   });
   const result = move();
   await vi.waitFor(() =>
-    expect(window.webContents.send).toHaveBeenCalledWith("reader:flush"),
+    expect(window.webContents.send).toHaveBeenCalledWith("interleaf:flush"),
   );
   expect(migrate).not.toHaveBeenCalled();
-  ipc.emit("reader:flushed", event(), null);
+  ipc.emit("interleaf:flushed", event(), null);
   await vi.waitFor(() => expect(stop).toHaveBeenCalledOnce());
   app.quit();
-  ipc.emit("reader:flushed", event(), null);
+  ipc.emit("interleaf:flushed", event(), null);
   expect(migrate).toHaveBeenCalledOnce();
   expect(app.relaunch).not.toHaveBeenCalled();
   await vi.waitFor(() => expect(complete).toBeTypeOf("function"));
@@ -241,9 +241,9 @@ it("waits for flushed reading data, then copies once despite repeated quit event
 it("cancels migration after a save failure and allows returning to reading", async () => {
   const result = move();
   await vi.waitFor(() =>
-    expect(window.webContents.send).toHaveBeenCalledWith("reader:flush"),
+    expect(window.webContents.send).toHaveBeenCalledWith("interleaf:flush"),
   );
-  ipc.emit("reader:flushed", event(), "save failed");
+  ipc.emit("interleaf:flushed", event(), "save failed");
   expect(await result).toBe(false);
   expect(migrate).not.toHaveBeenCalled();
   expect(app.relaunch).not.toHaveBeenCalled();
@@ -260,9 +260,9 @@ it("keeps the old library and refuses relaunch after shutdown fails", async () =
   stop.mockRejectedValueOnce(new Error("shutdown failed"));
   const result = move();
   await vi.waitFor(() =>
-    expect(window.webContents.send).toHaveBeenCalledWith("reader:flush"),
+    expect(window.webContents.send).toHaveBeenCalledWith("interleaf:flush"),
   );
-  ipc.emit("reader:flushed", event(), null);
+  ipc.emit("interleaf:flushed", event(), null);
   expect(await result).toBe(false);
   expect(showMessageBox).toHaveBeenCalledWith(
     window,
@@ -271,7 +271,7 @@ it("keeps the old library and refuses relaunch after shutdown fails", async () =
       detail: expect.stringContaining("原书库已保留"),
     }),
   );
-  expect(handlers.get("reader:library-location")!(event())).toBe(
+  expect(handlers.get("interleaf:library-location")!(event())).toBe(
     "/old/library",
   );
   expect(app.relaunch).not.toHaveBeenCalled();
@@ -293,7 +293,7 @@ it.each(["normal", "destroyed", "renderer-crash"])(
         { reason: "crashed", exitCode: 1 },
       );
     else app.quit();
-    if (kind === "normal") ipc.emit("reader:flushed", event(), null);
+    if (kind === "normal") ipc.emit("interleaf:flushed", event(), null);
     await vi.waitFor(() => expect(stop).toHaveBeenCalledOnce());
     app.quit();
     app.quit();
@@ -324,9 +324,9 @@ it.each(["plain", "restart"])("recovers %s quit after timeout and late close wit
   const actual = await vi.importActual<typeof import("./library-location")>("./library-location");
   stop.mockImplementation(actual.stopLibraryServer);
   vi.useFakeTimers();
-  if (kind === "restart") handlers.get("reader:restart")!(event());
+  if (kind === "restart") handlers.get("interleaf:restart")!(event());
   else app.quit();
-  ipc.emit("reader:flushed", event(), null);
+  ipc.emit("interleaf:flushed", event(), null);
   await vi.advanceTimersByTimeAsync(0);
   app.quit();
   await vi.advanceTimersByTimeAsync(30_000);
@@ -353,9 +353,9 @@ it.each(["plain", "restart"])("finishes %s quit after an already exited nonzero 
   stop.mockImplementation(actual.stopLibraryServer);
   vi.useFakeTimers();
   serverChild.exitCode = 1;
-  if (kind === "restart") handlers.get("reader:restart")!(event());
+  if (kind === "restart") handlers.get("interleaf:restart")!(event());
   else app.quit();
-  ipc.emit("reader:flushed", event(), null);
+  ipc.emit("interleaf:flushed", event(), null);
   await vi.advanceTimersByTimeAsync(0);
   expect(exitCount).toBe(0);
   serverChild.emit("close", 1, null);
@@ -384,7 +384,7 @@ it.each(["timeout", "nonzero"])("rejects migration after %s cleanup failure but 
   vi.useFakeTimers();
   const result = move();
   await vi.advanceTimersByTimeAsync(0);
-  ipc.emit("reader:flushed", event(), null);
+  ipc.emit("interleaf:flushed", event(), null);
   await vi.advanceTimersByTimeAsync(0);
   expect(execute).not.toHaveBeenCalled();
   if (kind === "timeout") await vi.advanceTimersByTimeAsync(30_000);
@@ -396,7 +396,7 @@ it.each(["timeout", "nonzero"])("rejects migration after %s cleanup failure but 
   expect(await result).toBe(false);
   expect(execute).not.toHaveBeenCalled();
   expect(app.relaunch).not.toHaveBeenCalled();
-  expect(handlers.get("reader:library-location")!(event())).toBe("/old/library");
+  expect(handlers.get("interleaf:library-location")!(event())).toBe("/old/library");
   if (kind === "timeout") {
     expect(exitCount).toBe(0);
     serverChild.exitCode = 0;
@@ -412,7 +412,7 @@ it.each(["timeout", "nonzero"])("rejects migration after %s cleanup failure but 
 it("does not close the reader when the native confirmation is cancelled", async () => {
   showMessageBox.mockResolvedValueOnce({ response: 1 });
   expect(await move()).toBe(false);
-  expect(window.webContents.send).not.toHaveBeenCalledWith("reader:flush");
+  expect(window.webContents.send).not.toHaveBeenCalledWith("interleaf:flush");
   expect(migrate).not.toHaveBeenCalled();
 });
 
@@ -427,11 +427,11 @@ it.each(["/destination?question", "/parent?question/destination"])(
     showMessageBox.mockResolvedValueOnce({ response: 1 });
     await expect(move()).rejects.toThrow("书库路径不能包含 ?");
     expect(showMessageBox).not.toHaveBeenCalled();
-    expect(window.webContents.send).not.toHaveBeenCalledWith("reader:flush");
+    expect(window.webContents.send).not.toHaveBeenCalledWith("interleaf:flush");
     expect(stop).not.toHaveBeenCalled();
     expect(migrate).not.toHaveBeenCalled();
     expect(app.relaunch).not.toHaveBeenCalled();
-    expect(handlers.get("reader:library-location")!(event())).toBe(
+    expect(handlers.get("interleaf:library-location")!(event())).toBe(
       "/old/library",
     );
 

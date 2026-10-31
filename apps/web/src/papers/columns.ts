@@ -1,4 +1,4 @@
-import type { PaperColumn, PaperLibraryPreferences } from "@reader/core";
+import type { PaperColumn, PaperLibraryPreferences } from "@interleaf/core";
 import { columnLabels, defaultColumns } from "./model";
 
 export type TableColumn = "title" | PaperColumn;

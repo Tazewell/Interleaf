@@ -1,20 +1,20 @@
 import { useEffect } from "react";
 import { toast } from "sonner";
-import { Progress } from "@reader/ui/components/progress";
+import { Progress } from "@interleaf/ui/components/progress";
 
 const megabytes = (bytes: number) => Math.round(bytes / 1024 / 1024);
 // Shows desktop update downloads in one persistent toast.
 export function useUpdateProgress() {
   useEffect(
     () =>
-      window.readerDesktop?.onUpdateProgress?.((progress) => {
+      window.interleafDesktop?.onUpdateProgress?.((progress) => {
         if (!progress) {
-          toast.dismiss("reader-update");
+          toast.dismiss("interleaf-update");
           return;
         }
         if (progress.phase === "prepare") {
           toast.loading(`正在准备安装纸间 ${progress.version}`, {
-            id: "reader-update",
+            id: "interleaf-update",
             description: undefined,
             duration: Infinity,
           });
@@ -22,7 +22,7 @@ export function useUpdateProgress() {
         }
         const { received, total } = progress;
         toast.loading(`正在下载纸间 ${progress.version}`, {
-          id: "reader-update",
+          id: "interleaf-update",
           duration: Infinity,
           description: (
             <div className="mt-2 grid gap-1.5">

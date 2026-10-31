@@ -472,13 +472,13 @@ function App() {
             <label htmlFor="folder">分类</label>
             <input
               id="folder"
-              list="reader-folders"
+              list="interleaf-folders"
               type="text"
               value={folder}
               onChange={(e) => setFolder(e.target.value)}
               placeholder="可选"
             />
-            <datalist id="reader-folders">
+            <datalist id="interleaf-folders">
               {folders.map((f) => (
                 <option value={f} key={f} />
               ))}
@@ -486,13 +486,13 @@ function App() {
             <label htmlFor="tags">标签</label>
             <input
               id="tags"
-              list="reader-tags"
+              list="interleaf-tags"
               type="text"
               value={tags}
               onChange={(e) => setTags(e.target.value)}
               placeholder="用逗号分隔，可选"
             />
-            <datalist id="reader-tags">
+            <datalist id="interleaf-tags">
               {existingTags.map((tag) => (
                 <option value={`${tagPrefix}${tag}`} key={tag} />
               ))}

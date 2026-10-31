@@ -14,9 +14,9 @@ declare module "unified" {
 
 declare module "micromark-util-types" {
   interface TokenTypeMap {
-    readerLatex: "readerLatex";
-    readerLatexFlow: "readerLatexFlow";
-    readerLatexData: "readerLatexData";
+    interleafLatex: "interleafLatex";
+    interleafLatexFlow: "interleafLatexFlow";
+    interleafLatexData: "interleafLatexData";
   }
 }
 
@@ -24,12 +24,12 @@ declare module "micromark-util-types" {
 // fences, link destinations and escaped backslashes retain their normal rules.
 function latexTokenizer(block: boolean): Tokenizer {
   return function (effects, ok, nok) {
-    const type = block ? "readerLatexFlow" : "readerLatex";
+    const type = block ? "interleafLatexFlow" : "interleafLatex";
     let closing = 0;
     let inData = true;
     const start: State = (code) => {
       effects.enter(type);
-      effects.enter("readerLatexData");
+      effects.enter("interleafLatexData");
       effects.consume(code);
       return opening;
     };
@@ -42,7 +42,7 @@ function latexTokenizer(block: boolean): Tokenizer {
     const content: State = (code) => {
       if (code === null) return nok(code);
       if (code === -5 || code === -4 || code === -3) {
-        if (inData) effects.exit("readerLatexData");
+        if (inData) effects.exit("interleafLatexData");
         inData = false;
         effects.enter("lineEnding");
         effects.consume(code);
@@ -50,7 +50,7 @@ function latexTokenizer(block: boolean): Tokenizer {
         return content;
       }
       if (!inData) {
-        effects.enter("readerLatexData");
+        effects.enter("interleafLatexData");
         inData = true;
       }
       effects.consume(code);
@@ -60,7 +60,7 @@ function latexTokenizer(block: boolean): Tokenizer {
       if (code === closing) {
         effects.consume(code);
         if (block) return trailing;
-        effects.exit("readerLatexData");
+        effects.exit("interleafLatexData");
         effects.exit(type);
         return ok;
       }
@@ -73,7 +73,7 @@ function latexTokenizer(block: boolean): Tokenizer {
     };
     const trailing: State = (code) => {
       if (code === null || code === -5 || code === -4 || code === -3) {
-        effects.exit("readerLatexData");
+        effects.exit("interleafLatexData");
         effects.exit(type);
         return ok(code);
       }
@@ -95,7 +95,7 @@ const enterLatex: Handle = function (token) {
   const raw = this.sliceSerialize(token).trimEnd();
   const value = raw.slice(2, -2).trim();
   const display = raw[1] === "[";
-  if (token.type === "readerLatexFlow") {
+  if (token.type === "interleafLatexFlow") {
     this.enter(
       {
         type: "math",
@@ -141,8 +141,8 @@ const exitLatex: Handle = function (token) {
   this.exit(token);
 };
 const markdown: MarkdownExtension = {
-  enter: { readerLatex: enterLatex, readerLatexFlow: enterLatex },
-  exit: { readerLatex: exitLatex, readerLatexFlow: exitLatex },
+  enter: { interleafLatex: enterLatex, interleafLatexFlow: enterLatex },
+  exit: { interleafLatex: exitLatex, interleafLatexFlow: exitLatex },
 };
 
 export const remarkLatex: Plugin = function () {

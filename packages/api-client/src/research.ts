@@ -14,7 +14,7 @@ import type {
   ResearchCandidate,
   ResearchSearch,
   Document,
-} from "@reader/core";
+} from "@interleaf/core";
 import { request, requestResponse } from "./transport";
 
 const topicPath = (id: string) =>

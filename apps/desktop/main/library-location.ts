@@ -20,13 +20,18 @@ export async function libraryDirectory(userData: string): Promise<string> {
   } catch {}
   if (typeof directory !== "string" || !isAbsolute(directory))
     throw new Error("保存的书库位置无效，请检查 library-location.json。");
-  try {
-    if (!(await stat(join(directory, "reader.sqlite"))).isFile())
-      throw new Error();
-  } catch {
-    throw new Error("无法访问已设置的书库，请连接存储设备并确认目录仍然存在。");
+  // Preserve custom libraries created before the internal project rename.
+  for (const name of ["interleaf.sqlite", "reader.sqlite"]) {
+    try {
+      if ((await stat(join(directory, name))).isFile()) return directory;
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "ENOENT")
+        throw new Error(
+          "无法访问已设置的书库，请连接存储设备并确认目录仍然存在。",
+        );
+    }
   }
-  return directory;
+  throw new Error("无法访问已设置的书库，请连接存储设备并确认目录仍然存在。");
 }
 
 /** Stdin EOF works on Windows too, unlike SIGTERM's forced termination there. */

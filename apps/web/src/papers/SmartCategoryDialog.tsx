@@ -1,7 +1,7 @@
 import { useState } from "react";
-import type { SmartCategory } from "@reader/core";
-import { Button } from "@reader/ui/components/button";
-import { Input } from "@reader/ui/components/input";
+import type { SmartCategory } from "@interleaf/core";
+import { Button } from "@interleaf/ui/components/button";
+import { Input } from "@interleaf/ui/components/input";
 import {
   Dialog,
   DialogContent,
@@ -9,11 +9,11 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "@reader/ui/components/dialog";
+} from "@interleaf/ui/components/dialog";
 import {
   ToggleGroup,
   ToggleGroupItem,
-} from "@reader/ui/components/toggle-group";
+} from "@interleaf/ui/components/toggle-group";
 
 /** Name a smart category and pick the tags its papers must all carry. */
 export function SmartCategoryDialog({

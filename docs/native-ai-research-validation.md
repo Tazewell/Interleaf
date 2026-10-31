@@ -2,7 +2,7 @@
 
 ## 可复现入口
 
-在依赖齐全的 Linux checkout 运行 `pnpm typecheck`、`pnpm test`、`pnpm build`，然后设置 `READER_IMPLEMENTATION_COMMIT` 为被构建源码的完整 Git 提交，运行：
+在依赖齐全的 Linux checkout 运行 `pnpm typecheck`、`pnpm test`、`pnpm build`，然后设置 `INTERLEAF_IMPLEMENTATION_COMMIT` 为被构建源码的完整 Git 提交，运行：
 
 ```sh
 bash scripts/native-ai-research-acceptance/run.sh /absolute/outside/repository/new-directory
@@ -25,7 +25,7 @@ bash scripts/bilingual-pdf-acceptance/run.sh /absolute/outside/repository/anothe
 在 Linux checkout 使用两个绝对仓库外目录（`FOCUSED_OUT` 是新输出目录，`PRIOR_OUT` 是已有完整验收产物）：
 
 ```sh
-(cd apps/server && READER_TEST_ATTRIBUTION_OUT="$FOCUSED_OUT" go test -race ./internal/reader -run '^TestResearchSameBareBlockHTTPAttribution$' -count=1 -v)
+(cd apps/server && INTERLEAF_TEST_ATTRIBUTION_OUT="$FOCUSED_OUT" go test -race ./internal/interleaf -run '^TestResearchSameBareBlockHTTPAttribution$' -count=1 -v)
 python3 scripts/native-ai-research-acceptance/attribution_test.py
 python3 scripts/native-ai-research-acceptance/verify-attribution.py "$FOCUSED_OUT" "$PRIOR_OUT"
 python3 scripts/native-ai-research-acceptance/traps_test.py "$PRIOR_OUT" "$FOCUSED_OUT"

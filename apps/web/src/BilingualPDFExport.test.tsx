@@ -2,11 +2,11 @@
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import { api } from "@reader/api";
-import type { BilingualPDFJob } from "@reader/core";
+import { api } from "@interleaf/api";
+import type { BilingualPDFJob } from "@interleaf/core";
 import { BilingualPDFExport } from "./BilingualPDFExport";
 import { paper } from "./papers/fixtures";
-vi.mock("@reader/api", () => ({
+vi.mock("@interleaf/api", () => ({
   api: {
     createBilingualPDF: vi.fn(),
     bilingualPDF: vi.fn(),
@@ -53,10 +53,10 @@ beforeEach(() => {
   vi.stubGlobal("PointerEvent", MouseEvent);
   vi.clearAllMocks();
   doc = paper({ id: "doc", paperId: "paper" });
-  window.readerDesktop = {
+  window.interleafDesktop = {
     saveBilingualPDF: save,
     cancelBilingualPDFSave: cancelSave,
-  } as unknown as Window["readerDesktop"];
+  } as unknown as Window["interleafDesktop"];
   save.mockResolvedValue({ saved: true, fileName: "双语.pdf" });
   cancelSave.mockResolvedValue(undefined);
   vi.mocked(api.createBilingualPDF).mockResolvedValue(preflight);
@@ -70,7 +70,7 @@ beforeEach(() => {
 afterEach(async () => {
   await act(async () => root.unmount());
   host.remove();
-  delete window.readerDesktop;
+  delete window.interleafDesktop;
   vi.unstubAllGlobals();
 });
 
@@ -295,7 +295,7 @@ it("offers attachments only for PaperItems and hides the feature outside desktop
   await mount();
   expect(host.textContent).toBe("");
   doc = paper();
-  delete window.readerDesktop;
+  delete window.interleafDesktop;
   await mount();
   expect(host.textContent).toBe("");
 });
@@ -351,7 +351,7 @@ it("polls genuine counts and cancels a failed job before retrying", async () => 
 });
 it("resets a ready job on library change before accepting another export", async () => {
   let change!: () => void;
-  window.readerDesktop!.onLibraryChanged = (callback) => {
+  window.interleafDesktop!.onLibraryChanged = (callback) => {
     change = callback;
     return () => {};
   };

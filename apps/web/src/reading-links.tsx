@@ -1,4 +1,4 @@
-import { figureReferences } from "./readers/figure-references";
+import { figureReferences } from "./engines/figure-references";
 import { createContext } from "react";
 import { toast } from "sonner";
 import type { Link, PhrasingContent, Root, Text } from "mdast";
@@ -10,15 +10,15 @@ export const ReadingLinkNavigation = createContext<
 
 export function openExternalLink(url: string) {
   if (!/^https?:\/\//i.test(url)) return;
-  if (window.readerDesktop?.openExternal)
-    void window.readerDesktop
+  if (window.interleafDesktop?.openExternal)
+    void window.interleafDesktop
       .openExternal(url)
       .catch((e) => toast.error(e.message));
   else window.open(url, "_blank", "noopener,noreferrer");
 }
 
 export function citationHref(blockId: string, label: string) {
-  return `#reader-citation?${new URLSearchParams({ block: blockId, label })}`;
+  return `#interleaf-citation?${new URLSearchParams({ block: blockId, label })}`;
 }
 
 const citationPattern = /\[(\d+(?:\s*[,，–-]\s*\d+)*)\]/g;

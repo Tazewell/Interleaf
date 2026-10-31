@@ -1,5 +1,5 @@
 {
-  "name": "@reader/web",
+  "name": "@interleaf/web",
   "private": true,
   "type": "module",
   "scripts": {
@@ -13,9 +13,9 @@
     "@lobehub/icons": "5.23.0",
     "@lobehub/streamdown": "1.4.0",
     "@phosphor-icons/react": "^2.1.10",
-    "@reader/api": "workspace:*",
-    "@reader/core": "workspace:*",
-    "@reader/ui": "workspace:*",
+    "@interleaf/api": "workspace:*",
+    "@interleaf/core": "workspace:*",
+    "@interleaf/ui": "workspace:*",
     "@readium/navigator": "2.11.1",
     "@readium/shared": "2.6.0",
     "katex": "0.18.1",

@@ -4,7 +4,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { AISettings } from "./AISettings";
 import { useReaderStore } from "../store";
-import type { NativeAIConfig } from "@reader/core";
+import type { NativeAIConfig } from "@interleaf/core";
 
 let root: Root;
 let host: HTMLDivElement;

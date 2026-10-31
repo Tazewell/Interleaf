@@ -11,7 +11,7 @@ import type {
   NativePDFPrepared,
   BilingualPDFOptions,
   NativePDFPage,
-} from "../../../../packages/reader-core/src/bilingual-pdf";
+} from "../../../../packages/interleaf-core/src/bilingual-pdf";
 import {
   atomicWrite,
   loadFont,
@@ -113,7 +113,7 @@ function validatePrepared(p: NativePDFPrepared) {
       checkBounds(paragraph.bounds, page.width, page.height);
       const expectedHash = sha256(
         JSON.stringify([
-          "reader-native-pdf-v1",
+          "interleaf-native-pdf-v1",
           paragraph.id,
           paragraph.source,
           paragraph.bounds,

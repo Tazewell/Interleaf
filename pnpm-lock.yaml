@@ -136,13 +136,13 @@ importers:
       '@phosphor-icons/react':
         specifier: ^2.1.10
         version: 2.1.10(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
-      '@reader/api':
+      '@interleaf/api':
         specifier: workspace:*
         version: link:../../packages/api-client
-      '@reader/core':
+      '@interleaf/core':
         specifier: workspace:*
-        version: link:../../packages/reader-core
-      '@reader/ui':
+        version: link:../../packages/interleaf-core
+      '@interleaf/ui':
         specifier: workspace:*
         version: link:../../packages/ui
       '@readium/navigator':
@@ -221,14 +221,14 @@ importers:
 
   packages/api-client:
     dependencies:
-      '@reader/core':
+      '@interleaf/core':
         specifier: workspace:*
-        version: link:../reader-core
+        version: link:../interleaf-core
       openapi-fetch:
         specifier: ^0.17.0
         version: 0.17.0
 
-  packages/reader-core: {}
+  packages/interleaf-core: {}
 
   packages/ui:
     dependencies:

@@ -8,7 +8,7 @@ import type {
   ReaderAdapter,
   SearchResult,
   TranslationBlock,
-} from "@reader/core";
+} from "@interleaf/core";
 // Geometry/lifecycle assertions are independent of the composited hover renderer.
 vi.mock("./sentence-hover", () => ({
   SentenceHover: class {
@@ -337,7 +337,7 @@ it("coalesces pointer bursts and ignores block-overlay mutations without rematch
   expect(reads).not.toHaveBeenCalled();
   await act(async () => {
     const overlay = document.createElement("div");
-    overlay.className = "reader-block-hover";
+    overlay.className = "interleaf-block-hover";
     host.querySelector(".page")!.append(overlay);
     await vi.advanceTimersByTimeAsync(40);
   });

@@ -1,12 +1,12 @@
-import { nativeConfigUpdate } from "@reader/core";
+import { nativeConfigUpdate } from "@interleaf/core";
 import { useEffect, useRef, useState, type CSSProperties } from "react";
-import { api } from "@reader/api";
+import { api } from "@interleaf/api";
 import type {
   NativeAIConfig,
   AgentModel,
   ModelTask,
   ReasoningEffort,
-} from "@reader/core";
+} from "@interleaf/core";
 import {
   ArrowCounterClockwise as RotateCcw,
   Lightning as Zap,
@@ -16,16 +16,16 @@ import {
   PopoverContent,
   PopoverTitle,
   PopoverTrigger,
-} from "@reader/ui/components/popover";
-import { Slider } from "@reader/ui/components/slider";
-import { Button } from "@reader/ui/components/button";
+} from "@interleaf/ui/components/popover";
+import { Slider } from "@interleaf/ui/components/slider";
+import { Button } from "@interleaf/ui/components/button";
 import {
   Select,
   SelectTrigger,
   SelectValue,
   SelectContent,
   SelectItem,
-} from "@reader/ui/components/select";
+} from "@interleaf/ui/components/select";
 import { useReaderStore } from "./store";
 import { ProviderIcon } from "./ProviderIdentity";
 import { toast } from "sonner";

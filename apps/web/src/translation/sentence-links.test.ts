@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { expect, it } from "vitest";
-import type { ReaderSelection, TranslationBlock } from "@reader/core";
+import type { ReaderSelection, TranslationBlock } from "@interleaf/core";
 import {
   linkTranslatedSelection,
   sentenceLink,

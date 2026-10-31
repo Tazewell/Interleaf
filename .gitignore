@@ -1,6 +1,8 @@
 node_modules/
 dist/
 bin/
+.interleaf/
+# Legacy development libraries remain private during migration.
 .reader/
 *.log
 .DS_Store

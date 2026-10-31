@@ -70,7 +70,7 @@ export class SentenceHover {
       return;
     }
     const layer = document.createElement("div");
-    layer.className = "reader-sentence-hover-layer";
+    layer.className = "interleaf-sentence-hover-layer";
     layer.setAttribute("aria-hidden", "true");
     const left = Math.min(...boxes.map((b) => b.left)),
       top = Math.min(...boxes.map((b) => b.top));
@@ -90,7 +90,7 @@ export class SentenceHover {
     });
     for (const box of boxes) {
       const mark = document.createElement("div");
-      mark.className = "reader-sentence-hover-mark";
+      mark.className = "interleaf-sentence-hover-mark";
       Object.assign(mark.style, {
         position: "absolute",
         left: `${box.left - left}px`,

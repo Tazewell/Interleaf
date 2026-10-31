@@ -1,5 +1,5 @@
 import { beforeEach, expect, it, vi } from "vitest";
-import type { Annotation, Document } from "@reader/core";
+import type { Annotation, Document } from "@interleaf/core";
 
 const mocks = vi.hoisted(() => ({
   annotations: vi.fn(),
@@ -9,7 +9,7 @@ const mocks = vi.hoisted(() => ({
   downloadBlob: vi.fn(),
   toast: { loading: vi.fn(() => "t"), success: vi.fn(), error: vi.fn() },
 }));
-vi.mock("@reader/api", () => ({
+vi.mock("@interleaf/api", () => ({
   api: {
     annotations: mocks.annotations,
     messages: mocks.messages,
@@ -17,7 +17,7 @@ vi.mock("@reader/api", () => ({
   },
   publicationURL: (id: string, name: string) => `/pub/x/${id}/${name}`,
 }));
-vi.mock("./readers/pdf-export", () => ({ annotatedPDF: mocks.annotatedPDF }));
+vi.mock("./engines/pdf-export", () => ({ annotatedPDF: mocks.annotatedPDF }));
 vi.mock("./download", async (original) => ({
   ...(await original<typeof import("./download")>()),
   downloadBlob: mocks.downloadBlob,

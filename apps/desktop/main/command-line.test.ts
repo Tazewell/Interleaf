@@ -4,26 +4,26 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import {
   commandLineStatus,
-  isReaderLink,
+  isInterleafLink,
   macInstall,
   macStatus,
   macUninstall,
   pathWith,
   pathWithout,
-  readerBundleId,
+  interleafBundleId,
   setCommandLine,
   windowsEnvironment,
 } from "./command-line";
 
-const app = "/Applications/Interleaf.app/Contents/Resources/bin/reader";
+const app = "/Applications/Interleaf.app/Contents/Resources/bin/interleaf";
 let directory = "";
 afterEach(async () => {
   if (directory) await rm(directory, { recursive: true, force: true });
   directory = "";
 });
 async function link() {
-  directory = await mkdtemp(join(tmpdir(), "reader-cli-"));
-  return join(directory, "bin", "reader");
+  directory = await mkdtemp(join(tmpdir(), "interleaf-cli-"));
+  return join(directory, "bin", "interleaf");
 }
 /** An app bundle on disk whose Info.plist names `id`; returns its command path. */
 async function bundle(name: string, id?: string) {
@@ -34,7 +34,7 @@ async function bundle(name: string, id?: string) {
       join(contents, "Info.plist"),
       `<?xml version="1.0" encoding="UTF-8"?>\n<plist version="1.0"><dict>\n    <key>CFBundleIdentifier</key>\n    <string>${id}</string>\n</dict></plist>\n`,
     );
-  return join(directory, name, "Contents", "Resources", "bin", "reader");
+  return join(directory, name, "Contents", "Resources", "bin", "interleaf");
 }
 
 describe.skipIf(process.platform === "win32")("macOS link", () => {
@@ -54,7 +54,7 @@ describe.skipIf(process.platform === "win32")("macOS link", () => {
     const path = await link();
     await macInstall(
       path,
-      "/Users/a/Downloads/Interleaf.app/Contents/Resources/bin/reader",
+      "/Users/a/Downloads/Interleaf.app/Contents/Resources/bin/interleaf",
     );
     const status = await macStatus(path, app);
     expect(status).toMatchObject({ installed: false });
@@ -76,7 +76,7 @@ describe.skipIf(process.platform === "win32")("macOS link", () => {
   });
   it("leaves another app's bundled reader alone", async () => {
     const path = await link();
-    const other = await bundle("Other Interleaf.app", "com.example.reader");
+    const other = await bundle("Other Interleaf.app", "com.example.interleaf");
     await macInstall(path, other);
     expect((await macStatus(path, app)).conflict).toBe(true);
     await expect(macInstall(path, app)).rejects.toThrow("已被其他程序占用");
@@ -86,23 +86,23 @@ describe.skipIf(process.platform === "win32")("macOS link", () => {
   it("recognises Interleaf links by bundle ID, or by name once deleted", async () => {
     await link();
     expect(
-      await isReaderLink(await bundle("Renamed.app", readerBundleId)),
+      await isInterleafLink(await bundle("Renamed.app", interleafBundleId)),
     ).toBe(true);
-    expect(await isReaderLink(await bundle("Interleaf.app", "com.example"))).toBe(
+    expect(await isInterleafLink(await bundle("Interleaf.app", "com.example"))).toBe(
       false,
     );
-    expect(await isReaderLink(await bundle("NoPlist.app"))).toBe(false);
+    expect(await isInterleafLink(await bundle("NoPlist.app"))).toBe(false);
     expect(
-      await isReaderLink(
-        "/Volumes/gone/Interleaf 2.app/Contents/Resources/bin/reader",
+      await isInterleafLink(
+        "/Volumes/gone/Interleaf 2.app/Contents/Resources/bin/interleaf",
       ),
     ).toBe(true);
     expect(
-      await isReaderLink(
-        "/Volumes/gone/Other.app/Contents/Resources/bin/reader",
+      await isInterleafLink(
+        "/Volumes/gone/Other.app/Contents/Resources/bin/interleaf",
       ),
     ).toBe(false);
-    expect(await isReaderLink("/usr/local/Cellar/reader/1/bin/reader")).toBe(
+    expect(await isInterleafLink("/usr/local/Cellar/reader/1/bin/interleaf")).toBe(
       false,
     );
   });
@@ -120,8 +120,8 @@ describe("Windows user PATH", () => {
   it("never lets an inherited variable turn a read into a write", () => {
     const env = {
       PATH: "C:\\Windows",
-      READER_PATH_WRITE: "1",
-      reader_path_value: "",
+      INTERLEAF_PATH_WRITE: "1",
+      interleaf_path_value: "",
       SystemRoot: "C:\\Windows",
     };
     expect(windowsEnvironment(env)).toEqual({
@@ -131,7 +131,7 @@ describe("Windows user PATH", () => {
     expect(windowsEnvironment(env, "C:\\bin")).toEqual({
       PATH: "C:\\Windows",
       SystemRoot: "C:\\Windows",
-      READER_PATH_VALUE: "C:\\bin",
+      INTERLEAF_PATH_VALUE: "C:\\bin",
     });
   });
   it("removes every spelling of the directory", () => {
@@ -146,7 +146,7 @@ describe("development builds", () => {
     const host = {
       platform: process.platform,
       packaged: false,
-      binary: "/repo/apps/desktop/bin/reader",
+      binary: "/repo/apps/desktop/bin/interleaf",
       env: {},
     };
     expect(await commandLineStatus(host)).toEqual({
@@ -160,7 +160,7 @@ describe("development builds", () => {
     const host = {
       platform: "linux" as const,
       packaged: true,
-      binary: "/opt/Interleaf/resources/bin/reader",
+      binary: "/opt/Interleaf/resources/bin/interleaf",
       env: {},
     };
     expect((await commandLineStatus(host)).supported).toBe(false);

@@ -15,7 +15,7 @@ afterEach(async () => {
   );
 });
 async function fixture() {
-  const cwd = await mkdtemp(join(tmpdir(), "reader-release-test-"));
+  const cwd = await mkdtemp(join(tmpdir(), "interleaf-release-test-"));
   temporary.push(cwd);
   await mkdir(join(cwd, "apps/desktop"), { recursive: true });
   await mkdir(join(cwd, "release"));

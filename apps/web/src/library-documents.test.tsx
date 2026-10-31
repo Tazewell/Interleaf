@@ -2,12 +2,12 @@
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import { api } from "@reader/api";
+import { api } from "@interleaf/api";
 import { toast } from "sonner";
-import type { Document } from "@reader/core";
+import type { Document } from "@interleaf/core";
 import { LibraryDocuments } from "./LibraryDocuments";
 import { useReaderStore } from "./store";
-vi.mock("@reader/api", () => ({
+vi.mock("@interleaf/api", () => ({
   api: {
     trashDocument: vi.fn(),
     restoreDocument: vi.fn(),

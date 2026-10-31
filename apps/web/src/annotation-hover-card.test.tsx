@@ -2,7 +2,7 @@
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import type { Annotation, ReaderAnnotationTarget } from "@reader/core";
+import type { Annotation, ReaderAnnotationTarget } from "@interleaf/core";
 import { AnnotationHoverCard } from "./AnnotationHoverCard";
 const target: ReaderAnnotationTarget = {
   ids: ["a", "b"],

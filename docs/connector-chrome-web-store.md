@@ -51,6 +51,6 @@
 
 ## 提交前核对
 
-上传 ZIP 不含固定扩展 `key`。Interleaf 尚未取得自己的商店 ID；取得后须在 `apps/server/internal/reader/connector.go` 加入明确的商店来源，并发布桌面版后再上架扩展。开发版 ID 为 `dkadbonndellegaomjgahilhpkneblkm`，原应用的商店与开发 ID 均不再接受。
+上传 ZIP 不含固定扩展 `key`。Interleaf 尚未取得自己的商店 ID；取得后须在 `apps/server/internal/interleaf/connector.go` 加入明确的商店来源，并发布桌面版后再上架扩展。开发版 ID 为 `dkadbonndellegaomjgahilhpkneblkm`，原应用的商店与开发 ID 均不再接受。
 
 首次提交时，按当前打包行为将 **Are you using remote code?** 填为 **No**。本资料不代替后台保存；Pages 地址须在网站部署且公开可访问后再填写。

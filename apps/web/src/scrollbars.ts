@@ -12,11 +12,11 @@ export function installScrollbars(doc: Document) {
     if (!target || !("nodeType" in target) || target.nodeType !== 1) return;
     const element = target as Element;
     clearTimeout(timers.get(element));
-    element.setAttribute("data-reader-scrolling", "");
+    element.setAttribute("data-interleaf-scrolling", "");
     timers.set(
       element,
       setTimeout(() => {
-        element.removeAttribute("data-reader-scrolling");
+        element.removeAttribute("data-interleaf-scrolling");
         timers.delete(element);
       }, 1000),
     );
@@ -26,7 +26,7 @@ export function installScrollbars(doc: Document) {
     doc.removeEventListener("scroll", onScroll, true);
     for (const [element, timer] of timers) {
       clearTimeout(timer);
-      element.removeAttribute("data-reader-scrolling");
+      element.removeAttribute("data-interleaf-scrolling");
     }
     timers.clear();
     style.remove();

@@ -2,7 +2,7 @@
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { api } from "@reader/api";
+import { api } from "@interleaf/api";
 import { toast } from "sonner";
 import {
   cursorAt,
@@ -17,7 +17,7 @@ import { guideTopics, onboardingPages } from "./topics";
 import { guideLaunch, releaseNotes } from "./releases";
 import { GuideHost } from "./GuideHost";
 
-vi.mock("@reader/api", () => ({
+vi.mock("@interleaf/api", () => ({
   api: { guidePreferences: vi.fn(), saveGuidePreferences: vi.fn() },
 }));
 vi.mock("sonner", () => ({ toast: { error: vi.fn() } }));
@@ -247,7 +247,7 @@ describe("guide host", () => {
       seenVersion: "0.0.1",
     });
     const openExternal = vi.fn().mockResolvedValue(undefined);
-    Object.defineProperty(window, "readerDesktop", {
+    Object.defineProperty(window, "interleafDesktop", {
       configurable: true,
       value: { openExternal },
     });
@@ -263,7 +263,7 @@ describe("guide host", () => {
         seenVersion: "9.9.9",
       });
     } finally {
-      Object.defineProperty(window, "readerDesktop", {
+      Object.defineProperty(window, "interleafDesktop", {
         configurable: true,
         value: undefined,
       });

@@ -1,4 +1,4 @@
-import type { NativePDFBounds } from "../../../../packages/reader-core/src/bilingual-pdf";
+import type { NativePDFBounds } from "../../../../packages/interleaf-core/src/bilingual-pdf";
 import { readingSpans, unionBounds, type SourceSpan } from "./formula";
 
 /** Match glyph content uniquely; asset file paths and model-provided rectangles

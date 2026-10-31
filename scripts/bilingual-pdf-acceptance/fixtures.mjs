@@ -202,7 +202,7 @@ paragraph(
   12,
 );
 q.drawText("2", { x: 301, y: 36, size: 10, font: roman });
-await writeFile(out + "/reader-synthetic-paper.pdf", await pdf.save());
+await writeFile(out + "/interleaf-synthetic-paper.pdf", await pdf.save());
 // Counter-rotate the page content so its visible writing stays horizontal.
 // All geometry is native PDF geometry, not a rasterized replacement page.
 const geometry = await PDFDocument.create();
@@ -284,10 +284,10 @@ for (const [
     userUnit: unit,
   });
 }
-await writeFile(out + "/reader-geometry.pdf", await geometry.save());
+await writeFile(out + "/interleaf-geometry.pdf", await geometry.save());
 const blank = await PDFDocument.create();
 blank.addPage([300, 400]);
-await writeFile(out + "/reader-no-text.pdf", await blank.save());
+await writeFile(out + "/interleaf-no-text.pdf", await blank.save());
 await writeFile(
   out + "/geometry-expected.json",
   JSON.stringify(expected, null, 2),

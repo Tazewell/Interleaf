@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
-import { researchAPI } from "@reader/api";
-import type { ResearchCandidate, ResearchSearch } from "@reader/core";
-import { Button } from "@reader/ui/components/button";
+import { researchAPI } from "@interleaf/api";
+import type { ResearchCandidate, ResearchSearch } from "@interleaf/core";
+import { Button } from "@interleaf/ui/components/button";
 import {
   finishResearchOperation,
   researchOperationID,

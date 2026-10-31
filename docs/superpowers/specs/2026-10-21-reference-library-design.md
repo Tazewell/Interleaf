@@ -26,7 +26,7 @@
 - 引用键由前端在导出时生成，重名后缀取决于当前导出批次，不能保证长期稳定。
 - 没有通用 .bib 导入、BibLaTeX 导出模式和持续更新的本地导出目标。
 
-代码依据：`packages/reader-core/src/index.ts`、`apps/server/internal/reader/metadata_lookup.go`、`metadata.go`、`merge.go`、`apps/web/src/papers/model.ts`、`citation.ts`。
+代码依据：`packages/interleaf-core/src/index.ts`、`apps/server/internal/interleaf/metadata_lookup.go`、`metadata.go`、`merge.go`、`apps/web/src/papers/model.ts`、`citation.ts`。
 
 ## 3. 第一阶段范围
 

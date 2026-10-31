@@ -1,5 +1,5 @@
 import bundledReleaseNotes from "../../../../docs/release-notes.json";
-import type { GuidePreferences } from "@reader/core";
+import type { GuidePreferences } from "@interleaf/core";
 
 export interface ReleaseItem {
   title: string;

@@ -37,7 +37,7 @@ Interleaf 通过用户配置的 API 地址、API Key 和模型提供 AI 功能�
 
 以下是实现建议，不冒充用户已逐项指定；审阅时可调整。
 
-- 第一版使用现有 Go 后端实现模型/工具循环，复用已存在的 OpenAI Chat Completions 与 Anthropic Messages 直连、流式解析和文档工具。移除 AI 运行链路中的 CLI 适配器、Codex 持久 thread、Kimi ACP、Claude CLI 及 Pi 调度/依赖。PDF 处理所需的 Node worker、Electron 和非 AI 的 `reader` 命令行仍保留。
+- 第一版使用现有 Go 后端实现模型/工具循环，复用已存在的 OpenAI Chat Completions 与 Anthropic Messages 直连、流式解析和文档工具。移除 AI 运行链路中的 CLI 适配器、Codex 持久 thread、Kimi ACP、Claude CLI 及 Pi 调度/依赖。PDF 处理所需的 Node worker、Electron 和非 AI 的 `interleaf` 命令行仍保留。
 - 第一版采用一个主要 API 连接，并按用途指定模型；研究模型留空时继承问答模型。允许自定义兼容端点和用户明确配置的本地模型端点，不内置训练或托管模型。支持未配置视觉模型时的纯文字研究。
 - 文件夹研究默认遵循当前书库对子文件夹的包含设置，并允许在研究范围中调整；默认选择每篇文献的可读原文附件，避免把译文附件当成第二篇论文。
 - 联网权限归研究会话，默认关闭；用户明确提出联网查新/找论文即开启该次任务权限。普通本地综述不会自行调用论文搜索服务。模型 API 请求与论文检索联网是两类不同的网络行为，界面不将关闭论文联网描述为完全离线。
@@ -121,7 +121,7 @@ SQLite 持久化主题、会话消息、任务、范围快照、结构化证据�
 - 保存旧配置备份及版本，原子迁移；不读取 Codex/Claude 等凭据或删除已安装的外部软件。用户现有 API Key 不因升级空覆盖。
 - 可见历史问答、来源、推理展示字段、笔记和译文保留。外部 Agent/Pi 的私有线程与协议状态不复用；可见历史按现有语义重建模型上下文，无法验证的旧来源不升级成已读证据。
 - 替换 `translationService` 中对 Codex 连接的硬断言和其他启动/能力检测依赖，不只改 primary 字段。现有摘要、分类、公式转换、自动翻译和双语 PDF 都使用统一用途路由；双语 PDF 的冻结、完成、保存及附件事务边界保持。
-- 清理外部 Agent 连接 UI、后端调用/探测、Pi runtime/build/package 依赖与对应失效测试/说明；新分发包无需这些 AI 运行时。保留原文、EPUB/PDF 阅读器、非 AI 文献导入/导出、书库本地 API 和 `reader` 客户端。
+- 清理外部 Agent 连接 UI、后端调用/探测、Pi runtime/build/package 依赖与对应失效测试/说明；新分发包无需这些 AI 运行时。保留原文、EPUB/PDF 阅读器、非 AI 文献导入/导出、书库本地 API 和 `interleaf` 客户端。
 - 保留已有文献/文件/引用键及 BibTeX/BibLaTeX 导出设置。主题报告可引用本地文献键；Markdown 导出带来源链接，导出不改书库。
 
 ## 不属于本轮范围
@@ -143,10 +143,10 @@ SQLite 持久化主题、会话消息、任务、范围快照、结构化证据�
 
 ## 已核查的代码基础与外部接口
 
-- `apps/server/internal/reader/{connections,generation,api_agent,api_stream,api_anthropic}.go`：现有多 Agent 配置及 API 传输；`pi_agent.go` 和 `apps/agent` 是需要替换的会话调度依赖。
+- `apps/server/internal/interleaf/{connections,generation,api_agent,api_stream,api_anthropic}.go`：现有多 Agent 配置及 API 传输；`pi_agent.go` 和 `apps/agent` 是需要替换的会话调度依赖。
 - `document_tools.go`、`document_conversation.go`、`api_chat_tools.go`、`api_conversation_compact.go`：单文献读取/证据、持久对话与严格流完成/工具协议，可复用其有效边界。
 - `apps/server/internal/scholar`：已有 DOI/arXiv/OpenReview/标题解析及公开 PDF 导入；主题搜索、研究证据保存、共享限速与 DNS/连接级保护需要新增或补足。
-- `packages/reader-core/src/papers.ts`、`apps/web/src/papers/model.ts`：PaperItem/附件与文件夹含子级的现有语义；当前没有稳定的主题研究实体。
+- `packages/interleaf-core/src/papers.ts`、`apps/web/src/papers/model.ts`：PaperItem/附件与文件夹含子级的现有语义；当前没有稳定的主题研究实体。
 - `bilingual_pdf*.go` 与 `docs/native-bilingual-pdf*.md`：上一阶段已完成的 API 翻译/原生双语 PDF 及实际验收边界，必须保留。
 - [arXiv API 手册](https://info.arxiv.org/help/api/user-manual.html)及[官方使用要求](https://info.arxiv.org/help/api/tou.html)：支持查询/分页，当前 legacy API 要求单连接且至少三秒间隔。实现时保留适配器与限速可调整能力。
 - [Crossref REST API](https://www.crossref.org/documentation/retrieve-metadata/rest-api/)：公开元数据搜索无需注册，可获取 DOI/文献信息，元数据存在并不意味着可读取全文。上述官方资料于 2026-10-22 核查；本轮未用用户文件或密钥进行真实研究检索。

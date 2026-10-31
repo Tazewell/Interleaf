@@ -10,7 +10,7 @@ import { commandLineStatus, setCommandLine } from "./command-line";
 // runner. The original user PATH is restored afterwards.
 const run = promisify(execFile);
 const key = "HKCU\\Environment";
-const probe = "%USERPROFILE%\\reader-cli-probe";
+const probe = "%USERPROFILE%\\interleaf-cli-probe";
 
 type Value = { type: string; data: string } | null;
 async function readPath(): Promise<Value> {
@@ -46,7 +46,7 @@ describe.runIf(process.platform === "win32")(
     let directory = "";
     beforeAll(async () => {
       original = await readPath();
-      directory = await mkdtemp(join(tmpdir(), "reader-cli-"));
+      directory = await mkdtemp(join(tmpdir(), "interleaf-cli-"));
       // An unexpanded entry must survive the installer untouched.
       await writePath({
         type: "REG_EXPAND_SZ",
@@ -63,7 +63,7 @@ describe.runIf(process.platform === "win32")(
       const host = {
         platform: "win32" as const,
         packaged: true,
-        binary: join(bin, "reader.exe"),
+        binary: join(bin, "interleaf.exe"),
         env: process.env,
       };
       expect(await commandLineStatus(host)).toEqual({
@@ -77,7 +77,7 @@ describe.runIf(process.platform === "win32")(
       const before = await readPath();
       await commandLineStatus({
         ...host,
-        env: { ...process.env, READER_PATH_WRITE: "1", READER_PATH_VALUE: "" },
+        env: { ...process.env, INTERLEAF_PATH_WRITE: "1", INTERLEAF_PATH_VALUE: "" },
       });
       expect(await readPath()).toEqual(before);
 

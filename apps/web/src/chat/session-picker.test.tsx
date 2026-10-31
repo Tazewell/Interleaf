@@ -2,11 +2,11 @@
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import type { DocumentChatSession } from "@reader/core";
+import type { DocumentChatSession } from "@interleaf/core";
 import { SessionPicker } from "./SessionPicker";
 
 const mocks = vi.hoisted(() => ({ create: vi.fn(), update: vi.fn() }));
-vi.mock("@reader/api", () => ({
+vi.mock("@interleaf/api", () => ({
   api: { createChatSession: mocks.create, updateChatSession: mocks.update },
 }));
 let root: Root, host: HTMLDivElement;

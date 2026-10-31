@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { beforeEach, expect, it, vi } from "vitest";
-import { api } from "@reader/api";
+import { api } from "@interleaf/api";
 import {
   libraryMode,
   loadLibraryPreferences,
@@ -8,7 +8,7 @@ import {
   updateLibraryPreferences,
   useReaderStore,
 } from "./store";
-vi.mock("@reader/api", () => ({
+vi.mock("@interleaf/api", () => ({
   api: { saveLibraryPreferences: vi.fn(), libraryPreferences: vi.fn() },
 }));
 beforeEach(() => {

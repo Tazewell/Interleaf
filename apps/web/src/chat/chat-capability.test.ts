@@ -1,10 +1,10 @@
 import { afterEach, expect, it, vi } from "vitest";
-import { api, chat } from "@reader/api";
-import type { NativeAIConfig } from "@reader/core";
+import { api, chat } from "@interleaf/api";
+import type { NativeAIConfig } from "@interleaf/core";
 import { useReaderStore, refreshAIConfig } from "../store";
 import { ChatSession } from "./chat-session";
 
-vi.mock("@reader/api", () => ({
+vi.mock("@interleaf/api", () => ({
   api: { messages: vi.fn().mockResolvedValue([]), aiConfig: vi.fn() },
   chat: vi.fn(),
 }));

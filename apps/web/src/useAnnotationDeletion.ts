@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { api } from "@reader/api";
+import { api } from "@interleaf/api";
 import { toast } from "sonner";
 
 export function useAnnotationDeletion(

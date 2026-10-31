@@ -20,13 +20,13 @@
     ],
     "baseUrl": ".",
     "paths": {
-      "@reader/core": [
-        "packages/reader-core/src/index.ts"
+      "@interleaf/core": [
+        "packages/interleaf-core/src/index.ts"
       ],
-      "@reader/api": [
+      "@interleaf/api": [
         "packages/api-client/src/index.ts"
       ],
-      "@reader/ui/*": [
+      "@interleaf/ui/*": [
         "packages/ui/src/*"
       ]
     }

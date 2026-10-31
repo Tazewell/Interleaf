@@ -1,6 +1,6 @@
 import { useEffect, useId, useState } from "react";
-import { Button } from "@reader/ui/components/button";
-import { Textarea } from "@reader/ui/components/textarea";
+import { Button } from "@interleaf/ui/components/button";
+import { Textarea } from "@interleaf/ui/components/textarea";
 
 export function TranslationPromptSettings({
   value,

@@ -1,4 +1,4 @@
-import { api } from "@reader/api";
+import { api } from "@interleaf/api";
 import { toast } from "sonner";
 import {
   forgetLibraryDocuments,

@@ -2,13 +2,13 @@
 import { act, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import { defaultTheme, type Processing } from "@reader/core";
-import { TooltipProvider } from "@reader/ui/components/tooltip";
-import { api } from "@reader/api";
+import { defaultTheme, type Processing } from "@interleaf/core";
+import { TooltipProvider } from "@interleaf/ui/components/tooltip";
+import { api } from "@interleaf/api";
 import { Workspace } from "./Workspace";
 import { paper } from "./papers/fixtures";
 
-vi.mock("@reader/api", () => ({
+vi.mock("@interleaf/api", () => ({
   api: {
     aiConfig: vi.fn(async () => ({
       version: 2,
@@ -48,7 +48,7 @@ vi.mock("./NotesPanel", () => ({
     <button onClick={onExport}>导出</button>
   ),
 }));
-vi.mock("@reader/ui/components/resizable", async () => {
+vi.mock("@interleaf/ui/components/resizable", async () => {
   const { useRef } = await import("react");
   const Panel = ({ children }: { children?: ReactNode }) => (
     <div>{children}</div>

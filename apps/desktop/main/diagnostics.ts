@@ -20,7 +20,7 @@ import {
   redact,
   redactLog,
   type DiagnosticEvent,
-} from "../../../packages/reader-core/src/diagnostics";
+} from "../../../packages/interleaf-core/src/diagnostics";
 
 export const retention = {
   days: 7,

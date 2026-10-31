@@ -2,7 +2,7 @@ import { diagnosticFetch, reportDiagnostic } from "./diagnostics";
 import {
   diagnosticError,
   diagnosticRoute,
-} from "../../reader-core/src/diagnostics";
+} from "../../interleaf-core/src/diagnostics";
 export { setDiagnosticReporter, reportDiagnostic } from "./diagnostics";
 import {
   consumeTranslationStream,
@@ -44,7 +44,7 @@ import type {
   ReadingStatus,
   JournalRankConfig,
   JournalRankResult,
-} from "@reader/core";
+} from "@interleaf/core";
 import { request, sessionToken, RequestError } from "./transport";
 import { nativeAI } from "./native-ai";
 export { researchAPI } from "./research";
@@ -82,7 +82,7 @@ client.use({
       route: diagnosticRoute(new URL(request.url).pathname),
       method: request.method,
       status: response.status,
-      requestId: response.headers.get("X-Reader-Request-ID") || undefined,
+      requestId: response.headers.get("X-Interleaf-Request-ID") || undefined,
     });
     return response;
   },
@@ -104,7 +104,7 @@ function annotationRequest<T>(path: string, init: RequestInit): Promise<T> {
   const operation = annotationQueue.then(() =>
     request<T>(path, {
       ...init,
-      headers: { ...init.headers, "X-Reader-Undo-Session": annotationSession },
+      headers: { ...init.headers, "X-Interleaf-Undo-Session": annotationSession },
     }),
   );
   annotationQueue = operation.then(
@@ -317,7 +317,7 @@ export const api = {
     return consumeTranslationStream(response.body, signal, onEvent);
   },
   epubChapters: (id: string, signal?: AbortSignal) =>
-    request<import("@reader/core").EPUBChapters>(
+    request<import("@interleaf/core").EPUBChapters>(
       `/api/documents/${encodeURIComponent(id)}/epub-chapters`,
       { signal },
     ),
@@ -327,37 +327,37 @@ export const api = {
       { signal },
     ),
   epubBlocks: (id: string) =>
-    request<import("@reader/core").EPUBReadingBlock[]>(
+    request<import("@interleaf/core").EPUBReadingBlock[]>(
       `/api/documents/${id}/epub-blocks`,
     ),
   translations: (id: string) =>
-    request<import("@reader/core").TranslationBlock[]>(
+    request<import("@interleaf/core").TranslationBlock[]>(
       `/api/documents/${id}/translations`,
     ),
   createBilingualPDF: (
     id: string,
     options: Pick<
-      import("@reader/core").BilingualPDFOptions,
+      import("@interleaf/core").BilingualPDFOptions,
       "layout" | "fromPage" | "toPage"
     >,
     signal?: AbortSignal,
   ) =>
-    request<import("@reader/core").BilingualPDFJob>(
+    request<import("@interleaf/core").BilingualPDFJob>(
       `/api/documents/${encodeURIComponent(id)}/bilingual-pdf`,
       { method: "POST", body: JSON.stringify(options), signal },
     ),
   bilingualPDF: (id: string, job: string, signal?: AbortSignal) =>
-    request<import("@reader/core").BilingualPDFJob>(
+    request<import("@interleaf/core").BilingualPDFJob>(
       `/api/documents/${encodeURIComponent(id)}/bilingual-pdf/${encodeURIComponent(job)}`,
       { signal },
     ),
   startBilingualPDF: (
     id: string,
     job: string,
-    input: import("@reader/core").BilingualPDFStart,
+    input: import("@interleaf/core").BilingualPDFStart,
     signal?: AbortSignal,
   ) =>
-    request<import("@reader/core").BilingualPDFJob>(
+    request<import("@interleaf/core").BilingualPDFJob>(
       `/api/documents/${encodeURIComponent(id)}/bilingual-pdf/${encodeURIComponent(job)}/start`,
       { method: "POST", body: JSON.stringify(input), signal },
     ),
@@ -414,7 +414,7 @@ export const api = {
     }),
   translateEPUBChapter: (
     id: string,
-    location: import("@reader/core").EPUBLocation,
+    location: import("@interleaf/core").EPUBLocation,
   ) =>
     request<{ queued: number; characters: number; hasMore: boolean }>(
       `/api/documents/${id}/translations/chapter`,
@@ -776,13 +776,13 @@ export async function chat(
     reportDiagnostic({
       level: "info",
       event: "chat.stream_finish",
-      requestId: response.headers.get("X-Reader-Request-ID") || undefined,
+      requestId: response.headers.get("X-Interleaf-Request-ID") || undefined,
     });
   } catch (error) {
     reportDiagnostic({
       level: signal.aborted ? "info" : "error",
       event: signal.aborted ? "chat.stream_cancelled" : "chat.stream_failed",
-      requestId: response.headers.get("X-Reader-Request-ID") || undefined,
+      requestId: response.headers.get("X-Interleaf-Request-ID") || undefined,
       ...diagnosticError(error),
     });
     throw error;

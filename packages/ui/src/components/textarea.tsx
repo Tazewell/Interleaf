@@ -1,5 +1,5 @@
 import * as React from "react";
-import { cn } from "@reader/ui/lib/utils";
+import { cn } from "@interleaf/ui/lib/utils";
 
 function Textarea({ className, ...props }: React.ComponentProps<"textarea">) {
   return (

@@ -1,4 +1,4 @@
-import type { Document, DocumentCategory, TagBoard } from "@reader/core";
+import type { Document, DocumentCategory, TagBoard } from "@interleaf/core";
 export const categoryLabels: Record<DocumentCategory, string> = {
   book: "书籍",
   article: "文章",

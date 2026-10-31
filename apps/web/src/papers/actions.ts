@@ -1,10 +1,10 @@
 import { confirmLargePaper } from "../LargePaperDialog";
-import { api, RequestError } from "@reader/api";
+import { api, RequestError } from "@interleaf/api";
 import type {
   Document,
   PaperLibraryPreferences,
   ReadingStatus,
-} from "@reader/core";
+} from "@interleaf/core";
 import { toast } from "sonner";
 import {
   refreshLibrary,
@@ -255,8 +255,8 @@ export async function deleteCategory(name: string) {
 
 export function openLink(url: string) {
   if (!url) return;
-  if (window.readerDesktop?.openExternal)
-    void window.readerDesktop
+  if (window.interleafDesktop?.openExternal)
+    void window.interleafDesktop
       .openExternal(url)
       .catch((e) => toast.error((e as Error).message));
   else window.open(url, "_blank", "noopener,noreferrer");
@@ -264,7 +264,7 @@ export function openLink(url: string) {
 
 export function revealFile(doc: Document, open = false) {
   if (doc.metadataOnly) return;
-  const desktop = window.readerDesktop;
+  const desktop = window.interleafDesktop;
   if (!desktop?.showDocumentFile) {
     toast.info("请在桌面版中打开文件");
     return;

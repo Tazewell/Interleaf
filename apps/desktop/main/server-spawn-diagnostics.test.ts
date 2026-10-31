@@ -4,11 +4,11 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { serverSpawnDiagnostics } from "./server-spawn-diagnostics";
 
-const directory = mkdtempSync(join(tmpdir(), "reader-spawn-diagnostics-"));
-afterEach(() => rmSync(join(directory, "reader-server.exe"), { force: true }));
+const directory = mkdtempSync(join(tmpdir(), "interleaf-spawn-diagnostics-"));
+afterEach(() => rmSync(join(directory, "interleaf-server.exe"), { force: true }));
 
 it("distinguishes a missing packaged server without exposing its path", () => {
-  const binary = join(directory, "reader-server.exe");
+  const binary = join(directory, "interleaf-server.exe");
   expect(
     serverSpawnDiagnostics(binary, { code: "ENOENT", path: binary }),
   ).toEqual({
@@ -18,7 +18,7 @@ it("distinguishes a missing packaged server without exposing its path", () => {
 });
 
 it("reports an existing server and bounds unexpected error codes", () => {
-  const binary = join(directory, "reader-server.exe");
+  const binary = join(directory, "interleaf-server.exe");
   writeFileSync(binary, "fixture");
   expect(serverSpawnDiagnostics(binary, { code: "EPERM" })).toEqual({
     systemCode: "EPERM",

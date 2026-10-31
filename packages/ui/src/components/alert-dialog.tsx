@@ -2,9 +2,9 @@
 
 import * as React from "react";
 import { AlertDialog as AlertDialogPrimitive } from "@base-ui/react/alert-dialog";
-import { cn } from "@reader/ui/lib/utils";
+import { cn } from "@interleaf/ui/lib/utils";
 
-import { Button } from "@reader/ui/components/button";
+import { Button } from "@interleaf/ui/components/button";
 
 function AlertDialog({ ...props }: AlertDialogPrimitive.Root.Props) {
   return <AlertDialogPrimitive.Root data-slot="alert-dialog" {...props} />;

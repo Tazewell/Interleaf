@@ -1,13 +1,13 @@
-import { nativeConfigUpdate } from "@reader/core";
+import { nativeConfigUpdate } from "@interleaf/core";
 // @vitest-environment jsdom
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import { api } from "@reader/api";
-import type { NativeAIConfig, AgentModel } from "@reader/core";
+import { api } from "@interleaf/api";
+import type { NativeAIConfig, AgentModel } from "@interleaf/core";
 import { ModelSelector, selectedAgentModel } from "./ModelSelector";
 import { useReaderStore } from "./store";
-vi.mock("@reader/api", () => ({
+vi.mock("@interleaf/api", () => ({
   api: { agentModels: vi.fn(), aiConfig: vi.fn(), saveAIConfig: vi.fn() },
 }));
 vi.mock("sonner", () => ({ toast: { error: vi.fn() } }));

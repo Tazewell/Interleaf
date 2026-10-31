@@ -1,5 +1,5 @@
-import { api, watchChatRun } from "@reader/api";
-import type { ChatRun } from "@reader/core";
+import { api, watchChatRun } from "@interleaf/api";
+import type { ChatRun } from "@interleaf/core";
 import { ChatSession, type ChatTransport } from "./chat-session";
 import { refreshAIConfig } from "../store";
 

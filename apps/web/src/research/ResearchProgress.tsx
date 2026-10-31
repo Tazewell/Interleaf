@@ -2,9 +2,9 @@ import type {
   ResearchCoverage,
   ResearchResults,
   ResearchRun,
-} from "@reader/core";
-import { Button } from "@reader/ui/components/button";
-import { Progress } from "@reader/ui/components/progress";
+} from "@interleaf/core";
+import { Button } from "@interleaf/ui/components/button";
+import { Progress } from "@interleaf/ui/components/progress";
 import { researchLocationLabel } from "./research-locations";
 import { useReaderStore } from "../store";
 const phases = {

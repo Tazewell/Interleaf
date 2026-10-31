@@ -1,7 +1,7 @@
 import { PaperColumns, usePaperColumns } from "./PaperColumns";
 import type { TableColumn } from "./columns";
 import { PaperTagFilterButton } from "./PaperTagFilter";
-import { Badge } from "@reader/ui/components/badge";
+import { Badge } from "@interleaf/ui/components/badge";
 import {
   useEffect,
   useMemo,
@@ -36,18 +36,18 @@ import {
   ArrowsClockwise as RefreshCw,
   Trash,
 } from "@phosphor-icons/react";
-import { api } from "@reader/api";
+import { api } from "@interleaf/api";
 import type {
   Document,
   JournalRankConfig,
   PaperColumn,
   PaperSort,
   Processing,
-} from "@reader/core";
-import { Button } from "@reader/ui/components/button";
-import { Checkbox } from "@reader/ui/components/checkbox";
-import { Input } from "@reader/ui/components/input";
-import { Progress } from "@reader/ui/components/progress";
+} from "@interleaf/core";
+import { Button } from "@interleaf/ui/components/button";
+import { Checkbox } from "@interleaf/ui/components/checkbox";
+import { Input } from "@interleaf/ui/components/input";
+import { Progress } from "@interleaf/ui/components/progress";
 import {
   Table,
   TableBody,
@@ -55,20 +55,20 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@reader/ui/components/table";
-import { Tabs, TabsList, TabsTrigger } from "@reader/ui/components/tabs";
+} from "@interleaf/ui/components/table";
+import { Tabs, TabsList, TabsTrigger } from "@interleaf/ui/components/tabs";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@reader/ui/components/select";
+} from "@interleaf/ui/components/select";
 import {
   ContextMenu,
   ContextMenuContent,
   ContextMenuTrigger,
-} from "@reader/ui/components/context-menu";
+} from "@interleaf/ui/components/context-menu";
 import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
@@ -76,7 +76,7 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from "@reader/ui/components/dropdown-menu";
+} from "@interleaf/ui/components/dropdown-menu";
 import { useReaderStore } from "../store";
 import { TrashView } from "../TrashView";
 import { exportAnnotatedPDFWithToast } from "../annotated-pdf-export";
@@ -233,12 +233,12 @@ export function PaperLibrary({
         .catch(() => {});
     const refresh = () => setJournalRankRefresh((value) => value + 1);
     load();
-    window.addEventListener("reader:journal-rank-config", load);
-    window.addEventListener("reader:journal-rank-refresh", refresh);
+    window.addEventListener("interleaf:journal-rank-config", load);
+    window.addEventListener("interleaf:journal-rank-refresh", refresh);
     return () => {
       mounted = false;
-      window.removeEventListener("reader:journal-rank-config", load);
-      window.removeEventListener("reader:journal-rank-refresh", refresh);
+      window.removeEventListener("interleaf:journal-rank-config", load);
+      window.removeEventListener("interleaf:journal-rank-refresh", refresh);
     };
   }, []);
   const tags = paperTags(documents);

@@ -1,5 +1,5 @@
-import type { Creator, Document } from "@reader/core";
-import { api } from "@reader/api";
+import type { Creator, Document } from "@interleaf/core";
+import { api } from "@interleaf/api";
 import { ensurePaperCitationKeys } from "../store";
 import { creatorName, paperCreators, paperLink, paperYear } from "./format";
 

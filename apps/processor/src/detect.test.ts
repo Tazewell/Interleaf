@@ -4,8 +4,8 @@ import { expect, it } from "vitest";
 import { detectRegions } from "./detect";
 import { digest, model } from "./model";
 
-// Opt-in: READER_TEST_LAYOUT_MODEL points at a downloaded copy of the pinned model.
-const path = process.env.READER_TEST_LAYOUT_MODEL;
+// Opt-in: INTERLEAF_TEST_LAYOUT_MODEL points at a downloaded copy of the pinned model.
+const path = process.env.INTERLEAF_TEST_LAYOUT_MODEL;
 it.skipIf(!path)(
   "maps detections from the square model input back to the page",
   async () => {

@@ -6,7 +6,7 @@ import { copyText } from "../chat/clipboard";
 import { useReaderStore } from "../store";
 import { CitationDialog } from "./CitationDialog";
 import { paper } from "./fixtures";
-vi.mock("@reader/api", () => ({
+vi.mock("@interleaf/api", () => ({
   api: {
     saveLibraryPreferences: vi.fn(async (value) => value),
     exportBibliography: vi.fn(async (ids: string[]) => ({

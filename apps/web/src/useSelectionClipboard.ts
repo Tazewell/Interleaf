@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import type { Annotation, ReaderSelection } from "@reader/core";
+import type { Annotation, ReaderSelection } from "@interleaf/core";
 import { copyText } from "./chat/clipboard";
 
 /** Only explicit opt-in permits reader events to overwrite the clipboard. */

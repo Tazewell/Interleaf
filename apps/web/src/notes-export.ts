@@ -3,7 +3,7 @@ import {
   type Annotation,
   type Document,
   type Message,
-} from "@reader/core";
+} from "@interleaf/core";
 import { documentOrder } from "./annotations";
 import { paperByline, paperLink } from "./papers/format";
 

@@ -1,5 +1,5 @@
 import { expect, it } from "vitest";
-import type { PDFBlock, TOCItem } from "@reader/core";
+import type { PDFBlock, TOCItem } from "@interleaf/core";
 import { chapterRange, headingPages } from "./chapters";
 
 const entry = (

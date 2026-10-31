@@ -64,7 +64,7 @@ Interleaf 的 MCP 地址、token 环境变量和活动请求绑定不适用于 C
 已通过本机 Codex CLI `0.163.0-alpha.10.2` 的真实协议验证：临时 Codex 状态目录与 loopback 合成响应服务创建一轮测试记录，接续后关闭进程，再恢复副本，核对提交轮次、分页聊天历史、工作目录和阅读说明；接续阶段没有请求响应服务。测试不会读取用户 Codex 凭据或访问真实模型。可重复执行：
 
 ```sh
-READER_CODEX_HANDOFF_LIVE=1 go -C apps/server test ./internal/reader -run '^TestCodexHandoffInstalledCLI$' -count=1 -v
+INTERLEAF_CODEX_HANDOFF_LIVE=1 go -C apps/server test ./internal/interleaf -run '^TestCodexHandoffInstalledCLI$' -count=1 -v
 ```
 
 人工验收：在 Interleaf 完成一次 Codex 文档问答，点击接续按钮，确认 Codex App 打开“阅读 · …”，已有回答可见；关闭 Interleaf 后追问原文，确认从快照读取；回到 Interleaf 确认原消息没有改变。没有安装 Codex App 时，应保留准备结果并允许安装后重试。深链入口已核对已安装 App 的实现，原生界面打开和续聊仍需人工验收。

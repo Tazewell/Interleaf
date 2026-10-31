@@ -40,7 +40,7 @@ await writeFile(
   JSON.stringify(
     {
       manifest_version: 3,
-      ...(process.env.READER_CONNECTOR_DEV_KEY === "1"
+      ...(process.env.INTERLEAF_CONNECTOR_DEV_KEY === "1"
         ? { key: developmentKey }
         : {}),
       name: "纸间收录助手",

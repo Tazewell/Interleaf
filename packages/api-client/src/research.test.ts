@@ -1,5 +1,5 @@
 import { afterEach, expect, expectTypeOf, it, vi } from "vitest";
-import type { ResearchRunInput } from "@reader/core";
+import type { ResearchRunInput } from "@interleaf/core";
 import type { components } from "./schema";
 import { researchAPI } from "./research";
 import { configureAPI, RequestError } from "./transport";

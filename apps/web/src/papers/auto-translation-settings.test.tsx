@@ -2,7 +2,7 @@
 import { act, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { expect, it, vi } from "vitest";
-import { defaultTheme } from "@reader/core";
+import { defaultTheme } from "@interleaf/core";
 import { AutoTranslationSettings } from "./AutoTranslationSettings";
 
 it("updates the highlighted threshold by tens with keyboard input and describes zero", async () => {

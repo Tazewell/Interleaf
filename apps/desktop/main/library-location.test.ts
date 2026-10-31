@@ -16,7 +16,7 @@ import {
 } from "./library-location";
 let directory: string;
 beforeEach(async () => {
-  directory = await mkdtemp(join(tmpdir(), "reader-location-"));
+  directory = await mkdtemp(join(tmpdir(), "interleaf-location-"));
   execute.mockReset();
 });
 afterEach(async () => {
@@ -27,7 +27,7 @@ it("uses the old location only when no configuration exists", async () => {
   expect(await libraryDirectory(directory)).toBe(join(directory, "library"));
   const moved = join(directory, "moved");
   await mkdir(moved);
-  await writeFile(join(moved, "reader.sqlite"), "db");
+  await writeFile(join(moved, "interleaf.sqlite"), "db");
   await writeFile(
     join(directory, "library-location.json"),
     JSON.stringify({ directory: moved }),
@@ -50,20 +50,20 @@ it("waits for shutdown and copies before switching the saved path", async () => 
     order.push("copy");
     expect(await libraryDirectory(directory)).toBe(join(directory, "library"));
     await mkdir(target);
-    await writeFile(join(target, "reader.sqlite"), "db");
+    await writeFile(join(target, "interleaf.sqlite"), "db");
   });
   await migrateLibrary(
     directory,
     join(directory, "library"),
     target,
-    "/reader-server",
+    "/interleaf-server",
     async () => {
       order.push("stop");
     },
   );
   expect(order).toEqual(["stop", "copy"]);
   expect(execute).toHaveBeenCalledWith(
-    "/reader-server",
+    "/interleaf-server",
     ["--data", join(directory, "library"), "--migrate-library", target],
     expect.objectContaining({ windowsHide: true }),
   );

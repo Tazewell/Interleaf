@@ -11,18 +11,18 @@ import {
   RequestError,
   type ZoteroImportResult,
   type ZoteroScan,
-} from "@reader/api";
-import { Button } from "@reader/ui/components/button";
-import { Checkbox } from "@reader/ui/components/checkbox";
-import { Input } from "@reader/ui/components/input";
-import { Progress } from "@reader/ui/components/progress";
+} from "@interleaf/api";
+import { Button } from "@interleaf/ui/components/button";
+import { Checkbox } from "@interleaf/ui/components/checkbox";
+import { Input } from "@interleaf/ui/components/input";
+import { Progress } from "@interleaf/ui/components/progress";
 import {
   Dialog,
   DialogContent,
   DialogDescription,
   DialogHeader,
   DialogTitle,
-} from "@reader/ui/components/dialog";
+} from "@interleaf/ui/components/dialog";
 import { refreshLibrary } from "../store";
 import { downloadText } from "../download";
 
@@ -79,7 +79,7 @@ export function ZoteroImportDialog({
 
   const chooseDirectory = async (linked: boolean) => {
     try {
-      const path = await window.readerDesktop?.chooseZoteroDirectory?.();
+      const path = await window.interleafDesktop?.chooseZoteroDirectory?.();
       if (path) (linked ? setLinkedBase : setDirectory)(path);
     } catch (e) {
       setError((e as Error).message);
@@ -243,7 +243,7 @@ export function ZoteroImportDialog({
                     onChange={(event) => setDirectory(event.target.value)}
                     placeholder="包含 zotero.sqlite 和 storage 的目录"
                   />
-                  {window.readerDesktop?.chooseZoteroDirectory && (
+                  {window.interleafDesktop?.chooseZoteroDirectory && (
                     <Button
                       type="button"
                       variant="outline"
@@ -277,7 +277,7 @@ export function ZoteroImportDialog({
                       disabled={busy}
                       onChange={(event) => setLinkedBase(event.target.value)}
                     />
-                    {window.readerDesktop?.chooseZoteroDirectory && (
+                    {window.interleafDesktop?.chooseZoteroDirectory && (
                       <Button
                         type="button"
                         variant="outline"

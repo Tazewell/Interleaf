@@ -9,7 +9,7 @@ import {
   type UpdateState,
 } from "./updates";
 import { downloadUpdate, type DownloadProgress } from "./update-download";
-import type { UpdateProgress } from "../../../packages/reader-core/src/update-progress";
+import type { UpdateProgress } from "../../../packages/interleaf-core/src/update-progress";
 
 export async function startUpdateService(window: BrowserWindow) {
   const directory = app.getPath("userData");
@@ -80,7 +80,7 @@ export async function startUpdateService(window: BrowserWindow) {
             Math.min(1, progress.received / progress.total)
           : 2,
     );
-    window.webContents.send("reader:update-progress", progress);
+    window.webContents.send("interleaf:update-progress", progress);
   };
   // Reports whole-percent steps (or 1 MB steps without a size) while visible.
   const track = (version: string): DownloadProgress => {

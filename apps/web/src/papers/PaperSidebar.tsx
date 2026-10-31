@@ -29,9 +29,9 @@ import type {
   Processing,
   ReadingStatus,
   SmartCategory,
-} from "@reader/core";
-import { Button } from "@reader/ui/components/button";
-import { Input } from "@reader/ui/components/input";
+} from "@interleaf/core";
+import { Button } from "@interleaf/ui/components/button";
+import { Input } from "@interleaf/ui/components/input";
 import {
   ContextMenu,
   ContextMenuCheckboxItem,
@@ -45,13 +45,13 @@ import {
   ContextMenuSubContent,
   ContextMenuSubTrigger,
   ContextMenuTrigger,
-} from "@reader/ui/components/context-menu";
+} from "@interleaf/ui/components/context-menu";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from "@reader/ui/components/dropdown-menu";
+} from "@interleaf/ui/components/dropdown-menu";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -61,7 +61,7 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from "@reader/ui/components/alert-dialog";
+} from "@interleaf/ui/components/alert-dialog";
 import { useReaderStore } from "../store";
 import {
   addToCategory,
@@ -101,7 +101,7 @@ import { usePaperUI } from "./state";
 import { exportCitations } from "./CitationMenu";
 
 /** Drag payload for papers moved onto sidebar targets. */
-export const PAPER_DRAG_TYPE = "application/x-reader-papers";
+export const PAPER_DRAG_TYPE = "application/x-interleaf-papers";
 
 const viewIcons: Record<BuiltinView, typeof Library> = {
   all: Files,

@@ -57,7 +57,7 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - name: Test Windows proxy conversion and reading
-        run: pnpm exec vitest run apps/desktop/main/windows-proxy.test.ts apps/desktop/main/windows-proxy-reader.test.ts
+        run: pnpm exec vitest run apps/desktop/main/windows-proxy.test.ts apps/desktop/main/windows-proxy-interleaf.test.ts
 
   windows-command-line:
     # The command-line installer edits the user PATH through PowerShell and the

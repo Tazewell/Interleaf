@@ -3,12 +3,12 @@ import {
   CircleNotch as LoaderCircle,
   TerminalWindow as SquareTerminal,
 } from "@phosphor-icons/react";
-import type { CommandLineStatus } from "@reader/core";
-import { Button } from "@reader/ui/components/button";
+import type { CommandLineStatus } from "@interleaf/core";
+import { Button } from "@interleaf/ui/components/button";
 
-/** Puts the bundled `reader` command on PATH for terminals and coding agents. */
+/** Puts the bundled `interleaf` command on PATH for terminals and coding agents. */
 export function CommandLineSettings({ open }: { open: boolean }) {
-  const desktop = window.readerDesktop;
+  const desktop = window.interleafDesktop;
   const [status, setStatus] = useState<CommandLineStatus | null>(null);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState("");
@@ -31,7 +31,7 @@ export function CommandLineSettings({ open }: { open: boolean }) {
       const next = await desktop.setCommandLine!(installed);
       setStatus(next);
       if (installed && desktop.platform === "win32")
-        setNotice("已加入 PATH，新打开的终端可以运行 reader。");
+        setNotice("已加入 PATH，新打开的终端可以运行 interleaf。");
     } catch (error) {
       setNotice((error as Error).message);
     } finally {
@@ -42,7 +42,7 @@ export function CommandLineSettings({ open }: { open: boolean }) {
     <section className="mt-7 border-t pt-5">
       <h3 className="mb-3 text-sm font-medium">命令行工具</h3>
       <p className="mb-4 text-xs leading-5 text-muted-foreground">
-        在终端运行 <code>reader</code>，检索、阅读和导入书库中的文档。 使用时
+        在终端运行 <code>interleaf</code>，检索、阅读和导入书库中的文档。 使用时
         纸间需要保持打开。
       </p>
       {status && !status.supported ? (
@@ -62,7 +62,7 @@ export function CommandLineSettings({ open }: { open: boolean }) {
             ) : (
               <SquareTerminal />
             )}
-            {status?.installed ? "卸载 reader 命令" : "安装 reader 命令"}
+            {status?.installed ? "卸载 interleaf 命令" : "安装 interleaf 命令"}
           </Button>
           {status && (
             <span className="min-w-0 break-all text-xs text-muted-foreground">

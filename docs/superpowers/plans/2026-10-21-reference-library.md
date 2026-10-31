@@ -31,7 +31,7 @@
 
 ### Task 1: Paper item authority, attachments, migration and stable keys
 
-**Files:** Create `apps/server/internal/reader/paper_items.go`, `paper_items_test.go`, `citation_keys.go`; modify `store.go`, `server.go` and focused integration points. Add shared types in `packages/reader-core/src/papers.ts`, exported by `index.ts`. Task 4 owns OpenAPI/client generation.
+**Files:** Create `apps/server/internal/interleaf/paper_items.go`, `paper_items_test.go`, `citation_keys.go`; modify `store.go`, `server.go` and focused integration points. Add shared types in `packages/interleaf-core/src/papers.ts`, exported by `index.ts`. Task 4 owns OpenAPI/client generation.
 
 **Interfaces:**
 - `PaperAttachment` JSON: `documentId`, `role` (original/translation/supplement/other), `title`, `type`, `size`; primary is recorded on item.
@@ -42,14 +42,14 @@
 - Legacy Document responses add optional `paperId`, `citationKey`; their IDs and file endpoints stay unchanged. Empty-paper DELETE is permanent; attached-document disposal uses existing lifecycle with correct cancellation. Paper trash/restore is distinct from detach.
 
 - [ ] Write real-store/API tests: migration preserves annotations/progress/notes/files and is idempotent; creating metadata-only item; attachment roles/primary/reparent constraints; old metadata PATCH/lookup/import writes visible through PaperItem; merge retains both documents; item trash/restore; stable keys across metadata update/reopen/subset/order/collision/delete and concurrent allocation.
-- [ ] Run `go test ./internal/reader -run 'TestPaper|TestCitationKey' -count=1` and observe the missing-feature failures before implementation.
+- [ ] Run `go test ./internal/interleaf -run 'TestPaper|TestCitationKey' -count=1` and observe the missing-feature failures before implementation.
 - [ ] Implement transactional additive migration with a pre-migration SQLite snapshot, compatibility integration and focused routes. Retain tombstones for used keys. Reject invalid input and missing IDs atomically.
-- [ ] Run the focused tests, then `go test ./internal/reader` and record pre-existing failures separately rather than weakening tests.
+- [ ] Run the focused tests, then `go test ./internal/interleaf` and record pre-existing failures separately rather than weakening tests.
 - [ ] Review/stage only this task; commit `feat(papers): add independent items and stable citation keys`.
 
 ### Task 2: Bibliography interchange and reference API
 
-**Files:** Create `apps/server/internal/bibliography/{bib.go,bib_test.go}` and `apps/server/internal/reader/paper_bibliography{,_test}.go`. No unrelated store or UI changes.
+**Files:** Create `apps/server/internal/bibliography/{bib.go,bib_test.go}` and `apps/server/internal/interleaf/paper_bibliography{,_test}.go`. No unrelated store or UI changes.
 
 **Interfaces:**
 - Package bibliography: `Parse(text string) (Database,error)`, Database holds entry kinds/keys/raw field expressions/string macros/preambles; `Render(Database) (string,error)` preserves unedited data; semantic string lookup resolves macros/concatenation with cycle checks.
@@ -59,19 +59,19 @@
 - POST `/api/papers/bibliography/export` accepts `{ids:string[],mode:'bibtex'|'biblatex'}` returns `{text:string}`. `Store.Bibliography` is also the single source for Task 3 managed exports.
 
 - [ ] Write parser fixtures asserting literal values and round trips for nested braces/escaped quotes/UTF-8/institution authors/unknown fields/@string/#/crossref, with malformed input and macro cycles rejected. Write API tests for preserving imported keys, merging without overwriting manual edits, transactional conflicts, missing crossref dependencies and subset export.
-- [ ] Run `go test ./internal/bibliography ./internal/reader -run 'TestBib|TestPaperBib' -count=1`; observe RED.
+- [ ] Run `go test ./internal/bibliography ./internal/interleaf -run 'TestBib|TestPaperBib' -count=1`; observe RED.
 - [ ] Implement focused parser and serializer, shared semantic metadata mapping and preview/commit/export routes. Treat all fields as data; never execute TeX or follow file paths.
 - [ ] Run parser/API tests and a local minimal BibTeX/BibLaTeX compile when runtime is available; otherwise install an isolated compiler or record the exact unavailable check, not a false pass.
 - [ ] Inspect/stage task files and commit `feat(citations): import and export BibTeX and BibLaTeX`.
 
 ### Task 3: Managed exports and desktop authorization
 
-**Files:** Create `apps/server/internal/reader/bibliography_exports{,_test}.go`, `apps/desktop/main/bibliography-export{,.test}.ts`; modify `main/index.ts`, `preload/index.ts`, renderer desktop declarations, server lifecycle registration.
+**Files:** Create `apps/server/internal/interleaf/bibliography_exports{,_test}.go`, `apps/desktop/main/bibliography-export{,.test}.ts`; modify `main/index.ts`, `preload/index.ts`, renderer desktop declarations, server lifecycle registration.
 
 **Interfaces:**
 - `BibliographyExport` JSON: `id,folder,includeChildren,mode,path,lastExportedAt,error` with internal persisted fingerprint/authorization identity.
 - GET `/api/papers/exports`, POST `/api/papers/exports/{id}/refresh`, DELETE `/api/papers/exports/{id}`; target registration is a server-to-desktop privileged path with a per-server capability passed only to Electron main, never exposed to renderer. Existing regular token alone cannot register arbitrary paths.
-- Desktop `readerDesktop.configureBibliographyExport({folder,includeChildren,mode})` chooses a destination natively, confirms backup/takeover of existing file, registers it with server and returns an export or null. Browser mode supports downloads only.
+- Desktop `interleafDesktop.configureBibliographyExport({folder,includeChildren,mode})` chooses a destination natively, confirms backup/takeover of existing file, registers it with server and returns an export or null. Browser mode supports downloads only.
 - Store.Bibliography from Task 2 supplies bytes. Exports use folder membership, optional descendants, stable sorted output, serial writes, atomic replacement and external-edit detection; run startup refresh and a bounded background reconciliation loop while server runs.
 - Folder rename must update the bound export folder (including descendants) together with library labels; deleting a bound folder pauses its managed export and retains the last file until explicitly reconfigured. Removing individual papers from an existing folder still updates its membership normally.
 

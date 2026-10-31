@@ -3,7 +3,7 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { TranslationText } from "./TranslationText";
-import type { PDFBlock } from "@reader/core";
+import type { PDFBlock } from "@interleaf/core";
 
 let root: Root, host: HTMLDivElement;
 beforeEach(() => {

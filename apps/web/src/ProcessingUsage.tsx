@@ -4,16 +4,16 @@ import type {
   Processing,
   ProcessingUsage,
   TokenCounts,
-} from "@reader/core";
-import { api } from "@reader/api";
-import { Button } from "@reader/ui/components/button";
+} from "@interleaf/core";
+import { api } from "@interleaf/api";
+import { Button } from "@interleaf/ui/components/button";
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
   DialogDescription,
-} from "@reader/ui/components/dialog";
+} from "@interleaf/ui/components/dialog";
 
 const labels: Record<string, string> = {
   chat: "聊天",

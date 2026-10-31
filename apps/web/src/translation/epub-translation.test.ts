@@ -4,13 +4,13 @@ import type {
   EPUBReadingBlock,
   TranslationBlock,
   Annotation,
-} from "@reader/core";
+} from "@interleaf/core";
 import { Locator } from "@readium/shared";
 import {
   selectionLocator,
   resolveEPUBRange,
   sliceEPUBRange,
-} from "../readers/selection-locator";
+} from "../engines/selection-locator";
 import { epubSentenceLocation, epubBlocksAt, epubOffsets } from "./epub-links";
 import { translatedSelection } from "./selection";
 import { translatedAnnotationRanges } from "./annotations";

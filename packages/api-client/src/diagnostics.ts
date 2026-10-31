@@ -2,7 +2,7 @@ import {
   diagnosticError,
   diagnosticRoute,
   type DiagnosticEvent,
-} from "../../reader-core/src/diagnostics";
+} from "../../interleaf-core/src/diagnostics";
 
 let reporter: ((event: DiagnosticEvent) => void) | undefined;
 export function setDiagnosticReporter(next?: (event: DiagnosticEvent) => void) {
@@ -28,7 +28,7 @@ export async function diagnosticFetch(path: string, init: RequestInit = {}) {
       route,
       method,
       status: response.status,
-      requestId: response.headers.get("X-Reader-Request-ID") || undefined,
+      requestId: response.headers.get("X-Interleaf-Request-ID") || undefined,
       durationMs: Math.round(performance.now() - started),
     });
     return response;

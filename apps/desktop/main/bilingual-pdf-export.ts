@@ -226,7 +226,7 @@ export class BilingualPDFSaveService {
     if (inside(destination, managed))
       throw new Error("请将导出文件保存在纸间书库之外");
     await regularTarget(destination);
-    const temporary = join(parent, `.reader-bilingual-${randomUUID()}.tmp`);
+    const temporary = join(parent, `.interleaf-bilingual-${randomUUID()}.tmp`);
     let owned = false;
     try {
       const response = await this.host.fetch(url, init);

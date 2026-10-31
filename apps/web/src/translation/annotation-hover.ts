@@ -1,4 +1,4 @@
-import type { Annotation } from "@reader/core";
+import type { Annotation } from "@interleaf/core";
 
 export type AnnotationRange = { annotation: Annotation; range: Range };
 const overlaps = (a: DOMRect, b: DOMRect) =>

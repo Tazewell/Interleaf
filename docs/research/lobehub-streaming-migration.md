@@ -56,10 +56,10 @@ Claude/Codex CLI，或图片/Kimi/备用 API
 
 这里的“首字延迟”指发送问题后到用户看到第一段答案的时间。前端平滑只能处理已经到达的文本。
 
-1. **纯文本 Claude**：[eventText](../../apps/server/internal/reader/ai.go#L74) 接受 `content_block_delta/text_delta`，可以逐段发送。
+1. **纯文本 Claude**：[eventText](../../apps/server/internal/interleaf/ai.go#L74) 接受 `content_block_delta/text_delta`，可以逐段发送。
 2. **纯文本 Codex**：同一函数只接受 `item.completed` 的 `agent_message`。这是当前 Interleaf 适配的边界；没有证据说明所有 Codex 接口都只能整段输出。本次未调研替代 Codex 协议。
-3. **图片附件或 Kimi**：[路由](../../apps/server/internal/reader/ai.go#L131) 进入 imageChat；[generateWithConfig](../../apps/server/internal/reader/connections.go#L279) 调用主 provider 时传入 `nil` 增量回调，成功后一次 `delta(text)`。即使底层 CLI 能产生增量，这条主路径也会缓冲。
-4. **备用 HTTP API**：[invokeAPI](../../apps/server/internal/reader/connections.go#L322) 明确发送 `stream: false`，收到完整 JSON 后一次回调。
+3. **图片附件或 Kimi**：[路由](../../apps/server/internal/interleaf/ai.go#L131) 进入 imageChat；[generateWithConfig](../../apps/server/internal/interleaf/connections.go#L279) 调用主 provider 时传入 `nil` 增量回调，成功后一次 `delta(text)`。即使底层 CLI 能产生增量，这条主路径也会缓冲。
+4. **备用 HTTP API**：[invokeAPI](../../apps/server/internal/interleaf/connections.go#L322) 明确发送 `stream: false`，收到完整 JSON 后一次回调。
 
 目前缓冲主 provider 的行为能避免失败后将主 provider 的半截答案与备用答案拼接，这是从调用关系得到的推断。若要改成真实流，需要同时定义 fallback 的替换语义：已经显示的旧片段如何撤回、如何区分新 attempt，或者开始输出后是否还允许自动切换。不能只把 `nil` 改成 `delta`。
 

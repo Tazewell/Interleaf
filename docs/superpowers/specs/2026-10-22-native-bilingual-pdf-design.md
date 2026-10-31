@@ -102,10 +102,10 @@ Go 管理预检、冻结快照、API 翻译、任务取消和书库生命周期�
 
 ## 当前代码依据
 
-- apps/server/internal/reader/processing.go：PDFBlock 与 layoutManifest。
-- apps/server/internal/reader/translation.go：原文哈希、可翻译块与可见成功译文。
+- apps/server/internal/interleaf/processing.go：PDFBlock 与 layoutManifest。
+- apps/server/internal/interleaf/translation.go：原文哈希、可翻译块与可见成功译文。
 - apps/processor/src/layout.ts、layout-worker.ts：版面类别、坐标、素材区域与 PDF.js 渲染。
-- apps/web/src/readers/pdf-export.ts：已有原文批注 PDF 导出，保持独立兼容。
+- apps/web/src/engines/pdf-export.ts：已有原文批注 PDF 导出，保持独立兼容。
 - docs/pdf-translation.md：已有译文 Markdown 导出与重译生命周期。
 - docs/reference-library.md：文献、附件与稳定引用键。
 

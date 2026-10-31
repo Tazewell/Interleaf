@@ -1,4 +1,4 @@
-import { researchAPI, RequestError } from "@reader/api";
+import { researchAPI, RequestError } from "@interleaf/api";
 import { researchDraftText } from "./research-draft";
 import type {
   ResearchBudget,
@@ -11,7 +11,7 @@ import type {
   ResearchSearch,
   ResearchSession,
   ResearchTopic,
-} from "@reader/core";
+} from "@interleaf/core";
 
 export const researchBudget: ResearchBudget = {
   maxModelRequests: 200,

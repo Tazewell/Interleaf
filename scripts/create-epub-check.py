@@ -3,7 +3,7 @@ from pathlib import Path
 from zipfile import ZipFile, ZipInfo, ZIP_STORED, ZIP_DEFLATED
 import sys
 
-output = Path(sys.argv[1] if len(sys.argv) > 1 else ".reader/epub-check.epub")
+output = Path(sys.argv[1] if len(sys.argv) > 1 else ".interleaf/epub-check.epub")
 output.parent.mkdir(parents=True, exist_ok=True)
 chapters = [
     ("重复文字与跨节点选择", '''
@@ -35,7 +35,7 @@ with ZipFile(output, "w") as archive:
     write("META-INF/container.xml", '''<container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container"><rootfiles><rootfile full-path="EPUB/package.opf" media-type="application/oebps-package+xml"/></rootfiles></container>''')
     items = ''.join(f'<item id="c{i}" href="chapter{i}.xhtml" media-type="application/xhtml+xml"/>' for i in range(1, 4))
     spine = ''.join(f'<itemref idref="c{i}"/>' for i in range(1, 4))
-    write("EPUB/package.opf", f'''<package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="book-id"><metadata xmlns:dc="http://purl.org/dc/elements/1.1/"><dc:identifier id="book-id">reader-epub-annotation-check</dc:identifier><dc:title>EPUB 批注验收样本</dc:title><dc:creator>Reader</dc:creator><dc:language>zh-CN</dc:language><meta property="dcterms:modified">2026-10-05T00:00:00Z</meta></metadata><manifest><item id="nav" href="nav.xhtml" media-type="application/xhtml+xml" properties="nav"/>{items}</manifest><spine>{spine}</spine></package>''')
+    write("EPUB/package.opf", f'''<package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="book-id"><metadata xmlns:dc="http://purl.org/dc/elements/1.1/"><dc:identifier id="book-id">interleaf-epub-annotation-check</dc:identifier><dc:title>EPUB 批注验收样本</dc:title><dc:creator>Reader</dc:creator><dc:language>zh-CN</dc:language><meta property="dcterms:modified">2026-10-05T00:00:00Z</meta></metadata><manifest><item id="nav" href="nav.xhtml" media-type="application/xhtml+xml" properties="nav"/>{items}</manifest><spine>{spine}</spine></package>''')
     links = ''.join(f'<li><a href="chapter{i}.xhtml">{title}</a></li>' for i, (title, _) in enumerate(chapters, 1))
     write("EPUB/nav.xhtml", f'''<html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops"><head><title>目录</title></head><body><nav epub:type="toc"><ol>{links}</ol></nav></body></html>''')
     for i, (title, body) in enumerate(chapters, 1):

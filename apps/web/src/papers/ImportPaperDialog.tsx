@@ -3,22 +3,22 @@ import {
   FileArrowUp as FileUp,
   CircleNotch as LoaderCircle,
 } from "@phosphor-icons/react";
-import { Button } from "@reader/ui/components/button";
-import { Input } from "@reader/ui/components/input";
+import { Button } from "@interleaf/ui/components/button";
+import { Input } from "@interleaf/ui/components/input";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@reader/ui/components/select";
+} from "@interleaf/ui/components/select";
 import {
   Dialog,
   DialogContent,
   DialogDescription,
   DialogHeader,
   DialogTitle,
-} from "@reader/ui/components/dialog";
+} from "@interleaf/ui/components/dialog";
 import { toast } from "sonner";
 import { libraryModes } from "../LibraryModeSwitcher";
 import { importReference } from "./actions";

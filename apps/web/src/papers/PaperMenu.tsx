@@ -11,7 +11,7 @@ import {
   Tag,
   Trash,
 } from "@phosphor-icons/react";
-import { readerLink, type Document, type ReadingStatus } from "@reader/core";
+import { interleafLink, type Document, type ReadingStatus } from "@interleaf/core";
 import { copyText } from "../chat/clipboard";
 import {
   ContextMenuCheckboxItem,
@@ -22,7 +22,7 @@ import {
   ContextMenuSub,
   ContextMenuSubContent,
   ContextMenuSubTrigger,
-} from "@reader/ui/components/context-menu";
+} from "@interleaf/ui/components/context-menu";
 import {
   DropdownMenuCheckboxItem,
   DropdownMenuItem,
@@ -32,7 +32,7 @@ import {
   DropdownMenuSub,
   DropdownMenuSubContent,
   DropdownMenuSubTrigger,
-} from "@reader/ui/components/dropdown-menu";
+} from "@interleaf/ui/components/dropdown-menu";
 import { useReaderStore } from "../store";
 import { libraryPapers } from "./projection";
 import {
@@ -234,7 +234,7 @@ export function PaperMenuItems({
           <K.Item
             disabled={one.metadataOnly}
             onClick={() =>
-              void copyText(readerLink({ id: one.id }), "已复制阅读链接")
+              void copyText(interleafLink({ id: one.id }), "已复制阅读链接")
             }
           >
             <Link2 />
@@ -246,10 +246,10 @@ export function PaperMenuItems({
               打开论文主页
             </K.Item>
           )}
-          {window.readerDesktop?.showDocumentFile && (
+          {window.interleafDesktop?.showDocumentFile && (
             <K.Item disabled={one.metadataOnly} onClick={() => revealFile(one)}>
               <FolderOpen />
-              {window.readerDesktop.platform === "darwin"
+              {window.interleafDesktop.platform === "darwin"
                 ? "在访达中显示"
                 : "在文件夹中显示"}
             </K.Item>

@@ -35,7 +35,7 @@ const event = { sender: contents, senderFrame: frame };
 let host: BilingualPDFSaveHost;
 let service: BilingualPDFSaveService;
 beforeEach(async () => {
-  dir = await mkdtemp(join(tmpdir(), "reader-bilingual-save-"));
+  dir = await mkdtemp(join(tmpdir(), "interleaf-bilingual-save-"));
   library = join(dir, "library");
   await mkdir(library);
   destination = join(dir, "export.pdf");

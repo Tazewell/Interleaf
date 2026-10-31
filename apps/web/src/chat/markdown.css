@@ -122,18 +122,18 @@
   text-decoration: underline;
   text-underline-offset: 3px;
 }
-.message-markdown a[href^="#reader-citation?"] {
+.message-markdown a[href^="#interleaf-citation?"] {
   color: #2563eb;
   text-decoration: none;
   cursor: pointer;
 }
-.dark .message-markdown a[href^="#reader-citation?"] {
+.dark .message-markdown a[href^="#interleaf-citation?"] {
   color: #60a5fa;
 }
-:root[data-theme="sepia"] .message-markdown a[href^="#reader-citation?"] {
+:root[data-theme="sepia"] .message-markdown a[href^="#interleaf-citation?"] {
   color: var(--brand-text);
 }
-.message-markdown a[href^="#reader-citation?"]:hover {
+.message-markdown a[href^="#interleaf-citation?"]:hover {
   text-decoration: underline;
   text-underline-offset: 3px;
 }

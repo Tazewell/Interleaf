@@ -6,7 +6,7 @@
 
 2026-10-31 对 933 个跟踪文件和全部 912 个可达提交进行了检查：Gitleaks 8.30.1 在当前源码中命中 4 处、历史补丁中命中 6 处，逐项核对为浏览器扩展的公开 SPKI 公钥、教程模拟值和模型配置测试数据，未发现真实 API Key。另将本机配置中的 API Key 和本地服务令牌与全部 5,193 个可达 Git 文件对象逐一比对，未发现匹配。扫描结果仅说明本次检查范围，后续提交仍需检查。
 
-本地 `.reader/ai-connections.json` 仍保存已配置的 API Key；书库、聊天数据和本地服务令牌也继续保留。它们被 Git 忽略，未被跟踪，不应将整个工作目录压缩上传。打包脚本只部署生产代码与运行资源，不复制 `.reader`；生成的安装包仍需人工安装验收。
+本地 `.interleaf/ai-connections.json` 仍保存已配置的 API Key；书库、聊天数据和本地服务令牌也继续保留。它们被 Git 忽略，未被跟踪，不应将整个工作目录压缩上传。打包脚本只部署生产代码与运行资源，不复制 `.interleaf`；生成的安装包仍需人工安装验收。
 
 `.gitignore` 也排除了 `.env.*`（保留示例模板）、复制出的 AI 连接配置和常见签名私钥/证书文件。macOS 证书和密码应存放在仓库之外；Actions 使用仓库 Secrets，不要写进源码。忽略规则不能删除已经进入历史的秘密；若后续发现真实密钥，先撤销或轮换，再处理历史，参见 [GitHub 敏感数据移除说明](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/removing-sensitive-data-from-a-repository)。
 
@@ -46,7 +46,7 @@ $sha256 = (Get-FileHash -LiteralPath $installer.FullName -Algorithm SHA256).Hash
 
 已安装的 Interleaf 每日检查正式版，也可在关于窗口手动检查。Windows 用户确认后会下载、校验、保存阅读数据、退出并运行安装程序；macOS 固定签名和更新 ZIP 可用时支持原地更新，否则使用 DMG。
 
-应用用户数据使用 Interleaf 目录；开发桌面使用 Interleaf Dev。不会自动搬移或删除其他应用的书库。内部 CLI 仍名为 reader，通过新的 Interleaf 数据目录发现本机服务；内部工作区包名、数据库格式及 API 通信头保持兼容。
+应用用户数据使用 Interleaf 目录；开发桌面使用 Interleaf Dev。不会自动搬移或删除其他应用的书库。内部 CLI 已改为 `interleaf`，工作区包名为 `@interleaf/*`，Go 模块为 `interleaf.local/server`，环境变量、桌面 IPC 和本地 API 请求头同步使用 Interleaf 名称。新书库使用 `interleaf.sqlite`；旧数据库名称仅在兼容读取和相关测试中保留。项目目录使用 `Interleaf`，开发书库使用 `.interleaf`。
 
 首次上线前需要用两个真实安装版本验收：安装较低版本并创建测试批注，再发布较高版本，在旧版检查更新，确认重启后版本变更、书库和批注保留。开发网页不执行应用内更新。
 

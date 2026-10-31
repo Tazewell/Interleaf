@@ -55,23 +55,23 @@ Codex 尝试 turn/interrupt；Kimi 发送无 ID 的 session/cancel 并继续读�
 
 ```sh
 cd apps/server
-READER_TEST_STREAM_PROVIDER=codex go test ./internal/reader -run '^TestLiveGenerationAdapter$' -count=1 -v
-READER_TEST_STREAM_PROVIDER=kimi go test ./internal/reader -run '^TestLiveGenerationAdapter$' -count=1 -v
+INTERLEAF_TEST_STREAM_PROVIDER=codex go test ./internal/interleaf -run '^TestLiveGenerationAdapter$' -count=1 -v
+INTERLEAF_TEST_STREAM_PROVIDER=kimi go test ./internal/interleaf -run '^TestLiveGenerationAdapter$' -count=1 -v
 # Claude 登录后，用相同命令并把 provider 换为 claude。
-go test ./internal/reader -run 'TestAPIFallbackStreamsOverHTTP|TestAgentCancellationHandshake|TestHTTPDisconnect|TestDoneLoss|TestFrozenStreamFixtures' -count=1
+go test ./internal/interleaf -run 'TestAPIFallbackStreamsOverHTTP|TestAgentCancellationHandshake|TestHTTPDisconnect|TestDoneLoss|TestFrozenStreamFixtures' -count=1
 ```
 
 ## 联调交付
 
 [OpenAPI](../openapi.yaml) 的 `ChatStreamEvent` 是解码后联合类型，线上仍是 event/data 行。生成文件：`packages/api-client/src/schema.d.ts`。共用 [v1 fixtures](../fixtures/agent-streaming-v1.json)（success/fallback/partial-error/missing-terminal），`TestFrozenStreamFixtures` 通过实际 writer 回放；前端可只读消费。契约正文实现状态已更新，冻结项未改。
 
-前轮后端单独预览曾运行在 `http://127.0.0.1:65219`，使用独立临时书库及本工作树构建的基线 UI。当前 F4 联调使用下节的 `17840` 后端与 `15174` 前端；此处仅保留早期预览证据。HTTP 检查 `/`、health 和带认证 documents 返回 200，无认证 documents 返回 401。启动状态和本机会话 token 存在权限 0600 的 `/tmp/reader-streaming-backend-preview.json`，不进 Git。打开方式：读取该文件，将 `url + '/#token=' + token` 作为地址。预览是进程存活期间的本机地址，不是部署或合并前端后的视觉验收。
+前轮后端单独预览曾运行在 `http://127.0.0.1:65219`，使用独立临时书库及本工作树构建的基线 UI。当前 F4 联调使用下节的 `17840` 后端与 `15174` 前端；此处仅保留早期预览证据。HTTP 检查 `/`、health 和带认证 documents 返回 200，无认证 documents 返回 401。启动状态和本机会话 token 存在权限 0600 的 `/tmp/interleaf-streaming-backend-preview.json`，不进 Git。打开方式：读取该文件，将 `url + '/#token=' + token` 作为地址。预览是进程存活期间的本机地址，不是部署或合并前端后的视觉验收。
 
 重新启动可在此工作树运行：
 
 ```sh
 pnpm build
-apps/desktop/bin/reader-server --data "$(mktemp -d /tmp/reader-streaming-preview.XXXXXX)" --port 0 --web "$PWD/apps/web/dist"
+apps/desktop/bin/interleaf-server --data "$(mktemp -d /tmp/interleaf-streaming-preview.XXXXXX)" --port 0 --web "$PWD/apps/web/dist"
 ```
 
 协调会话集成前端后，可将此命令的 `--web` 指向其构建目录，使用 Go 同源服务，避免另改 CORS 或依赖其他会话的开发端口。也可在最终集成树 `pnpm dev`。需要的人工检查：导入项目合成样本；测试长文字、代码、公式及合成图片；确认首段提前出现、最终正文不重复；生成中取消再查询 messages；用 fixtures 检查备用、部分失败、无 done，以及保存成功但消息同步查询失败。Markdown/滚动/动画和 Electron 实机效果仍由前端及协调会话人工记录，不使用浏览器自动化宣称验收。
@@ -82,11 +82,11 @@ apps/desktop/bin/reader-server --data "$(mktemp -d /tmp/reader-streaming-preview
 
 可运行后端候选为 `backend/unified-streaming@47aab55`（实现提交 `2f7f820`，含完整联调启动文档）；本节只补启动文档，不改变 Go 或冻结 wire。B2/B3 当前没有已知未完成的实现项，模拟/HTTP 生命周期测试已通过；尚未验证的是商业备用 API 厂商端兼容性、Claude 未登录情况下无法执行的真实文字/图片/取消，以及双 worktree 的人工交互和视觉效果。这些未验证项不阻塞启动。
 
-本轮已实际启动后端 `http://127.0.0.1:17840` 和前端 `http://127.0.0.1:15174`。启动前两端口均通过 loopback bind 检查；前端会话既有 `15173` 监听保持不动。当前独立运行目录为 `/tmp/reader-streaming-backend-integration.zo5NBG`，书库仅在其 `data/` 下；未读取用户已有 `.reader`。运行目录指针保存在 `/tmp/reader-streaming-backend-integration.current`。以下命令可复现；若本轮进程仍在运行，直接执行初始化步骤，无需再次启动。
+本轮已实际启动后端 `http://127.0.0.1:17840` 和前端 `http://127.0.0.1:15174`。启动前两端口均通过 loopback bind 检查；前端会话既有 `15173` 监听保持不动。当前独立运行目录为 `/tmp/interleaf-streaming-backend-integration.zo5NBG`，书库仅在其 `data/` 下；未读取用户已有 `.interleaf`。运行目录指针保存在 `/tmp/interleaf-streaming-backend-integration.current`。以下命令可复现；若本轮进程仍在运行，直接执行初始化步骤，无需再次启动。
 
 ### 终端 A：后端与独立数据目录
 
-在后端 worktree 执行。依赖已安装；新 checkout 若缺依赖，先 `pnpm install --frozen-lockfile`。不要运行顶层 `pnpm dev`：它会自行启动另一份 Go 并使用 worktree 的 `.reader`，不适用于本次隔离联调。
+在后端 worktree 执行。依赖已安装；新 checkout 若缺依赖，先 `pnpm install --frozen-lockfile`。不要运行顶层 `pnpm dev`：它会自行启动另一份 Go 并使用 worktree 的 `.interleaf`，不适用于本次隔离联调。
 
 ```sh
 set -e
@@ -99,21 +99,21 @@ for port in (17840, 15174):
         listener.bind(('127.0.0.1', port))
         print(f'loopback port {port}: available')
 PY
-reader_integration_dir=$(mktemp -d /tmp/reader-streaming-backend-integration.XXXXXX)
-printf '%s\n' "$reader_integration_dir" > /tmp/reader-streaming-backend-integration.current
-(cd apps/server && go build -o "$reader_integration_dir/reader-server" ./cmd/reader-server)
-pnpm --filter @reader/processor build
-printf 'Integration state directory: %s\n' "$reader_integration_dir"
-env -u READER_TOKEN \
-  READER_NODE="$(command -v node)" \
-  READER_PROCESSOR="$PWD/apps/processor/dist/main.mjs" \
-  "$reader_integration_dir/reader-server" \
-  --data "$reader_integration_dir/data" --port 17840 \
-  > "$reader_integration_dir/ready.json" \
-  2> "$reader_integration_dir/server.log"
+interleaf_integration_dir=$(mktemp -d /tmp/interleaf-streaming-backend-integration.XXXXXX)
+printf '%s\n' "$interleaf_integration_dir" > /tmp/interleaf-streaming-backend-integration.current
+(cd apps/server && go build -o "$interleaf_integration_dir/interleaf-server" ./cmd/interleaf-server)
+pnpm --filter @interleaf/processor build
+printf 'Integration state directory: %s\n' "$interleaf_integration_dir"
+env -u INTERLEAF_TOKEN \
+  INTERLEAF_NODE="$(command -v node)" \
+  INTERLEAF_PROCESSOR="$PWD/apps/processor/dist/main.mjs" \
+  "$interleaf_integration_dir/interleaf-server" \
+  --data "$interleaf_integration_dir/data" --port 17840 \
+  > "$interleaf_integration_dir/ready.json" \
+  2> "$interleaf_integration_dir/server.log"
 ```
 
-Go 仅绑定 `127.0.0.1`。`env -u READER_TOKEN` 使每次启动生成独立会话 token；启动 JSON 重定向到 `ready.json`，不打印到共享终端或回报。`umask 077` 使运行目录及会话文件只对当前用户开放。没有复制旧书库、连接配置或 API key。处理器使用本后端工作树的构建产物，图片/PDF 解析不会误用另一会话的目录。
+Go 仅绑定 `127.0.0.1`。`env -u INTERLEAF_TOKEN` 使每次启动生成独立会话 token；启动 JSON 重定向到 `ready.json`，不打印到共享终端或回报。`umask 077` 使运行目录及会话文件只对当前用户开放。没有复制旧书库、连接配置或 API key。处理器使用本后端工作树的构建产物，图片/PDF 解析不会误用另一会话的目录。
 
 若端口检查失败，先确认是否正是本节已启动的进程；不要杀其他进程，也不要让 Vite 自动递增端口。`17840` 是当前前端 proxy 的固定目标，因此不能只改 Go 端口。确需换后端端口时交由前端同步修改其 proxy 配置；本后端会话不编辑前端文件。前端端口可以选另一个空闲 loopback 端口，但要同步下方初始化脚本中的 `frontend`。
 
@@ -121,7 +121,7 @@ Go 仅绑定 `127.0.0.1`。`env -u READER_TOKEN` 使每次启动生成独立会�
 
 ```sh
 pnpm --dir /Users/bu44er/Developer/Projects/Interleaf-streaming-frontend \
-  --filter @reader/web dev --host 127.0.0.1 --port 15174 --strictPort
+  --filter @interleaf/web dev --host 127.0.0.1 --port 15174 --strictPort
 ```
 
 已只读核对前端 `apps/web/vite.config.ts`：`/api` 与 `/pub` 均代理到 `http://127.0.0.1:17840`，无需修改。浏览器只访问 `15174`，SDK 的相对 `/api`、出版物和图片的 `/pub` 请求均经 Vite 转发。保留默认 `changeOrigin:false`，让 Go 收到的 Host 和浏览器 Origin 都是 `127.0.0.1:15174`，满足现有同源检查；不要额外重写 Origin 或为此扩大 CORS。只代理 `/api` 会遗漏 EPUB 资源及图片。
@@ -138,7 +138,7 @@ import subprocess
 import time
 from urllib.parse import quote
 
-run_dir = pathlib.Path('/tmp/reader-streaming-backend-integration.current').read_text().strip()
+run_dir = pathlib.Path('/tmp/interleaf-streaming-backend-integration.current').read_text().strip()
 ready = pathlib.Path(run_dir) / 'ready.json'
 for attempt in range(100):
     try:
@@ -154,13 +154,13 @@ print('Frontend opened; session value omitted')
 PY
 ```
 
-前端 `src/main.tsx` 从 `#token` 读取值，写入该 origin 的 `sessionStorage['reader-session']`，通过 `history.replaceState` 清除地址栏 fragment，再调用 `configureAPI(token)`。SDK 为 API 请求添加 Bearer 认证。直接打开裸地址不会自动获得新会话；重启后端、更换端口或新开未初始化窗口后应重新执行此步骤，覆盖旧 session。`/__streaming` 是无模型回放入口，不能用它代替正式 `/` 对话联调。
+前端 `src/main.tsx` 从 `#token` 读取值，写入该 origin 的 `sessionStorage['interleaf-session']`，通过 `history.replaceState` 清除地址栏 fragment，再调用 `configureAPI(token)`。SDK 为 API 请求添加 Bearer 认证。直接打开裸地址不会自动获得新会话；重启后端、更换端口或新开未初始化窗口后应重新执行此步骤，覆盖旧 session。`/__streaming` 是无模型回放入口，不能用它代替正式 `/` 对话联调。
 
 ### 验证与停止
 
 本轮已通过 HTTP 请求验证（无浏览器自动化）：Vite `/` 和经 proxy 的 `/api/health` 为 200；带认证 `/api/documents` 为 200，无认证为 401；带正确 Origin/认证的 POST 聊天通过安全边界后对不存在的文档返回 404；`/pub` 转发到 Go 后对不存在的出版物返回 404；外部 Origin 返回 403。这些检查确认代理和认证通路，不代表视觉、真实文档资源或实际对话验收完成。
 
-必要后端复验：`cd apps/server && go test ./internal/reader -run 'TestAuthBoundaries|TestChatStreamsOverHTTP|TestAPIFallbackStreamsOverHTTP|TestHTTPDisconnect|TestFrozenStreamFixtures' -count=1` 通过（9.003s）。此前正式全量检查见上文；本补充仅改文档，没有重复所有构建。
+必要后端复验：`cd apps/server && go test ./internal/interleaf -run 'TestAuthBoundaries|TestChatStreamsOverHTTP|TestAPIFallbackStreamsOverHTTP|TestHTTPDisconnect|TestFrozenStreamFixtures' -count=1` 通过（9.003s）。此前正式全量检查见上文；本补充仅改文档，没有重复所有构建。
 
 打开正式界面后，在隔离书库导入项目合成样本。Codex/Claude 文字可按现有 CLI 登录使用；Kimi、图片及备用 API 需在这个全新的书库设置页重新做所需能力测试，不能假定已有用户书库的配置被继承。测试真实模型时仅发送原创摘录与合成图片。
 

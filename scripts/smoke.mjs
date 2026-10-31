@@ -5,13 +5,13 @@ import { join } from "node:path";
 import { once } from "node:events";
 import { createInterface } from "node:readline";
 import { randomBytes } from "node:crypto";
-const data = await mkdtemp(join(tmpdir(), "reader-smoke-"));
+const data = await mkdtemp(join(tmpdir(), "interleaf-smoke-"));
 const token = randomBytes(32).toString("hex");
 const child = spawn(
-  `./apps/desktop/bin/reader-server${process.platform === "win32" ? ".exe" : ""}`,
+  `./apps/desktop/bin/interleaf-server${process.platform === "win32" ? ".exe" : ""}`,
   ["--port", "0", "--data", data, "--web", "apps/web/dist"],
   {
-    env: { ...process.env, READER_TOKEN: token },
+    env: { ...process.env, INTERLEAF_TOKEN: token },
     stdio: ["ignore", "pipe", "inherit"],
   },
 );
@@ -62,15 +62,15 @@ try {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         provider: "codex",
-        prompt: "Reply with exactly READER_OK. This is a connection test.",
+        prompt: "Reply with exactly INTERLEAF_OK. This is a connection test.",
         context: "An original Interleaf sample document.",
       }),
       signal: AbortSignal.timeout(180000),
     });
     const stream = await res.text();
-    if (!stream.includes("event: done") || !stream.includes("READER_OK"))
+    if (!stream.includes("event: done") || !stream.includes("INTERLEAF_OK"))
       throw new Error("Real CLI response did not complete: " + stream);
-    console.log("Real Codex CLI: READER_OK; SSE completed.");
+    console.log("Real Codex CLI: INTERLEAF_OK; SSE completed.");
   }
   console.log("HTTP smoke passed.");
 } finally {

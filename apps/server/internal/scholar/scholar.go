@@ -22,7 +22,7 @@ type Creator struct {
 	Name   string
 }
 
-// Metadata uses the same field meanings as the reader's paper metadata.
+// Metadata uses the same field meanings as the interleaf's paper metadata.
 type Metadata struct {
 	Title     string
 	ItemType  string

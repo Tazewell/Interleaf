@@ -3,8 +3,8 @@ import {
   TextB as Bold,
   CircleNotch as LoaderCircle,
 } from "@phosphor-icons/react";
-import { defaultTheme, type ReaderTheme } from "@reader/core";
-import { Button } from "@reader/ui/components/button";
+import { defaultTheme, type ReaderTheme } from "@interleaf/core";
+import { Button } from "@interleaf/ui/components/button";
 import {
   Select,
   SelectContent,
@@ -14,8 +14,8 @@ import {
   SelectSeparator,
   SelectTrigger,
   SelectValue,
-} from "@reader/ui/components/select";
-import { Toggle } from "@reader/ui/components/toggle";
+} from "@interleaf/ui/components/select";
+import { Toggle } from "@interleaf/ui/components/toggle";
 import { toast } from "sonner";
 import { translationFont, translationFontLabel } from "./appearance";
 import { canQueryLocalFonts, localFontFamilies } from "./local-fonts";

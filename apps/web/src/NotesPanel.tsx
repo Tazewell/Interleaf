@@ -15,28 +15,28 @@ import {
   Trash,
 } from "@phosphor-icons/react";
 import {
-  readerLink,
+  interleafLink,
   locationLabel,
   type Annotation,
   type Document,
   type Message,
-} from "@reader/core";
-import { api } from "@reader/api";
-import { Badge } from "@reader/ui/components/badge";
-import { Button } from "@reader/ui/components/button";
-import { Input } from "@reader/ui/components/input";
-import { Textarea } from "@reader/ui/components/textarea";
-import { ScrollArea } from "@reader/ui/components/scroll-area";
+} from "@interleaf/core";
+import { api } from "@interleaf/api";
+import { Badge } from "@interleaf/ui/components/badge";
+import { Button } from "@interleaf/ui/components/button";
+import { Input } from "@interleaf/ui/components/input";
+import { Textarea } from "@interleaf/ui/components/textarea";
+import { ScrollArea } from "@interleaf/ui/components/scroll-area";
 import {
   Collapsible,
   CollapsibleContent,
   CollapsibleTrigger,
-} from "@reader/ui/components/collapsible";
+} from "@interleaf/ui/components/collapsible";
 import {
   ToggleGroup,
   ToggleGroupItem,
-} from "@reader/ui/components/toggle-group";
-import { Tabs, TabsList, TabsTrigger } from "@reader/ui/components/tabs";
+} from "@interleaf/ui/components/toggle-group";
+import { Tabs, TabsList, TabsTrigger } from "@interleaf/ui/components/tabs";
 import { toast } from "sonner";
 import { annotationLabels } from "./AnnotationToolbar";
 import { copyText } from "./chat/clipboard";
@@ -133,7 +133,7 @@ function PaperNote({
     state === "loading"
       ? ""
       : annotationDigest(annotations, body, (a) =>
-          readerLink({ id: documentId, annotation: a.id }),
+          interleafLink({ id: documentId, annotation: a.id }),
         );
   // Save on unmount so switching documents never drops the last edit.
   const latest = useRef(body);
@@ -252,7 +252,7 @@ function NoteCard({
             title="复制链接，可在笔记软件中点开回到这里"
             onClick={() =>
               void copyText(
-                readerLink({ id: a.documentId, annotation: a.id }),
+                interleafLink({ id: a.documentId, annotation: a.id }),
                 "已复制链接",
               )
             }

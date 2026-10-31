@@ -1,15 +1,15 @@
 import { useEffect, useState } from "react";
-import { api } from "@reader/api";
-import { nativeConfigUpdate, type NativeAIConfig } from "@reader/core";
-import { Input } from "@reader/ui/components/input";
-import { Button } from "@reader/ui/components/button";
+import { api } from "@interleaf/api";
+import { nativeConfigUpdate, type NativeAIConfig } from "@interleaf/core";
+import { Input } from "@interleaf/ui/components/input";
+import { Button } from "@interleaf/ui/components/button";
 import {
   Select,
   SelectTrigger,
   SelectValue,
   SelectContent,
   SelectItem,
-} from "@reader/ui/components/select";
+} from "@interleaf/ui/components/select";
 import { TaskModels } from "../TaskModels";
 import { TranslationPromptSettings } from "../TranslationPromptSettings";
 import { useReaderStore } from "../store";

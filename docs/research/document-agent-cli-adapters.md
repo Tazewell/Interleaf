@@ -35,10 +35,10 @@
 
 当前实现有意将 CLI 收窄为文本生成器：
 
-- [`codex.go`](../../apps/server/internal/reader/codex.go) 启动独立 `codex app-server --listen stdio://`，关闭 shell、unified exec、hooks、plugins、apps、多 Agent、code mode、图片工具和 web search，设置 `mcp_servers={}`；`thread/start` 使用 `ephemeral: true`、只读 sandbox 和 `approvalPolicy: never`。所有服务端主动 RPC 一律返回不支持，因此尚不能承接 `item/tool/call`。
-- [`claude.go`](../../apps/server/internal/reader/claude.go) 使用 `--safe-mode --tools "" --strict-mcp-config --mcp-config '{"mcpServers":{}}'`，保留 `--setting-sources user` 让 CLI 自己处理用户的网关、模型与认证设置。
-- [`cli.go`](../../apps/server/internal/reader/cli.go) 给 Kimi 写 `reader.md`，包含 `tools: []`、`subagents: []` 的 Markdown frontmatter，执行 `kimi --agent-file ... --skills-dir ... acp`，`session/new` 传空 `mcpServers`，不声明客户端 filesystem/terminal capability，并拒绝全部权限请求。
-- [`codex_chat.go`](../../apps/server/internal/reader/codex_chat.go) 已有按文档和已提交历史复用的进程会话缓存，失败、取消、未保存等情况会清理。新工具会话也必须遵守这套提交边界，不能在换文档后复用旧授权。
+- [`codex.go`](../../apps/server/internal/interleaf/codex.go) 启动独立 `codex app-server --listen stdio://`，关闭 shell、unified exec、hooks、plugins、apps、多 Agent、code mode、图片工具和 web search，设置 `mcp_servers={}`；`thread/start` 使用 `ephemeral: true`、只读 sandbox 和 `approvalPolicy: never`。所有服务端主动 RPC 一律返回不支持，因此尚不能承接 `item/tool/call`。
+- [`claude.go`](../../apps/server/internal/interleaf/claude.go) 使用 `--safe-mode --tools "" --strict-mcp-config --mcp-config '{"mcpServers":{}}'`，保留 `--setting-sources user` 让 CLI 自己处理用户的网关、模型与认证设置。
+- [`cli.go`](../../apps/server/internal/interleaf/cli.go) 给 Kimi 写 `interleaf.md`，包含 `tools: []`、`subagents: []` 的 Markdown frontmatter，执行 `kimi --agent-file ... --skills-dir ... acp`，`session/new` 传空 `mcpServers`，不声明客户端 filesystem/terminal capability，并拒绝全部权限请求。
+- [`codex_chat.go`](../../apps/server/internal/interleaf/codex_chat.go) 已有按文档和已提交历史复用的进程会话缓存，失败、取消、未保存等情况会清理。新工具会话也必须遵守这套提交边界，不能在换文档后复用旧授权。
 
 因此新增 Agent 能力不是只放开一个开关：还需工具注册、能力检测、调用记录、引用来源、预算、取消传播和阶段化流式输出。
 
@@ -56,20 +56,20 @@ MCP 服务可使用现有 Go loopback 服务上的 Streamable HTTP endpoint。Co
 
 ```text
 codex app-server --listen stdio://
-  -c mcp_servers.reader.url="http://127.0.0.1:<port>/agent/mcp"
-  -c mcp_servers.reader.bearer_token_env_var="READER_MCP_TOKEN"
-  -c mcp_servers.reader.enabled_tools=["get_outline","search_document","read_passage"]
-  -c mcp_servers.reader.required=true
+  -c mcp_servers.interleaf.url="http://127.0.0.1:<port>/agent/mcp"
+  -c mcp_servers.interleaf.bearer_token_env_var="INTERLEAF_MCP_TOKEN"
+  -c mcp_servers.interleaf.enabled_tools=["get_outline","search_document","read_passage"]
+  -c mcp_servers.interleaf.required=true
   ...经固定版本验证的内置工具禁用参数...
 ```
 
-实现应构造参数数组而不是拼接 shell；`READER_MCP_TOKEN` 是 Interleaf 自己签发的短期能力 token，不能复用 Interleaf 管理 API 的全权限 token，也不涉及 Codex 登录 token。
+实现应构造参数数组而不是拼接 shell；`INTERLEAF_MCP_TOKEN` 是 Interleaf 自己签发的短期能力 token，不能复用 Interleaf 管理 API 的全权限 token，也不涉及 Codex 登录 token。
 
 ### `mcp_servers={}` 不是严格清空策略
 
 所查 Codex 上游 [`config/src/merge.rs`](https://github.com/openai/codex/blob/73bbb654b3b9796b11624914b3be908ab8a0551f/codex-rs/config/src/merge.rs) 对 TOML table 递归合并：overlay table 逐键覆盖；空 table 没有要覆盖的键，base table 中的旧项会保留。配置加载器将 CLI overrides 作为一层合并，而不是默认删除所有低优先级字段。[配置层加载源码](https://github.com/openai/codex/blob/73bbb654b3b9796b11624914b3be908ab8a0551f/codex-rs/config/src/loader/mod.rs)
 
-据此，当前代码的 `mcp_servers={}` **不能用作“没有继承用户 MCP”的证据**。同理，在 table 下加 `reader` 也不会自动删除其他服务器；`--profile` 的本机 help 说明它叠加在基础用户配置之上，不能当作全新空白环境。`--strict-config` 仅针对未知配置键，不等于 MCP allowlist。
+据此，当前代码的 `mcp_servers={}` **不能用作“没有继承用户 MCP”的证据**。同理，在 table 下加 `interleaf` 也不会自动删除其他服务器；`--profile` 的本机 help 说明它叠加在基础用户配置之上，不能当作全新空白环境。`--strict-config` 仅针对未知配置键，不等于 MCP allowlist。
 
 采用下节的枚举和进程覆盖流程，复用原有认证环境。通过受支持配置接口提取继承服务器名称，为每项设置 `enabled=false`，再注入 Interleaf MCP。须验证禁用在首次连接和执行任何无关 hook/MCP **之前**生效，并检查管理配置、插件来源及配置变化时机。当前资料未证明本机版本存在一键严格 MCP 开关，也不能仅靠一次列表检查宣称完全隔离。
 
@@ -118,14 +118,14 @@ codex app-server --listen stdio://
 | `--disable-slash-commands`             | 关闭 skills                      | 不替代其他配置隔离                                   |
 | `--no-session-persistence`             | 不保存 CLI 会话                  | 不代表 Go 可以在 provider 未完成时保存答案           |
 
-表中参数语义以[官方 CLI 文档](https://code.claude.com/docs/en/cli-reference)和[权限文档](https://code.claude.com/docs/en/permissions)为依据；本机只查帮助，没有真实工具调用验证。工具名应为 `mcp__reader__search_document` 等精确名称，不给宽泛 `mcp__*` 的免审批许可。
+表中参数语义以[官方 CLI 文档](https://code.claude.com/docs/en/cli-reference)和[权限文档](https://code.claude.com/docs/en/permissions)为依据；本机只查帮助，没有真实工具调用验证。工具名应为 `mcp__interleaf__search_document` 等精确名称，不给宽泛 `mcp__*` 的免审批许可。
 
 候选运行形态：
 
 ```text
 claude -p --output-format stream-json --verbose --include-partial-messages
-  --tools "" --strict-mcp-config --mcp-config <临时 reader-mcp.json>
-  --allowedTools mcp__reader__get_outline mcp__reader__search_document mcp__reader__read_passage
+  --tools "" --strict-mcp-config --mcp-config <临时 interleaf-mcp.json>
+  --allowedTools mcp__interleaf__get_outline mcp__interleaf__search_document mcp__interleaf__read_passage
   --permission-mode dontAsk --disable-slash-commands --no-session-persistence
   ...经验证的配置/自定义内容隔离参数...
 ```
@@ -160,7 +160,7 @@ Kimi 的实施门禁应是：选择支持显式 profile 且能禁用插件/其�
 
 ## 中间文字和最终答案必须分开
 
-开启原生工具循环后，“我先查看方法章节”这样的顶层 assistant 文本会先于工具调用出现。当前 [`codex.go`](../../apps/server/internal/reader/codex.go) 拼接全部 `agentMessage`，[`claude.go`](../../apps/server/internal/reader/claude.go) 拼接全部顶层 `text_delta`，都不能原样用于工具模式。Claude 当前还比较最终 result 与所有拼接文本是否完全一致，工具轮中间文本会使这一假设失效。
+开启原生工具循环后，“我先查看方法章节”这样的顶层 assistant 文本会先于工具调用出现。当前 [`codex.go`](../../apps/server/internal/interleaf/codex.go) 拼接全部 `agentMessage`，[`claude.go`](../../apps/server/internal/interleaf/claude.go) 拼接全部顶层 `text_delta`，都不能原样用于工具模式。Claude 当前还比较最终 result 与所有拼接文本是否完全一致，工具轮中间文本会使这一假设失效。
 
 Codex 本机 schema 的 `item/started` 与 `item/completed` 中 `agentMessage` 都有可空 `phase`，值包含 `commentary` / `final_answer`；`item/agentMessage/delta` 自身没有 phase。只有已收到且确认 phase 的 item 才能按 phase 分流；不能默认 null 就是 final，也不能保证每个模型在首个 delta 之前都给出非空 phase。[Codex 消息类型](https://learn.chatgpt.com/docs/app-server#items)
 

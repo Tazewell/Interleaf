@@ -152,7 +152,7 @@ it("shows download progress in the taskbar and the app, then clears it", async (
   await vi.advanceTimersByTimeAsync(15_000);
   expect(window.setProgressBar).toHaveBeenCalledWith(0.25);
   const reports = send.mock.calls
-    .filter(([channel]) => channel === "reader:update-progress")
+    .filter(([channel]) => channel === "interleaf:update-progress")
     .map(([, progress]) => progress);
   // Steps within the same percent are not sent again.
   expect(reports).toEqual([
@@ -196,7 +196,7 @@ it("clears download progress before showing a download error", async () => {
     if (options.type === "error")
       clearedBeforeError = send.mock.calls.some(
         ([channel, progress]) =>
-          channel === "reader:update-progress" && progress === null,
+          channel === "interleaf:update-progress" && progress === null,
       );
     return { response: 0 };
   });
@@ -296,7 +296,7 @@ it("stages a signed Mac update silently and installs it on restart", async () =>
   );
   expect(window.setProgressBar).not.toHaveBeenCalledWith(2);
   expect(send).not.toHaveBeenCalledWith(
-    "reader:update-progress",
+    "interleaf:update-progress",
     expect.objectContaining({ phase: "download" }),
   );
   expect(mocks.quitAndInstall).toHaveBeenCalledTimes(1);

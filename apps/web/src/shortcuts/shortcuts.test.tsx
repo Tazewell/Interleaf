@@ -2,7 +2,7 @@
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { beforeEach, afterEach, expect, it, vi } from "vitest";
-import { api } from "@reader/api";
+import { api } from "@interleaf/api";
 import { GuideDialog } from "../guide/GuideDialog";
 import { ShortcutPanel } from "./ShortcutPanel";
 import {
@@ -18,7 +18,7 @@ import {
   useShortcut,
 } from "./shortcuts";
 
-vi.mock("@reader/api", () => ({
+vi.mock("@interleaf/api", () => ({
   api: {
     shortcutPreferences: vi.fn(async () => ({})),
     saveShortcutPreferences: vi.fn(async (value) => value),
@@ -48,7 +48,7 @@ it("maps Cmd on Mac to Ctrl on Windows, with exact modifiers", () => {
   expect(
     matches(
       new KeyboardEvent("keydown", { key: "L", metaKey: true }),
-      "readerLeft",
+      "interleafLeft",
       bindings,
       true,
     ),
@@ -56,7 +56,7 @@ it("maps Cmd on Mac to Ctrl on Windows, with exact modifiers", () => {
   expect(
     matches(
       new KeyboardEvent("keydown", { key: "l", ctrlKey: true }),
-      "readerLeft",
+      "interleafLeft",
       bindings,
       false,
     ),
@@ -64,7 +64,7 @@ it("maps Cmd on Mac to Ctrl on Windows, with exact modifiers", () => {
   expect(
     matches(
       new KeyboardEvent("keydown", { key: "l", metaKey: true }),
-      "readerLeft",
+      "interleafLeft",
       bindings,
       false,
     ),
@@ -72,20 +72,20 @@ it("maps Cmd on Mac to Ctrl on Windows, with exact modifiers", () => {
   expect(
     matches(
       new KeyboardEvent("keydown", { key: "l", ctrlKey: true, shiftKey: true }),
-      "readerLeft",
+      "interleafLeft",
       bindings,
       false,
     ),
   ).toBe(false);
-  expect(label(bindings.readerLeft, false)).toBe("Ctrl + L");
-  expect(label(bindings.readerLeft, true)).toBe("Cmd + L");
+  expect(label(bindings.interleafLeft, false)).toBe("Ctrl + L");
+  expect(label(bindings.interleafLeft, true)).toBe("Cmd + L");
 });
 it("allows distinct scopes and rejects overlapping and reserved shortcuts", () => {
   expect(
-    bindingError("readerLeft", defaults().libraryLeft, defaults()),
+    bindingError("interleafLeft", defaults().libraryLeft, defaults()),
   ).toBeNull();
   expect(
-    bindingError("readerRight", defaults().readerLeft, defaults()),
+    bindingError("interleafRight", defaults().interleafLeft, defaults()),
   ).toContain("冲突");
   expect(bindingError("search", defaults().libraryLeft, defaults())).toContain(
     "冲突",
@@ -115,7 +115,7 @@ it("reloads saved preferences and retains bindings when a save fails", async () 
 it("applies saved changes immediately, ignores dialogs and repeat, forwards frame events, and cleans up", async () => {
   const run = vi.fn();
   function Harness() {
-    useShortcut("readerLeft", run);
+    useShortcut("interleafLeft", run);
     return null;
   }
   await act(async () => root.render(<Harness />));
@@ -130,7 +130,10 @@ it("applies saved changes immediately, ignores dialogs and repeat, forwards fram
     return event;
   };
   expect(fire("l").defaultPrevented).toBe(true);
-  await saveBindings({ ...defaults(), readerLeft: { key: "b", shift: false } });
+  await saveBindings({
+    ...defaults(),
+    interleafLeft: { key: "b", shift: false },
+  });
   expect(fire("l").defaultPrevented).toBe(false);
   fire("b");
   fire("b", true);
@@ -168,7 +171,7 @@ it("records, persists, cancels and restores shortcuts in the panel", async () =>
       }),
     ),
   );
-  expect(readBindings().readerLeft.key).toBe("b");
+  expect(readBindings().interleafLeft.key).toBe("b");
   expect(button().textContent).toBe("Ctrl + B");
   await act(async () => button().click());
   await act(async () =>
@@ -234,9 +237,9 @@ it("pins the shortcuts tab and cancels recording without closing the guide", asy
 it("allows reading shortcuts beside a pinned preview but not from its controls", async () => {
   const run = vi.fn();
   function Harness() {
-    useShortcut("readerLeft", run);
+    useShortcut("interleafLeft", run);
     return (
-      <div role="dialog" data-reader-floating-preview="">
+      <div role="dialog" data-interleaf-floating-preview="">
         <button>Preview</button>
       </div>
     );
@@ -261,4 +264,22 @@ it("allows reading shortcuts beside a pinned preview but not from its controls",
   fire(window);
   expect(run).toHaveBeenCalledOnce();
   modal.remove();
+});
+
+it("keeps custom reading shortcuts saved before the project rename", () => {
+  expect(
+    normalizeBindings({
+      readerLeft: { key: "b", shift: true },
+      readerRight: { key: "m", shift: false },
+    }),
+  ).toMatchObject({
+    interleafLeft: { key: "b", shift: true },
+    interleafRight: { key: "m", shift: false },
+  });
+  expect(
+    normalizeBindings({
+      readerLeft: { key: "b", shift: true },
+      interleafLeft: { key: "u", shift: false },
+    }).interleafLeft,
+  ).toEqual({ key: "u", shift: false });
 });

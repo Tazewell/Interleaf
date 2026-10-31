@@ -1,5 +1,5 @@
 import { memo, useEffect, useState } from "react";
-import { Button } from "@reader/ui/components/button";
+import { Button } from "@interleaf/ui/components/button";
 import { copyText } from "./clipboard";
 import type { ThemedToken } from "shiki";
 // Fine-grained bundle: only these grammars/themes and the engine ship offline.

@@ -1,6 +1,6 @@
 import { contextBridge, ipcRenderer } from "electron";
-import type { ProxySettings } from "../../../packages/reader-core/src/proxy-settings";
-import type { UpdateProgress } from "../../../packages/reader-core/src/update-progress";
+import type { ProxySettings } from "../../../packages/interleaf-core/src/proxy-settings";
+import type { UpdateProgress } from "../../../packages/interleaf-core/src/update-progress";
 async function proxyRequest(channel: string, ...args: unknown[]) {
   try {
     return await ipcRenderer.invoke(channel, ...args);
@@ -15,86 +15,86 @@ async function proxyRequest(channel: string, ...args: unknown[]) {
     );
   }
 }
-contextBridge.exposeInMainWorld("readerDesktop", {
+contextBridge.exposeInMainWorld("interleafDesktop", {
   platform: process.platform,
   saveBilingualPDF: (input: { documentId: string; jobId: string }) =>
-    proxyRequest("reader:save-bilingual-pdf", input),
+    proxyRequest("interleaf:save-bilingual-pdf", input),
   cancelBilingualPDFSave: (input: { documentId: string; jobId: string }) =>
-    proxyRequest("reader:cancel-bilingual-pdf-save", input),
+    proxyRequest("interleaf:cancel-bilingual-pdf-save", input),
   configureBibliographyExport: (options: unknown) =>
-    proxyRequest("reader:configure-bibliography-export", options),
-  exportDiagnostics: () => ipcRenderer.invoke("reader:export-diagnostics"),
+    proxyRequest("interleaf:configure-bibliography-export", options),
+  exportDiagnostics: () => ipcRenderer.invoke("interleaf:export-diagnostics"),
   recordDiagnostic: (event: unknown) =>
-    ipcRenderer.send("reader:diagnostic-event", event),
+    ipcRenderer.send("interleaf:diagnostic-event", event),
   diagnosticSettings: (settings: unknown) =>
-    ipcRenderer.send("reader:diagnostic-settings", settings),
-  checkForUpdates: () => ipcRenderer.invoke("reader:check-updates"),
+    ipcRenderer.send("interleaf:diagnostic-settings", settings),
+  checkForUpdates: () => ipcRenderer.invoke("interleaf:check-updates"),
   onUpdateProgress: (callback: (progress: UpdateProgress | null) => void) => {
     const listener = (_event: unknown, progress: UpdateProgress | null) =>
       callback(progress);
-    ipcRenderer.on("reader:update-progress", listener);
-    return () => ipcRenderer.removeListener("reader:update-progress", listener);
+    ipcRenderer.on("interleaf:update-progress", listener);
+    return () => ipcRenderer.removeListener("interleaf:update-progress", listener);
   },
-  proxySettings: () => proxyRequest("reader:proxy-settings"),
+  proxySettings: () => proxyRequest("interleaf:proxy-settings"),
   saveProxySettings: (settings: ProxySettings) =>
-    proxyRequest("reader:save-proxy-settings", settings),
+    proxyRequest("interleaf:save-proxy-settings", settings),
   checkProxy: (settings: ProxySettings) =>
-    proxyRequest("reader:check-proxy", settings),
-  restart: () => proxyRequest("reader:restart"),
-  libraryLocation: () => proxyRequest("reader:library-location"),
-  moveLibrary: () => proxyRequest("reader:move-library"),
-  commandLine: () => proxyRequest("reader:command-line"),
+    proxyRequest("interleaf:check-proxy", settings),
+  restart: () => proxyRequest("interleaf:restart"),
+  libraryLocation: () => proxyRequest("interleaf:library-location"),
+  moveLibrary: () => proxyRequest("interleaf:move-library"),
+  commandLine: () => proxyRequest("interleaf:command-line"),
   setCommandLine: (installed: boolean) =>
-    proxyRequest("reader:set-command-line", installed),
+    proxyRequest("interleaf:set-command-line", installed),
   writeClipboardText: (text: string) =>
-    ipcRenderer.invoke("reader:clipboard-write", text),
+    ipcRenderer.invoke("interleaf:clipboard-write", text),
   writeClipboardImage: (data: Uint8Array, text: string) =>
-    ipcRenderer.invoke("reader:clipboard-write-image", data, text),
+    ipcRenderer.invoke("interleaf:clipboard-write-image", data, text),
   onBeforeClose: (callback: () => Promise<void>) => {
     const listener = () => {
       void callback().then(
-        () => ipcRenderer.send("reader:flushed", null),
-        (error) => ipcRenderer.send("reader:flushed", String(error)),
+        () => ipcRenderer.send("interleaf:flushed", null),
+        (error) => ipcRenderer.send("interleaf:flushed", String(error)),
       );
     };
-    ipcRenderer.on("reader:flush", listener);
-    return () => ipcRenderer.removeListener("reader:flush", listener);
+    ipcRenderer.on("interleaf:flush", listener);
+    return () => ipcRenderer.removeListener("interleaf:flush", listener);
   },
   setAppearance: (appearance: "light" | "sepia" | "dark" | "system") =>
-    ipcRenderer.invoke("reader:appearance", appearance),
+    ipcRenderer.invoke("interleaf:appearance", appearance),
   findEndNoteLibraries: (id: string) =>
-    ipcRenderer.invoke("reader:find-endnote", id),
+    ipcRenderer.invoke("interleaf:find-endnote", id),
   cancelEndNoteSearch: (id: string) =>
-    ipcRenderer.invoke("reader:cancel-endnote-search", id),
+    ipcRenderer.invoke("interleaf:cancel-endnote-search", id),
   chooseEndNoteLibrary: (directory = false) =>
-    ipcRenderer.invoke("reader:choose-endnote", directory),
+    ipcRenderer.invoke("interleaf:choose-endnote", directory),
   chooseZoteroDirectory: () =>
-    ipcRenderer.invoke("reader:choose-zotero-directory"),
+    ipcRenderer.invoke("interleaf:choose-zotero-directory"),
   importFiles: (library: "books" | "papers", folder = "") =>
-    ipcRenderer.invoke("reader:import", library, folder),
+    ipcRenderer.invoke("interleaf:import", library, folder),
   importLargePapers: (
     ids: string[],
     library: "books" | "papers",
     folder = "",
-  ) => ipcRenderer.invoke("reader:import-large", ids, library, folder),
+  ) => ipcRenderer.invoke("interleaf:import-large", ids, library, folder),
   showDocumentFile: (id: string, type: "pdf" | "epub") =>
-    ipcRenderer.invoke("reader:document-file", id, type, "show"),
+    ipcRenderer.invoke("interleaf:document-file", id, type, "show"),
   openDocumentFile: (id: string, type: "pdf" | "epub") =>
-    ipcRenderer.invoke("reader:document-file", id, type, "open"),
+    ipcRenderer.invoke("interleaf:document-file", id, type, "open"),
   openExternal: (url: string) =>
-    ipcRenderer.invoke("reader:open-external", url),
+    ipcRenderer.invoke("interleaf:open-external", url),
   onOpenLink: (callback: (target: unknown) => void) => {
     const listener = (_event: unknown, target: unknown) => callback(target);
-    ipcRenderer.on("reader:open-link", listener);
+    ipcRenderer.on("interleaf:open-link", listener);
     // Links that arrived before this listener are delivered once.
     void ipcRenderer
-      .invoke("reader:take-links")
+      .invoke("interleaf:take-links")
       .then((targets: unknown[]) => targets.forEach(callback));
-    return () => ipcRenderer.removeListener("reader:open-link", listener);
+    return () => ipcRenderer.removeListener("interleaf:open-link", listener);
   },
   onLibraryChanged: (callback: () => void) => {
     const listener = () => callback();
-    ipcRenderer.on("reader:library-changed", listener);
-    return () => ipcRenderer.removeListener("reader:library-changed", listener);
+    ipcRenderer.on("interleaf:library-changed", listener);
+    return () => ipcRenderer.removeListener("interleaf:library-changed", listener);
   },
 });

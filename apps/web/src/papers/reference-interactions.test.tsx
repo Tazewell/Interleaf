@@ -2,13 +2,13 @@
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { beforeEach, afterEach, expect, it, vi } from "vitest";
-import { api } from "@reader/api";
+import { api } from "@interleaf/api";
 import { PaperDetail } from "./PaperDetail";
 import { TrashView } from "../TrashView";
 import { useReaderStore } from "../store";
 import { paper } from "./fixtures";
 import { MergeDialog } from "./MergeDialog";
-vi.mock("@reader/api", () => ({
+vi.mock("@interleaf/api", () => ({
   api: {
     snapshotStatus: vi.fn(async () => ({ available: false })),
     documents: vi.fn(async () => []),

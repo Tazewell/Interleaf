@@ -2,7 +2,7 @@
 import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { expect, it, vi } from "vitest";
-import type { Processing } from "@reader/core";
+import type { Processing } from "@interleaf/core";
 import { TranslationJobStatus } from "./TranslationJobStatus";
 
 it.each([

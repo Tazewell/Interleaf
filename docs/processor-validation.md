@@ -10,7 +10,7 @@ The desktop import flow now starts the worker automatically for PDFs. The UI exp
 
 Weights: `bu44er/PP-DocLayoutV3-FP16-ONNX`, revision `58dfa00ba1135e027817cbd5802f1f0df62aa5c0`, file `PP-DocLayoutV3-fp16.onnx`, 67,372,587 bytes (about 67 MB / 64.3 MiB). SHA256: `8bb693ed3b5dcc1cf926b15d89dfe6abf62bc11cdd0afd33c8ffe039db6f8209`. It is a byte-identical mirror of [`stefanj0/PP-DocLayoutV3-FP16-ONNX`](https://huggingface.co/stefanj0/PP-DocLayoutV3-FP16-ONNX) at `ca5155572513b7832d297255a1f5cab0ff4b0202`, an FP16 export of [`PaddlePaddle/PP-DocLayoutV3_safetensors`](https://huggingface.co/PaddlePaddle/PP-DocLayoutV3_safetensors) without the mask head; box decoding and reading-order postprocessing stay in FP32. The mirror keeps the file available if the source repository disappears. Weights and generated user documents are not committed. Build downloads are checked before publication; partial downloads never become usable models. Runtime verifies the bundled file and fails locally if it is missing or corrupt, without downloading a replacement. Old per-library caches are left untouched.
 
-I/O differs from the official paddle2onnx export: the output is `det` (`[300,7]`), boxes are in the 800×800 input space, and `scale_factor` is passed as `[1,1]`. `detectRegions` owns this contract. Set `READER_TEST_LAYOUT_MODEL` to a downloaded copy to run the real-model coordinate test.
+I/O differs from the official paddle2onnx export: the output is `det` (`[300,7]`), boxes are in the 800×800 input space, and `scale_factor` is passed as `[1,1]`. `detectRegions` owns this contract. Set `INTERLEAF_TEST_LAYOUT_MODEL` to a downloaded copy to run the real-model coordinate test.
 
 The FP16 model replaced the official FP32 [`PaddlePaddle/PP-DocLayoutV3_onnx`](https://huggingface.co/PaddlePaddle/PP-DocLayoutV3_onnx) (revision `46bbdf1`, 130,502,049 bytes) on 2026-10-08. On 72 pages from four English papers with ONNX Runtime CPU: 1434 regions from each model, 1431 matched at IoU ≥ 0.5 with mean IoU 0.991, no label changes, 99.7% pairwise reading-order agreement, unchanged per-page latency (about 1.1 s), and peak inference RSS of 0.77 GB instead of 1.24 GB. The remaining differences were regions at the 0.5 confidence threshold. On the Oze paper the full worker produced the same 17 image blocks on the same pages and the same block count as the FP32 run. Scanned, CJK and vertical-text documents were not compared.
 
@@ -19,10 +19,10 @@ Sources: [mirror model card](https://huggingface.co/bu44er/PP-DocLayoutV3-FP16-O
 ## Reproduce
 
 ```sh
-pnpm --filter @reader/processor build
+pnpm --filter @interleaf/processor build
 node apps/processor/dist/main.mjs \
   --input 'docs/66_VLDB25- Oze_ Decentralized Graph-based Concurrency Control for Long-running Update Transactions.pdf' \
-  --output .reader/layout-check/oze \
+  --output .interleaf/layout-check/oze \
   --debug
 ```
 
@@ -32,10 +32,10 @@ Opt-in real Codex test (uses the existing CLI login and subscription):
 
 ```sh
 cd apps/server
-READER_TEST_CODEX=1 go test ./internal/reader -run '^TestLiveCodex$' -v -count=1
+INTERLEAF_TEST_CODEX=1 go test ./internal/interleaf -run '^TestLiveCodex$' -v -count=1
 ```
 
-The default automated test suite skips this call. To additionally test a paper image, set `READER_TEST_IMAGE` to its absolute PNG path and optionally `READER_TEST_OUTPUT` to a Markdown destination. The test runs in a fresh temporary working directory, disables shell tools and avoids user/project instruction configuration. It uses the CLI's authentication; Interleaf does not inspect credentials.
+The default automated test suite skips this call. To additionally test a paper image, set `INTERLEAF_TEST_IMAGE` to its absolute PNG path and optionally `INTERLEAF_TEST_OUTPUT` to a Markdown destination. The test runs in a fresh temporary working directory, disables shell tools and avoids user/project instruction configuration. It uses the CLI's authentication; Interleaf does not inspect credentials.
 
 ## Bundled-model validation on 2026-10-12
 
@@ -43,7 +43,7 @@ On the development Apple Silicon Mac, `pnpm build` fetched the pinned weights in
 
 The packaged worker processed the two-page original `reading-notes.pdf` sample in a fresh temporary directory, with Node `fetch` and TCP connections disabled and without a model-path override or a library model cache. It produced 18 layout blocks, per-page detections, extracted text, `paper.md` and a completed `manifest.json`. The check also verified the bundled license/provenance files, application signature, Go sidecar, SQLite initialization, loopback binding, API authentication and web resources. This establishes offline first use for the tested sample and macOS runtime, not general document accuracy or installed GUI behavior.
 
-Type checking and the full build passed. The initial parallel test run had four failures in existing timing-sensitive tests (three test timeouts and one asynchronous rendering wait); the complete serial rerun with `pnpm test --maxWorkers=1` passed Go tests and 566 Vitest tests, with three skips. `READER_TEST_LAYOUT_MODEL` pointed at the newly bundled model, so the real-model coordinate test ran in both full-suite runs. Test timeouts and application behavior outside model distribution were not changed.
+Type checking and the full build passed. The initial parallel test run had four failures in existing timing-sensitive tests (three test timeouts and one asynchronous rendering wait); the complete serial rerun with `pnpm test --maxWorkers=1` passed Go tests and 566 Vitest tests, with three skips. `INTERLEAF_TEST_LAYOUT_MODEL` pointed at the newly bundled model, so the real-model coordinate test ran in both full-suite runs. Test timeouts and application behavior outside model distribution were not changed.
 
 The local v0.5.1 validation artifacts measured 203,893,014 bytes (194.45 MiB) for the DMG and 248,945,874 bytes (237.41 MiB) for the update ZIP. These are total artifact sizes, not a measured increase over an equivalent unbundled build. Windows packaging and installation/GUI acceptance remain unverified for this change; the shared packaging smoke will run on the Windows release runner.
 

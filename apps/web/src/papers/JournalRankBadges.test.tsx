@@ -2,10 +2,10 @@
 import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { expect, it, vi } from "vitest";
-import { api } from "@reader/api";
+import { api } from "@interleaf/api";
 import { JournalRankBadges } from "./JournalRankBadges";
 
-vi.mock("@reader/api", () => ({ api: { documentJournalRank: vi.fn() } }));
+vi.mock("@interleaf/api", () => ({ api: { documentJournalRank: vi.fn() } }));
 
 it("shows every selected subject and omits unselected indicators", async () => {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);

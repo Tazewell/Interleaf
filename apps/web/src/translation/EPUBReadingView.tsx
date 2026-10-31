@@ -15,12 +15,12 @@ import type {
   ReaderAdapter,
   ReaderSelection,
   Processing,
-} from "@reader/core";
-import { api, publicationURL } from "@reader/api";
-import { Tabs, TabsList, TabsTrigger } from "@reader/ui/components/tabs";
-import { Button } from "@reader/ui/components/button";
+} from "@interleaf/core";
+import { api, publicationURL } from "@interleaf/api";
+import { Tabs, TabsList, TabsTrigger } from "@interleaf/ui/components/tabs";
+import { Button } from "@interleaf/ui/components/button";
 import { toast } from "sonner";
-import { ReaderView } from "../ReaderView";
+import { InterleafView } from "../InterleafView";
 import { AssistanceControls } from "./AssistanceControls";
 import { TranslationPanes } from "./TranslationPanes";
 import { TranslationText } from "./TranslationText";
@@ -32,8 +32,8 @@ import {
 } from "./annotations";
 import { installTranslationSelectionHighlight } from "./selection-highlight";
 import { epubBlocksAt } from "./epub-links";
-import { isSelectionToolbar } from "../readers/selection-anchor";
-import { defaultTheme } from "@reader/core";
+import { isSelectionToolbar } from "../engines/selection-anchor";
+import { defaultTheme } from "@interleaf/core";
 import { translationFont } from "../appearance";
 import "./translation.css";
 
@@ -46,7 +46,7 @@ export function EPUBReadingView({
   onReady,
   toolbarHost,
   processing,
-}: ComponentProps<typeof ReaderView> & {
+}: ComponentProps<typeof InterleafView> & {
   toolbarHost?: HTMLElement | null;
   autoCenterHost?: HTMLElement | null;
   processing?: Processing;
@@ -353,7 +353,7 @@ export function EPUBReadingView({
         translationLabel="译文"
         source={
           <div className="translation-source">
-            <ReaderView
+            <InterleafView
               document={doc}
               theme={theme}
               annotations={annotations}

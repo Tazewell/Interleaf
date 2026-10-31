@@ -134,7 +134,7 @@ func TestEnvironmentAndLoopback(t *testing.T) {
 			}
 			cmd.Env = append(cmd.Env, entry)
 		}
-		cmd.Env = append(cmd.Env, "READER_PROBE_TEST="+test.target, "HTTP_PROXY="+proxy.URL, "HTTPS_PROXY="+proxy.URL, "NO_PROXY=localhost,127.0.0.1,::1")
+		cmd.Env = append(cmd.Env, "INTERLEAF_PROBE_TEST="+test.target, "HTTP_PROXY="+proxy.URL, "HTTPS_PROXY="+proxy.URL, "NO_PROXY=localhost,127.0.0.1,::1")
 		output, err := cmd.Output()
 		if err != nil {
 			t.Fatal(err)
@@ -150,7 +150,7 @@ func TestEnvironmentAndLoopback(t *testing.T) {
 }
 
 func TestProbeChild(t *testing.T) {
-	target := os.Getenv("READER_PROBE_TEST")
+	target := os.Getenv("INTERLEAF_PROBE_TEST")
 	if target == "" {
 		return
 	}

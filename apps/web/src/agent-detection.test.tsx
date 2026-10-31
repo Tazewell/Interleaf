@@ -2,11 +2,11 @@
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import { api } from "@reader/api";
-import type { NativeAIConfig, NativeAICheck } from "@reader/core";
+import { api } from "@interleaf/api";
+import type { NativeAIConfig, NativeAICheck } from "@interleaf/core";
 import { TaskModels } from "./TaskModels";
 import { useReaderStore } from "./store";
-vi.mock("@reader/api", () => ({
+vi.mock("@interleaf/api", () => ({
   api: {
     agentModels: vi.fn(),
     aiConfig: vi.fn(),

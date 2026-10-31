@@ -1,11 +1,11 @@
-import { api, chat, type ChatStreamEvent } from "@reader/api";
+import { api, chat, type ChatStreamEvent } from "@interleaf/api";
 import type {
   ChatRun,
   DocumentLocation,
   ImageAttachment,
   Message,
   SourceReference,
-} from "@reader/core";
+} from "@interleaf/core";
 import { refreshAIConfig } from "../store";
 export type ChatInput = {
   /** Stable identity of the question across explicit regeneration attempts. */

@@ -1,15 +1,15 @@
 import { useEffect, useState } from "react";
 import { FolderOpen, CircleNotch as LoaderCircle } from "@phosphor-icons/react";
-import { Button } from "@reader/ui/components/button";
+import { Button } from "@interleaf/ui/components/button";
 import {
   Dialog,
   DialogContent,
   DialogTitle,
   DialogDescription,
-} from "@reader/ui/components/dialog";
+} from "@interleaf/ui/components/dialog";
 
 export function LibraryLocationSettings({ open }: { open: boolean }) {
-  const desktop = window.readerDesktop;
+  const desktop = window.interleafDesktop;
   const [directory, setDirectory] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");

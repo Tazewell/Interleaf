@@ -29,7 +29,7 @@ vi.mock("electron", () => ({
 import { startDiagnosticService } from "./diagnostic-service";
 
 it("keeps native export usable after failure and rejects events from other frames", async () => {
-  mocks.directory = mkdtempSync(join(tmpdir(), "reader-native-diagnostics-"));
+  mocks.directory = mkdtempSync(join(tmpdir(), "interleaf-native-diagnostics-"));
   const originalWarn = console.warn,
     originalError = console.error;
   const originalListeners = process.listeners("uncaughtExceptionMonitor");
@@ -123,7 +123,7 @@ it("keeps native export usable after failure and rejects events from other frame
 });
 
 it("exports only the active library's failure files, including after startup fails", async () => {
-  mocks.directory = mkdtempSync(join(tmpdir(), "reader-active-diagnostics-"));
+  mocks.directory = mkdtempSync(join(tmpdir(), "interleaf-active-diagnostics-"));
   const originalWarn = console.warn,
     originalError = console.error;
   const listeners = process.listeners("uncaughtExceptionMonitor");

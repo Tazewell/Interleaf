@@ -13,7 +13,7 @@ it("uses the desktop bridge when browser clipboard permission is denied", async 
     .mockRejectedValue(new Error("Write permission denied"));
   const writeClipboardText = vi.fn().mockResolvedValue(undefined);
   vi.stubGlobal("navigator", { clipboard: { writeText } });
-  vi.stubGlobal("window", { readerDesktop: { writeClipboardText } });
+  vi.stubGlobal("window", { interleafDesktop: { writeClipboardText } });
   expect(await copyText("回答原文")).toBe(true);
   expect(writeClipboardText).toHaveBeenCalledWith("回答原文");
   expect(writeText).not.toHaveBeenCalled();
@@ -46,7 +46,7 @@ it("falls back to selection copy when the clipboard API is blocked", async () =>
     expect(await copyText("Ou2025SERL", "已复制引用键")).toBe(true);
     expect(document.execCommand).toHaveBeenCalledWith("copy");
     expect(toast.success).toHaveBeenCalledWith("已复制引用键", {
-      id: "reader-clipboard",
+      id: "interleaf-clipboard",
     });
     expect(document.querySelector("textarea")).toBeNull();
   } finally {
@@ -60,7 +60,7 @@ it("falls through to the browser clipboard when the desktop bridge rejects", asy
   const writeClipboardText = vi.fn().mockRejectedValue(new Error("IPC down"));
   const writeText = vi.fn().mockResolvedValue(undefined);
   vi.stubGlobal("navigator", { clipboard: { writeText } });
-  vi.stubGlobal("window", { readerDesktop: { writeClipboardText } });
+  vi.stubGlobal("window", { interleafDesktop: { writeClipboardText } });
   expect(await copyText("引用键")).toBe(true);
   expect(writeText).toHaveBeenCalledWith("引用键");
   expect(toast.error).not.toHaveBeenCalled();
@@ -72,14 +72,14 @@ it("confirms successful copies and writes again when the same passage is clicked
   await copyText("原文", "已复制");
   expect(writeText).toHaveBeenCalledTimes(2);
   expect(toast.success).toHaveBeenLastCalledWith("已复制", {
-    id: "reader-clipboard",
+    id: "interleaf-clipboard",
   });
 });
 it("copies figures through the desktop bridge", async () => {
   const write = vi.fn();
   const writeClipboardImage = vi.fn().mockResolvedValue(undefined);
   vi.stubGlobal("navigator", { clipboard: { write } });
-  vi.stubGlobal("window", { readerDesktop: { writeClipboardImage } });
+  vi.stubGlobal("window", { interleafDesktop: { writeClipboardImage } });
   vi.stubGlobal(
     "fetch",
     vi.fn().mockResolvedValue(new Response(new Uint8Array([137, 80]))),
@@ -91,12 +91,12 @@ it("copies figures through the desktop bridge", async () => {
   );
   expect(write).not.toHaveBeenCalled();
   expect(toast.success).toHaveBeenCalledWith("已复制图片", {
-    id: "reader-clipboard",
+    id: "interleaf-clipboard",
   });
 });
 it("reports a failed figure fetch in the desktop app", async () => {
   const writeClipboardImage = vi.fn();
-  vi.stubGlobal("window", { readerDesktop: { writeClipboardImage } });
+  vi.stubGlobal("window", { interleafDesktop: { writeClipboardImage } });
   vi.stubGlobal(
     "fetch",
     vi.fn().mockResolvedValue(new Response(null, { status: 404 })),
@@ -104,6 +104,6 @@ it("reports a failed figure fetch in the desktop app", async () => {
   await copyImage("/pub/t/doc/assets/fig.png", "");
   expect(writeClipboardImage).not.toHaveBeenCalled();
   expect(toast.error).toHaveBeenCalledWith("复制图片失败", {
-    id: "reader-clipboard",
+    id: "interleaf-clipboard",
   });
 });

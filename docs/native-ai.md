@@ -1,6 +1,6 @@
 # 内置 AI
 
-Interleaf 的 Go 后端直接连接用户设置的 OpenAI Chat Completions 或 Anthropic Messages 兼容 API，管理原文工具、模型循环、会话和任务。无需安装 Codex、Claude Code、Kimi 或 Pi。普通 `reader` 命令行和本地 PDF Node 处理器继续保留。
+Interleaf 的 Go 后端直接连接用户设置的 OpenAI Chat Completions 或 Anthropic Messages 兼容 API，管理原文工具、模型循环、会话和任务。无需安装 Codex、Claude Code、Kimi 或 Pi。普通 `interleaf` 命令行和本地 PDF Node 处理器继续保留。
 
 ## 配置与迁移
 

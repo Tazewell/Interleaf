@@ -1,4 +1,4 @@
-import { figureTarget } from "../readers/figure-references";
+import { figureTarget } from "../engines/figure-references";
 import {
   useEffect,
   useLayoutEffect,
@@ -24,21 +24,21 @@ import type {
   SearchResult,
   TOCItem,
   TranslationBlock,
-} from "@reader/core";
-import { defaultTheme, isPDFPageDecoration } from "@reader/core";
-import { api } from "@reader/api";
-import { Button } from "@reader/ui/components/button";
-import { Tabs, TabsList, TabsTrigger } from "@reader/ui/components/tabs";
+} from "@interleaf/core";
+import { defaultTheme, isPDFPageDecoration } from "@interleaf/core";
+import { api } from "@interleaf/api";
+import { Button } from "@interleaf/ui/components/button";
+import { Tabs, TabsList, TabsTrigger } from "@interleaf/ui/components/tabs";
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
-} from "@reader/ui/components/tooltip";
-import { Popover, PopoverContent } from "@reader/ui/components/popover";
+} from "@interleaf/ui/components/tooltip";
+import { Popover, PopoverContent } from "@interleaf/ui/components/popover";
 import { toast } from "sonner";
-import { ReaderView } from "../ReaderView";
-import { overlap, ReadingSync } from "../readers/pdf-reading";
-import { animatePDFScroll } from "../readers/pdf-scroll";
+import { InterleafView } from "../InterleafView";
+import { overlap, ReadingSync } from "../engines/pdf-reading";
+import { animatePDFScroll } from "../engines/pdf-scroll";
 import { TranslationPanes } from "./TranslationPanes";
 import { formulaNumbers } from "./formulaNumbers";
 import { TranslationText } from "./TranslationText";
@@ -48,9 +48,9 @@ import { useSentenceMarks } from "./useSentenceMarks";
 import { translatedSelection as captureTranslationSelection } from "./selection";
 import { installTranslationSelectionHighlight } from "./selection-highlight";
 import { translationFont } from "../appearance";
-import { selectSentence } from "../readers/sentence-selection";
-import { installCitationHover } from "../readers/citation-hover";
-import { numberedReference } from "../readers/pdf-citations";
+import { selectSentence } from "../engines/sentence-selection";
+import { installCitationHover } from "../engines/citation-hover";
+import { numberedReference } from "../engines/pdf-citations";
 import "./translation.css";
 
 import { AssistanceControls } from "./AssistanceControls";
@@ -897,7 +897,7 @@ export function PDFReadingView({
             onPointerDownCapture={() => input("source")}
             onKeyDownCapture={() => input("source")}
           >
-            <ReaderView
+            <InterleafView
               document={doc}
               theme={theme}
               annotations={annotations.filter(

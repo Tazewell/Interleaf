@@ -24,7 +24,7 @@ export function remarkResearchCitations({
           known.has(id)
             ? ({
                 type: "link",
-                url: `#reader-research?source=${id}`,
+                url: `#interleaf-research?source=${id}`,
                 children: [
                   { type: "text", value: `[${sourceIds.indexOf(id) + 1}]` },
                 ],

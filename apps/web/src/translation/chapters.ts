@@ -1,4 +1,4 @@
-import type { PDFBlock, TOCItem } from "@reader/core";
+import type { PDFBlock, TOCItem } from "@interleaf/core";
 
 export interface PageRange {
   fromPage: number;

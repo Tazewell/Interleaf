@@ -2,7 +2,7 @@
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import type { LinkPreview } from "@reader/core";
+import type { LinkPreview } from "@interleaf/core";
 import { constrainPreviewFrame, LinkPreviewPanel } from "./LinkPreviewPanel";
 
 let root: Root, host: HTMLDivElement;

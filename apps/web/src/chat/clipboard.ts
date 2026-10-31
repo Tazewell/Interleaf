@@ -17,7 +17,7 @@ function copySelection(text: string) {
   }
 }
 async function writeText(text: string) {
-  const bridge = window.readerDesktop?.writeClipboardText;
+  const bridge = window.interleafDesktop?.writeClipboardText;
   if (bridge) {
     try {
       await bridge(text);
@@ -40,23 +40,23 @@ export async function copyText(text: string, successMessage?: string) {
   try {
     await writeText(text);
     if (successMessage)
-      toast.success(successMessage, { id: "reader-clipboard" });
+      toast.success(successMessage, { id: "interleaf-clipboard" });
     return true;
   } catch {
-    toast.error("复制失败，请选择文字后复制。", { id: "reader-clipboard" });
+    toast.error("复制失败，请选择文字后复制。", { id: "interleaf-clipboard" });
     return false;
   }
 }
 export async function copyImage(url: string, text: string) {
   try {
-    if (window.readerDesktop?.writeClipboardImage) {
+    if (window.interleafDesktop?.writeClipboardImage) {
       const response = await fetch(url);
       if (!response.ok) throw new Error(response.statusText);
-      await window.readerDesktop.writeClipboardImage(
+      await window.interleafDesktop.writeClipboardImage(
         new Uint8Array(await response.arrayBuffer()),
         text,
       );
-      toast.success("已复制图片", { id: "reader-clipboard" });
+      toast.success("已复制图片", { id: "interleaf-clipboard" });
       return;
     }
     // Pass the blob as a promise so Safari keeps the click's user activation.
@@ -70,8 +70,8 @@ export async function copyImage(url: string, text: string) {
         ...(text && { "text/plain": new Blob([text], { type: "text/plain" }) }),
       }),
     ]);
-    toast.success("已复制图片", { id: "reader-clipboard" });
+    toast.success("已复制图片", { id: "interleaf-clipboard" });
   } catch {
-    toast.error("复制图片失败", { id: "reader-clipboard" });
+    toast.error("复制图片失败", { id: "interleaf-clipboard" });
   }
 }

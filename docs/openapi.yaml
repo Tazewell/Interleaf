@@ -1411,7 +1411,7 @@
               "parameters":
                 [
                   {
-                    "name": "X-Reader-Export-Capability",
+                    "name": "X-Interleaf-Export-Capability",
                     "in": "header",
                     "required": true,
                     "schema": { "type": "string" },
@@ -2844,7 +2844,7 @@
                     "schema": { "type": "string" },
                   },
                   {
-                    "name": "X-Reader-Undo-Session",
+                    "name": "X-Interleaf-Undo-Session",
                     "in": "header",
                     "required": true,
                     "schema":
@@ -2988,7 +2988,7 @@
               "parameters":
                 [
                   {
-                    "name": "X-Reader-Undo-Session",
+                    "name": "X-Interleaf-Undo-Session",
                     "in": "header",
                     "description": "Opt into per-window annotation undo history.",
                     "schema": { "type": "string", "maxLength": 128 },
@@ -3048,7 +3048,7 @@
               "parameters":
                 [
                   {
-                    "name": "X-Reader-Undo-Session",
+                    "name": "X-Interleaf-Undo-Session",
                     "in": "header",
                     "description": "Opt into per-window annotation undo history.",
                     "schema": { "type": "string", "maxLength": 128 },
@@ -3157,7 +3157,7 @@
               "parameters":
                 [
                   {
-                    "name": "X-Reader-Undo-Session",
+                    "name": "X-Interleaf-Undo-Session",
                     "in": "header",
                     "description": "Opt into per-window annotation undo history.",
                     "schema": { "type": "string", "maxLength": 128 },
@@ -3996,7 +3996,7 @@
                                       "html":
                                         {
                                           "type": "string",
-                                          "description": "Server sanitized reader-mode HTML; no publisher CSS",
+                                          "description": "Server sanitized interleaf-mode HTML; no publisher CSS",
                                         },
                                     },
                                 },

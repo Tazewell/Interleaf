@@ -6,7 +6,7 @@ import {
   defaultTheme,
   type Annotation,
   type ReaderSelection,
-} from "@reader/core";
+} from "@interleaf/core";
 import { copyText } from "./chat/clipboard";
 import { useSelectionClipboard } from "./useSelectionClipboard";
 vi.mock("./chat/clipboard", () => ({ copyText: vi.fn(async () => true) }));

@@ -1,5 +1,5 @@
 import { expect, it } from "vitest";
-import type { PDFBlock } from "@reader/core";
+import type { PDFBlock } from "@interleaf/core";
 import { formulaNumbers } from "./formulaNumbers";
 function block(
   id: string,

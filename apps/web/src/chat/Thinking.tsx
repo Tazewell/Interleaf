@@ -1,11 +1,11 @@
 import { useEffect, useState } from "react";
 import { CaretRight as ChevronRight } from "@phosphor-icons/react";
-import { Button } from "@reader/ui/components/button";
+import { Button } from "@interleaf/ui/components/button";
 import {
   Collapsible,
   CollapsibleTrigger,
   CollapsibleContent,
-} from "@reader/ui/components/collapsible";
+} from "@interleaf/ui/components/collapsible";
 
 export function Thinking({
   text,

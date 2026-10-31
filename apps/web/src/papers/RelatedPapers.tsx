@@ -1,14 +1,14 @@
 import { useState } from "react";
 import { FileText, Plus, X } from "@phosphor-icons/react";
-import type { Document } from "@reader/core";
-import { api } from "@reader/api";
-import { Button } from "@reader/ui/components/button";
-import { Input } from "@reader/ui/components/input";
+import type { Document } from "@interleaf/core";
+import { api } from "@interleaf/api";
+import { Button } from "@interleaf/ui/components/button";
+import { Input } from "@interleaf/ui/components/input";
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
-} from "@reader/ui/components/popover";
+} from "@interleaf/ui/components/popover";
 import { toast } from "sonner";
 import { refreshLibrary, useReaderStore } from "../store";
 import { paperYear, shortTitle } from "./format";

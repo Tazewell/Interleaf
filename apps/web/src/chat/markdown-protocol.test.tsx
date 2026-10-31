@@ -114,7 +114,7 @@ it.each(["", "ci", "cite", "filecite", "cite", "citeS999
   async (marker) => {
     await render("结论 " + marker, true);
     expect(host.textContent).not.toContain("");
-    expect(host.querySelector('a[href^="#reader-evidence?"]')).toBeNull();
+    expect(host.querySelector('a[href^="#interleaf-evidence?"]')).toBeNull();
   },
 );
 
@@ -122,20 +122,20 @@ it("shows readable citation labels in a stream and only links saved known source
   const content = "结论 citeS64S65，另见 [S64]。`citeS64`";
   for (const part of ["结论 citeS", "结论 citeS64", content])
     await render(part, true);
-  expect(host.querySelectorAll('a[href^="#reader-evidence?"]')).toHaveLength(0);
+  expect(host.querySelectorAll('a[href^="#interleaf-evidence?"]')).toHaveLength(0);
   expect(host.textContent).toContain("结论 [S64][S65]");
   const navigate = vi.fn();
   await act(async () =>
     root.render(
       <ChatCitationNavigation.Provider value={{ sourceIds: ["S64"], navigate }}>
         <MessageMarkdown
-          content={content + " [伪造](#reader-evidence?source=S999)"}
+          content={content + " [伪造](#interleaf-evidence?source=S999)"}
         />
       </ChatCitationNavigation.Provider>,
     ),
   );
   const links = host.querySelectorAll<HTMLAnchorElement>(
-    'a[href^="#reader-evidence?"]',
+    'a[href^="#interleaf-evidence?"]',
   );
   expect(links).toHaveLength(2);
   links[0].click();
@@ -159,7 +159,7 @@ it.each(["【S64】", "［S64］", "（S64、S65）", "(S64, S65)", "[S64; S65]"
       ),
     );
     const links = host.querySelectorAll<HTMLAnchorElement>(
-      'a[href^="#reader-evidence?"]',
+      'a[href^="#interleaf-evidence?"]',
     );
     expect(links).toHaveLength(1);
     links[0].click();

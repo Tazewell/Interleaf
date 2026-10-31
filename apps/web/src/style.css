@@ -769,7 +769,7 @@ kbd {
   display: flex;
   flex-direction: column;
 }
-.reader-toolbar {
+.interleaf-toolbar {
   height: 44px;
   flex-shrink: 0;
   display: grid;
@@ -780,31 +780,31 @@ kbd {
   border-bottom: 1px solid var(--line);
   background: var(--surface);
 }
-.reader-title-group {
+.interleaf-title-group {
   display: flex;
   align-items: center;
   gap: 6px;
   min-width: 0;
   overflow: hidden;
 }
-.reader-toolbar-center {
+.interleaf-toolbar-center {
   display: flex;
   align-items: center;
   justify-content: center;
   min-width: 0;
   max-width: 46vw;
 }
-.reader-toolbar-center > div {
+.interleaf-toolbar-center > div {
   display: flex;
   align-items: center;
   justify-content: center;
   min-width: 0;
   max-width: 100%;
 }
-.reader-toolbar-center > div:empty {
+.interleaf-toolbar-center > div:empty {
   display: none;
 }
-.reader-title {
+.interleaf-title {
   min-width: 0;
   max-width: 420px;
   overflow: hidden;
@@ -813,7 +813,7 @@ kbd {
   font-size: 12.5px;
   font-weight: 550;
 }
-.reader-toolbar .reader-title-group [data-slot="badge"] {
+.interleaf-toolbar .interleaf-title-group [data-slot="badge"] {
   height: 16px;
   padding: 0 5px;
   border-radius: 4px;
@@ -824,13 +824,13 @@ kbd {
   font-weight: 550;
   letter-spacing: 0.06em;
 }
-.reader-toolbar [data-slot="tabs-list"] {
+.interleaf-toolbar [data-slot="tabs-list"] {
   height: 28px;
   padding: 2px;
   border-radius: 6px;
   background: var(--rail-strong);
 }
-.reader-toolbar [data-slot="tabs-trigger"] {
+.interleaf-toolbar [data-slot="tabs-trigger"] {
   height: 24px;
   padding-inline: 10px;
   font-size: 12px;
@@ -867,7 +867,7 @@ kbd {
   min-width: 0;
   gap: 4px;
 }
-.reader-toolbar-center .translation-toolbar {
+.interleaf-toolbar-center .translation-toolbar {
   min-width: 0;
   max-width: 100%;
 }
@@ -985,11 +985,11 @@ kbd {
   font-size: 12px;
   font-weight: 500;
 }
-.reader-panels {
+.interleaf-panels {
   flex: 1;
   min-height: 0;
 }
-.reader-panels[data-toggling] > [data-slot="resizable-panel"] {
+.interleaf-panels[data-toggling] > [data-slot="resizable-panel"] {
   transition: flex-grow var(--motion-slow) var(--ease-out);
 }
 .sidebar-handle-closed {
@@ -997,7 +997,7 @@ kbd {
   pointer-events: none;
   opacity: 0;
 }
-.reader-sidebar,
+.interleaf-sidebar,
 .assistant-sidebar {
   height: 100%;
   background: var(--background);
@@ -1005,13 +1005,13 @@ kbd {
     opacity var(--motion-base) var(--ease-out),
     transform var(--motion-slow) var(--ease-out);
 }
-.reader-sidebar {
+.interleaf-sidebar {
   min-width: 180px;
 }
 .assistant-sidebar {
   min-width: 250px;
 }
-.reader-sidebar[data-open="false"] {
+.interleaf-sidebar[data-open="false"] {
   opacity: 0;
   transform: translateX(-12px);
 }
@@ -1208,7 +1208,7 @@ kbd {
   font-size: 10px;
   color: var(--muted-foreground);
 }
-.reader-block-search-hit {
+.interleaf-block-search-hit {
   position: absolute;
   pointer-events: none;
   z-index: 1;
@@ -1218,46 +1218,46 @@ kbd {
   height: 100%;
   position: relative;
 }
-.reader-stage {
+.interleaf-stage {
   position: absolute;
   inset: 0;
   background: #f6f5f2;
 }
-.reader-stage[data-theme="dark"],
+.interleaf-stage[data-theme="dark"],
 .pdf-reading[data-theme="dark"] {
   --pdf-dark-paper: #242424;
   --pdf-dark-ink: #dedede;
 }
-.reader-stage[data-theme="dark"][data-dark-contrast="high"],
+.interleaf-stage[data-theme="dark"][data-dark-contrast="high"],
 .pdf-reading[data-theme="dark"][data-dark-contrast="high"] {
   --pdf-dark-paper: #000;
   --pdf-dark-ink: #fff;
 }
-.reader-stage[data-theme="dark"] {
+.interleaf-stage[data-theme="dark"] {
   background: var(--pdf-dark-paper);
 }
-.reader-stage[data-theme="sepia"] {
+.interleaf-stage[data-theme="sepia"] {
   background: #eeede7;
 }
-.reader-host {
+.interleaf-host {
   position: absolute;
   inset: 0;
 }
-.reader-engine {
+.interleaf-engine {
   position: absolute;
   inset: 0;
   overflow: hidden;
 }
 /* Readium positions reflowable frames but leaves their viewport size to us.
    Fixed-layout frames are nested in wrappers and keep Readium's own sizing. */
-.reader-engine > .readium-navigator-iframe {
+.interleaf-engine > .readium-navigator-iframe {
   top: 0;
   left: 0;
   width: 100%;
   height: 100%;
   border: 0;
 }
-.reader-engine.pdf-container {
+.interleaf-engine.pdf-container {
   /* PDF.js assigns increasing z-index values to native annotations. Keep
      those layers inside the reader, below app dialogs and popovers. */
   isolation: isolate;
@@ -1265,7 +1265,7 @@ kbd {
   scrollbar-width: none;
   scrollbar-gutter: auto;
 }
-.reader-engine.pdf-container::-webkit-scrollbar {
+.interleaf-engine.pdf-container::-webkit-scrollbar {
   display: none;
   width: 0;
   height: 0;
@@ -1313,7 +1313,7 @@ kbd {
   padding-inline: var(--reading-inset-x);
   padding-top: var(--reading-inset-y);
 }
-.reader-annotation {
+.interleaf-annotation {
   position: absolute;
   inset: 0;
   opacity: 0.32;
@@ -1322,24 +1322,24 @@ kbd {
   z-index: 7;
   mix-blend-mode: multiply;
 }
-.reader-stage[data-theme="dark"] [class~="reader-annotation"] {
+.interleaf-stage[data-theme="dark"] [class~="interleaf-annotation"] {
   mix-blend-mode: screen;
 }
-.reader-highlight {
+.interleaf-highlight {
   position: absolute;
   background: var(--annotation-color);
 }
-.reader-highlight[data-kind="underline"] {
+.interleaf-highlight[data-kind="underline"] {
   background: transparent;
   border-bottom: 2px solid var(--annotation-color);
 }
-.reader-annotation:has(.reader-highlight[data-hovered]) {
+.interleaf-annotation:has(.interleaf-highlight[data-hovered]) {
   opacity: 0.48;
 }
-.reader-highlight[data-kind="underline"][data-hovered] {
+.interleaf-highlight[data-kind="underline"][data-hovered] {
   background: color-mix(in srgb, var(--annotation-color) 30%, transparent);
 }
-.reader-loading {
+.interleaf-loading {
   position: absolute;
   inset: 0;
   display: flex;
@@ -2198,7 +2198,7 @@ kbd {
   .library-sidebar {
     --sidebar-width: 210px;
   }
-  .reader-title {
+  .interleaf-title {
     max-width: 210px;
   }
   .toolbar-actions {
@@ -2224,20 +2224,20 @@ kbd {
   .library-footer > span:last-child {
     display: none;
   }
-  .reader-title {
+  .interleaf-title {
     max-width: 130px;
   }
-  .reader-title-group {
+  .interleaf-title-group {
     gap: 6px;
   }
-  .reader-toolbar {
+  .interleaf-toolbar {
     padding: 0 8px;
   }
   .toolbar-actions {
     gap: 0;
   }
-  .reader-title-group > svg,
-  .reader-title-group [data-slot="badge"] {
+  .interleaf-title-group > svg,
+  .interleaf-title-group [data-slot="badge"] {
     display: none;
   }
   .selection-bar {
@@ -2302,7 +2302,7 @@ kbd {
 .processing-progress[data-indeterminate] [data-slot="progress-indicator"] {
   width: 26%;
 }
-.reader-block-hover {
+.interleaf-block-hover {
   position: absolute;
   pointer-events: none;
   z-index: 6;
@@ -2311,7 +2311,7 @@ kbd {
   background: rgb(97 137 113 / 7%);
   box-shadow: 0 0 0 3px rgb(97 137 113 / 3%);
 }
-.reader-block-reference-flash {
+.interleaf-block-reference-flash {
   position: absolute;
   pointer-events: none;
   z-index: 6;
@@ -2319,7 +2319,7 @@ kbd {
   background: var(--primary);
   opacity: 0.3;
 }
-:root[data-theme="sepia"] .reader-block-reference-flash {
+:root[data-theme="sepia"] .interleaf-block-reference-flash {
   background: var(--brand);
 }
 @keyframes processing-light {
@@ -2604,15 +2604,15 @@ kbd {
 
 /* Native macOS traffic lights sit in the global navigation. Interactive
    controls must stay outside drag areas. */
-.app[data-platform="darwin"] :is(.reader-toolbar) {
+.app[data-platform="darwin"] :is(.interleaf-toolbar) {
   -webkit-app-region: drag;
 }
 .app[data-platform="darwin"]
-  :is(.reader-toolbar)
+  :is(.interleaf-toolbar)
   :is(button, input, a, select, textarea, [role="button"]) {
   -webkit-app-region: no-drag;
 }
-.app[data-platform="darwin"] .reader-toolbar {
+.app[data-platform="darwin"] .interleaf-toolbar {
   padding-left: 104px;
 }
 
@@ -4222,17 +4222,17 @@ textarea.paper-note-input {
 
 /* Navigation feedback is independent of the native selection and remains above
    page canvases and saved marks in every reading appearance. */
-.reader-location-highlight {
+.interleaf-location-highlight {
   position: absolute;
   inset: 0;
   pointer-events: none;
   z-index: 8;
 }
-.reader-location-highlight > div {
+.interleaf-location-highlight > div {
   background: rgb(0 90 255 / 24%);
   border-radius: 2px;
 }
-.pdf-container[data-theme="dark"] .reader-location-highlight > div {
+.pdf-container[data-theme="dark"] .interleaf-location-highlight > div {
   background: rgb(100 170 255 / 36%);
 }
 

@@ -3,7 +3,7 @@ import {
   type ReaderAdapter,
   type ReaderSelection,
   type SourceReference,
-} from "@reader/core";
+} from "@interleaf/core";
 import { contextReferences } from "../references";
 
 // Mirrors the server request limit. Explicit quotations are never shortened.

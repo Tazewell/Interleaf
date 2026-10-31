@@ -4,12 +4,12 @@ import {
   type ReactElement,
   type ComponentProps,
 } from "react";
-import type { Document, Processing } from "@reader/core";
-import { Button } from "@reader/ui/components/button";
+import type { Document, Processing } from "@interleaf/core";
+import { Button } from "@interleaf/ui/components/button";
 import {
   ToggleGroup,
   ToggleGroupItem,
-} from "@reader/ui/components/toggle-group";
+} from "@interleaf/ui/components/toggle-group";
 import { matchTagBoard } from "../library";
 import { filterPapers, paperTags } from "./model";
 import { useReaderStore } from "../store";
@@ -17,7 +17,7 @@ import {
   Popover,
   PopoverContent,
   PopoverTrigger,
-} from "@reader/ui/components/popover";
+} from "@interleaf/ui/components/popover";
 import { usePaperUI } from "./state";
 
 interface Props {

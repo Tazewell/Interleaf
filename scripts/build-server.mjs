@@ -3,7 +3,7 @@ import { mkdir } from "node:fs/promises";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
-const readerVersion = JSON.parse(
+const interleafVersion = JSON.parse(
   readFileSync(new URL("../package.json", import.meta.url), "utf8"),
 ).version;
 const commitResult = spawnSync("git", ["rev-parse", "HEAD"], {
@@ -20,13 +20,13 @@ const exe = platform === "windows" ? ".exe" : "";
 await mkdir(new URL("../apps/desktop/bin/", import.meta.url), {
   recursive: true,
 });
-// The app's sidecar and the `reader` command line that talks to it.
+// The app's sidecar and the `interleaf` command line that talks to it.
 for (const [name, ldflags] of [
   [
-    "reader-server",
-    `-X main.readerVersion=${readerVersion} -X main.buildCommit=${buildCommit}`,
+    "interleaf-server",
+    `-X main.interleafVersion=${interleafVersion} -X main.buildCommit=${buildCommit}`,
   ],
-  ["reader", `-X main.readerVersion=${readerVersion}`],
+  ["interleaf", `-X main.interleafVersion=${interleafVersion}`],
 ]) {
   const output = new URL(`../apps/desktop/bin/${name}${exe}`, import.meta.url);
   const result = spawnSync(

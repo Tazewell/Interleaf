@@ -1,5 +1,5 @@
 {
-  "name": "@reader/processor",
+  "name": "@interleaf/processor",
   "private": true,
   "type": "module",
   "scripts": {

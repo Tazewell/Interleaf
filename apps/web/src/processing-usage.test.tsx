@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { renderToStaticMarkup } from "react-dom/server";
 import { expect, it } from "vitest";
-import type { ProcessingUsage } from "@reader/core";
+import type { ProcessingUsage } from "@interleaf/core";
 import { UsageDetails, combineUsageReports } from "./ProcessingUsage";
 const total = {
   inputTokens: 10,

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import type { TranslationBlock } from "@reader/core";
-import { api } from "@reader/api";
+import type { TranslationBlock } from "@interleaf/core";
+import { api } from "@interleaf/api";
 export function useTranslations(documentId: string) {
   const [translations, setTranslations] = useState<TranslationBlock[]>([]);
   const [error, setError] = useState("");

@@ -1,18 +1,18 @@
 import { readFile, appendFile } from "node:fs/promises";
 import { afterAll, beforeAll, expect, it, vi } from "vitest";
-import { api, chat, configureAPI, type ChatStreamEvent } from "@reader/api";
+import { api, chat, configureAPI, type ChatStreamEvent } from "@interleaf/api";
 import { consumeChatStream } from "../../../../packages/api-client/src/chat-stream";
 import { ChatSession } from "./chat-session";
 // Explicit opt-in: local disposable backend, no credential files, no automatic model calls in pnpm test.
-const readyFile = process.env.READER_INTEGRATION_READY;
-const fixtureFile = process.env.READER_INTEGRATION_FIXTURES;
+const readyFile = process.env.INTERLEAF_INTEGRATION_READY;
+const fixtureFile = process.env.INTERLEAF_INTEGRATION_FIXTURES;
 async function report(value: Record<string, unknown>) {
   const line = JSON.stringify(value);
   console.log(line);
-  if (process.env.READER_INTEGRATION_OUTPUT)
-    await appendFile(process.env.READER_INTEGRATION_OUTPUT, line + "\n");
+  if (process.env.INTERLEAF_INTEGRATION_OUTPUT)
+    await appendFile(process.env.INTERLEAF_INTEGRATION_OUTPUT, line + "\n");
 }
-const provider = process.env.READER_INTEGRATION_PROVIDER || "codex";
+const provider = process.env.INTERLEAF_INTEGRATION_PROVIDER || "codex";
 beforeAll(async () => {
   if (!readyFile) return;
   const ready = JSON.parse(await readFile(readyFile, "utf8")) as {
@@ -195,12 +195,12 @@ it.skipIf(!readyFile)(
   180_000,
 );
 
-it.skipIf(!readyFile || !process.env.READER_INTEGRATION_IMAGE)(
+it.skipIf(!readyFile || !process.env.INTERLEAF_INTEGRATION_IMAGE)(
   "real image attachment uses the same SDK events and persistence",
   async () => {
     const capability = await api.checkNativeAI("vision");
     expect(capability.vision, capability.error).toBe(true);
-    const id = process.env.READER_INTEGRATION_IMAGE!;
+    const id = process.env.INTERLEAF_INTEGRATION_IMAGE!;
     const blocks = await api.blocks(id);
     const block = blocks.find((item) => item.id === "p1-b1")!;
     expect(block).toBeDefined();

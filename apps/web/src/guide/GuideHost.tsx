@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import { api } from "@reader/api";
-import type { GuidePreferences } from "@reader/core";
+import { api } from "@interleaf/api";
+import type { GuidePreferences } from "@interleaf/core";
 import { toast } from "sonner";
 import {
   GuideDialog,

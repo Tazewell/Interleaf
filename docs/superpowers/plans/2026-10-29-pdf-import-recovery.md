@@ -8,7 +8,7 @@
 
 **Tech Stack:** Go/SQLite/native API, React/TypeScript/Vitest.
 
-**Spec:** User bug report and three screenshots, 2026-10-29; current `AGENTS.md` and `docs/agent-streaming-contract.md` native contract. Read-only reproduction found the matching document in `D:/work/myreader/reader-merge/.reader`: missing configuration at import created twelve failed formula rows before the later valid connection save; text never ran, PDF metadata Title/Author are empty, lookup remains pending. Current saved model is text-capable and not vision-verified. No user secrets belong in reports or commits.
+**Spec:** User bug report and three screenshots, 2026-10-29; current `AGENTS.md` and `docs/agent-streaming-contract.md` native contract. Read-only reproduction found the matching document in `D:/work/myreader/interleaf-merge/.interleaf`: missing configuration at import created twelve failed formula rows before the later valid connection save; text never ran, PDF metadata Title/Author are empty, lookup remains pending. Current saved model is text-capable and not vision-verified. No user secrets belong in reports or commits.
 
 ## Global Constraints
 - Work only in `codex/pdf-import-recovery`, base `3a813bd83ec3ba4f8e02b99fdb0baa6142a27bd6`; preserve unrelated main changes.
@@ -24,7 +24,7 @@
 - Manual title/author/creators remain authoritative, and a failed lookup cannot starve all later documents.
 
 ### Task 1: Configuration waiting and text-only PDF translation
-Files: `apps/server/internal/reader/formula.go`, covering formula/native/processing tests; existing processing helpers only as necessary.
+Files: `apps/server/internal/interleaf/formula.go`, covering formula/native/processing tests; existing processing helpers only as necessary.
 - [x] Add processing regressions for missing configuration with text+formula, configuration-save wake and text-only API with formula originals; retain existing successful-content and explicit-retry coverage.
 - [x] Run focused Go tests and confirm the expected behavior failures before implementing.
 - [x] Apply the waiting/capability fix, keeping provider completion, source validation, cancellation and no-fallback rules.
@@ -37,7 +37,7 @@ Files: `apps/web/src/translation/TranslationText.tsx`, `PDFReadingView.tsx`, `EP
 - [x] Run relevant renderer tests/typecheck and commit independently.
 
 ### Task 3: Metadata lookup lifecycle
-Files: `apps/server/internal/reader/metadata_lookup.go`, `metadata_lookup_test.go` and related lifecycle tests.
+Files: `apps/server/internal/interleaf/metadata_lookup.go`, `metadata_lookup_test.go` and related lifecycle tests.
 - [x] Reproduce metadataWorker invalid HTTP response/not-found leaving pending, with a controlled HTTP endpoint and temporary parsed document; cover cancellation and later-document progress.
 - [x] Observe RED; persist the terminal state while the document task still owns the operation, then release it, preserving user edits and cancellation.
 - [x] Run metadata/paper/library/lifecycle checks and commit independently.

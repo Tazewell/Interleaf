@@ -6,9 +6,9 @@ import {
   CircleNotch,
 } from "@phosphor-icons/react";
 import { ProviderGlyph } from "../ProviderIdentity";
-import type { Message } from "@reader/core";
-import { Button } from "@reader/ui/components/button";
-import { ScrollArea } from "@reader/ui/components/scroll-area";
+import type { Message } from "@interleaf/core";
+import { Button } from "@interleaf/ui/components/button";
+import { ScrollArea } from "@interleaf/ui/components/scroll-area";
 import {
   ChatSession,
   chatRetryAction,

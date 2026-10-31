@@ -2,9 +2,9 @@
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { beforeEach, afterEach, expect, it, vi } from "vitest";
-import { api } from "@reader/api";
+import { api } from "@interleaf/api";
 import { useAnnotationUndo } from "./useAnnotationUndo";
-vi.mock("@reader/api", () => ({ api: { undoAnnotation: vi.fn() } }));
+vi.mock("@interleaf/api", () => ({ api: { undoAnnotation: vi.fn() } }));
 vi.mock("sonner", () => ({ toast: { error: vi.fn() } }));
 let root: Root, host: HTMLDivElement;
 const changed = vi.fn();

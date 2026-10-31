@@ -7,7 +7,7 @@ import { fileURLToPath } from "node:url";
 import model from "./model.json" with { type: "json" };
 
 const root = dirname(fileURLToPath(import.meta.url));
-const temporary = await mkdtemp(join(tmpdir(), "reader-model-build-"));
+const temporary = await mkdtemp(join(tmpdir(), "interleaf-model-build-"));
 try {
   const prepare = join(temporary, "prepare-model.mjs");
   await build({

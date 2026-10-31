@@ -1,5 +1,5 @@
 import { useEffect, useId, useState } from "react";
-import { api } from "@reader/api";
+import { api } from "@interleaf/api";
 import {
   nativeConfigUpdate,
   type NativeAIConfig,
@@ -7,16 +7,16 @@ import {
   type AgentModel,
   type NativeAICheck,
   type ReasoningEffort,
-} from "@reader/core";
-import { Input } from "@reader/ui/components/input";
-import { Button } from "@reader/ui/components/button";
+} from "@interleaf/core";
+import { Input } from "@interleaf/ui/components/input";
+import { Button } from "@interleaf/ui/components/button";
 import {
   Select,
   SelectTrigger,
   SelectValue,
   SelectContent,
   SelectItem,
-} from "@reader/ui/components/select";
+} from "@interleaf/ui/components/select";
 import { toast } from "sonner";
 import {
   catalogRevision,

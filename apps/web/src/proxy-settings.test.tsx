@@ -2,7 +2,7 @@
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import type { ProxySettingsState, ProxyCheckResult } from "@reader/core";
+import type { ProxySettingsState, ProxyCheckResult } from "@interleaf/core";
 import { ProxySettings } from "./ProxySettings";
 
 let host: HTMLDivElement;
@@ -75,7 +75,7 @@ beforeEach(() => {
     elapsedMs: 18,
   });
   restart.mockResolvedValue(undefined);
-  window.readerDesktop = {
+  window.interleafDesktop = {
     platform: "win32",
     proxySettings: get,
     saveProxySettings: save,
@@ -100,7 +100,7 @@ beforeEach(() => {
 afterEach(async () => {
   await act(async () => root.unmount());
   host.remove();
-  delete window.readerDesktop;
+  delete window.interleafDesktop;
   vi.unstubAllGlobals();
 });
 
@@ -256,7 +256,7 @@ it("shows system-reading warnings in settings and is absent in the web app", asy
   };
   await render();
   expect(host.textContent).toContain("无法读取系统代理");
-  delete window.readerDesktop;
+  delete window.interleafDesktop;
   await render();
   expect(host.textContent).toBe("");
 });

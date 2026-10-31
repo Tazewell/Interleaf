@@ -25,7 +25,7 @@ HERE = Path(__file__).resolve().parent
 TARGETS = json.loads((HERE / "targets.json").read_text())
 STATE = {"calls": 0, "mode": "normal", "errors": [], "requests": []}
 ENTERED, RELEASE = threading.Event(), threading.Event()
-KEY, MODEL = "reader-acceptance-test-key", "reader-acceptance-model"
+KEY, MODEL = "interleaf-acceptance-test-key", "interleaf-acceptance-model"
 
 
 class Mock(http.server.BaseHTTPRequestHandler):
@@ -99,11 +99,11 @@ def wait_for(check, seconds=90):
 
 mock = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Mock)
 threading.Thread(target=mock.serve_forever, daemon=True).start()
-run = Path(tempfile.mkdtemp(prefix="reader-bilingual-acceptance-"))
+run = Path(tempfile.mkdtemp(prefix="interleaf-bilingual-acceptance-"))
 library = run / "library"
-env = dict(os.environ, READER_NODE=shutil.which("node"), READER_PROCESSOR=str(ROOT / "apps/processor/dist/main.mjs"))
+env = dict(os.environ, INTERLEAF_NODE=shutil.which("node"), INTERLEAF_PROCESSOR=str(ROOT / "apps/processor/dist/main.mjs"))
 log = open(OUT / "server.log", "wb")
-server = subprocess.Popen([str(OUT / "reader-server"), "--data", str(library), "--port", "0", "--connector=false"], cwd=run, env=env, stdout=log, stderr=log)
+server = subprocess.Popen([str(OUT / "interleaf-server"), "--data", str(library), "--port", "0", "--connector=false"], cwd=run, env=env, stdout=log, stderr=log)
 results = {"implementationCommit": subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip(), "run": str(run), "library": str(library), "exports": [], "checks": []}
 (OUT / "result.json").write_text(json.dumps(results, ensure_ascii=False, indent=2))
 
@@ -147,14 +147,14 @@ try:
 
     def seed(doc):
         # Deliberately unrelated reading data verifies a non-empty preservation case.
-        with sqlite3.connect(library / "reader.sqlite") as db:
+        with sqlite3.connect(library / "interleaf.sqlite") as db:
             db.execute("INSERT INTO translations(document_id,block_id,source_hash,status,body) VALUES(?,?,?,?,?)", (doc["id"], "acceptance-reading", "unrelated-reading-source", "complete", json.dumps({"blockId": "acceptance-reading", "sourceHash": "unrelated-reading-source", "status": "complete", "sentences": [{"source": "Existing reading text", "target": "已存在的阅读译文"}]})))
             annotation = {"id": "acceptance-" + doc["id"], "documentId": doc["id"], "kind": "note", "note": "已存在的批注", "location": {"type": "pdf", "page": 1}, "quote": "", "color": "#facc15", "createdAt": "2026-10-22T00:00:00Z", "tags": []}
             db.execute("INSERT INTO annotations VALUES(?,?,?)", (annotation["id"], doc["id"], json.dumps(annotation)))
             db.execute("INSERT INTO document_notes VALUES(?,?,?)", (doc["id"], "已存在的文献笔记", "2026-10-22T00:00:00Z"))
 
     def snapshot(doc):
-        with sqlite3.connect(library / "reader.sqlite") as db:
+        with sqlite3.connect(library / "interleaf.sqlite") as db:
             rows = {table: db.execute(f"SELECT * FROM {table} WHERE document_id=? ORDER BY rowid", (doc["id"],)).fetchall() for table in ["translations", "translation_previous", "annotations", "document_notes"]}
             paper = db.execute("SELECT id,primary_document_id,citation_key FROM paper_items WHERE id=?", (doc["paperId"],)).fetchone()
         return {"sha256": hashlib.sha256((library / "papers" / (doc["id"] + ".pdf")).read_bytes()).hexdigest(), "rows": rows, "paper": paper}
@@ -181,15 +181,15 @@ try:
 
     def native(doc, job, mode, output, cancel=False):
         p = {"helper": str(OUT / "native-save.mjs"), "url": discovery["url"], "token": discovery["token"], "library": str(library), "documentId": doc["id"], "jobId": job["id"], "mode": mode, "path": str(output), "cancel": cancel}
-        result = subprocess.check_output([env["READER_NODE"], str(HERE / "native-save.mjs")], input=json.dumps(p).encode(), cwd=run, env=env, timeout=30)
+        result = subprocess.check_output([env["INTERLEAF_NODE"], str(HERE / "native-save.mjs")], input=json.dumps(p).encode(), cwd=run, env=env, timeout=30)
         return json.loads(result)
 
-    paper = imported("reader-synthetic-paper.pdf")
+    paper = imported("interleaf-synthetic-paper.pdf")
     seed(paper)
     results["previewDocumentId"] = paper["id"]
     baseline = snapshot(paper)
 
-    geometry = imported("reader-geometry.pdf")
+    geometry = imported("interleaf-geometry.pdf")
     for name, doc in [("paper", paper), ("geometry", geometry)]:
         for mode in ["side-by-side", "alternating"]:
             before = snapshot(doc)
@@ -211,7 +211,7 @@ try:
             assert job["status"] == "ready", job
             data = api("GET", path + "/file")
             assert data.startswith(b"%PDF-")
-            output = OUT / f"reader-{name}-{mode}.pdf"
+            output = OUT / f"interleaf-{name}-{mode}.pdf"
             cancelled_path = OUT / "cancelled-picker.pdf"
             native(doc, job, mode, cancelled_path, cancel=True)
             assert not cancelled_path.exists()
@@ -235,7 +235,7 @@ try:
                 for literal in ["{}", "{name}", "{value}", '{"a":{"b":1}}', "打开 { 关闭 } 未闭合 {。"]:
                     assert literal in target, ("completed API target literal braces changed", literal, target)
                 results["checks"].append(f"{mode}: literal placeholders, nested JSON and unmatched braces survive real prepare/completed API/native CLI; searchable output checked by inspect.mjs")
-            results["exports"].append({"name": name, "mode": mode, "file": str(output), "source": str(OUT / ("reader-synthetic-paper.pdf" if name == "paper" else "reader-geometry.pdf")), "evidence": str(evidence), "bytes": len(data), "sha256": hashlib.sha256(data).hexdigest(), "preflight": job["preflight"], "apiCalls": STATE["calls"] - calls, "native": native_result, "attachmentId": attached["id"]})
+            results["exports"].append({"name": name, "mode": mode, "file": str(output), "source": str(OUT / ("interleaf-synthetic-paper.pdf" if name == "paper" else "interleaf-geometry.pdf")), "evidence": str(evidence), "bytes": len(data), "sha256": hashlib.sha256(data).hexdigest(), "preflight": job["preflight"], "apiCalls": STATE["calls"] - calls, "native": native_result, "attachmentId": attached["id"]})
             (OUT / "result.json").write_text(json.dumps(results, ensure_ascii=False, indent=2))
             api("DELETE", path, expected=204)
             assert not work.exists(), "cancel did not remove job files"
@@ -253,7 +253,7 @@ try:
     api("DELETE", path, expected=204)
     assert snapshot(paper) == baseline
 
-    for action, doc in [("cancel", paper), ("delete", imported("reader-no-text.pdf"))]:
+    for action, doc in [("cancel", paper), ("delete", imported("interleaf-no-text.pdf"))]:
         # A no-text page requires an explicit decision and is never sent to API.
         if action == "delete":
             path, job, work, _ = preflight(doc, "alternating")

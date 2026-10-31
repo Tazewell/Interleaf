@@ -1,7 +1,7 @@
 /// <reference types="vite/client" />
 
 interface Window {
-  readerDesktop?: {
+  interleafDesktop?: {
     platform: string;
     saveBilingualPDF?: (input: {
       documentId: string;
@@ -15,32 +15,32 @@ interface Window {
       folder: string;
       includeChildren: boolean;
       mode: "bibtex" | "biblatex";
-    }) => Promise<import("@reader/core").BibliographyExport | null>;
+    }) => Promise<import("@interleaf/core").BibliographyExport | null>;
     exportDiagnostics?: () => Promise<boolean>;
     recordDiagnostic?: (
-      event: import("../../../packages/reader-core/src/diagnostics").DiagnosticEvent,
+      event: import("../../../packages/interleaf-core/src/diagnostics").DiagnosticEvent,
     ) => void;
     diagnosticSettings?: (settings: unknown) => void;
     checkForUpdates: () => Promise<void>;
     onUpdateProgress?: (
       callback: (
-        progress: import("@reader/core").UpdateProgress | null,
+        progress: import("@interleaf/core").UpdateProgress | null,
       ) => void,
     ) => () => void;
-    proxySettings?: () => Promise<import("@reader/core").ProxySettingsState>;
+    proxySettings?: () => Promise<import("@interleaf/core").ProxySettingsState>;
     saveProxySettings?: (
-      settings: import("@reader/core").ProxySettings,
-    ) => Promise<import("@reader/core").ProxySettingsState>;
+      settings: import("@interleaf/core").ProxySettings,
+    ) => Promise<import("@interleaf/core").ProxySettingsState>;
     checkProxy?: (
-      settings: import("@reader/core").ProxySettings,
-    ) => Promise<import("@reader/core").ProxyCheckResult>;
+      settings: import("@interleaf/core").ProxySettings,
+    ) => Promise<import("@interleaf/core").ProxyCheckResult>;
     restart?: () => Promise<void>;
     libraryLocation?: () => Promise<string>;
     moveLibrary?: () => Promise<boolean>;
-    commandLine?: () => Promise<import("@reader/core").CommandLineStatus>;
+    commandLine?: () => Promise<import("@interleaf/core").CommandLineStatus>;
     setCommandLine?: (
       installed: boolean,
-    ) => Promise<import("@reader/core").CommandLineStatus>;
+    ) => Promise<import("@interleaf/core").CommandLineStatus>;
     writeClipboardText: (text: string) => Promise<void>;
     writeClipboardImage: (data: Uint8Array, text: string) => Promise<void>;
     setAppearance: (
@@ -67,7 +67,7 @@ interface Window {
     openDocumentFile: (id: string, type: "pdf" | "epub") => Promise<void>;
     openExternal: (url: string) => Promise<void>;
     onOpenLink?: (
-      callback: (target: import("@reader/core").ReaderLinkTarget) => void,
+      callback: (target: import("@interleaf/core").InterleafLinkTarget) => void,
     ) => () => void;
     onBeforeClose: (callback: () => Promise<void>) => () => void;
     onLibraryChanged: (callback: () => void) => () => void;

@@ -4,7 +4,7 @@ import { createRoot } from "react-dom/client";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, expect, it, vi } from "vitest";
 import { toast } from "sonner";
-import type { UpdateProgress } from "@reader/core";
+import type { UpdateProgress } from "@interleaf/core";
 import { useUpdateProgress } from "./update-progress";
 vi.mock("sonner", () => ({ toast: { loading: vi.fn(), dismiss: vi.fn() } }));
 function Host() {
@@ -12,18 +12,18 @@ function Host() {
   return null;
 }
 afterEach(() => {
-  delete window.readerDesktop;
+  delete window.interleafDesktop;
   vi.clearAllMocks();
 });
 it("shows download progress in one toast and dismisses it when cleared", async () => {
   let emit: (progress: UpdateProgress | null) => void = () => {};
   const unsubscribe = vi.fn();
-  window.readerDesktop = {
+  window.interleafDesktop = {
     onUpdateProgress: (callback: typeof emit) => {
       emit = callback;
       return unsubscribe;
     },
-  } as unknown as typeof window.readerDesktop;
+  } as unknown as typeof window.interleafDesktop;
   const root = createRoot(document.createElement("div"));
   await act(async () => root.render(<Host />));
   const mb = 1024 * 1024;
@@ -35,7 +35,7 @@ it("shows download progress in one toast and dismisses it when cleared", async (
   });
   expect(toast.loading).toHaveBeenLastCalledWith(
     "正在下载纸间 0.6.2",
-    expect.objectContaining({ id: "reader-update" }),
+    expect.objectContaining({ id: "interleaf-update" }),
   );
   const description = renderToStaticMarkup(
     vi.mocked(toast.loading).mock.lastCall![1]!.description as ReactElement,
@@ -45,10 +45,10 @@ it("shows download progress in one toast and dismisses it when cleared", async (
   emit({ version: "0.6.2", phase: "prepare", received: 0 });
   expect(toast.loading).toHaveBeenLastCalledWith(
     "正在准备安装纸间 0.6.2",
-    expect.objectContaining({ id: "reader-update" }),
+    expect.objectContaining({ id: "interleaf-update" }),
   );
   emit(null);
-  expect(toast.dismiss).toHaveBeenCalledWith("reader-update");
+  expect(toast.dismiss).toHaveBeenCalledWith("interleaf-update");
   await act(async () => root.unmount());
   expect(unsubscribe).toHaveBeenCalled();
 });

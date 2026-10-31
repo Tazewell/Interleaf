@@ -139,7 +139,7 @@
   background: color-mix(in srgb, var(--primary) 13%, transparent);
   border-radius: 3px;
 }
-.translation-document ::highlight(reader-translation-selection) {
+.translation-document ::highlight(interleaf-translation-selection) {
   background-color: rgba(59, 130, 246, 0.3);
   background-color: color-mix(in srgb, AccentColor 30%, transparent);
 }
@@ -223,12 +223,12 @@
   color: var(--foreground);
 }
 
-.textLayer ::highlight(reader-linked-sentences) {
+.textLayer ::highlight(interleaf-linked-sentences) {
   /* A subtle linked-sentence cue; visible glyphs remain on the PDF canvas. */
   background-color: rgba(128, 128, 128, 0.22);
   color: transparent;
 }
-.textLayer br::highlight(reader-linked-sentences) {
+.textLayer br::highlight(interleaf-linked-sentences) {
   background-color: transparent;
 }
 .translation-note-indicator {
@@ -253,11 +253,11 @@
   background: var(--card);
   color: var(--foreground);
 }
-::highlight(reader-translation-marks) {
+::highlight(interleaf-translation-marks) {
   background: #e6b94c66;
   color: inherit;
 }
-::highlight(reader-translation-underlines) {
+::highlight(interleaf-translation-underlines) {
   text-decoration: underline 2px #e6b94c;
 }
 
@@ -273,22 +273,22 @@
 }
 
 .translation-document [data-translation-block][data-focused],
-.reader-block-hover.reader-block-focus,
-.reader-block-hover[data-block-kind="text"],
+.interleaf-block-hover.interleaf-block-focus,
+.interleaf-block-hover[data-block-kind="text"],
 .translation-document [data-block-kind="text"][data-hovered] {
   background: rgb(128 128 128 / 5%);
   box-shadow: none;
 }
-.reader-block-hover.reader-block-focus,
-.reader-block-hover[data-block-kind="text"] {
+.interleaf-block-hover.interleaf-block-focus,
+.interleaf-block-hover[data-block-kind="text"] {
   border: 0.5px solid rgb(128 128 128 / 22%);
 }
 .translation-document [data-translation-block][data-focused],
 .translation-document [data-block-kind="text"][data-hovered] {
   outline: 0.5px solid rgb(128 128 128 / 22%);
 }
-:root[data-theme="sepia"] .reader-block-hover[data-block-kind="text"],
-:root[data-theme="sepia"] .reader-block-hover.reader-block-focus,
+:root[data-theme="sepia"] .interleaf-block-hover[data-block-kind="text"],
+:root[data-theme="sepia"] .interleaf-block-hover.interleaf-block-focus,
 :root[data-theme="sepia"]
   .translation-document
   :is(
@@ -297,8 +297,8 @@
   ) {
   background: var(--brand-10);
 }
-:root[data-theme="sepia"] .reader-block-hover[data-block-kind="text"],
-:root[data-theme="sepia"] .reader-block-hover.reader-block-focus {
+:root[data-theme="sepia"] .interleaf-block-hover[data-block-kind="text"],
+:root[data-theme="sepia"] .interleaf-block-hover.interleaf-block-focus {
   border-color: var(--brand-10);
 }
 :root[data-theme="sepia"]
@@ -310,14 +310,14 @@
   outline-color: var(--brand-10);
 }
 
-.reader-sentence-hover-mark {
+.interleaf-sentence-hover-mark {
   background: rgb(128 128 128 / 22%);
 }
-:root[data-theme="sepia"] .reader-sentence-hover-mark {
+:root[data-theme="sepia"] .interleaf-sentence-hover-mark {
   background: var(--brand-10);
 }
 
-.reader-block-focus[data-fading] {
+.interleaf-block-focus[data-fading] {
   animation: block-focus-fade var(--motion-base) var(--ease-out) forwards;
 }
 @keyframes block-focus-fade {
@@ -329,7 +329,7 @@
   .translation-document section {
     transition: none;
   }
-  .reader-block-focus[data-fading] {
+  .interleaf-block-focus[data-fading] {
     animation-duration: 0s;
   }
 }
@@ -372,7 +372,7 @@
   color: var(--muted-foreground);
 }
 
-.reader-block-hover:not(.reader-block-focus) {
+.interleaf-block-hover:not(.interleaf-block-focus) {
   animation: block-hover-in var(--motion-fast) var(--ease-out);
 }
 @keyframes block-hover-in {
@@ -384,7 +384,7 @@
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  .reader-block-hover:not(.reader-block-focus) {
+  .interleaf-block-hover:not(.interleaf-block-focus) {
     animation: none;
   }
 }

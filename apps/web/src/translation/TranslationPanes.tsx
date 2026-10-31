@@ -6,13 +6,13 @@ import {
   type ReactNode,
 } from "react";
 import { ArrowsLeftRight as ArrowRightLeft } from "@phosphor-icons/react";
-import { Button } from "@reader/ui/components/button";
+import { Button } from "@interleaf/ui/components/button";
 import {
   ResizableHandle,
   ResizablePanel,
   ResizablePanelGroup,
   usePanelRef,
-} from "@reader/ui/components/resizable";
+} from "@interleaf/ui/components/resizable";
 
 export function TranslationPanes({
   mode,

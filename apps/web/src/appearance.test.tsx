@@ -2,7 +2,7 @@
 import { afterEach, expect, it, vi } from "vitest";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { defaultTheme, type ReaderTheme } from "@reader/core";
+import { defaultTheme, type ReaderTheme } from "@interleaf/core";
 import {
   resolveTheme,
   stepTranslationSize,

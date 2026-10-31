@@ -23,7 +23,7 @@ Interleaf 以 EPUB 和 PDF 为两种核心文档格式，将图书库与论文�
 - **图书库与论文库**：分别管理电子书和论文，可在两库间移动文档。图书库支持 EPUB / PDF；论文库只收 PDF，单个文件不超过 50 MB、150 页，超过 50 页时会先询问。
 - **论文信息**：编辑作者、年份、出处、DOI、arXiv、摘要等信息；在线补全不覆盖手动修改。支持嵌套分类、标签与智能标签分类、列表与可排序表格视图、阅读状态、批量操作、重复论文检测与合并、双向相关论文。
 - **期刊评级**：配置 easyScholar 密钥后，在论文标题旁显示期刊评级，可选择要显示的评级体系。
-- **多种收录方式**：通过编号、链接或标题导入；安装 [Interleaf Connector](docs/reader-connector.md) Chrome 扩展后，可从论文页面或搜索结果收录 PDF、论文信息和离线网页快照；也可[从本机 Zotero 迁移](docs/zotero-migration.md) PDF、论文信息、分类、标签、笔记和可转换的批注。
+- **多种收录方式**：通过编号、链接或标题导入；安装 [Interleaf Connector](docs/interleaf-connector.md) Chrome 扩展后，可从论文页面或搜索结果收录 PDF、论文信息和离线网页快照；也可[从本机 Zotero 迁移](docs/zotero-migration.md) PDF、论文信息、分类、标签、笔记和可转换的批注。
 - **引用导出**：支持 GB/T 7714、APA、BibTeX 和 RIS，可复制单篇引用或批量导出。
 - **回收站**：删除后保留原文件、批注和对话，可撤销或恢复；确认彻底删除后才移除数据。
 
@@ -105,7 +105,7 @@ AI 是可选功能。本地阅读、搜索和批注不需要登录 AI 账户。
 | ------------------------------ | ------------------------------------------------------------------------------------------ |
 | 已安装桌面版                   | Electron `userData/library/`；macOS 通常为 `~/Library/Application Support/Interleaf/library/` |
 | 未打包桌面版（`pnpm desktop`） | macOS 为 `~/Library/Application Support/Interleaf Dev/library/`                               |
-| 浏览器开发模式（`pnpm dev`）   | 项目根目录的 `.reader/`                                                                    |
+| 浏览器开发模式（`pnpm dev`）   | 项目根目录的 `.interleaf/`                                                                    |
 
 桌面版可在 **设置 → 论文库 → 书库位置** 中选择新的保存文件夹。Interleaf 会在其中新建 `Interleaf Library`，保存当前阅读状态后，复制 PDF、EPUB、笔记、批注、阅读记录及其他书库数据，校验成功后重启。已有的 `Interleaf Library` 不会被覆盖，原书库保留为迁移时的备份，之后的修改只写入新位置。笔记仍保存在书库数据库中，不单独导出文件；这不是 Zotero 持续同步。
 
@@ -115,7 +115,7 @@ AI 是可选功能。本地阅读、搜索和批注不需要登录 AI 账户。
 
 ```text
 library/
-├── reader.sqlite       # 文档信息、阅读记录、对话、设置与全文索引
+├── interleaf.sqlite       # 文档信息、阅读记录、对话、设置与全文索引
 ├── books/              # EPUB 原文件
 ├── papers/             # PDF 原文件
 ├── cache/              # EPUB 资源；PDF analysis 下的 Markdown、图片与解析稿
@@ -134,9 +134,9 @@ pnpm dev
 
 终端会输出 `http://127.0.0.1:5173/#token=…`，请用完整地址打开。Vite 将请求代理到 `127.0.0.1:17840` 的 Go 服务。该 token 用于本地服务鉴权，不是 AI 账户凭据，请勿分享带 token 的地址。
 
-开发运行默认不监听插件端口；设置 `READER_DEV_CONNECTOR=1` 可启用。未打包桌面版默认不注册 `interleaf://`；设置 `READER_DEV_PROTOCOL=1` 可启用。
+开发运行默认不监听插件端口；设置 `INTERLEAF_DEV_CONNECTOR=1` 可启用。未打包桌面版默认不注册 `interleaf://`；设置 `INTERLEAF_DEV_PROTOCOL=1` 可启用。
 
-`pnpm dev`、`pnpm desktop` 和 `pnpm build` 会先准备固定版本的版面模型。首次构建需要下载约 67 MB，后续校验并复用 `apps/processor/models/` 中的构建缓存；该目录不进入 Git。离线构建可将 `READER_BUILD_LAYOUT_MODEL` 设为已有权重文件的绝对路径，仍需通过大小和 SHA256 校验。`pnpm install`、类型检查和普通单元测试不下载模型。
+`pnpm dev`、`pnpm desktop` 和 `pnpm build` 会先准备固定版本的版面模型。首次构建需要下载约 67 MB，后续校验并复用 `apps/processor/models/` 中的构建缓存；该目录不进入 Git。离线构建可将 `INTERLEAF_BUILD_LAYOUT_MODEL` 设为已有权重文件的绝对路径，仍需通过大小和 SHA256 校验。`pnpm install`、类型检查和普通单元测试不下载模型。
 
 ```sh
 pnpm typecheck     # TypeScript 类型检查
@@ -162,7 +162,7 @@ apps/
 └── connector/     # Interleaf Connector Chrome 扩展
 packages/
 ├── ui/            # shadcn/ui + Base UI 组件
-├── reader-core/   # Document、Location、TOC、Annotation、ReaderAdapter
+├── interleaf-core/   # Document、Location、TOC、Annotation、ReaderAdapter
 └── api-client/    # OpenAPI 类型与 API 客户端
 docs/              # 范围、路线图、接口与验证记录
 website/           # 项目官网静态页面与 README 截图

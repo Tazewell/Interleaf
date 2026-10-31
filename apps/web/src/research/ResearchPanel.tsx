@@ -1,15 +1,15 @@
 import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
-import { api } from "@reader/api";
-import type { AICapability, DocumentLocation } from "@reader/core";
-import { Button } from "@reader/ui/components/button";
-import { Checkbox } from "@reader/ui/components/checkbox";
+import { api } from "@interleaf/api";
+import type { AICapability, DocumentLocation } from "@interleaf/core";
+import { Button } from "@interleaf/ui/components/button";
+import { Checkbox } from "@interleaf/ui/components/checkbox";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@reader/ui/components/select";
+} from "@interleaf/ui/components/select";
 import {
   researchEpoch,
   researchStore,

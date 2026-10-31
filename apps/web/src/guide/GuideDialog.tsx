@@ -8,7 +8,7 @@ import {
   ChatText as MessageSquare,
   Keyboard,
 } from "@phosphor-icons/react";
-import { Button } from "@reader/ui/components/button";
+import { Button } from "@interleaf/ui/components/button";
 import {
   Dialog,
   DialogContent,
@@ -16,13 +16,13 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "@reader/ui/components/dialog";
+} from "@interleaf/ui/components/dialog";
 import {
   Tabs,
   TabsContent,
   TabsList,
   TabsTrigger,
-} from "@reader/ui/components/tabs";
+} from "@interleaf/ui/components/tabs";
 import { SceneCanvas } from "./SceneCanvas";
 import { scenes } from "./scenes";
 import {
@@ -261,8 +261,8 @@ export function ReleaseNotesDialog({
     const url = `https://github.com/Tazewell/Interleaf${issues ? "/issues/new/choose" : ""}`;
     setOpening(true);
     try {
-      if (window.readerDesktop?.openExternal) {
-        await window.readerDesktop.openExternal(url);
+      if (window.interleafDesktop?.openExternal) {
+        await window.interleafDesktop.openExternal(url);
       } else {
         const opened = window.open(url, "_blank");
         if (!opened) throw new Error("无法打开浏览器，请允许弹出窗口后重试。");

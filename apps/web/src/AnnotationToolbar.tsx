@@ -1,17 +1,17 @@
 import type { RefObject } from "react";
-import type { Annotation, SelectionAnchor } from "@reader/core";
+import type { Annotation, SelectionAnchor } from "@interleaf/core";
 import {
   Trash,
   Note as StickyNote,
   NotePencil as SquarePen,
   Sparkle as Sparkles,
 } from "@phosphor-icons/react";
-import { Button } from "@reader/ui/components/button";
+import { Button } from "@interleaf/ui/components/button";
 import {
   Tooltip,
   TooltipTrigger,
   TooltipContent,
-} from "@reader/ui/components/tooltip";
+} from "@interleaf/ui/components/tooltip";
 import { SelectionToolbar } from "./SelectionToolbar";
 import { ColorSwatchPicker } from "./ColorSwatches";
 

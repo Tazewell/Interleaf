@@ -5,10 +5,10 @@ import {
   ArrowsClockwise as RefreshCw,
   Translate as Languages,
 } from "@phosphor-icons/react";
-import type { Processing } from "@reader/core";
-import { api } from "@reader/api";
-import { Progress } from "@reader/ui/components/progress";
-import { Button } from "@reader/ui/components/button";
+import type { Processing } from "@interleaf/core";
+import { api } from "@interleaf/api";
+import { Progress } from "@interleaf/ui/components/progress";
+import { Button } from "@interleaf/ui/components/button";
 import { toast } from "sonner";
 
 export function useProcessing() {

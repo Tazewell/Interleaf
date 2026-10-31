@@ -13,7 +13,7 @@ await build({
   format: "cjs",
   outfile: "dist/main.cjs",
   external: ["electron"],
-  define: { READER_BUILD_COMMIT: JSON.stringify(commit) },
+  define: { INTERLEAF_BUILD_COMMIT: JSON.stringify(commit) },
 });
 await build({
   entryPoints: ["preload/index.ts"],

@@ -1,4 +1,4 @@
-import { Button } from "@reader/ui/components/button";
+import { Button } from "@interleaf/ui/components/button";
 import { copyText } from "./clipboard";
 import { Copy } from "@phosphor-icons/react";
 import { CachedMarkdown, Streamdown } from "@lobehub/streamdown";
@@ -49,7 +49,7 @@ function MarkdownLink({
   const navigate = useContext(ReadingLinkNavigation);
   const evidence = useContext(ChatCitationNavigation);
   const research = useContext(ResearchCitationNavigation);
-  if (href?.startsWith("#reader-research?")) {
+  if (href?.startsWith("#interleaf-research?")) {
     const id = new URLSearchParams(href.split("?")[1]).get("source") ?? "";
     if (!research?.sourceIds.includes(id)) return <span>{children}</span>;
     return (
@@ -64,7 +64,7 @@ function MarkdownLink({
       </a>
     );
   }
-  if (href?.startsWith("#reader-evidence?")) {
+  if (href?.startsWith("#interleaf-evidence?")) {
     const sourceId =
       new URLSearchParams(href.split("?")[1]).get("source") ?? "";
     if (!evidence?.sourceIds.includes(sourceId)) return <span>{children}</span>;
@@ -86,7 +86,7 @@ function MarkdownLink({
         href={href}
         onClick={(event) => {
           event.preventDefault();
-          if (href.startsWith("#reader-citation?")) {
+          if (href.startsWith("#interleaf-citation?")) {
             const params = new URLSearchParams(
               href.slice(href.indexOf("?") + 1),
             );

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, expect, it, vi } from "vitest";
-import type { Annotation } from "@reader/core";
+import type { Annotation } from "@interleaf/core";
 import { annotationsInRects, sentenceRectsAtPoint } from "./annotation-hover";
 afterEach(() => {
   document.body.replaceChildren();

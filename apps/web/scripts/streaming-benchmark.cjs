@@ -3,7 +3,7 @@ const { app, BrowserWindow } = require("electron");
 const os = require("node:os");
 const path = require("node:path");
 const fs = require("node:fs");
-app.setPath("userData", fs.mkdtempSync(path.join(os.tmpdir(), "reader-benchmark-")));
+app.setPath("userData", fs.mkdtempSync(path.join(os.tmpdir(), "interleaf-benchmark-")));
 app.commandLine.appendSwitch("js-flags", "--expose-gc");
 const results = [];
 app.whenReady().then(async () => {
@@ -14,8 +14,8 @@ app.whenReady().then(async () => {
       await new Promise((resolve, reject) => {
         const timer = setTimeout(() => reject(new Error(`benchmark timeout ${bytes}/${animated}`)), 180000);
         window.webContents.on("console-message", (_, level, message) => {
-          if (message.startsWith("READER_BENCHMARK=")) {
-            const result = JSON.parse(message.slice("READER_BENCHMARK=".length));
+          if (message.startsWith("INTERLEAF_BENCHMARK=")) {
+            const result = JSON.parse(message.slice("INTERLEAF_BENCHMARK=".length));
             results.push(result); console.log(JSON.stringify(result)); clearTimeout(timer); resolve();
           }
           if (level >= 3) console.error(message);
@@ -25,7 +25,7 @@ app.whenReady().then(async () => {
       window.destroy();
     }
   }
-  if (process.env.READER_BENCHMARK_OUTPUT) fs.writeFileSync(process.env.READER_BENCHMARK_OUTPUT, JSON.stringify(results, null, 2) + "\n");
+  if (process.env.INTERLEAF_BENCHMARK_OUTPUT) fs.writeFileSync(process.env.INTERLEAF_BENCHMARK_OUTPUT, JSON.stringify(results, null, 2) + "\n");
   app.quit();
 }).catch((error) => { console.error(error); app.exit(1); });
 app.on("window-all-closed", () => {});

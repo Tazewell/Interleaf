@@ -12,7 +12,7 @@ afterEach(async () => {
   );
 });
 async function archive(bytes: Buffer) {
-  const directory = await mkdtemp(join(tmpdir(), "reader-squirrel-test-"));
+  const directory = await mkdtemp(join(tmpdir(), "interleaf-squirrel-test-"));
   temporary.push(directory);
   const path = join(directory, "Interleaf.zip");
   await writeFile(path, bytes);

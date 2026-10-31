@@ -9,12 +9,12 @@ import { act, createElement } from "react";
 afterEach(() => {
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
-  delete window.readerDesktop;
+  delete window.interleafDesktop;
 });
 it("exports through the desktop bridge even when all network requests fail", async () => {
   const exportBundle = vi.fn().mockResolvedValue(true),
     record = vi.fn();
-  Object.defineProperty(window, "readerDesktop", {
+  Object.defineProperty(window, "interleafDesktop", {
     configurable: true,
     value: { exportDiagnostics: exportBundle, recordDiagnostic: record },
   });
@@ -40,7 +40,7 @@ it("keeps the export action inside the React crash fallback", async () => {
   vi.spyOn(console, "error").mockImplementation(() => {});
   const exportBundle = vi.fn().mockResolvedValue(true),
     record = vi.fn();
-  Object.defineProperty(window, "readerDesktop", {
+  Object.defineProperty(window, "interleafDesktop", {
     configurable: true,
     value: { exportDiagnostics: exportBundle, recordDiagnostic: record },
   });

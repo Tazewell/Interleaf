@@ -3,8 +3,8 @@
 // certificate available, only the identity and keychain are replaced.
 // Squirrel.Mac installs an update only when it is signed by the same
 // certificate as the running app, so every release must use this one.
-//   READER_MAC_SIGN_P12           base64 .p12 with the certificate and key
-//   READER_MAC_SIGN_P12_PASSWORD  its password
+//   INTERLEAF_MAC_SIGN_P12           base64 .p12 with the certificate and key
+//   INTERLEAF_MAC_SIGN_P12_PASSWORD  its password
 const { signAsync } = require("@electron/osx-sign");
 const { execFileSync } = require("node:child_process");
 const { randomBytes } = require("node:crypto");
@@ -21,7 +21,7 @@ function security(args) {
 
 // Import into a throwaway keychain; the login keychain and trust settings stay untouched.
 async function withCertificate(p12, password, sign) {
-  const directory = mkdtempSync(join(tmpdir(), "reader-sign-"));
+  const directory = mkdtempSync(join(tmpdir(), "interleaf-sign-"));
   const keychain = join(directory, "sign.keychain-db");
   const secret = randomBytes(24).toString("hex");
   const searchList = security(["list-keychains", "-d", "user"])
@@ -63,7 +63,7 @@ async function withCertificate(p12, password, sign) {
     ].map((match) => match[1]);
     if (identities.length !== 1)
       throw new Error(
-        `Expected one signing identity in READER_MAC_SIGN_P12, found ${identities.length}`,
+        `Expected one signing identity in INTERLEAF_MAC_SIGN_P12, found ${identities.length}`,
       );
     return await sign(identities[0], keychain);
   } finally {
@@ -78,16 +78,16 @@ async function withCertificate(p12, password, sign) {
 }
 
 module.exports = async function sign(options) {
-  const p12 = process.env.READER_MAC_SIGN_P12;
+  const p12 = process.env.INTERLEAF_MAC_SIGN_P12;
   if (!p12) {
     if (process.env.RELEASE_TAG)
       throw new Error(
-        "Release builds must be signed with the fixed Interleaf certificate (READER_MAC_SIGN_P12).",
+        "Release builds must be signed with the fixed Interleaf certificate (INTERLEAF_MAC_SIGN_P12).",
       );
     return signAsync(options);
   }
-  const password = process.env.READER_MAC_SIGN_P12_PASSWORD;
-  if (!password) throw new Error("READER_MAC_SIGN_P12_PASSWORD is not set.");
+  const password = process.env.INTERLEAF_MAC_SIGN_P12_PASSWORD;
+  if (!password) throw new Error("INTERLEAF_MAC_SIGN_P12_PASSWORD is not set.");
   return withCertificate(p12, password, (identity, keychain) =>
     signAsync({
       ...options,

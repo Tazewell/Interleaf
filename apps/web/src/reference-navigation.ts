@@ -1,4 +1,4 @@
-import type { DocumentLocation, ReaderAdapter } from "@reader/core";
+import type { DocumentLocation, ReaderAdapter } from "@interleaf/core";
 
 // Keep the original reading position while visiting several references.
 // A jump that stays on the same screen, or a reader who scrolls back, needs
@@ -8,16 +8,16 @@ export class ReferenceNavigation {
   busy = false;
   private departing = false;
   constructor(
-    private reader: Pick<ReaderAdapter, "getLocation" | "goTo" | "isNear">,
+    private interleaf: Pick<ReaderAdapter, "getLocation" | "goTo" | "isNear">,
   ) {}
   async visit(
     target: DocumentLocation,
     navigate: (target: DocumentLocation) => Promise<void> = (location) =>
-      this.reader.goTo(location),
+      this.interleaf.goTo(location),
   ) {
     if (this.busy) return;
     this.busy = true;
-    const origin = this.origin || structuredClone(this.reader.getLocation());
+    const origin = this.origin || structuredClone(this.interleaf.getLocation());
     try {
       await navigate(target);
       this.origin = origin;
@@ -36,7 +36,7 @@ export class ReferenceNavigation {
   /** Forget the return point once it is on screen again; true if forgotten. */
   settle() {
     if (this.busy || !this.origin) return false;
-    const near = this.reader.isNear?.(this.origin);
+    const near = this.interleaf.isNear?.(this.origin);
     // PDF.js may emit pagechanging before its viewport has left the origin.
     if (this.departing) {
       if (!near) this.departing = false;
@@ -50,7 +50,7 @@ export class ReferenceNavigation {
     if (this.busy || !this.origin) return;
     this.busy = true;
     try {
-      await this.reader.goTo(this.origin);
+      await this.interleaf.goTo(this.origin);
       this.origin = undefined;
       this.departing = false;
     } finally {

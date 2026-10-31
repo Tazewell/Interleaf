@@ -2,7 +2,7 @@
 
 ## 当前运行合同 · 2026-10-23
 
-Interleaf 的 AI 调用统一使用设置中 version 2 的主要 API 连接。Go 后端管理模型循环、工具、会话与取消；不启动 Codex、Claude Code、Kimi 或 Pi。普通 `reader` 命令行和 PDF Node 处理器仍保留。以下历史章节用于解释已保存数据，涉及外部运行时、备用服务、安装探测或 handoff 的说明已退役，以本节为准。
+Interleaf 的 AI 调用统一使用设置中 version 2 的主要 API 连接。Go 后端管理模型循环、工具、会话与取消；不启动 Codex、Claude Code、Kimi 或 Pi。普通 `interleaf` 命令行和 PDF Node 处理器仍保留。以下历史章节用于解释已保存数据，涉及外部运行时、备用服务、安装探测或 handoff 的说明已退役，以本节为准。
 
 问答、翻译、图片和研究用途分别解析模型；研究模型留空继承问答。每次任务冻结端点、密钥、模型与思考配置，后续设置编辑不改变正在运行的请求。双语导出在预检时冻结私有配置；全文重译的用途覆盖只作用于任务副本。额度、模型和协议错误不会触发其他服务。
 
@@ -91,7 +91,7 @@ Content-Type: application/json
 ```
 
 ```ts
-import type { SourceReference } from "@reader/core";
+import type { SourceReference } from "@interleaf/core";
 
 type ChatRequest = {
   provider: "codex" | "claude" | "kimi" | "api";
@@ -102,7 +102,7 @@ type ChatRequest = {
 };
 ```
 
-`claude` 对应 Claude Code，`kimi` 对应 Kimi Code，`api` 对应设置中填写的 OpenAI 兼容 API（地址与 Key）。`references` 用于保存来源引用；EPUB 使用自身的 `href`、`locator` 等位置字段，PDF 使用页码，类型见 [reader-core](../packages/reader-core/src/index.ts)。
+`claude` 对应 Claude Code，`kimi` 对应 Kimi Code，`api` 对应设置中填写的 OpenAI 兼容 API（地址与 Key）。`references` 用于保存来源引用；EPUB 使用自身的 `href`、`locator` 等位置字段，PDF 使用页码，类型见 [interleaf-core](../packages/interleaf-core/src/index.ts)。
 
 普通提问默认传空 `context` 和 `references`，并记录发送时的原生 `readingLocation`。手动引用、解释选区或提问批注时，只发送用户主动选择的原文和位置，不附带所在整章、邻近段落或全篇批注。图片附件不自动附加当前页文字。Codex/API 文档 Agent 根据概要、位置和问题调用工具；未具备文档工具的 CLI，仅在用户主动点击“总结当前页面／章节”等操作时通过阅读器取得该范围文字。无工具 API 的预检索仍复用后端原文索引。
 
@@ -184,7 +184,7 @@ data: {"ok":true}
 
 ```
 
-后端在每个事件后调用 `Flush()`。网络和运行时仍可能合并多个事件，或把一个事件切成多个读取块。因此，一次 `reader.read()` 不等于一个事件，也不等于一个文本片段。
+后端在每个事件后调用 `Flush()`。网络和运行时仍可能合并多个事件，或把一个事件切成多个读取块。因此，一次 `interleaf.read()` 不等于一个事件，也不等于一个文本片段。
 
 ## 3. 完成、失败、取消与保存
 
@@ -242,15 +242,15 @@ data: {"ok":true}
 
 ```sh
 cd apps/server
-go test ./internal/reader -run 'TestAgent|TestCodexProtocolBoundaries|TestChatStreamsOverHTTP|TestChatPartialFailure' -count=1
+go test ./internal/interleaf -run 'TestAgent|TestCodexProtocolBoundaries|TestChatStreamsOverHTTP|TestChatPartialFailure' -count=1
 ```
 
 真实调用可选以下测试，只发送内置原创提示，并使用 CLI 自身登录：
 
 ```sh
-READER_TEST_STREAM_PROVIDER=codex go test ./internal/reader -run '^TestLiveAgentStreaming$' -count=1 -v
-READER_TEST_STREAM_PROVIDER=claude go test ./internal/reader -run '^TestLiveAgentStreaming$' -count=1 -v
-READER_TEST_STREAM_PROVIDER=kimi go test ./internal/reader -run '^TestLiveAgentStreaming$' -count=1 -v
+INTERLEAF_TEST_STREAM_PROVIDER=codex go test ./internal/interleaf -run '^TestLiveAgentStreaming$' -count=1 -v
+INTERLEAF_TEST_STREAM_PROVIDER=claude go test ./internal/interleaf -run '^TestLiveAgentStreaming$' -count=1 -v
+INTERLEAF_TEST_STREAM_PROVIDER=kimi go test ./internal/interleaf -run '^TestLiveAgentStreaming$' -count=1 -v
 ```
 
 本次本机实测：Codex CLI 0.160.0 返回 193 个片段，首段约 6.1 秒、完成约 10.6 秒；Kimi 返回 214 个片段，首段约 6.2 秒、完成约 11.8 秒。这些是一次请求的记录，不是延迟承诺。Codex 另通过合成图片识别测试。Claude Code 2.1.220 当前未登录，已验证模拟协议，真实生成待具备登录环境后验证。

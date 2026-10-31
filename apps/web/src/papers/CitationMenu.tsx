@@ -1,19 +1,19 @@
 import { Copy, DownloadSimple as Download, Link } from "@phosphor-icons/react";
-import type { Document } from "@reader/core";
+import type { Document } from "@interleaf/core";
 import {
   ContextMenuItem,
   ContextMenuSeparator,
   ContextMenuSub,
   ContextMenuSubContent,
   ContextMenuSubTrigger,
-} from "@reader/ui/components/context-menu";
+} from "@interleaf/ui/components/context-menu";
 import {
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuSub,
   DropdownMenuSubContent,
   DropdownMenuSubTrigger,
-} from "@reader/ui/components/dropdown-menu";
+} from "@interleaf/ui/components/dropdown-menu";
 import { toast } from "sonner";
 import { copyText } from "../chat/clipboard";
 import {

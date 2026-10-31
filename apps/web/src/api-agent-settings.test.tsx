@@ -2,13 +2,13 @@
 import { act, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import type { NativeAIConfig, ProxySettingsState } from "@reader/core";
-import { api } from "@reader/api";
+import type { NativeAIConfig, ProxySettingsState } from "@interleaf/core";
+import { api } from "@interleaf/api";
 import { toast } from "sonner";
 import { Settings } from "./Settings";
 import { useReaderStore } from "./store";
 
-vi.mock("@reader/api", () => ({
+vi.mock("@interleaf/api", () => ({
   api: {
     connectorStatus: vi.fn(async () => ({ available: true })),
     journalRankConfig: vi.fn(async () => ({
@@ -26,7 +26,7 @@ vi.mock("@reader/api", () => ({
   },
 }));
 vi.mock("sonner", () => ({ toast: { error: vi.fn(), warning: vi.fn() } }));
-vi.mock("@reader/ui/components/dialog", () => {
+vi.mock("@interleaf/ui/components/dialog", () => {
   const Content = ({ children }: { children: ReactNode }) => (
     <div>{children}</div>
   );
@@ -66,12 +66,12 @@ beforeEach(() => {
 afterEach(async () => {
   await act(async () => root.unmount());
   host.remove();
-  delete window.readerDesktop;
+  delete window.interleafDesktop;
   vi.unstubAllGlobals();
 });
 it("groups proxy settings and log export under diagnostics without a network tab", async () => {
   const exportLogs = vi.fn(async () => true);
-  window.readerDesktop = {
+  window.interleafDesktop = {
     platform: "darwin",
     proxySettings: vi.fn(async (): Promise<ProxySettingsState> => ({
       settings: { mode: "manual", host: "127.0.0.1", port: 7890 },

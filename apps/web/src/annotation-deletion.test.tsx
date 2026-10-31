@@ -2,11 +2,11 @@
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { beforeEach, afterEach, expect, it, vi } from "vitest";
-import { api } from "@reader/api";
+import { api } from "@interleaf/api";
 import { toast } from "sonner";
 import { useAnnotationDeletion } from "./useAnnotationDeletion";
 
-vi.mock("@reader/api", () => ({ api: { removeAnnotation: vi.fn() } }));
+vi.mock("@interleaf/api", () => ({ api: { removeAnnotation: vi.fn() } }));
 vi.mock("sonner", () => ({ toast: { error: vi.fn() } }));
 let root: Root;
 let host: HTMLDivElement;

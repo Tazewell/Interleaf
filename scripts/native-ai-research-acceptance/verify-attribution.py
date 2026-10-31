@@ -36,7 +36,7 @@ else:
     raise AssertionError('actual swapped-but-valid source attribution escaped verification')
 
 previous = json.loads((prior / 'result.json').read_text())
-with sqlite3.connect('file:' + previous['library'] + '/reader.sqlite?mode=ro', uri=True) as db:
+with sqlite3.connect('file:' + previous['library'] + '/interleaf.sqlite?mode=ro', uri=True) as db:
     reports = [json.loads(x[0]) for x in db.execute('SELECT body FROM research_reports')]
     report = next(x for x in reports if x['origin'] == 'model' and 'improves' in x['content'] and 'worsens' in x['content'])
     sources = {sid: json.loads(db.execute('SELECT body FROM research_evidence WHERE id=?', (sid,)).fetchone()[0]) for sid in report['sourceIds']}

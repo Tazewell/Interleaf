@@ -53,7 +53,7 @@ export async function downloadUpdate(
     update.installer,
   );
   await mkdir(directory, { recursive: true });
-  const temporary = await mkdtemp(join(directory, "reader-update-"));
+  const temporary = await mkdtemp(join(directory, "interleaf-update-"));
   const path = join(temporary, update.installer);
   const partial = `${path}.part`;
   try {

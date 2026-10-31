@@ -11,10 +11,10 @@
   },
   "iconLibrary": "lucide",
   "aliases": {
-    "components": "@reader/ui/components",
-    "utils": "@reader/ui/lib/utils",
-    "ui": "@reader/ui/components",
-    "lib": "@reader/ui/lib",
-    "hooks": "@reader/ui/hooks"
+    "components": "@interleaf/ui/components",
+    "utils": "@interleaf/ui/lib/utils",
+    "ui": "@interleaf/ui/components",
+    "lib": "@interleaf/ui/lib",
+    "hooks": "@interleaf/ui/hooks"
   }
 }

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Check, Copy } from "@phosphor-icons/react";
-import { Button } from "@reader/ui/components/button";
+import { Button } from "@interleaf/ui/components/button";
 import { copyText } from "./clipboard";
 
 const messageTimeFormat = new Intl.DateTimeFormat("en", {

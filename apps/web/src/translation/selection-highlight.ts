@@ -4,7 +4,7 @@ export function installTranslationSelectionHighlight(host: HTMLElement) {
   const registry = typeof CSS !== "undefined" ? CSS.highlights : undefined;
   if (!registry || typeof Highlight === "undefined") return;
   const document = host.ownerDocument;
-  const name = "reader-translation-selection";
+  const name = "interleaf-translation-selection";
   let highlight: Highlight | undefined;
   const clear = () => {
     if (highlight && registry.get(name) === highlight) registry.delete(name);

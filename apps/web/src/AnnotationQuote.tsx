@@ -1,4 +1,4 @@
-import type { DocumentLocation } from "@reader/core";
+import type { DocumentLocation } from "@interleaf/core";
 /** Reflow PDF layout lines for display without changing stored text or anchors. */
 export function reflowPDFQuote(text: string): string {
   return text

@@ -1,5 +1,5 @@
 import type { PointerEvent as ReactPointerEvent } from "react";
-import type { PaperColumn } from "@reader/core";
+import type { PaperColumn } from "@interleaf/core";
 
 /** Keyboard step for resize separators, in CSS pixels. */
 export const resizeStep = 16;

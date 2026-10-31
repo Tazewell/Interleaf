@@ -20,11 +20,11 @@ import {
   diagnosticError,
   validateDiagnosticEvent,
   diagnosticRoute,
-} from "../../../packages/reader-core/src/diagnostics";
+} from "../../../packages/interleaf-core/src/diagnostics";
 
 const temporary: string[] = [];
 const directory = () => {
-  const dir = mkdtempSync(join(tmpdir(), "reader-diagnostics-test-"));
+  const dir = mkdtempSync(join(tmpdir(), "interleaf-diagnostics-test-"));
   temporary.push(dir);
   return dir;
 };

@@ -34,9 +34,9 @@ API 地址、密钥和翻译模型取自现有设置。导出任务创建时冻�
 
 ## 本次 WSL 隔离预览
 
-启动桌面快捷方式 `E:\Administrator\Desktop\Interleaf 双语 PDF 预览.lnk`。它使用单独的配置和测试文献库 `/home/admin/.cache/reader-bilingual-preview/library-01cbf22`，不修改真实 Interleaf 文献库。该测试库由成功验收库通过应用迁移命令复制，保留两份可用样本文献及翻译附件，WSL 重启后也可继续打开。测试用 API 地址和密钥已清空，重新导出前请配置自己的 API。
+启动桌面快捷方式 `E:\Administrator\Desktop\Interleaf 双语 PDF 预览.lnk`。它使用单独的配置和测试文献库 `/home/admin/.cache/interleaf-bilingual-preview/library-01cbf22`，不修改真实 Interleaf 文献库。该测试库由成功验收库通过应用迁移命令复制，保留两份可用样本文献及翻译附件，WSL 重启后也可继续打开。测试用 API 地址和密钥已清空，重新导出前请配置自己的 API。
 
-可直接查看 [并排样本](E:/WSL/reader-bilingual-acceptance-final/reader-paper-side-by-side.pdf) 和 [交替样本](E:/WSL/reader-bilingual-acceptance-final/reader-paper-alternating.pdf)。它们来自自行生成的两页测试论文，使用确定性模拟译文；本次没有调用真实付费翻译 API。
+可直接查看 [并排样本](E:/WSL/interleaf-bilingual-acceptance-final/interleaf-paper-side-by-side.pdf) 和 [交替样本](E:/WSL/interleaf-bilingual-acceptance-final/interleaf-paper-alternating.pdf)。它们来自自行生成的两页测试论文，使用确定性模拟译文；本次没有调用真实付费翻译 API。
 
 人工验证：打开样本原文，配置 API 并分别导出两种布局；在实际系统保存选择器中保存一次、取消一次；确认取消未添加附件，再勾选翻译附件保存，检查文献仍只有一个主附件且引用键不变。可缩小页码范围观察预检与输出页数，并在翻译途中取消后继续阅读。系统选择器的交互需要人工验证，本次自动回归注入选择路径，执行的是同一个生产保存服务。
 

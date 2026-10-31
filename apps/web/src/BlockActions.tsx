@@ -4,8 +4,8 @@ import {
   ArrowsOut as Expand,
   Sparkle as Sparkles,
 } from "@phosphor-icons/react";
-import { Button } from "@reader/ui/components/button";
-import type { PDFBlock, PDFBlockAction } from "@reader/core";
+import { Button } from "@interleaf/ui/components/button";
+import type { PDFBlock, PDFBlockAction } from "@interleaf/core";
 export function BlockActions({
   block,
   onAction,

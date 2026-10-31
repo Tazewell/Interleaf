@@ -1,7 +1,7 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { expect, it } from "vitest";
 import { AnnotationQuote, reflowPDFQuote } from "./AnnotationQuote";
-import type { PDFLocation } from "@reader/core";
+import type { PDFLocation } from "@interleaf/core";
 const part = {
   blockId: "p1-b1",
   sourceHash: "h",

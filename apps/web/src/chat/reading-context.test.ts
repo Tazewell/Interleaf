@@ -1,5 +1,5 @@
 import { expect, it, vi } from "vitest";
-import type { EPUBLocation, PDFLocation, ReaderSelection } from "@reader/core";
+import type { EPUBLocation, PDFLocation, ReaderSelection } from "@interleaf/core";
 import { readingContext } from "./reading-context";
 
 it.each(["codex", "api", "claude", "kimi"])(

@@ -18,7 +18,7 @@ vi.mock("../model.json", async () => {
 
 const roots: string[] = [];
 async function temporary() {
-  const root = await mkdtemp(join(tmpdir(), "reader-model-"));
+  const root = await mkdtemp(join(tmpdir(), "interleaf-model-"));
   roots.push(root);
   return root;
 }

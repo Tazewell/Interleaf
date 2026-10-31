@@ -57,7 +57,7 @@ assert.ok(
     model.sha256,
   ),
 );
-const temporary = await mkdtemp(join(tmpdir(), "reader-offline-layout-"));
+const temporary = await mkdtemp(join(tmpdir(), "interleaf-offline-layout-"));
 try {
   // Exercise the actual worker with no --model override or library cache.
   // Block both fetch and TCP connections, including accidental download fallback.

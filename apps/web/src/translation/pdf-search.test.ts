@@ -1,5 +1,5 @@
 import { expect, it } from "vitest";
-import type { PDFBlock, TranslationBlock } from "@reader/core";
+import type { PDFBlock, TranslationBlock } from "@interleaf/core";
 import { searchPDFBlocks } from "./pdf-search";
 
 const blocks: PDFBlock[] = [

@@ -1,4 +1,4 @@
-import type { EPUBLocation, EPUBReadingBlock } from "@reader/core";
+import type { EPUBLocation, EPUBReadingBlock } from "@interleaf/core";
 export function epubOffsets(
   location: EPUBLocation,
 ): { start: number; end: number } | undefined {

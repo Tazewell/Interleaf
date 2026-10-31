@@ -2,8 +2,8 @@ import type {
   NativePDFBounds,
   NativePDFPrepared,
   NativePDFPage,
-} from "../../../../packages/reader-core/src/bilingual-pdf";
-import { pdfFontAscent } from "../../../../packages/reader-core/src/pdf-text";
+} from "../../../../packages/interleaf-core/src/bilingual-pdf";
+import { pdfFontAscent } from "../../../../packages/interleaf-core/src/pdf-text";
 import { openPDF, printRaster, readLimited, sha256 } from "./runtime";
 import {
   protectFormulas,
@@ -685,7 +685,7 @@ export async function prepareNativePDF({
         const id = `p${number}.${block.id}${block.groupIds ? ".g" + sha256(block.groupIds.join("\0")).slice(0, 12) : ""}`;
         const sourceHash = sha256(
           JSON.stringify([
-            "reader-native-pdf-v1",
+            "interleaf-native-pdf-v1",
             id,
             protectedText.source,
             block.bounds,

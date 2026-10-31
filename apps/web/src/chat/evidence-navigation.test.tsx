@@ -2,12 +2,12 @@
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import type { Message, ReaderAdapter } from "@reader/core";
-import { api } from "@reader/api";
+import type { Message, ReaderAdapter } from "@interleaf/core";
+import { api } from "@interleaf/api";
 import { SourceReferences } from "../SourceReferences";
 import { MessageMarkdown } from "./MessageMarkdown";
 
-vi.mock("@reader/api", () => ({ api: { validateEvidence: vi.fn() } }));
+vi.mock("@interleaf/api", () => ({ api: { validateEvidence: vi.fn() } }));
 let host: HTMLDivElement, root: Root;
 beforeEach(() => {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);

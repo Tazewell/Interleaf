@@ -1,15 +1,15 @@
 import { useState } from "react";
-import type { Annotation, Document, PaperAttachmentRole } from "@reader/core";
-import { api } from "@reader/api";
+import type { Annotation, Document, PaperAttachmentRole } from "@interleaf/core";
+import { api } from "@interleaf/api";
 import { toast } from "sonner";
-import { Button } from "@reader/ui/components/button";
+import { Button } from "@interleaf/ui/components/button";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@reader/ui/components/select";
+} from "@interleaf/ui/components/select";
 import {
   AlertDialog,
   AlertDialogContent,
@@ -19,7 +19,7 @@ import {
   AlertDialogFooter,
   AlertDialogCancel,
   AlertDialogAction,
-} from "@reader/ui/components/alert-dialog";
+} from "@interleaf/ui/components/alert-dialog";
 import { refreshLibrary, useReaderStore } from "../store";
 const roles: Record<PaperAttachmentRole, string> = {
   original: "原文",

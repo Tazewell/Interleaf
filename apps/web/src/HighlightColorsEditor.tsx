@@ -6,9 +6,9 @@ import {
   ArrowCounterClockwise as RotateCcw,
   Trash,
 } from "@phosphor-icons/react";
-import type { HighlightColor } from "@reader/core";
-import { Button } from "@reader/ui/components/button";
-import { Input } from "@reader/ui/components/input";
+import type { HighlightColor } from "@interleaf/core";
+import { Button } from "@interleaf/ui/components/button";
+import { Input } from "@interleaf/ui/components/input";
 import {
   MAX_HIGHLIGHT_COLORS,
   highlightColors,

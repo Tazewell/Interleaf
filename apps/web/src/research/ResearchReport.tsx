@@ -1,19 +1,19 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
-import { researchAPI } from "@reader/api";
+import { researchAPI } from "@interleaf/api";
 import type {
   DocumentLocation,
   ResearchReport as Report,
   ResearchResults,
-} from "@reader/core";
-import { Button } from "@reader/ui/components/button";
-import { Textarea } from "@reader/ui/components/textarea";
+} from "@interleaf/core";
+import { Button } from "@interleaf/ui/components/button";
+import { Textarea } from "@interleaf/ui/components/textarea";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@reader/ui/components/select";
+} from "@interleaf/ui/components/select";
 import {
   Table,
   TableHeader,
@@ -21,7 +21,7 @@ import {
   TableRow,
   TableHead,
   TableCell,
-} from "@reader/ui/components/table";
+} from "@interleaf/ui/components/table";
 import { MessageMarkdown } from "../chat/MessageMarkdown";
 import { ResearchSources } from "./ResearchSources";
 import { Coverage } from "./ResearchProgress";

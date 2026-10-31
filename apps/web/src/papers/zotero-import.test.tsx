@@ -2,12 +2,12 @@
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import { api, type ZoteroScan, type ZoteroImportResult } from "@reader/api";
+import { api, type ZoteroScan, type ZoteroImportResult } from "@interleaf/api";
 import { refreshLibrary } from "../store";
 import { downloadText } from "../download";
 import { ZoteroImportDialog } from "./ZoteroImportDialog";
-vi.mock("@reader/api", async (importOriginal) => ({
-  RequestError: (await importOriginal<typeof import("@reader/api")>())
+vi.mock("@interleaf/api", async (importOriginal) => ({
+  RequestError: (await importOriginal<typeof import("@interleaf/api")>())
     .RequestError,
   api: { zoteroDefaults: vi.fn(), scanZotero: vi.fn(), importZotero: vi.fn() },
 }));

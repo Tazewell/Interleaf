@@ -2,7 +2,7 @@
 
 2026-10-28：用户授权的三个剩余问题均已修复并通过独立限定复审；最终产品提交 `9ad8614`。Tasks 1～11、61项要求已核对。最新结果、提交、验证、局限及完整复审见[最终集成记录](2026-10-28-native-ai-research-completion.md)。本次仅本地main集成，没有推送或发布。
 
-以下为2026-10-26及此前的阶段历史，包含已失效的待办、PID、禁止合并等当时状态，不作为当前执行指令。忽略目录审计材料归档于 `E:/WSL/reader-native-ai-audit-2026-10-28/audit.zip`。
+以下为2026-10-26及此前的阶段历史，包含已失效的待办、PID、禁止合并等当时状态，不作为当前执行指令。忽略目录审计材料归档于 `E:/WSL/interleaf-native-ai-audit-2026-10-28/audit.zip`。
 
 ---
 
@@ -18,8 +18,8 @@
 - I3：结构化摘要中的 Methods/Results 可被扁平文本分类器当成全文。必须在失去 HTML 结构前确认正文身份，否则保持未确认，不能满足查新全文门槛。此残余由源码推导，尚未新增实际 HTTP 反例。
 - I7：停服超时后实际 close、或服务已非零退出，失败 Promise 被永久缓存；再次退出仍被拦截。必须区分清理结果与进程已关闭状态，保留取消/join 和失败不迁移、不重启约束。
 - `pnpm typecheck`、`pnpm test`、`pnpm build` 在最终产品源码上均 exit 0；Go 全套通过，Vitest 170 文件通过、3 文件跳过，1225 测试通过、5 跳过。根检查和原验收没有覆盖上述三个残余，不构成豁免。
-- 新原生验收 `E:/WSL/reader-native-ai-final-fix-acceptance-v2`：20 项通过、40 篇覆盖、69 次受控模型调用、外部 Agent trap 0、非空历史保全。最终研究 PDF 6 页全部渲染、查看、重开；既有双语 4 个 PDF 共 15 页检查保留。受控工程验收不证明真实模型的科学质量。
-- 最终检查、source/mirror/HEAD 字节绑定及退出记录：`E:/WSL/reader-native-ai-logs/final-review-fix/v2`。完整执行台账、独立报告和反例保留于本工作树 `.superpowers/sdd/2026-10-22-native-ai-research/`；因为未通过，不删除该审计目录。
+- 新原生验收 `E:/WSL/interleaf-native-ai-final-fix-acceptance-v2`：20 项通过、40 篇覆盖、69 次受控模型调用、外部 Agent trap 0、非空历史保全。最终研究 PDF 6 页全部渲染、查看、重开；既有双语 4 个 PDF 共 15 页检查保留。受控工程验收不证明真实模型的科学质量。
+- 最终检查、source/mirror/HEAD 字节绑定及退出记录：`E:/WSL/interleaf-native-ai-logs/final-review-fix/v2`。完整执行台账、独立报告和反例保留于本工作树 `.superpowers/sdd/2026-10-22-native-ai-research/`；因为未通过，不删除该审计目录。
 - 独立样本预览：`E:/Administrator/Desktop/Interleaf 内置 AI 研究预览.lnk`；人工步骤见 `docs/native-ai-research-validation.md`。样本连接的 endpoint/Key 已清空，用户自行填写。当前为 Linux WSLg 开发预览，未验收 Windows 安装包/原生对话框。
 - 主检出 `D:/work/myreader/reader` 保持 `main` / `d64f41a` 干净；没有 push、merge、发布、改版本或构建安装器，也没有访问真实书库或外部凭据。
 
@@ -47,7 +47,7 @@
 - 完整响应及结构/来源校验通过后才提交成功；已显示部分输出后不追加备用答案。成功持久化后才能发送 done。
 - PDF 保留页/块位置；EPUB 保留原生章节/位置；摘要、HTML、PDF 全文证据不可混用。
 - 一项任务采用同一既有调度、预算、暂停/继续、取消/join 协议，不另建研究任务引擎。
-- 小步 Conventional Commit；精确暂存及检查，不 `git add -A`，不提交 `.reader`、PDF/DB、模型、二进制或依赖目录。不推送、合并、发布。
+- 小步 Conventional Commit；精确暂存及检查，不 `git add -A`，不提交 `.interleaf`、PDF/DB、模型、二进制或依赖目录。不推送、合并、发布。
 - 最终必须运行 `pnpm typecheck`、`pnpm test`、`pnpm build`。禁止浏览器自动化作视觉验收，提供独立预览与人工步骤。
 
 ### Task 8 已采用、后续必须保留的接口裁定
@@ -65,7 +65,7 @@
 
 ### 实现工作
 
-1. 新增 `apps/server/internal/reader/research_ideas.go`、`research_novelty.go`、`research_prompts.go` 及对应测试；扩展既有 jobs/reports/types、core 类型、OpenAPI 和 API client。
+1. 新增 `apps/server/internal/interleaf/research_ideas.go`、`research_novelty.go`、`research_prompts.go` 及对应测试；扩展既有 jobs/reports/types、core 类型、OpenAPI 和 API client。
 2. 实现 `exploreResearchIdeas(ctx, runID)`、`checkResearchNovelty(ctx, runID, ideaID)` 和 `validateNoveltyReport(...)`。沿用同一个 ResearchRun，将结构化成功单元写入 `research_units`，最终形成 ResearchReport。
 3. 默认生成 3 个 idea，允许用户指定 1～3 个；每个包含问题、机制、假设、具体改动、最近工作、最小实验、基线、消融、证伪条件、资源和逐条 claim。事实、推断、待验证假设明确区分；未知资源标 unknown，不能编造 GPU/费用。
 4. 支持针对明确 idea 的继续精化，并复用当前版本已成功的论文卡，不重做所有论文分析。旧报告引用须重新验证，不能因历史文本存在就视为模型已读。
@@ -80,7 +80,7 @@
 - `TestResearchIdeasHaveMechanismAndFalsification`：3 个完整候选；空洞/缺字段/无证据归因拒绝且旧结果保留；选择精化不重跑已成功论文卡。
 - `TestResearchNoveltyFindsKnownOverlap`：实际 mock HTTP 搜索和读取链路取得 B2 全文；B2 已覆盖 X 时输出 high_overlap，并引用确实读过的片段。只伪造模型 JSON 不算通过。
 - `TestResearchNoveltyInsufficientEvidence`：同一方法 claim 只给摘要时 insufficient；失败源、未覆盖查询、超预算不能变成 not_found；非法引用/原创保证不保存为成功报告。
-- 先运行 RED：`go test ./internal/reader -run 'TestResearch(Ideas|Novelty)' -count=1`，再实现并查看实际 GREEN。
+- 先运行 RED：`go test ./internal/interleaf -run 'TestResearch(Ideas|Novelty)' -count=1`，再实现并查看实际 GREEN。
 - 运行 Tasks 5～8 相关研究回归、`pnpm api:generate`、`pnpm typecheck`；报告准确命令、退出状态及 mock 边界。
 - 独立审查完整 Task 9 提交范围，修复并限定复审；建议提交 `feat(research): ground idea exploration and novelty checks in evidence`。
 
@@ -119,21 +119,21 @@
 2. 夹具：主题 A/B/C PDF，A 同时有原文和译文，A/B 同块名但结论冲突，C 方法被远程 B2 覆盖；子目录 EPUB、仅元数据文献、回收站及范围外文献。默认范围 5、关闭子级 4；另 40 篇验证全量分批覆盖。远端含分页、同名不同 ID、预印本/正式版、摘要及限流错误。
 3. 支持 `run.sh OUT --checks-only`；新增尚未实现的真实断言先 RED，已有路径不人为改坏求 RED，也不重复制造已证明的失败。
 4. 验收 v1 迁移→无 Agent/Pi 启动→API 角色→单篇原文问答/图片/翻译→overview/compare→暂停继续/源变更→查新重合与证据不足→显式导入去重→编辑导出→重启/退出/迁移/删除。
-5. PATH 设置外部 CLI trap，READER_AGENT 不存在；确认真实 PDF processor 可用。比较非空旧问答、笔记、批注、译文、引用键和原始文件 SHA 的前后快照，空库不能证明保全。
+5. PATH 设置外部 CLI trap，INTERLEAF_AGENT 不存在；确认真实 PDF processor 可用。比较非空旧问答、笔记、批注、译文、引用键和原始文件 SHA 的前后快照，空库不能证明保全。
 6. `result.json` 记录 implementationCommit、模型/搜索 mock 调用计数、范围、来源、报告、保全 hash 和断言结果；生成可读 Markdown 研究样本及样本 PDF，读取实际产物核查。
-7. 最终运行 `pnpm typecheck`、`pnpm test`、`pnpm build`。研究验收输出 `E:/WSL/reader-native-ai-acceptance-final`，既有双语验收输出另一个独立目录。
+7. 最终运行 `pnpm typecheck`、`pnpm test`、`pnpm build`。研究验收输出 `E:/WSL/interleaf-native-ai-acceptance-final`，既有双语验收输出另一个独立目录。
 8. 双语验收保留两种布局、公式、字体、最小 9pt、附件和取消断言；用 Poppler 渲染并实际查看全部样本页，重新打开 PDF。研究样本检查冲突、重合、证据与引用。
 9. arXiv/Crossref 各一个低频小查询作真实在线烟测，不发送私人文献或 Key；真实失败如实记录，mock 不算在线通过。真实模型只用用户另行提供的配置，无 Key 不读取别处凭据、不声称语言质量验收。
 
 ### WSL 与预览的具体环境
 
-- 专用镜像 `/home/admin/.cache/reader-native-ai-check`；同步脚本 `E:/WSL/reader-native-ai-sync.sh`。先检查脚本仍只同步本 worktree。
+- 专用镜像 `/home/admin/.cache/interleaf-native-ai-check`；同步脚本 `E:/WSL/interleaf-native-ai-sync.sh`。先检查脚本仍只同步本 worktree。
 - WSL PATH：`/home/admin/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin`。依赖安装显式用 `/mnt/d/.pnpm-store`，不在 C 盘新建默认 store/node_modules。
 - 先前完整 processor build 曾因 HuggingFace DNS 失败；单独 corpus worker 构建通过不等于完整 build 通过。
-- 已知可复核缓存：`/home/admin/.cache/reader-reference-check/apps/processor/models/PP-DocLayoutV3-FP16-58dfa00ba1135e027817cbd5802f1f0df62aa5c0.onnx`，67372587 bytes，SHA256 `8bb693ed3b5dcc1cf926b15d89dfe6abf62bc11cdd0afd33c8ffe039db6f8209`。先核对最终 model.json 和实际 hash，再复制到专用镜像；不得修改 reference/预期 hash、绕过验证或提交模型。
+- 已知可复核缓存：`/home/admin/.cache/interleaf-reference-check/apps/processor/models/PP-DocLayoutV3-FP16-58dfa00ba1135e027817cbd5802f1f0df62aa5c0.onnx`，67372587 bytes，SHA256 `8bb693ed3b5dcc1cf926b15d89dfe6abf62bc11cdd0afd33c8ffe039db6f8209`。先核对最终 model.json 和实际 hash，再复制到专用镜像；不得修改 reference/预期 hash、绕过验证或提交模型。
 - sync 的 `--delete` 未排除 models，必须在最后一次 sync 后再放入已验证模型；后续 sync 后若模型被清掉，按同样流程恢复，不误判为产品故障。
-- 桌面入口 `apps/desktop/main/index.ts`，构建入口 `apps/desktop/dist/main.cjs`；Electron 启动 `apps/desktop/bin/reader-server`、生成 token、loopback port 0、绑定 activeLibrary。
-- 使用任务自有 XDG_CONFIG_HOME/cache/profile/library，实际核对 Electron appData/userData。`READER_DATA` 不是桌面库覆盖，`scripts/dev.mjs` 硬编码仓库 `.reader`/17840，不适合最终隔离预览。
+- 桌面入口 `apps/desktop/main/index.ts`，构建入口 `apps/desktop/dist/main.cjs`；Electron 启动 `apps/desktop/bin/interleaf-server`、生成 token、loopback port 0、绑定 activeLibrary。
+- 使用任务自有 XDG_CONFIG_HOME/cache/profile/library，实际核对 Electron appData/userData。`INTERLEAF_DATA` 不是桌面库覆盖，`scripts/dev.mjs` 硬编码仓库 `.interleaf`/17840，不适合最终隔离预览。
 - 新建 `E:/Administrator/Desktop/Interleaf 内置 AI 研究预览.lnk`，不改真实启动器/库。核对 Electron/Go 路径、进程、健康/鉴权 API/HTML，无外部 Agent/Pi 进程；移除样本测试 Key。
 - 提供人工操作步骤：API 设置、文件夹综述、联网找论文/查新、来源回跳、预算继续、编辑导出、两种双语 PDF。禁止浏览器自动化视觉验收。
 

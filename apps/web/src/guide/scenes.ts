@@ -1009,7 +1009,7 @@ function selectionToolbar(f: Frame) {
 }
 
 /** The reading window's title bar. */
-function readerTop(f: Frame, title = "Attention Is All You Need") {
+function interleafTop(f: Frame, title = "Attention Is All You Need") {
   chrome(f);
   glyphs.back(f, 72, 22, f.c.mutedForeground);
   f.p.text(title, 84, 22, { size: 12, weight: 600, max: 220 });
@@ -1053,7 +1053,7 @@ const assistant = scene({
   script: assistantScript,
   draw(f) {
     const { p, c } = f;
-    readerTop(f);
+    interleafTop(f);
     card(f, page);
     const lines = wrap(f, pageText, textWidth, 11.5);
     selection(f, lines);
@@ -1193,7 +1193,7 @@ const research = scene({
   script: researchScript,
   draw(f) {
     const { p, c } = f;
-    readerTop(f);
+    interleafTop(f);
     card(f, page);
     const jumped = f.after("jump");
     p.alpha(jumped ? f.progress("jump", 300) : 1, () => {
@@ -1375,7 +1375,7 @@ const pages = scene({
   script: pagesScript,
   draw(f) {
     const { p, c } = f;
-    readerTop(f);
+    interleafTop(f);
     card(f, page);
     const table = pdfPage(f, paper, lightInk);
     const text = f.after("answer") ? streamed(f, tableAnswer, "answer") : "";
@@ -1481,7 +1481,7 @@ const overview = scene({
   script: overviewScript,
   draw(f) {
     const { p, c } = f;
-    readerTop(f);
+    interleafTop(f);
     button(f, overviewButton, "", "ghost", { icon: glyphs.book });
     card(f, content);
     sourceText(f, content.x + 110, content.w - 220);
@@ -2052,7 +2052,7 @@ const hoverNote = scene({
   still: "h1",
   draw(f) {
     const { p, c } = f;
-    readerTop(f, "Neural Networks and Deep Learning");
+    interleafTop(f, "Neural Networks and Deep Learning");
     card(f, content);
     p.text("How backpropagation works", notesX, content.y + 32, {
       size: 13,
@@ -2247,7 +2247,7 @@ const appearance = scene({
   script: appearanceScript,
   draw(f) {
     const { p, c } = f;
-    readerTop(f);
+    interleafTop(f);
     button(f, appearanceButton, "", "ghost", {
       icon: glyphs.type,
       active: f.after("open"),
@@ -2313,8 +2313,8 @@ const installButton = {
   h: 28,
 };
 const cliTerm: Rect = { x: 300, y: 46, w: 320, h: 316 };
-const searchCommand = "reader search attention dropout";
-const readCommand = "reader read 1a2b3c4d --pages 8";
+const searchCommand = "interleaf search attention dropout";
+const readCommand = "interleaf read 1a2b3c4d --pages 8";
 
 const cliScript = script({ x: 200, y: 340 })
   .wait(400)
@@ -2376,7 +2376,7 @@ const cli = scene({
     });
     paragraph(
       f,
-      "在终端运行 reader，让 Claude Code、Codex 等工具检索、阅读和导入书库中的文档。使用时纸间需要保持打开。",
+      "在终端运行 interleaf，让 Claude Code、Codex 等工具检索、阅读和导入书库中的文档。使用时纸间需要保持打开。",
       cliPanel.x + 16,
       cliPanel.y + 50,
       cliPanel.w - 32,
@@ -2392,7 +2392,7 @@ const cli = scene({
         f.t,
         c.mutedForeground,
       );
-      p.text("安装 reader 命令", installButton.x + 30, installButton.y + 14, {
+      p.text("安装 interleaf 命令", installButton.x + 30, installButton.y + 14, {
         size: 11.5,
         weight: 500,
       });
@@ -2400,13 +2400,13 @@ const cli = scene({
       button(
         f,
         installButton,
-        installed ? "卸载 reader 命令" : "安装 reader 命令",
+        installed ? "卸载 interleaf 命令" : "安装 interleaf 命令",
         "outline",
         { icon: glyphs.terminal },
       );
     p.text(
       installed
-        ? "已安装：/usr/local/bin/reader"
+        ? "已安装：/usr/local/bin/interleaf"
         : "将安装到 /usr/local/bin，可能需要输入密码",
       cliPanel.x + 16,
       cliPanel.y + 178,

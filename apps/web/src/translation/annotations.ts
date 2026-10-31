@@ -1,4 +1,4 @@
-import type { Annotation, TranslationBlock } from "@reader/core";
+import type { Annotation, TranslationBlock } from "@interleaf/core";
 
 export function textRange(
   root: HTMLElement,
@@ -80,7 +80,7 @@ export function paintTranslatedAnnotations(
   if (!api || !Highlight) return;
   const ranges = translatedAnnotationRanges(host, annotations, translations);
   api.set(
-    "reader-translation-marks",
+    "interleaf-translation-marks",
     new Highlight(
       ...ranges
         .filter((r) => r.annotation.kind !== "underline")
@@ -88,7 +88,7 @@ export function paintTranslatedAnnotations(
     ),
   );
   api.set(
-    "reader-translation-underlines",
+    "interleaf-translation-underlines",
     new Highlight(
       ...ranges
         .filter((r) => r.annotation.kind === "underline")
@@ -96,8 +96,8 @@ export function paintTranslatedAnnotations(
     ),
   );
   return () => {
-    api.delete("reader-translation-marks");
-    api.delete("reader-translation-underlines");
+    api.delete("interleaf-translation-marks");
+    api.delete("interleaf-translation-underlines");
   };
 }
 

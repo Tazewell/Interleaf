@@ -5,7 +5,7 @@ const calls = vi.hoisted(() => [] as string[]);
 vi.mock("./progress", () => ({
   flushProgress: vi.fn(async () => void calls.push("progress")),
 }));
-vi.mock("@reader/api", () => ({
+vi.mock("@interleaf/api", () => ({
   api: {
     saveSettings: vi.fn(async () => void calls.push("settings")),
   },
@@ -17,7 +17,7 @@ import { installCloseFlush } from "./close-flush";
 
 afterEach(() => {
   calls.length = 0;
-  Object.defineProperty(window, "readerDesktop", {
+  Object.defineProperty(window, "interleafDesktop", {
     configurable: true,
     value: undefined,
   });
@@ -26,7 +26,7 @@ afterEach(() => {
 it("answers the desktop close request without any React tree", async () => {
   let close: (() => Promise<void>) | undefined;
   const remove = vi.fn();
-  Object.defineProperty(window, "readerDesktop", {
+  Object.defineProperty(window, "interleafDesktop", {
     configurable: true,
     value: {
       onBeforeClose: (callback: () => Promise<void>) => {

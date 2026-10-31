@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
-import { Button } from "@reader/ui/components/button";
-import { RadioGroup, RadioGroupItem } from "@reader/ui/components/radio-group";
-import { Input } from "@reader/ui/components/input";
+import { Button } from "@interleaf/ui/components/button";
+import { RadioGroup, RadioGroupItem } from "@interleaf/ui/components/radio-group";
+import { Input } from "@interleaf/ui/components/input";
 
 type Candidate = { path: string; name: string };
 export function EndNoteSourcePicker({
@@ -19,7 +19,7 @@ export function EndNoteSourcePicker({
   const [message, setMessage] = useState("");
   const cancel = useRef<() => void>(() => {});
   useEffect(() => {
-    const desktop = window.readerDesktop;
+    const desktop = window.interleafDesktop;
     const id = crypto.randomUUID();
     let active = true;
     let timer: ReturnType<typeof setTimeout>;
@@ -72,7 +72,7 @@ export function EndNoteSourcePicker({
   const choose = async (directory: boolean) => {
     try {
       const selected =
-        await window.readerDesktop?.chooseEndNoteLibrary?.(directory);
+        await window.interleafDesktop?.chooseEndNoteLibrary?.(directory);
       if (selected) setPath(selected);
     } catch (e) {
       setMessage((e as Error).message);
@@ -159,7 +159,7 @@ export function EndNoteSourcePicker({
                 onChange={(e) => setPath(e.target.value)}
                 placeholder=".enl 文件、.enlp 文件包或所在目录"
               />
-              {window.readerDesktop?.chooseEndNoteLibrary && (
+              {window.interleafDesktop?.chooseEndNoteLibrary && (
                 <div className="flex gap-2">
                   <Button
                     type="button"

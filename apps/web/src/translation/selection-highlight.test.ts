@@ -6,7 +6,7 @@ let host: HTMLDivElement, registry: Map<string, Set<Range>>;
 let dispose: (() => void) | undefined;
 const update = () => document.dispatchEvent(new Event("selectionchange"));
 const highlighted = () =>
-  [...(registry.get("reader-translation-selection") ?? [])].map((r) =>
+  [...(registry.get("interleaf-translation-selection") ?? [])].map((r) =>
     r.toString(),
   );
 beforeEach(() => {

@@ -5,7 +5,7 @@ import {
   type ReactNode,
   type RefObject,
 } from "react";
-import type { SelectionAnchor } from "@reader/core";
+import type { SelectionAnchor } from "@interleaf/core";
 
 export function toolbarPosition(
   anchor: SelectionAnchor,

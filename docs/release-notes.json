@@ -218,8 +218,8 @@
   ],
   "0.7.0": [
     {
-      "title": "新增 reader 命令行",
-      "body": "可在设置中安装 reader 命令，在终端或 Claude Code、Codex 等工具中检索书库、读取原文与译文、查看批注和笔记、导入文档。使用时需保持 Interleaf 打开。"
+      "title": "新增 interleaf 命令行",
+      "body": "可在设置中安装 interleaf 命令，在终端或 Claude Code、Codex 等工具中检索书库、读取原文与译文、查看批注和笔记、导入文档。使用时需保持 Interleaf 打开。"
     },
     {
       "title": "导出带批注的 PDF",

@@ -9,7 +9,7 @@
 - Vitest：PDF.js 实际解析两页 PDF、双格式位置持久化形状、EPUB 重复句子的精确 DOM range、进度排队与失败恢复。
 - Go + Vite + Electron 生产构建通过。Vite 提示主界面与 PDF chunk 超过 500 kB；两个阅读引擎已按需加载，但首版尚未做进一步体积优化。
 - 独立本地服务 smoke：真实导入两份示例、读回书库、检测 CLI、读取 Web 入口、停止 sidecar 并清理临时库。
-- 本机真实 Codex CLI 通过 Interleaf HTTP/SSE 返回 `READER_OK`，正常完成并持久化。使用原创测试文字，没有上传用户书籍。
+- 本机真实 Codex CLI 通过 Interleaf HTTP/SSE 返回 `INTERLEAF_OK`，正常完成并持久化。使用原创测试文字，没有上传用户书籍。
 - 本机 Claude 可执行文件存在但未登录；只完成协议模拟和检测，未宣称真实 Claude 生成已验证。
 - Electron 实际启动 Go 子进程，本地 health 返回 `ok`。向 Electron 发出 SIGTERM 后，renderer 先保存设置，经 IPC 确认后窗口与 sidecar 均正常退出；重开数据库确认设置已落盘。随后重新打开桌面窗口供人工验收。
 

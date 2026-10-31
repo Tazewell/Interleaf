@@ -1,6 +1,6 @@
 import { expect, it } from "vitest";
 import { processingStages } from "./ProcessingStatus";
-import type { Processing } from "@reader/core";
+import type { Processing } from "@interleaf/core";
 const job: Processing = {
   documentId: "test",
   phase: "learning",

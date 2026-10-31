@@ -7,9 +7,9 @@ import {
   type NativeAIConfig,
   type LibraryMode,
   type LibraryPreferences,
-  type ReaderLinkTarget,
-} from "@reader/core";
-import { api } from "@reader/api";
+  type InterleafLinkTarget,
+} from "@interleaf/core";
+import { api } from "@interleaf/api";
 import { projectPapers } from "./papers/projection";
 export const useReaderStore = create<{
   documents: Document[];
@@ -25,8 +25,8 @@ export const useReaderStore = create<{
   trash: Document[];
   setTrash: (trash: Document[]) => void;
   /** A interleaf:// target waiting for its document to open. */
-  linkTarget: ReaderLinkTarget | null;
-  setLinkTarget: (target: ReaderLinkTarget | null) => void;
+  linkTarget: InterleafLinkTarget | null;
+  setLinkTarget: (target: InterleafLinkTarget | null) => void;
   setLibraryPreferences: (preferences: LibraryPreferences) => void;
   setAIConfig: (config: NativeAIConfig) => void;
   invalidateAICatalog: (snapshot: NativeAIConfig) => void;
@@ -147,7 +147,7 @@ export async function refreshTrash() {
     useReaderStore.setState({ trash, paperTrash });
 }
 /** Open the document a interleaf:// link points to, in its own library. */
-export async function openLinkTarget(target: ReaderLinkTarget) {
+export async function openLinkTarget(target: InterleafLinkTarget) {
   let doc = useReaderStore.getState().documents.find((d) => d.id === target.id);
   if (!doc) {
     await refreshLibrary();
@@ -171,7 +171,7 @@ useReaderStore.subscribe((state, previous) => {
   )
     return;
   if (typeof window !== "undefined")
-    window.readerDesktop?.diagnosticSettings?.({
+    window.interleafDesktop?.diagnosticSettings?.({
       ...state.theme,
       mode: state.libraryPreferences.mode,
       primaryMode: state.libraryPreferences.primaryMode,
