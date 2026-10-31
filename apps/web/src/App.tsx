@@ -950,13 +950,13 @@ export function App() {
           <DialogContent className="sm:max-w-sm">
             <DialogHeader>
               <img
-                src="/brand/logo.svg"
+                src="/brand/logo.svg?v=green-1"
                 alt=""
                 aria-hidden="true"
                 className="mb-1 size-10 rounded-lg dark:hidden"
               />
               <img
-                src="/brand/logo-dark.svg"
+                src="/brand/logo-dark.svg?v=green-1"
                 alt=""
                 aria-hidden="true"
                 className="mb-1 hidden size-10 rounded-lg dark:block"

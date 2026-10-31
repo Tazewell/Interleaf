@@ -9,8 +9,10 @@
   --faint: #a8a59d;
   --line: #e7e4da;
   --line-strong: #d9d5c8;
-  --accent: #c2643f;
-  --accent-soft: rgba(194, 100, 63, 0.12);
+  --accent: #307a52;
+  --brand-ink: #246b4d;
+  --brand-leaf: #4c9164;
+  --accent-soft: rgba(48, 122, 82, 0.12);
   --green: #3f7a4a;
   --green-soft: rgba(63, 122, 74, 0.14);
   --mark: rgba(240, 196, 76, 0.42);
@@ -48,8 +50,10 @@
     --faint: #6d6b65;
     --line: #2c2b28;
     --line-strong: #3a3935;
-    --accent: #df8a64;
-    --accent-soft: rgba(223, 138, 100, 0.14);
+    --accent: #98cda7;
+    --brand-ink: #daecde;
+    --brand-leaf: #83bc96;
+    --accent-soft: rgba(152, 205, 167, 0.14);
     --green: #7fbf89;
     --green-soft: rgba(127, 191, 137, 0.14);
     --mark: rgba(240, 196, 76, 0.3);
@@ -77,8 +81,10 @@
   --faint: #6d6b65;
   --line: #2c2b28;
   --line-strong: #3a3935;
-  --accent: #df8a64;
-  --accent-soft: rgba(223, 138, 100, 0.14);
+  --accent: #98cda7;
+  --brand-ink: #daecde;
+  --brand-leaf: #83bc96;
+  --accent-soft: rgba(152, 205, 167, 0.14);
   --green: #7fbf89;
   --green-soft: rgba(127, 191, 137, 0.14);
   --mark: rgba(240, 196, 76, 0.3);
@@ -181,6 +187,7 @@ button {
   font-size: 15px;
 }
 .brand svg {
+  color: var(--brand-ink);
   width: 22px;
   height: 22px;
 }

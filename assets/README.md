@@ -10,6 +10,6 @@
 | `icons/macos/icon.icns` | macOS 应用图标（`icon.svg` 为 1024 px 网格源图） |
 | `icons/windows/icon.ico` | Windows 应用与安装器图标，16–256 px |
 
-图形为两张错位纸页，以留白构成“纸间”，小尺寸使用相同的实心轮廓。官网的 `website/assets/favicon.*` 与 `apple-touch-icon.png` 也由同一脚本生成；GitHub Pages 只发布 `website/`，所以官网使用的图片和截图保留在 `website/assets/`。
+图形以展开的书页和向上翻起的叶形组成，中央留白表现“纸间”。采用林绿底、米白书页与浅绿页片，小尺寸沿用清楚的实心轮廓。官网的 `website/assets/favicon.*` 与 `apple-touch-icon.png` 也由同一脚本生成；GitHub Pages 只发布 `website/`，所以官网使用的图片和截图保留在 `website/assets/`。
 
 应用页面的图标与关于窗口标识位于 `apps/web/public/brand/`，扩展图标和网站内联标识也由同一脚本同步。安装包名称、应用 ID、数据目录、更新源和扩展身份保持稳定。

@@ -14,20 +14,20 @@ const { createCanvas, loadImage } = require("@napi-rs/canvas");
 const assets = join(root, "assets");
 const website = join(root, "website/assets");
 
-const ivory = "#F7F6F2";
-const ink = "#1F1E1D";
-const clay = "#C2643F";
-// Filled paper silhouettes retain a clear gap when reduced to 16 px.
-const leftPage =
-  "M29 30H47L60 43V82H30C26.686 82 24 79.314 24 76V35C24 32.239 26.239 30 29 30Z";
-const rightPage =
-  "M44 18H68L80 30V68C80 70.761 77.761 73 75 73H66V40L50 24H44V18Z";
-const mark = (foreground, cls = "") =>
-  `<path${cls} d="${leftPage}" fill="${foreground}"/><path d="${rightPage}" fill="${clay}"/>`;
+const paper = "#F2F7ED";
+const forest = "#246B4D";
+const deepForest = "#123D2D";
+const leaf = "#A6D4AC";
+const leafOnLight = "#4C9164";
+// An open paper leaf and an upward-turning page share a clear central space.
+const leftPage = "M23 29C32 26 41 29 47 35V74C40 69 32 66 23 68V29Z";
+const rightPage = "M53 32C59 24 69 21 79 23C80 42 71 63 53 76V32Z";
+const mark = (foreground, cls = "", accent = leaf) =>
+  `<path${cls} d="${leftPage}" fill="${foreground}"/><path d="${rightPage}" fill="${accent}"/>`;
 const svg = (viewBox, body, size = "") =>
   `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${viewBox}"${size}>${body}</svg>\n`;
 // Full-bleed rounded tile on a 100-unit grid.
-const logo = ({ tile = ivory, foreground = ink, rx = 22.5 } = {}) =>
+const logo = ({ tile = forest, foreground = paper, rx = 22.5 } = {}) =>
   svg(
     "0 0 100 100",
     `<rect width="100" height="100" rx="${rx}" fill="${tile}"/>${mark(foreground)}`,
@@ -36,12 +36,12 @@ const logo = ({ tile = ivory, foreground = ink, rx = 22.5 } = {}) =>
 const macos = () =>
   svg(
     "0 0 1024 1024",
-    `<defs><filter id="s" x="-10%" y="-10%" width="120%" height="125%"><feGaussianBlur in="SourceAlpha" stdDeviation="14"/><feOffset dy="12"/><feComponentTransfer><feFuncA type="linear" slope="0.28"/></feComponentTransfer><feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs><rect x="100" y="100" width="824" height="824" rx="185" fill="${ivory}" filter="url(#s)"/><g transform="translate(100 100) scale(8.24)">${mark(ink)}</g>`,
+    `<defs><filter id="s" x="-10%" y="-10%" width="120%" height="125%"><feGaussianBlur in="SourceAlpha" stdDeviation="14"/><feOffset dy="12"/><feComponentTransfer><feFuncA type="linear" slope="0.28"/></feComponentTransfer><feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs><rect x="100" y="100" width="824" height="824" rx="185" fill="${forest}" filter="url(#s)"/><g transform="translate(100 100) scale(8.24)">${mark(paper)}</g>`,
     ' width="1024" height="1024"',
   );
 const favicon = svg(
   "0 0 100 100",
-  `<style>@media (prefers-color-scheme: dark){.t{fill:${ink}}.i{fill:${ivory}}}</style><rect class="t" width="100" height="100" rx="22.5" fill="${ivory}"/>${mark(ink, ' class="i"')}`,
+  `<style>@media(prefers-color-scheme:dark){.t{fill:${deepForest}}}</style><rect class="t" width="100" height="100" rx="22.5" fill="${forest}"/>${mark(paper)}`,
 );
 
 const png = async (source, target, size) => {
@@ -111,7 +111,7 @@ try {
     small: await write(join(tmp, "small.svg"), logo()),
     dark: await write(
       join(assets, "logo/interleaf-logo-dark.svg"),
-      logo({ tile: ink, foreground: ivory }),
+      logo({ tile: deepForest, foreground: paper }),
     ),
     square: await write(join(tmp, "square.svg"), logo({ rx: 0 })),
     macos: await write(join(assets, "icons/macos/icon.svg"), macos()),
@@ -121,11 +121,11 @@ try {
   // The bare mark, cropped to its bounds, for surfaces that supply their own background.
   await write(
     join(assets, "logo/interleaf-mark.svg"),
-    svg("24 18 56 64", mark(ink)),
+    svg("21 20 60 57", mark(forest, "", leafOnLight)),
   );
   await write(
     join(assets, "logo/interleaf-mark-light.svg"),
-    svg("24 18 56 64", mark(ivory)),
+    svg("21 20 60 57", mark(paper)),
   );
 
   await mkdir(join(assets, "logo/png"), { recursive: true });
@@ -207,7 +207,7 @@ try {
     page,
     html.replace(
       /(<a class="brand"[^>]*>\s*)<svg\b[\s\S]*?<\/svg>/,
-      `$1<svg viewBox="24 18 56 64" aria-hidden="true">${mark("currentColor")}</svg>`,
+      `$1<svg viewBox="21 20 60 57" aria-hidden="true">${mark("var(--brand-ink, currentColor)", "", "var(--brand-leaf, #4C9164)")}</svg>`,
     ),
   );
   console.log("Generated 纸间 Interleaf SVG, PNG, ICO, ICNS and app icons.");
