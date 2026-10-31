@@ -35,7 +35,7 @@ gh secret set MAC_SIGN_P12_PASSWORD < ~/reader-mac-sign/password.txt
 2. 推送 `main`，等待单个 Linux runner 的类型检查和测试通过。首次启用时，可先从 Actions 手动运行 **Release installers**；它只保存安装包与校验值为 Actions artifacts，不创建或修改 Release。
 3. 在所需提交上创建 tag，例如 `v0.2.0`，并发布该 tag 对应的 GitHub Release。Release 所在提交必须包含本工作流。预发布版本可用 `0.2.0-beta.1` / `v0.2.0-beta.1`。
 4. **Release installers** 将 tag 解析为固定提交，核对版本，分别在原生 macOS ARM64 和 Windows x64 runner 上构建。同一源提交已经通过的 `main` CI 会直接复用；没有成功记录时，先调用与日常 CI 相同的检查流程。检查通过后才构建安装包，所有平台都成功后统一上传安装包与校验值到同一个 Release。
-5. 下载并做安装后的人工检查：打开应用，导入 EPUB/PDF，确认阅读、笔记保存及重新打开后恢复；退出后检查服务已停止。AI 功能另用已安装并登录的 CLI 检查。
+5. 下载并做安装后的人工检查：打开应用，导入 EPUB/PDF，确认阅读、笔记保存及重新打开后恢复；退出后检查服务已停止。AI 功能另在应用内配置自己的 API 连接和模型后检查。
 
 触发事件为 `release: published`，适用于正式版和预发布版。保存草稿、单独推送 tag 或修改 Release 描述不会触发。Release 页面会先发布，安装包稍后上传；任一构建失败时上传任务不会运行。GitHub 资产上传不是事务操作，上传过程中网络失败可能留下部分文件；修复后重新运行工作流会覆盖同名资产。不要移动已发布的 tag；代码修复请发布新版本。
 
@@ -55,9 +55,9 @@ pnpm package:dir  # 构建未封装应用，并检查包内运行时
 pnpm package      # 构建 DMG 或 NSIS 安装包，并执行相同检查
 ```
 
-产物在根目录 `release/`。脚本不上传任何文件。暂不支持交叉打包、Linux 安装包或 Windows ARM64。安装包目前使用默认 Electron 图标。
+产物在根目录 `release/`。脚本不上传任何文件。暂不支持交叉打包、Linux 安装包或 Windows ARM64。安装包使用纸间的绿色书页标识，源文件与平台图标由 `scripts/build-brand-assets.mjs` 统一生成。
 
-安装包包含 Electron、Go 服务、Web 资源、PDF 处理器的生产依赖及约 67 MB 的 PP-DocLayoutV3 FP16 版面权重。终端用户无需安装 Node.js、Go、Python 或 PaddlePaddle；首次版面解析即可离线运行。Codex、Claude Code、Kimi Code 仍需用户自行安装及登录，AI 翻译仍需要可用连接。
+安装包包含 Electron、Go 服务、Web 资源、PDF 处理器的生产依赖及约 67 MB 的 PP-DocLayoutV3 FP16 版面权重。终端用户无需安装 Node.js、Go、Python 或 PaddlePaddle；首次版面解析即可离线运行。AI 问答、翻译和研究功能需要用户在应用内配置自己的 API 连接及可用模型。
 
 `pnpm package` 会先执行完整 `pnpm build`。PDF 处理器使用 workspace 锁文件部署为独立依赖目录，再裁剪其他平台的 ONNX 二进制；所有原生依赖必须来自当前 runner。临时 staging 和产物被 Git 忽略。
 
