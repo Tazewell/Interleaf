@@ -145,6 +145,48 @@ it("keeps almost-neutral antialiasing pixels close to neutral instead of produci
   expect(Math.abs(edge[0] - neutral[0])).toBeLessThan(8);
 });
 
+it.each(["soft", "high"] as const)(
+  "keeps pale colored glyph edges close to the paper in %s contrast",
+  (contrast) => {
+    // A colored stroke covering 48/255 of a white pixel must stay faint
+    // after recoloring; it must not become as bright as the solid stroke.
+    const pixels = new Uint8ClampedArray([
+      255, 207, 207, 255, 207, 255, 255, 255, 207, 207, 255, 255,
+    ]);
+    const result = processPDFPagePixels(
+      pixels,
+      3,
+      1,
+      [],
+      [],
+      "adaptive",
+      contrast,
+    );
+    for (let i = 0; i < 12; i += 4) {
+      const edge = [...result.slice(i, i + 3)];
+      expect(Math.max(...edge)).toBeLessThan(90);
+      expect(Math.max(...edge) - Math.min(...edge)).toBeLessThan(50);
+      expect(result[i + 3]).toBe(255);
+    }
+  },
+);
+
+it("keeps colored antialiasing proportional to stroke coverage", () => {
+  // Half-covered and quarter-covered red strokes on white paper.
+  const solid = adaptPDFColor(255, 0, 0);
+  const half = adaptPDFColor(255, 128, 128);
+  const quarter = adaptPDFColor(255, 191, 191);
+  const paper = adaptPDFColor(255, 255, 255);
+  for (let channel = 0; channel < 3; channel++) {
+    expect(
+      Math.abs(half[channel] - (paper[channel] + solid[channel]) / 2),
+    ).toBeLessThanOrEqual(1);
+    expect(
+      Math.abs(quarter[channel] - (3 * paper[channel] + solid[channel]) / 4),
+    ).toBeLessThanOrEqual(1);
+  }
+});
+
 it("includes the fourth corner of a rotated bitmap", () => {
   expect(
     imageRegions({ coordinates: [0.5, 0.1, 0.3, 0.3, 0.7, 0.3] })[0].height,

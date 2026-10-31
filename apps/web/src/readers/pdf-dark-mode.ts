@@ -84,7 +84,7 @@ function hslToRgb(h: number, s: number, l: number) {
               ? [x, 0, chroma]
               : [chroma, 0, x];
   const m = l - chroma / 2;
-  return [r, g, b].map((channel) => Math.round((channel + m) * 255));
+  return [r, g, b].map((channel) => (channel + m) * 255);
 }
 
 /** Adapt grayscale to the selected contrast while preserving colored hues. */
@@ -94,18 +94,30 @@ export function adaptPDFColor(
   b: number,
   contrast: PDFDarkContrast = "soft",
 ) {
-  const { h, s, l } = rgbToHsl(r, g, b);
+  const paper = contrast === "high" ? 0 : 0.14 * 255;
+  const minimum = Math.min(r, g, b);
+  const coverage = 1 - minimum / 255;
+  if (!coverage) return [paper, paper, paper].map(Math.round);
+  // Separate the white paper mixed into antialiased pixels before adapting
+  // their ink. Otherwise a faint colored edge can hit the same HSL lightness
+  // floor as a solid stroke and turn into a bright halo.
+  const { h, s, l } = rgbToHsl(
+    (r - minimum) / coverage,
+    (g - minimum) / coverage,
+    (b - minimum) / coverage,
+  );
   let nextL = contrast === "high" ? 1 - l : 0.14 + (0.87 - 0.14) * (1 - l);
   // HSL saturation is unstable near white. Use absolute chroma and a smooth
   // transition so barely tinted antialiasing pixels cannot become bright halos.
   const chroma = Math.max(r, g, b) - Math.min(r, g, b);
   const weight = Math.max(0, Math.min(1, (chroma - 12) / 36));
   nextL += weight * (Math.min(0.87, Math.max(0.64, nextL)) - nextL);
-  return hslToRgb(
+  const ink = hslToRgb(
     h,
     s * weight,
     contrast === "high" ? nextL : Math.min(0.87, Math.max(0.14, nextL)),
   );
+  return ink.map((channel) => Math.round(paper + coverage * (channel - paper)));
 }
 
 function makeMask(width: number, height: number, regions: PDFDarkRegion[]) {
