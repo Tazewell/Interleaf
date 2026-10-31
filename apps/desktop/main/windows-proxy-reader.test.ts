@@ -59,7 +59,7 @@ it.each(["win32", "darwin"] as const)(
     expect(result).toEqual(parent);
     expect(result).not.toBe(parent);
     expect(warn).toHaveBeenCalledExactlyOnceWith(
-      "无法应用系统代理，Interleaf 将沿用启动环境。",
+      "无法应用系统代理，纸间将沿用启动环境。",
     );
   },
 );

@@ -3,14 +3,14 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Interleaf — 本地优先的 EPUB / PDF 阅读器</title>
+    <title>纸间 Interleaf — 本地优先的 EPUB / PDF 阅读器</title>
     <meta
       name="description"
-      content="Interleaf 是一个本地优先的 EPUB / PDF 阅读器：论文库与图书库、原文译文对照、批注与引用导出，以及通过你已登录的 Claude Code、Codex 或 Kimi CLI 调用的 AI 助读。"
+      content="纸间是一个本地优先的 EPUB / PDF 阅读器：论文库与图书库、原文译文对照、批注与引用导出，以及通过你已登录的 Claude Code、Codex 或 Kimi CLI 调用的 AI 助读。"
     />
     <meta name="theme-color" content="#faf9f5" media="(prefers-color-scheme: light)" />
     <meta name="theme-color" content="#151514" media="(prefers-color-scheme: dark)" />
-    <meta property="og:title" content="Interleaf — 本地优先的 EPUB / PDF 阅读器" />
+    <meta property="og:title" content="纸间 Interleaf — 本地优先的 EPUB / PDF 阅读器" />
     <meta property="og:description" content="读论文与读书，译文、批注与 AI 助读都回到原文。" />
     <meta property="og:url" content="https://tazewell.github.io/Interleaf/" />
     <meta property="og:image" content="https://tazewell.github.io/Interleaf/assets/screenshots/pdf-bilingual-ai.webp" />
@@ -83,9 +83,9 @@
 
     <header class="nav" id="nav">
       <div class="wrap nav-inner">
-        <a class="brand" href="#top" aria-label="Interleaf">
-          <svg viewBox="25.5 17 50 67" aria-hidden="true"><g transform="translate(-2 0)"><path d="M58 21C68 21.5 74 29.5 73 38.5C72 47.5 64.5 53 56.5 52C48.5 51 44 44 45 36C46 27.5 50.5 20.6 58 21Z" fill="#c2643f" /><path d="M35 77C34.4 62 35.4 41 34.6 24M34.6 24C44 22.6 56 22.4 61 27C67 32.5 65 45 56 48.5C50 50.6 42 50.5 35 50M47 50.5C53 58 60 67 68 77.5" fill="none" stroke="currentColor" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round" /></g></svg>
-          Interleaf
+        <a class="brand" href="#top" aria-label="纸间 Interleaf">
+          <svg viewBox="24 18 56 64" aria-hidden="true"><path d="M29 30H47L60 43V82H30C26.686 82 24 79.314 24 76V35C24 32.239 26.239 30 29 30Z" fill="currentColor"/><path d="M44 18H68L80 30V68C80 70.761 77.761 73 75 73H66V40L50 24H44V18Z" fill="#C2643F"/></svg>
+          <span data-en="Interleaf">纸间</span>
         </a>
         <nav class="nav-links" aria-label="页面导航">
           <a href="#demo" data-en="Interface">界面</a>
@@ -150,7 +150,7 @@
           </div>
           <div class="stage reveal" id="stage">
             <div class="stage-scale" id="stage-scale">
-              <div class="window" id="window" data-scene="notes" data-view="src" role="img" aria-label="Interleaf 阅读界面演示：原文批注、对照翻译与上下文问答">
+              <div class="window" id="window" data-scene="notes" data-view="src" role="img" aria-label="纸间阅读界面演示：原文批注、对照翻译与上下文问答">
                 <div class="win-bar">
                   <div class="lights"><i></i><i></i><i></i></div>
                   <svg class="icon"><use href="#i-back" /></svg>
@@ -302,7 +302,7 @@
           <div class="section-head reveal">
             <div class="kicker">Features</div>
             <h2 data-en="Take one paper,<br />from import to citation.">以一篇论文为例，<br />从导入读到引用。</h2>
-            <p class="lead" data-en="Interleaf has two modes: a paper library for PDFs, organized, translated and cited as papers, and a book library for EPUBs and long PDFs. Here is one paper, read in the paper library.">Interleaf 分论文库与图书库两种模式：论文库只收 PDF，按论文整理、翻译与引用；图书库放 EPUB 与长篇 PDF。下面以在论文库中读一篇 PDF 为例。</p>
+            <p class="lead" data-en="Interleaf has two modes: a paper library for PDFs, organized, translated and cited as papers, and a book library for EPUBs and long PDFs. Here is one paper, read in the paper library.">纸间分论文库与图书库两种模式：论文库只收 PDF，按论文整理、翻译与引用；图书库放 EPUB 与长篇 PDF。下面以在论文库中读一篇 PDF 为例。</p>
           </div>
           <div class="bento">
             <article class="card span-2 reveal">
@@ -488,10 +488,10 @@
             <button role="tab" aria-selected="false" data-shot="settings" data-en="Agent settings">Agent 设置</button>
           </div>
           <div class="shot-frame reveal" id="shot-frame">
-            <img class="on" data-shot="bilingual" data-light="assets/screenshots/pdf-bilingual-ai.webp" data-dark="assets/screenshots/pdf-bilingual-ai.webp" src="assets/screenshots/pdf-bilingual-ai.webp" alt="Interleaf 论文对照阅读：左侧目录，中间原文与译文，右侧 AI 助读" loading="lazy" />
-            <img data-shot="library" data-light="assets/screenshots/library-light.webp" data-dark="assets/screenshots/library-dark.webp" src="assets/screenshots/library-light.webp" alt="Interleaf 书库" loading="lazy" />
-            <img data-shot="pdf" data-light="assets/screenshots/pdf-light.webp" data-dark="assets/screenshots/pdf-dark.webp" src="assets/screenshots/pdf-light.webp" alt="Interleaf PDF 阅读界面" loading="lazy" />
-            <img data-shot="settings" data-light="assets/screenshots/settings-light.webp" data-dark="assets/screenshots/settings-light.webp" src="assets/screenshots/settings-light.webp" alt="Interleaf Agent 设置" loading="lazy" />
+            <img class="on" data-shot="bilingual" data-light="assets/screenshots/pdf-bilingual-ai.webp" data-dark="assets/screenshots/pdf-bilingual-ai.webp" src="assets/screenshots/pdf-bilingual-ai.webp" alt="纸间论文对照阅读：左侧目录，中间原文与译文，右侧 AI 助读" loading="lazy" />
+            <img data-shot="library" data-light="assets/screenshots/library-light.webp" data-dark="assets/screenshots/library-dark.webp" src="assets/screenshots/library-light.webp" alt="纸间书库" loading="lazy" />
+            <img data-shot="pdf" data-light="assets/screenshots/pdf-light.webp" data-dark="assets/screenshots/pdf-dark.webp" src="assets/screenshots/pdf-light.webp" alt="纸间 PDF 阅读界面" loading="lazy" />
+            <img data-shot="settings" data-light="assets/screenshots/settings-light.webp" data-dark="assets/screenshots/settings-light.webp" src="assets/screenshots/settings-light.webp" alt="纸间 Agent 设置" loading="lazy" />
           </div>
           <p class="shot-caption" data-en="Screenshots with a dark version follow the page's appearance.">有深色版本的截图会跟随本页外观切换。</p>
           <figure class="video reveal">
@@ -575,7 +575,7 @@ codex login</div>
           <div class="faq reveal">
             <details>
               <summary data-en="Do I need an API key?">需要填写 API Key 吗？</summary>
-              <p data-en="No. Interleaf calls the official Claude Code, Codex or Kimi CLI you have already signed in to. Permissions, quotas, models and billing follow that CLI account.">不需要。Interleaf 调用你已登录的官方 Claude Code、Codex 或 Kimi CLI；权限、额度、模型与计费都跟随该 CLI 账户。</p>
+              <p data-en="No. Interleaf calls the official Claude Code, Codex or Kimi CLI you have already signed in to. Permissions, quotas, models and billing follow that CLI account.">不需要。纸间调用你已登录的官方 Claude Code、Codex 或 Kimi CLI；权限、额度、模型与计费都跟随该 CLI 账户。</p>
             </details>
             <details>
               <summary data-en="Are my documents uploaded?">我的文档会被上传吗？</summary>

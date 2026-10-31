@@ -167,8 +167,8 @@ async function startServer() {
       if (window && !quitting) {
         void diagnostics!
           .failure(
-            "Interleaf 本地服务已停止",
-            "已保存的文档和笔记仍保留在本地。可先导出诊断包，再重新打开 Interleaf。",
+            "纸间本地服务已停止",
+            "已保存的文档和笔记仍保留在本地。可先导出诊断包，再重新打开纸间。",
           )
           .then(() => {
             flushed = true;
@@ -355,7 +355,7 @@ app
       height: 940,
       minWidth: 1000,
       minHeight: 660,
-      title: "Interleaf",
+      title: "纸间 Interleaf",
       ...(process.platform === "darwin"
         ? {
             titleBarStyle: "hidden" as const,
@@ -380,7 +380,7 @@ app
       });
       if (!quitting)
         void diagnostics!
-          .failure("Interleaf 界面已停止", "可先导出诊断包，再重新打开 Interleaf。")
+          .failure("纸间界面已停止", "可先导出诊断包，再重新打开纸间。")
           .then(() => {
             flushed = true;
             app.quit();
@@ -458,7 +458,7 @@ app
               type: "error",
               message: "书库迁移失败",
               detail: `${(error as Error).message}\n原书库已保留，将重新打开原来的位置。`,
-              buttons: ["重新打开 Interleaf"],
+              buttons: ["重新打开纸间"],
             });
             move.resolve(false);
           }
@@ -577,7 +577,7 @@ app
         }
         const confirmed = await dialog.showMessageBox(window!, {
           type: "question",
-          message: "迁移书库并重启 Interleaf？",
+          message: "迁移书库并重启纸间？",
           detail: `新位置：${destination}\nPDF、笔记、批注和阅读记录将一起复制。原书库保留。`,
           buttons: ["迁移并重启", "取消"],
           defaultId: 0,
@@ -862,10 +862,10 @@ app
     diagnostics?.record("desktop.start_failed", error);
     if (diagnostics)
       await diagnostics.failure(
-        "无法打开 Interleaf",
+        "无法打开纸间",
         "可导出启动日志供开发者排查，然后退出重试。",
       );
-    else dialog.showErrorBox("无法打开 Interleaf", String(error));
+    else dialog.showErrorBox("无法打开纸间", String(error));
     flushed = true;
     app.quit();
   });
@@ -893,7 +893,7 @@ app.on("before-quit", (event) => {
         restartRequested = false;
         diagnostics?.record("desktop.stop_failed", error);
         dialog.showErrorBox(
-          "Interleaf 尚未退出",
+          "纸间尚未退出",
           `本地服务未确认停止，未重新启动。\n${String(error)}`,
         );
         // Cleanup success and process closure are separate barriers. Keep the

@@ -223,7 +223,9 @@ describe("guide host", () => {
     const [version, items] = Object.entries(releaseNotes)[0];
     vi.mocked(api.guidePreferences).mockResolvedValue({});
     await render(true, version);
-    expect(document.body.textContent).toContain(`Interleaf ${version} 更新内容`);
+    expect(document.body.textContent).toContain(
+      `纸间 Interleaf ${version} 更新内容`,
+    );
     expect(document.body.textContent).toContain(items[0].title);
     const open = vi
       .spyOn(window, "open")

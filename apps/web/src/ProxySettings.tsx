@@ -193,16 +193,16 @@ export function ProxySettings({ open }: { open: boolean }) {
               disabled={pending || changed || !desktop.restart}
               onClick={() => void perform("restart")}
             >
-              重启 Interleaf
+              重启纸间
             </Button>
           )}
         </div>
         <p className="mt-2 text-xs text-muted-foreground">
           {state?.restartRequired
-            ? "代理配置已变化，重启 Interleaf 后生效。"
+            ? "代理配置已变化，重启纸间后生效。"
             : mode === "system"
-              ? "切换系统代理后，请重启 Interleaf 再检测。"
-              : "修改后需保存并重启 Interleaf。"}
+              ? "切换系统代理后，请重启纸间再检测。"
+              : "修改后需保存并重启纸间。"}
         </p>
         {state?.warning && (
           <p className="mt-2 text-xs text-muted-foreground">{state.warning}</p>

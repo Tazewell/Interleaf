@@ -68,8 +68,7 @@ export function LibraryLocationSettings({ open }: { open: boolean }) {
         <DialogContent showCloseButton={false}>
           <DialogTitle>正在更改书库位置</DialogTitle>
           <DialogDescription>
-            请完成目录选择和确认。迁移过程中请保持 Interleaf
-            打开，完成后会自动重启。
+            请完成目录选择和确认。迁移过程中请保持纸间 打开，完成后会自动重启。
           </DialogDescription>
           <LoaderCircle
             aria-label="处理中"

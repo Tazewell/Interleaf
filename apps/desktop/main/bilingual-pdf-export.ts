@@ -224,7 +224,7 @@ export class BilingualPDFSaveService {
     const managed = await realpath(library);
     const destination = join(parent, basename(path));
     if (inside(destination, managed))
-      throw new Error("请将导出文件保存在 Interleaf 书库之外");
+      throw new Error("请将导出文件保存在纸间书库之外");
     await regularTarget(destination);
     const temporary = join(parent, `.reader-bilingual-${randomUUID()}.tmp`);
     let owned = false;

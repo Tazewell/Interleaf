@@ -18,7 +18,7 @@ async function save(
   library: "papers" | "books" = "papers",
 ): Promise<Result> {
   const { secret } = await chrome.storage.local.get("secret");
-  if (!secret) return { ok: false, error: "请先打开 Interleaf 后重新打开插件" };
+  if (!secret) return { ok: false, error: "请先打开纸间后重新打开插件" };
   if (!candidate.pdfUrl) return { ok: false, error: "页面没有可下载的 PDF" };
   let pdf: Response;
   try {
@@ -32,10 +32,10 @@ async function save(
   if (!pdf.ok) return { ok: false, error: `PDF 下载失败 (${pdf.status})` };
   const declared = Number(pdf.headers.get("content-length") || 0);
   if (declared > 512 * 1024 * 1024)
-    return { ok: false, error: "PDF 超过 Interleaf 的 512 MB 上传限制" };
+    return { ok: false, error: "PDF 超过纸间的 512 MB 上传限制" };
   const blob = await pdf.blob();
   if (blob.size > 512 * 1024 * 1024)
-    return { ok: false, error: "PDF 超过 Interleaf 的 512 MB 上传限制" };
+    return { ok: false, error: "PDF 超过纸间的 512 MB 上传限制" };
   const magic = new Uint8Array(await blob.slice(0, 5).arrayBuffer());
   if (String.fromCharCode(...magic) !== "%PDF-")
     return { ok: false, error: "下载结果不是 PDF；可能需要在网站登录" };
@@ -56,7 +56,7 @@ async function save(
       body: form,
     });
   } catch {
-    return { ok: false, error: "无法连接 Interleaf，请确认桌面应用正在运行" };
+    return { ok: false, error: "无法连接纸间，请确认桌面应用正在运行" };
   }
   const data = await response
     .json()

@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/logo/reader-logo.svg" width="112" alt="Interleaf logo" />
+  <img src="assets/logo/interleaf-logo.svg" width="112" alt="Interleaf logo" />
 </p>
 
 <h1 align="center">Interleaf</h1>

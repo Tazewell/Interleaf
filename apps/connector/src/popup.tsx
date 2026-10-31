@@ -46,7 +46,7 @@ function App() {
           const session = await fetch(bridge + "/v1/session", {
             method: "POST",
           });
-          if (!session.ok) throw Error("无法连接 Interleaf");
+          if (!session.ok) throw Error("无法连接纸间");
           credential = (await session.json()).secret;
           await chrome.storage.local.set({ secret: credential });
           response = await fetch(bridge + "/v1/labels", {
@@ -54,7 +54,7 @@ function App() {
           });
         }
         if (response.status === 404) throw Error(outdatedReaderMessage);
-        if (!response.ok) throw Error("无法读取 Interleaf 论文库");
+        if (!response.ok) throw Error("无法读取纸间论文库");
         const labels = (await response.json()) as {
           folders: string[];
           tags: string[];
@@ -66,7 +66,7 @@ function App() {
         setMessage(
           error instanceof Error && error.message === outdatedReaderMessage
             ? error.message
-            : "请先打开 Interleaf 桌面应用",
+            : "请先打开纸间桌面应用",
         );
         setMessageTone("error");
       }
@@ -438,9 +438,9 @@ function App() {
   return (
     <>
       <main>
-        <h1>Interleaf Connector</h1>
+        <h1>纸间收录助手</h1>
         {!secret ? (
-          <p>正在连接本机 Interleaf…</p>
+          <p>正在连接本机纸间…</p>
         ) : (
           <>
             <p>
@@ -522,7 +522,7 @@ function App() {
             disabled={busy || !selected.length}
             onClick={() => void save()}
           >
-            {busy ? "正在处理…" : `收录 ${selected.length} 篇到 Interleaf`}
+            {busy ? "正在处理…" : `收录 ${selected.length} 篇到纸间`}
           </button>
         </div>
       )}

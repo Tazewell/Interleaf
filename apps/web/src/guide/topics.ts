@@ -46,7 +46,7 @@ export const guideTopics: GuideTopic[] = [
       {
         id: "connect",
         title: "连接模型 API",
-        body: "打开「设置 → Agent」，选择 OpenAI 兼容或 Anthropic 协议，填写接口地址与 Key 并保存。Key 只保存在本机；保存后 Interleaf 会拉取模型列表，并检测文本推理与图片理解能力。",
+        body: "打开「设置 → Agent」，选择 OpenAI 兼容或 Anthropic 协议，填写接口地址与 Key 并保存。Key 只保存在本机；保存后纸间会拉取模型列表，并检测文本推理与图片理解能力。",
         scene: "api",
       },
     ],
@@ -76,7 +76,7 @@ export const guideTopics: GuideTopic[] = [
       {
         id: "link",
         title: "从链接导入",
-        body: "在论文库点击「导入论文」，粘贴论文页面或 PDF 链接，也可以输入 arXiv 编号、DOI 或完整标题。Interleaf 会下载 PDF 并补全论文信息。",
+        body: "在论文库点击「导入论文」，粘贴论文页面或 PDF 链接，也可以输入 arXiv 编号、DOI 或完整标题。纸间会下载 PDF 并补全论文信息。",
         scene: "link",
       },
       {
@@ -147,7 +147,7 @@ export const guideTopics: GuideTopic[] = [
       {
         id: "connector",
         title: "从浏览器收录",
-        body: "从 Chrome 网上应用店安装 Interleaf Connector。在论文页面点击插件图标，选择分类和标签后即可把 PDF 收录到论文库。收录时需要保持 Interleaf 打开。",
+        body: "从 Chrome 网上应用店安装纸间收录助手。在论文页面点击插件图标，选择分类和标签后即可把 PDF 收录到论文库。收录时需要保持纸间打开。",
         scene: "connector",
       },
     ],
@@ -166,7 +166,7 @@ export const guideTopics: GuideTopic[] = [
       {
         id: "export-pdf",
         title: "导出带批注的 PDF",
-        body: "在书库中右键 PDF 并选择「导出带批注的 PDF」，或在笔记栏的导出中选择该项。Interleaf 会将高亮、下划线、笔记以及问题和回答写入 PDF 副本，原文件保持不变。",
+        body: "在书库中右键 PDF 并选择「导出带批注的 PDF」，或在笔记栏的导出中选择该项。纸间会将高亮、下划线、笔记以及问题和回答写入 PDF 副本，原文件保持不变。",
         scene: "exportPdf",
       },
     ],
@@ -208,7 +208,7 @@ export const guideTopics: GuideTopic[] = [
       {
         id: "cli",
         title: "安装 reader 命令",
-        body: "在「设置 → Agent → 命令行工具」中安装 reader 命令后，可以在终端检索、阅读和导入书库中的文档，也可以让 Claude Code、Codex 等 Agent 直接调用。使用时需要保持 Interleaf 打开。",
+        body: "在「设置 → Agent → 命令行工具」中安装 reader 命令后，可以在终端检索、阅读和导入书库中的文档，也可以让 Claude Code、Codex 等 Agent 直接调用。使用时需要保持纸间打开。",
         scene: "cli",
       },
     ],

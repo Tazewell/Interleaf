@@ -639,7 +639,7 @@ export function App() {
                     </DropdownMenuItem>
                     <DropdownMenuItem onClick={() => setAbout(true)}>
                       <Info />
-                      关于 Interleaf
+                      关于纸间
                     </DropdownMenuItem>
                     <DropdownMenuSeparator />
                     <div className="px-1.5 py-1 text-xs text-ink-faint">
@@ -949,8 +949,20 @@ export function App() {
         <Dialog open={about} onOpenChange={setAbout}>
           <DialogContent className="sm:max-w-sm">
             <DialogHeader>
-              <DialogTitle>关于 Interleaf</DialogTitle>
-              <DialogDescription>一千万以内最好的阅读器</DialogDescription>
+              <img
+                src="/brand/logo.svg"
+                alt=""
+                aria-hidden="true"
+                className="mb-1 size-10 rounded-lg dark:hidden"
+              />
+              <img
+                src="/brand/logo-dark.svg"
+                alt=""
+                aria-hidden="true"
+                className="mb-1 hidden size-10 rounded-lg dark:block"
+              />
+              <DialogTitle>关于纸间 Interleaf</DialogTitle>
+              <DialogDescription>本地 EPUB / PDF 阅读器</DialogDescription>
             </DialogHeader>
             <dl className="flex items-center justify-between text-sm">
               <dt className="text-muted-foreground">版本</dt>

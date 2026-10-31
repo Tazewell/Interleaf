@@ -219,7 +219,7 @@ export class ProxySettingsService {
         connected: false,
         route: "unknown",
         elapsedMs: Date.now() - started,
-        message: "无法完成连接检测，请重试或重新打开 Interleaf。",
+        message: "无法完成连接检测，请重试或重新打开纸间。",
         warning,
       };
     } finally {

@@ -308,7 +308,7 @@ const login = scene({
     chrome(f);
     terminal(f, term, terminalLines(f), f.after("focus"));
 
-    p.text("Interleaf", loginPanel.x, 36, {
+    p.text("纸间 Interleaf", loginPanel.x, 36, {
       size: 11,
       weight: 600,
       color: c.mutedForeground,
@@ -1814,7 +1814,7 @@ const connector = scene({
     if (!f.after("open")) return;
     p.alpha(f.progress("open", 180), () => {
       p.box(P, { fill: c.popover, radius: 10, shadow: 18, stroke: c.border });
-      p.text("Interleaf Connector", P.x + 14, P.y + 24, { size: 13, weight: 600 });
+      p.text("纸间收录助手", P.x + 14, P.y + 24, { size: 13, weight: 600 });
       p.text("保存当前页面的 PDF 论文。", P.x + 14, P.y + 46, {
         size: 10.5,
         color: c.mutedForeground,
@@ -1858,7 +1858,7 @@ const connector = scene({
       button(
         f,
         collectButton,
-        f.between("save", "saved") ? "正在处理…" : "收录 1 篇到 Interleaf",
+        f.between("save", "saved") ? "正在处理…" : "收录 1 篇到纸间",
         "primary",
       );
     });
@@ -2364,7 +2364,7 @@ const cli = scene({
   draw(f) {
     const { p, c } = f;
     chrome(f);
-    p.text("Interleaf 设置 · Agent", cliPanel.x, 36, {
+    p.text("纸间设置 · Agent", cliPanel.x, 36, {
       size: 11,
       weight: 600,
       color: c.mutedForeground,
@@ -2376,7 +2376,7 @@ const cli = scene({
     });
     paragraph(
       f,
-      "在终端运行 reader，让 Claude Code、Codex 等工具检索、阅读和导入书库中的文档。使用时 Interleaf 需要保持打开。",
+      "在终端运行 reader，让 Claude Code、Codex 等工具检索、阅读和导入书库中的文档。使用时纸间需要保持打开。",
       cliPanel.x + 16,
       cliPanel.y + 50,
       cliPanel.w - 32,

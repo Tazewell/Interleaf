@@ -24,7 +24,7 @@ await build({
   minify: true,
 });
 await copyFile(
-  new URL("../../assets/logo/png/reader-logo-256.png", import.meta.url),
+  new URL("../../assets/logo/png/interleaf-logo-256.png", import.meta.url),
   new URL("icon.png", out),
 );
 await copyFile(
@@ -43,9 +43,9 @@ await writeFile(
       ...(process.env.READER_CONNECTOR_DEV_KEY === "1"
         ? { key: developmentKey }
         : {}),
-      name: "Interleaf Connector",
+      name: "纸间收录助手",
       version: "0.1.0",
-      description: "将网页中的 PDF 论文收录到本机 Interleaf",
+      description: "将网页中的 PDF 论文收录到本机纸间",
       icons: { 128: "icon.png" },
       action: { default_popup: "popup.html", default_icon: "icon.png" },
       background: { service_worker: "worker.js" },

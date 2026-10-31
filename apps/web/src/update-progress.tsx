@@ -13,7 +13,7 @@ export function useUpdateProgress() {
           return;
         }
         if (progress.phase === "prepare") {
-          toast.loading(`正在准备安装 Interleaf ${progress.version}`, {
+          toast.loading(`正在准备安装纸间 ${progress.version}`, {
             id: "reader-update",
             description: undefined,
             duration: Infinity,
@@ -21,7 +21,7 @@ export function useUpdateProgress() {
           return;
         }
         const { received, total } = progress;
-        toast.loading(`正在下载 Interleaf ${progress.version}`, {
+        toast.loading(`正在下载纸间 ${progress.version}`, {
           id: "reader-update",
           duration: Infinity,
           description: (

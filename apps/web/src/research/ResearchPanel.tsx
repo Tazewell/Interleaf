@@ -69,9 +69,7 @@ function ResearchPanelView({
     return () => controller.abort();
   }, [config, model, catalogRevision]);
   const blocked =
-    !config?.connection.url ||
-    !model ||
-    capability?.text === false;
+    !config?.connection.url || !model || capability?.text === false;
   const active = running(state.run);
   const session = state.sessions.find(
     (session) => session.id === state.sessionId,
@@ -189,7 +187,7 @@ function ResearchPanelView({
         )}
         {!blocked && capability && capability.tools !== "passed" && (
           <p className="text-sm text-muted-foreground">
-            受限文字模式：由 Interleaf 控制资料读取，模型不调用工具。
+            受限文字模式：由纸间控制资料读取，模型不调用工具。
           </p>
         )}
         {capability && !capability.vision && (

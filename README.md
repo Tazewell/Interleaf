@@ -1,8 +1,8 @@
 <p align="center">
-  <img src="assets/logo/reader-logo.svg" width="112" alt="Interleaf logo" />
+  <img src="assets/logo/interleaf-logo.svg" width="112" alt="纸间 Interleaf 标识" />
 </p>
 
-<h1 align="center">Interleaf</h1>
+<h1 align="center">纸间 Interleaf</h1>
 
 <p align="center"><b>简体中文</b> | <a href="README.en.md">English</a> | <a href="https://tazewell.github.io/Interleaf/">官网</a></p>
 

@@ -132,9 +132,9 @@ it("shows restart only after successful persistence and never restarts automatic
     host: "127.0.0.1",
     port: 7897,
   });
-  expect(host.textContent).toContain("代理配置已变化，重启 Interleaf 后生效。");
+  expect(host.textContent).toContain("代理配置已变化，重启纸间后生效。");
   expect(restart).not.toHaveBeenCalled();
-  await click("重启 Interleaf");
+  await click("重启纸间");
   expect(restart).toHaveBeenCalledOnce();
 });
 
@@ -163,16 +163,16 @@ it("reloads a completed save after closing and reopening settings", async () => 
   expect(button("检测连接").disabled).toBe(true);
   await act(async () => finish());
   expect(input("代理端口").value).toBe("7897");
-  expect(button("重启 Interleaf")).toBeDefined();
+  expect(button("重启纸间")).toBeDefined();
 });
 
 it("offers restart in system mode and tests the active configuration", async () => {
   state = { settings: { mode: "system" }, restartRequired: false };
   await render();
-  expect(host.textContent).toContain("切换系统代理后，请重启 Interleaf 再检测。");
+  expect(host.textContent).toContain("切换系统代理后，请重启纸间再检测。");
   expect(host.textContent).toContain("检测当前已生效的系统代理配置。");
-  expect(button("重启 Interleaf").disabled).toBe(false);
-  await click("重启 Interleaf");
+  expect(button("重启纸间").disabled).toBe(false);
+  await click("重启纸间");
   expect(restart).toHaveBeenCalledOnce();
 });
 
@@ -210,9 +210,9 @@ it("keeps unsaved fields and allows retry when saving fails", async () => {
   );
   expect(input("代理端口").value).toBe("7897");
   expect(button("保存代理设置").disabled).toBe(false);
-  expect(button("重启 Interleaf")).toBeUndefined();
+  expect(button("重启纸间")).toBeUndefined();
   await click("保存代理设置");
-  expect(button("重启 Interleaf")).toBeDefined();
+  expect(button("重启纸间")).toBeDefined();
 });
 
 it("rejects a nonnumeric port before calling the desktop", async () => {

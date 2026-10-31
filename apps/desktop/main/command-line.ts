@@ -70,7 +70,7 @@ export async function macStatus(
 }
 
 function conflictError(location: string) {
-  return new Error(`${location} 已被其他程序占用，Interleaf 没有改动它`);
+  return new Error(`${location} 已被其他程序占用，纸间没有改动它`);
 }
 function permissionDenied(error: unknown) {
   const code = (error as NodeJS.ErrnoException).code;
