@@ -23,6 +23,9 @@ it("PDF.js reads the shipped PDF with outline and selectable text", async () => 
     expect(
       text.items.map((item) => ("str" in item ? item.str : "")).join(" "),
     ).toContain("A claim is not the same as evidence.");
+    const renderedText = text.items.map((item) => ("str" in item ? item.str : "")).join(" ");
+    expect(renderedText).toContain("A short sample paper for Interleaf");
+    expect(renderedText).not.toContain("for Reader");
   } finally {
     await task.destroy();
   }
