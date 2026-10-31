@@ -6,11 +6,7 @@ import { spawnSync } from "node:child_process";
 const { version } = JSON.parse(
   await readFile("apps/desktop/package.json", "utf8"),
 );
-const expected = [
-  `Interleaf-${version}-mac-arm64.dmg`,
-  `Interleaf-${version}-mac-arm64.zip`,
-  ...(process.env.MAC_ONLY === "true" ? [] : [`Interleaf-${version}-win-x64.exe`]),
-].sort();
+const expected = [`Interleaf-${version}-win-x64.exe`];
 const actual = (await readdir("release"))
   .filter((file) => file !== "SHA256SUMS.txt")
   .sort();
@@ -26,12 +22,11 @@ for (const file of expected) {
     bytes.length > 1024 * 1024,
     `Installer is unexpectedly small: ${file}`,
   );
-  const [header, magic] = file.endsWith(".dmg")
-    ? [bytes.subarray(-512, -508), "koly"]
-    : file.endsWith(".zip")
-      ? [bytes.subarray(0, 4), "PK\u0003\u0004"]
-      : [bytes.subarray(0, 2), "MZ"];
-  assert.equal(header.toString(), magic, `Invalid installer format: ${file}`);
+  assert.equal(
+    bytes.subarray(0, 2).toString(),
+    "MZ",
+    `Invalid installer format: ${file}`,
+  );
   checksums.push(
     `${createHash("sha256").update(bytes).digest("hex")}  ${file}`,
   );

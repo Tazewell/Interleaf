@@ -50,9 +50,9 @@ Captured from the current app on **2026-10-31**, using the bundled original samp
 
 ## Install or run from source
 
-Published installers are available through [GitHub Releases](https://github.com/Tazewell/Interleaf/releases); check the release attachments for actual versions and platforms. The project builds Windows x64 EXE and Apple Silicon macOS DMG installers. Build installers on native Windows or macOS. If no installer is available yet, run from source.
+Installers are distributed through [GitHub Releases](https://github.com/Tazewell/Interleaf/releases). Currently only **Windows x64 EXE** installers are published. Download `Interleaf-VERSION-win-x64.exe` and follow the setup wizard. If no installer is available yet, run from source.
 
-Installers currently have no trusted developer signature or macOS notarization. Check the download source and checksums; your operating system may show a first-run security prompt.
+Windows installers currently have no trusted developer signature. Check the download source and `SHA256SUMS.txt`; Windows may show a first-run security prompt.
 
 ### Run from source
 
@@ -86,7 +86,7 @@ The key is stored by the local backend; the UI only reports whether one is confi
 pnpm typecheck     # TypeScript checks
 pnpm test          # Go and frontend tests
 pnpm build         # Server, processor, web, desktop main process, and connector
-pnpm package       # Native Windows/macOS installer build
+pnpm package       # Native Windows x64 EXE installer build
 ```
 
 ```text
@@ -104,13 +104,15 @@ website/                 Static website and current screenshots
 assets/                  Interleaf identity and platform icons
 ```
 
-Scanned-page OCR is not available. Fixed-layout EPUB, vertical text, RTL, and complex PDF layouts need more validation. Linux installers are not provided. Native installation, security prompts, and cross-version upgrades still require manual verification.
+Scanned-page OCR is not available. Fixed-layout EPUB, vertical text, RTL, and complex PDF layouts need more validation. macOS and Linux installers are not currently published. Native installation and cross-version upgrades still require manual verification.
 
 ## Publishing and updates
 
-Keep the root and `apps/desktop/package.json` versions in sync and add notes for that version to `docs/release-notes.json`. Run checks, then execute `pnpm package` on native Windows/macOS. Installers are written to `release/`.
+Keep the root and `apps/desktop/package.json` versions in sync and add notes for that version to `docs/release-notes.json`. Run checks, then execute `pnpm package` on native Windows x64. Installers are written to `release/`.
 
-The automated release workflow runs when a GitHub Release is **published**; pushing code or a tag alone does not publish installers. It currently builds Windows x64 and Apple Silicon macOS together. Tagged Mac builds require the repository secrets `MAC_SIGN_P12` and `MAC_SIGN_P12_PASSWORD`; a failed platform blocks the combined upload.
+The automated release workflow runs when a GitHub Release is **published**; pushing code or a tag alone does not publish installers. In **Releases → Draft a new release**, create a tag matching the app version (for example, `v0.8.7`), target the updated `main` commit, enter release notes, and click **Publish release**.
+
+The pipeline builds Windows x64 only and needs no Mac signing secrets. Follow **Actions → Release installers**; after checks, packaging, and runtime verification pass, it attaches the EXE and `SHA256SUMS.txt` to a mutable Release. You can also run the workflow manually to download and verify build artifacts first. For immutable releases, build manually and attach the installer and checksums to the draft before publishing; the published event skips building and uploading so locked assets stay intact.
 
 Before the first release, verify installation, imports, reading, note persistence, and reopening. Use two actual installed versions to check that updates preserve data. A stable Release must include installers and `SHA256SUMS.txt`; installed apps check `Tazewell/Interleaf` for updates.
 

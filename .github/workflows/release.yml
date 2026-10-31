@@ -14,6 +14,9 @@ concurrency:
 
 jobs:
   prepare:
+    # Immutable releases must have their files attached to the draft first.
+    # Build those files with workflow_dispatch; publishing must not replace them.
+    if: github.event_name != 'release' || !github.event.release.immutable
     runs-on: ubuntu-24.04
     permissions:
       contents: read
@@ -63,7 +66,6 @@ jobs:
     with:
       ref: ${{ needs.prepare.outputs.sha }}
       release-tag: ${{ github.event.release.tag_name || '' }}
-      mac-only: ${{ contains(github.event.release.body, '<!-- interleaf:mac-only -->') }}
 
   publish:
     needs: [prepare, desktop]
@@ -71,8 +73,6 @@ jobs:
     runs-on: ubuntu-24.04
     permissions:
       contents: write
-    env:
-      MAC_ONLY: ${{ contains(github.event.release.body, '<!-- interleaf:mac-only -->') }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:

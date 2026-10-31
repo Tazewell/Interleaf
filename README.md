@@ -50,9 +50,9 @@
 
 ## 安装与运行
 
-安装包入口为 [GitHub Releases](https://github.com/Tazewell/Interleaf/releases)，具体版本与平台以 Release 附件为准。项目支持构建 Windows x64 EXE 与 Apple Silicon macOS DMG；可在原生 Windows 或 macOS 环境构建对应平台的安装包。若页面尚无安装包，可从源码运行。
+安装包入口为 [GitHub Releases](https://github.com/Tazewell/Interleaf/releases)。当前仅发布 **Windows x64 EXE**，下载 `Interleaf-版本号-win-x64.exe` 后按安装向导操作。若页面尚无安装包，可从源码运行。
 
-当前安装包尚无系统信任的开发者签名或 macOS 公证。下载后请核对来源和校验文件，系统首次运行可能出现安全提示。
+当前 Windows 安装包尚无受信任的开发者签名。下载后请核对来源和 `SHA256SUMS.txt`，系统首次运行可能出现安全提示。
 
 ### 从源码运行
 
@@ -86,7 +86,7 @@ API Key 由本机后端配置保存，界面只显示是否已配置。调用模
 pnpm typecheck     # TypeScript 类型检查
 pnpm test          # Go 与前端测试
 pnpm build         # 构建服务、处理器、Web、桌面主进程与扩展
-pnpm package       # 在原生 Windows / macOS 环境生成安装包
+pnpm package       # 在原生 Windows x64 环境生成 EXE 安装包
 ```
 
 ```text
@@ -104,13 +104,15 @@ website/                 静态官网与当前界面截图
 assets/                  纸间标识与平台图标
 ```
 
-扫描件尚不支持 OCR；固定版式 EPUB、竖排、RTL 和复杂 PDF 排版仍需更多验证。当前没有 Linux 安装包。实际安装、系统签名提示和跨版本升级仍需原生平台验收。
+扫描件尚不支持 OCR；固定版式 EPUB、竖排、RTL 和复杂 PDF 排版仍需更多验证。当前不发布 macOS 或 Linux 安装包。实际安装和跨版本升级仍需原生平台验收。
 
 ## 发布与更新
 
-先同步根目录和 `apps/desktop/package.json` 的版本号，并为该版本填写 `docs/release-notes.json`。运行检查后，在原生 Windows / macOS 环境执行 `pnpm package`，安装包生成在 `release/`。
+先同步根目录和 `apps/desktop/package.json` 的版本号，并为该版本填写 `docs/release-notes.json`。运行检查后，在原生 Windows x64 环境执行 `pnpm package`，安装包生成在 `release/`。
 
-GitHub 自动发布工作流由 **发布 Release** 触发，单独推送代码或 tag 不会生成正式附件。当前流水线同时构建 Windows x64 与 Apple Silicon macOS；Mac 正式构建需要仓库 Secrets `MAC_SIGN_P12` 和 `MAC_SIGN_P12_PASSWORD`，任一平台失败都会阻止统一上传。
+GitHub 自动发布工作流由 **发布 Release** 触发，单独推送代码或 tag 不会生成正式附件。在仓库的 **Releases → Draft a new release** 中创建与版本号一致的标签（例如 `v0.8.7`），选择已包含版本改动的 `main`，填写更新说明，再点击 **Publish release**。
+
+当前流水线只构建 Windows x64，不需要 Mac 签名 Secrets。进入 **Actions → Release installers** 查看进度；检查、打包和运行库验证全部通过后，工作流会自动向普通 Release 上传 EXE 和 `SHA256SUMS.txt`。也可先在 Actions 中手动运行该工作流，下载并验证构建产物，再正式发布。若启用了 GitHub 不可变发行，需先手动构建，将安装包和校验文件附到草稿再发布；发布后工作流会跳过构建和上传，保留已锁定的附件。
 
 首次发行前，先用测试安装包验收导入、阅读、笔记保存与重新打开，再用两个真实安装版本验收升级后数据保留。正式 Release 需提供安装包和 `SHA256SUMS.txt`；已安装应用从 `Tazewell/Interleaf` 检查更新。
 

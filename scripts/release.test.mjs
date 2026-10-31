@@ -31,7 +31,6 @@ function run(script, cwd, env = {}, args = []) {
       ...process.env,
       RELEASE_TAG: "",
       GITHUB_OUTPUT: "",
-      MAC_ONLY: "false",
       ...env,
     },
     timeout: 10000,
@@ -39,16 +38,10 @@ function run(script, cwd, env = {}, args = []) {
 }
 async function installers(cwd) {
   const files = [];
-  for (const target of [
-    "mac-arm64.dmg",
-    "mac-arm64.zip",
-    "win-x64.exe",
-  ]) {
+  for (const target of ["win-x64.exe"]) {
     const file = `Interleaf-0.2.0-${target}`;
     const bytes = Buffer.alloc(1024 * 1024 + 512);
-    if (target.endsWith("dmg")) bytes.write("koly", bytes.length - 512);
-    else if (target.endsWith("zip")) bytes.write("PK\u0003\u0004", 0);
-    else bytes.write("MZ", 0);
+    bytes.write("MZ", 0);
     await writeFile(join(cwd, "release", file), bytes);
     files.push({ file, bytes });
   }
@@ -90,14 +83,19 @@ test("release refuses missing or unexpected artifacts", async () => {
   await rm(join(cwd, "release/Interleaf-0.2.0-win-x64.exe"));
   expect(run("release-assets.mjs", cwd).status).not.toBe(0);
   await installers(cwd);
-  await rm(join(cwd, "release/Interleaf-0.2.0-mac-arm64.zip"));
-  expect(run("release-assets.mjs", cwd, { MAC_ONLY: "true" }).status).not.toBe(
-    0,
-  );
-  expect(run("release-assets.mjs", cwd).status).not.toBe(0);
-  await installers(cwd);
   await writeFile(join(cwd, "release/Interleaf-0.2.0-mac-x64.dmg"), "unexpected");
   expect(run("release-assets.mjs", cwd).status).not.toBe(0);
+});
+test("Windows release is complete with only the x64 installer", async () => {
+  const cwd = await fixture();
+  const files = await installers(cwd);
+  const result = run("release-assets.mjs", cwd);
+  expect(result.status, result.stderr).toBe(0);
+  const hashes = await readFile(join(cwd, "release/SHA256SUMS.txt"), "utf8");
+  const windows = files.find(({ file }) => file.endsWith(".exe"));
+  expect(hashes).toBe(
+    `${createHash("sha256").update(windows.bytes).digest("hex")}  ${windows.file}\n`,
+  );
 });
 test("release checks installer format before writing hashes", async () => {
   const cwd = await fixture();
@@ -110,27 +108,14 @@ test("release checks installer format before writing hashes", async () => {
   expect(result.status).not.toBe(0);
   expect(result.stderr).toContain("Invalid installer format");
 });
-test("Mac-only release requires the Apple Silicon DMG and update ZIP", async () => {
+test("Windows release rejects macOS artifacts", async () => {
   const cwd = await fixture();
   const files = await installers(cwd);
-  await rm(join(cwd, "release/Interleaf-0.2.0-win-x64.exe"));
-  expect(run("release-assets.mjs", cwd).status).not.toBe(0);
-  expect(run("release-assets.mjs", cwd, { MAC_ONLY: "true" }).status).toBe(0);
-  const hashes = await readFile(join(cwd, "release/SHA256SUMS.txt"), "utf8");
-  expect(hashes.split("\n").filter(Boolean)).toHaveLength(2);
-  for (const { file, bytes } of files.filter(
-    ({ file }) => !file.endsWith(".exe"),
-  ))
-    expect(hashes).toContain(
-      `${createHash("sha256").update(bytes).digest("hex")}  ${file}\n`,
-    );
   await writeFile(
-    join(cwd, "release/Interleaf-0.2.0-win-x64.exe"),
-    files[2].bytes,
+    join(cwd, "release/Interleaf-0.2.0-mac-arm64.dmg"),
+    files[0].bytes,
   );
-  expect(run("release-assets.mjs", cwd, { MAC_ONLY: "true" }).status).not.toBe(
-    0,
-  );
+  expect(run("release-assets.mjs", cwd).status).not.toBe(0);
 });
 test("complete artifacts get correct hashes and upload requires the matching tag", async () => {
   const cwd = await fixture();
@@ -189,8 +174,6 @@ test.each([0, 1, 2])(
       "release",
       "upload",
       "v0.2.0",
-      "release/Interleaf-0.2.0-mac-arm64.dmg",
-      "release/Interleaf-0.2.0-mac-arm64.zip",
       "release/Interleaf-0.2.0-win-x64.exe",
       "--clobber",
     ]);
