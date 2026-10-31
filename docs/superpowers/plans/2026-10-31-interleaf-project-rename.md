@@ -44,3 +44,11 @@
 - Full Go suite: passed, including legacy settings/image/locking compatibility.
 - Production processor, web, desktop and connector builds passed; backend rebuilt after compatibility fixes.
 - Renamed source secret scan: 938 files; the same four known public-key/demo/test matches, no new findings.
+
+## Checkout migration verified
+- Final checkout: D:/work/myreader/Interleaf; former ./reader directory no longer exists. Sibling checkouts were outside scope.
+- Development library: .interleaf/interleaf.sqlite; stopped the owned preview before moving, checkpointed SQLite and created .interleaf/interleaf.pre-rename.sqlite.
+- Before/after counts match: 2 documents, 2 messages, 2 chat sessions, 1 stored document conversation; annotation/research counts unchanged. SQLite quick_check is ok.
+- API configuration hash and preference-value hash match the pre-move values; private data and backup remain Git-ignored.
+- Preview restarted at http://127.0.0.1:5173/ from the final checkout; authenticated document listing and renamed CLI status/list work. Unauthenticated API access is rejected.
+- Final-path native Windows typecheck and release-source validation passed. Temporary task worktree/branch removed after merge. No remote push or installer publication performed.
