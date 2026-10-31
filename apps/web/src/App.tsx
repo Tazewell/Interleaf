@@ -17,7 +17,6 @@ import {
   Check,
   Info,
   Trash,
-  BookOpenText,
   Moon,
   DotsThree as Ellipsis,
   Sun,
@@ -81,7 +80,7 @@ import { DocumentEditor, LibraryFilterBar } from "./DocumentManagement";
 import { TagBoards } from "./TagBoards";
 import { LibraryDocuments } from "./LibraryDocuments";
 import { filterDocuments, initialFilters } from "./library";
-import { GuideHost } from "./guide/GuideHost";
+import { ReleaseNotesHost } from "./release-notes/ReleaseNotesHost";
 import { libraryPapers } from "./papers/projection";
 const currentMode = () =>
   libraryMode(useReaderStore.getState().libraryPreferences);
@@ -160,7 +159,6 @@ export function App() {
   const [settings, setSettings] = useState(false);
   const [checkingUpdates, setCheckingUpdates] = useState(false);
   const [about, setAbout] = useState(false);
-  const [guide, setGuide] = useState(false);
   const [filter, setFilter] = useState("all");
   const [filters, setFilters] = useState(initialFilters);
   const [libraryView, setLibraryView] = useState<"grid" | "list">("grid");
@@ -633,10 +631,6 @@ export function App() {
                     <Ellipsis weight="bold" className="size-4" />
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end" className="w-44">
-                    <DropdownMenuItem onClick={() => setGuide(true)}>
-                      <BookOpenText />
-                      指南
-                    </DropdownMenuItem>
                     <DropdownMenuItem onClick={() => setAbout(true)}>
                       <Info />
                       关于纸间
@@ -934,17 +928,10 @@ export function App() {
           onOpenChange={setImportingPaper}
           onChooseFiles={(folder) => chooseFiles(folder)}
         />
-        <GuideHost
+        <ReleaseNotesHost
           ready={!loading && !error}
           version={version}
           hasDocuments={allDocuments.length > 0}
-          open={guide}
-          onOpenChange={setGuide}
-          onAction={(action) => {
-            if (action === "settings") setSettings(true);
-            else if (currentMode() === "papers") setImportingPaper(true);
-            else chooseFiles();
-          }}
         />
         <Dialog open={about} onOpenChange={setAbout}>
           <DialogContent className="sm:max-w-sm">

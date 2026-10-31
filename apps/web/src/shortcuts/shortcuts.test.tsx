@@ -3,7 +3,7 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { beforeEach, afterEach, expect, it, vi } from "vitest";
 import { api } from "@interleaf/api";
-import { GuideDialog } from "../guide/GuideDialog";
+import { Settings } from "../Settings";
 import { ShortcutPanel } from "./ShortcutPanel";
 import {
   bindingError,
@@ -18,9 +18,11 @@ import {
   useShortcut,
 } from "./shortcuts";
 
+vi.mock("../ai/AISettings", () => ({ AISettings: () => null }));
 vi.mock("@interleaf/api", () => ({
   api: {
     shortcutPreferences: vi.fn(async () => ({})),
+    journalRankConfig: vi.fn(async () => null),
     saveShortcutPreferences: vi.fn(async (value) => value),
   },
 }));
@@ -201,22 +203,14 @@ it("searches actions by name", async () => {
   expect(host.textContent).not.toContain("主界面－左侧栏");
 });
 
-it("pins the shortcuts tab and cancels recording without closing the guide", async () => {
+it("opens shortcuts in settings and cancels recording without closing settings", async () => {
   const close = vi.fn();
-  await act(async () =>
-    root.render(
-      <GuideDialog
-        open
-        topic="shortcuts"
-        onTopicChange={() => {}}
-        onOpenChange={close}
-        onAction={() => {}}
-      />,
-    ),
-  );
-  expect(document.querySelector('[role="tab"]')?.textContent).toContain(
-    "快捷键",
-  );
+  await act(async () => root.render(<Settings open onOpenChange={close} />));
+  const tab = [
+    ...document.querySelectorAll<HTMLButtonElement>('[role="tab"]'),
+  ].find((item) => item.textContent?.includes("快捷键"));
+  expect(tab).toBeDefined();
+  await act(async () => tab!.click());
   const edit = document.querySelector<HTMLButtonElement>(
     '[aria-label="修改阅读模式－左侧栏快捷键"]',
   )!;

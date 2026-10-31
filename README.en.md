@@ -47,7 +47,7 @@ Download installers from [GitHub Releases](https://github.com/Tazewell/Interleaf
 
 - **In-app updates**: check for and download new versions with visible progress. Fixed-certificate macOS builds update in place; Windows verifies and installs updates silently, then reopens Interleaf.
 - **Proxy and diagnostics**: follow the system proxy, set a manual proxy, or connect directly, then test the connection. Export [diagnostic logs](docs/diagnostics.md) (Chinese) with sensitive fields filtered when something goes wrong.
-- **Guide and release notes**: a first-run guide walks through Agent setup; each version ships offline release notes, and update prompts link to GitHub feedback.
+- **Offline release notes**: each version ships offline release notes, and update prompts link to GitHub feedback. Keyboard shortcuts are available in Settings.
 
 See [paper-library behavior and manual checks (Chinese)](docs/paper-library.md) for import limits, online lookup, duplicate merging, and manual checks.
 

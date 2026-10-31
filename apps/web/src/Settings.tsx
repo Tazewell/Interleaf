@@ -1,3 +1,4 @@
+import { ShortcutPanel } from "./shortcuts/ShortcutPanel";
 import { AISettings } from "./ai/AISettings";
 import { AutoTranslationSettings } from "./papers/AutoTranslationSettings";
 import { useEffect, useState } from "react";
@@ -8,13 +9,18 @@ import {
   HighlighterCircle as Highlighter,
   Books as Library,
   Monitor,
+  Keyboard,
   ArrowsClockwise as RefreshCw,
 } from "@phosphor-icons/react";
 import { DiagnosticExport } from "./DiagnosticExport";
 import { LibraryLocationSettings } from "./LibraryLocationSettings";
 import { CommandLineSettings } from "./CommandLineSettings";
 import { api } from "@interleaf/api";
-import type { LibraryMode, JournalRankConfig, PaperColumn } from "@interleaf/core";
+import type {
+  LibraryMode,
+  JournalRankConfig,
+  PaperColumn,
+} from "@interleaf/core";
 import { Button } from "@interleaf/ui/components/button";
 import { Input } from "@interleaf/ui/components/input";
 import {
@@ -107,7 +113,7 @@ export function Settings({
         <DialogHeader>
           <DialogTitle>设置</DialogTitle>
           <DialogDescription className="sr-only">
-            AI 连接、显示、阅读、诊断与论文库
+            AI 连接、显示、阅读、快捷键、诊断与论文库
           </DialogDescription>
         </DialogHeader>
         <Tabs defaultValue="agent" className="settings-tabs">
@@ -124,6 +130,10 @@ export function Settings({
               <Highlighter />
               阅读
             </TabsTrigger>
+            <TabsTrigger value="shortcuts">
+              <Keyboard />
+              快捷键
+            </TabsTrigger>
             <TabsTrigger value="diagnostics">
               <FileText />
               诊断
@@ -133,6 +143,9 @@ export function Settings({
               论文库
             </TabsTrigger>
           </TabsList>
+          <TabsContent value="shortcuts" className="settings-panel">
+            <ShortcutPanel />
+          </TabsContent>
           <TabsContent
             value="diagnostics"
             className="settings-panel"

@@ -38,7 +38,7 @@ import type {
   PDFBlock,
   LibraryMode,
   LibraryPreferences,
-  GuidePreferences,
+  ReleasePreferences,
   PaperMetadata,
   PaperMetadataField,
   ReadingStatus,
@@ -104,7 +104,10 @@ function annotationRequest<T>(path: string, init: RequestInit): Promise<T> {
   const operation = annotationQueue.then(() =>
     request<T>(path, {
       ...init,
-      headers: { ...init.headers, "X-Interleaf-Undo-Session": annotationSession },
+      headers: {
+        ...init.headers,
+        "X-Interleaf-Undo-Session": annotationSession,
+      },
     }),
   );
   annotationQueue = operation.then(
@@ -718,9 +721,11 @@ export const api = {
       "/api/preferences/shortcuts",
       { method: "PUT", body: JSON.stringify(preferences) },
     ),
-  guidePreferences: () => request<GuidePreferences>("/api/preferences/guide"),
-  saveGuidePreferences: (preferences: GuidePreferences) =>
-    request<GuidePreferences>("/api/preferences/guide", {
+  // Keep the existing storage bucket so previously acknowledged updates stay read.
+  releasePreferences: () =>
+    request<ReleasePreferences>("/api/preferences/guide"),
+  saveReleasePreferences: (preferences: ReleasePreferences) =>
+    request<ReleasePreferences>("/api/preferences/guide", {
       method: "PUT",
       body: JSON.stringify(preferences),
     }),
