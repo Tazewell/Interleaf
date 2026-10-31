@@ -6,14 +6,14 @@
     <title>纸间 Interleaf — 本地优先的 EPUB / PDF 阅读器</title>
     <meta
       name="description"
-      content="纸间是一个本地优先的 EPUB / PDF 阅读器：论文库与图书库、原文译文对照、批注与引用导出，以及通过你已登录的 Claude Code、Codex 或 Kimi CLI 调用的 AI 助读。"
+      content="纸间是一个本地优先的 EPUB / PDF 阅读器，支持图书与论文管理、双语对照翻译、批注笔记，以及通过自选 API 连接的 AI 精读与主题研究。"
     />
     <meta name="theme-color" content="#faf9f5" media="(prefers-color-scheme: light)" />
     <meta name="theme-color" content="#151514" media="(prefers-color-scheme: dark)" />
     <meta property="og:title" content="纸间 Interleaf — 本地优先的 EPUB / PDF 阅读器" />
     <meta property="og:description" content="读论文与读书，译文、批注与 AI 助读都回到原文。" />
     <meta property="og:url" content="https://tazewell.github.io/Interleaf/" />
-    <meta property="og:image" content="https://tazewell.github.io/Interleaf/assets/screenshots/pdf-bilingual-ai.webp" />
+    <meta property="og:image" content="https://tazewell.github.io/Interleaf/assets/screenshots/interleaf-pdf-light.jpg" />
     <link rel="icon" href="assets/favicon.ico?v=green-1" sizes="32x32" />
     <link rel="icon" href="assets/favicon.svg?v=green-1" type="image/svg+xml" />
     <link rel="apple-touch-icon" href="assets/apple-touch-icon.png?v=green-1" />
@@ -120,8 +120,8 @@
         </svg>
         <div class="hero-copy wrap">
           <h1 class="reveal" data-en="Read deeper.<br /><em>Stay with the text.</em>">读得更深，<br /><em>始终回到原文。</em></h1>
-          <p class="hero-sub reveal" data-en="A local-first PDF / EPUB reader with a paper library and a book library. Papers read side by side with their translation, and highlights, search and AI help stay anchored to the source — documents stay on your machine, and AI runs through the Claude Code, Codex or Kimi CLI you already use.">
-            本地优先的 PDF / EPUB 阅读器，分论文库与图书库。论文可以原文译文逐段对照，批注、搜索与 AI 助读都锚定在原文——文档留在本机，AI 通过你已登录的 Claude Code、Codex 或 Kimi CLI 调用。
+          <p class="hero-sub reveal" data-en="A local-first PDF / EPUB reader for papers and books. Read, translate and annotate with the source in view. Documents stay on your machine; AI connects to your own OpenAI- or Anthropic-compatible API.">
+            本地优先的 PDF / EPUB 阅读器，分论文库与图书库。原文、翻译、批注与笔记放在同一阅读空间；文档留在本机，AI 通过你配置的 OpenAI 或 Anthropic 兼容 API 调用。
           </p>
           <div class="hero-cta reveal">
             <a class="btn btn-primary" href="https://github.com/Tazewell/Interleaf/releases/latest" target="_blank" rel="noopener">
@@ -258,7 +258,7 @@
                             <p>选中原文，可以翻译、解释，<br />或引用多段文字一起讨论。</p>
                             <div class="suggest"><svg class="icon"><use href="#i-book" /></svg>总结当前页面<svg class="icon"><use href="#i-arrow" /></svg></div>
                             <div class="suggest"><svg class="icon"><use href="#i-message" /></svg>解释核心概念<svg class="icon"><use href="#i-arrow" /></svg></div>
-                            <p class="privacy">对话发送所选文字或当前页面给 AI。PDF 图表按主 Agent 设置自动预处理。</p>
+                            <p class="privacy">对话发送所选文字或当前页面给 AI。PDF 处理遵循你的模型与自动处理设置。</p>
                           </div>
                           <div class="m-user" id="m-user">
                             <div class="bubble">
@@ -340,7 +340,7 @@
 
             <article class="card span-2 reveal">
               <h3 data-en="Source and translation, paragraph by paragraph">原文译文，逐段对照</h3>
-              <p data-en="A local layout model finds text, figures and formulas. Your selected agent translates paragraphs and captions, and turns formulas into LaTeX. The original stays in PDF.js; hover and selections line up sentence by sentence, and both panes scroll together.">本地版面模型识别正文、图表与公式；所选 Agent 逐段翻译正文和图题，公式转为 LaTeX。原文仍由 PDF.js 渲染，两侧悬停与划词按句对应，滚动保持同步。</p>
+              <p data-en="A local layout model finds text, figures and formulas. Your configured model translates paragraphs and captions, and turns formulas into LaTeX. The original stays in PDF.js; hover and selections line up sentence by sentence, and both panes scroll together.">本地版面模型识别正文、图表与公式；配置的模型逐段翻译正文和图题，公式转为 LaTeX。原文仍由 PDF.js 渲染，两侧悬停与划词按句对应，滚动保持同步。</p>
               <div class="viz">
                 <div class="pdf">
                   <div class="col">
@@ -415,14 +415,11 @@
             </article>
 
             <article class="card reveal">
-              <h3 data-en="The AI account you already have">用你已有的 AI 账户</h3>
-              <p data-en="Interleaf detects locally installed CLIs and runs a real text and vision test. Pick separate models for chat and translation. No API key, no unofficial OAuth.">检测本机已安装的 CLI，用真实请求测试文本与识图能力；问答与翻译可分别选择模型。无需 API Key，不读取凭据文件。</p>
+              <h3 data-en="Connect the models you choose">连接你选择的模型</h3>
+              <p data-en="Configure your endpoint and key, then choose models for chat, translation, images and research. Interleaf connects directly through its built-in runtime.">配置 API 地址与 Key，分别选择问答、翻译、图片和研究模型。纸间通过内置运行时直接连接服务。</p>
               <div class="viz">
                 <div class="providers" id="providers">
-                  <div class="prov"><span class="brand-avatar brand-claude" style="--bg: #d97757"><svg><use href="#b-claude" /></svg></span><span class="name">Claude Code</span><span class="caps"><span class="cap"><i class="spin"></i><svg class="icon"><use href="#i-check" /></svg><span data-en="Text">文本</span></span><span class="cap"><i class="spin"></i><svg class="icon"><use href="#i-check" /></svg><span data-en="Vision">识图</span></span></span></div>
-                  <div class="prov"><span class="brand-avatar brand-openai" style="--bg: #000"><svg><use href="#b-openai" /></svg></span><span class="name">Codex</span><span class="caps"><span class="cap"><i class="spin"></i><svg class="icon"><use href="#i-check" /></svg><span data-en="Text">文本</span></span><span class="cap"><i class="spin"></i><svg class="icon"><use href="#i-check" /></svg><span data-en="Vision">识图</span></span></span></div>
-                  <div class="prov"><span class="brand-avatar brand-kimi" style="--bg: #000"><svg><use href="#b-kimi" /></svg></span><span class="name">Kimi Code</span><span class="caps"><span class="cap"><i class="spin"></i><svg class="icon"><use href="#i-check" /></svg><span data-en="Text">文本</span></span><span class="cap"><i class="spin"></i><svg class="icon"><use href="#i-check" /></svg><span data-en="Vision">识图</span></span></span></div>
-                  <div class="term">claude auth login</div>
+                  <img src="assets/screenshots/interleaf-ai-settings.jpg" alt="当前纸间的 API 设置界面" style="display:block;width:100%;border-radius:12px" loading="lazy" />
                 </div>
               </div>
             </article>
@@ -479,19 +476,21 @@
           <div class="section-head center reveal">
             <div class="kicker">Screenshots</div>
             <h2 data-en="The real thing">真实界面</h2>
-            <p class="lead" data-en="Captured from the app with the bundled sample documents.">以下截图来自应用本身，使用项目自带的示例文档。</p>
+            <p class="lead" data-en="Captured from the current Interleaf app with its original sample documents.">以下为当前纸间版本的真实截图，使用项目自带的原创示例文档。</p>
           </div>
           <div class="gallery-tabs reveal" role="tablist" id="gallery-tabs">
-            <button role="tab" aria-selected="true" data-shot="bilingual" data-en="Paper translation">论文对照</button>
+            <button role="tab" aria-selected="true" data-shot="reading" data-en="PDF reading">PDF 阅读</button>
             <button role="tab" aria-selected="false" data-shot="library" data-en="Library">书库</button>
-            <button role="tab" aria-selected="false" data-shot="pdf" data-en="PDF reading">PDF 阅读</button>
-            <button role="tab" aria-selected="false" data-shot="settings" data-en="Agent settings">Agent 设置</button>
+            <button role="tab" aria-selected="false" data-shot="settings" data-en="API settings">API 设置</button>
+            <button role="tab" aria-selected="false" data-shot="shortcuts" data-en="Shortcuts">快捷键</button>
+            <button role="tab" aria-selected="false" data-shot="identity" data-en="About Interleaf">关于纸间</button>
           </div>
           <div class="shot-frame reveal" id="shot-frame">
-            <img class="on" data-shot="bilingual" data-light="assets/screenshots/pdf-bilingual-ai.webp" data-dark="assets/screenshots/pdf-bilingual-ai.webp" src="assets/screenshots/pdf-bilingual-ai.webp" alt="纸间论文对照阅读：左侧目录，中间原文与译文，右侧 AI 助读" loading="lazy" />
-            <img data-shot="library" data-light="assets/screenshots/library-light.webp" data-dark="assets/screenshots/library-dark.webp" src="assets/screenshots/library-light.webp" alt="纸间书库" loading="lazy" />
-            <img data-shot="pdf" data-light="assets/screenshots/pdf-light.webp" data-dark="assets/screenshots/pdf-dark.webp" src="assets/screenshots/pdf-light.webp" alt="纸间 PDF 阅读界面" loading="lazy" />
-            <img data-shot="settings" data-light="assets/screenshots/settings-light.webp" data-dark="assets/screenshots/settings-light.webp" src="assets/screenshots/settings-light.webp" alt="纸间 Agent 设置" loading="lazy" />
+            <img class="on" data-shot="reading" data-light="assets/screenshots/interleaf-pdf-light.jpg" data-dark="assets/screenshots/interleaf-pdf-dark.jpg" src="assets/screenshots/interleaf-pdf-light.jpg" alt="当前纸间 PDF 阅读界面与批注面板" loading="lazy" />
+            <img data-shot="library" data-light="assets/screenshots/interleaf-library-light.jpg" data-dark="assets/screenshots/interleaf-library-dark.jpg" src="assets/screenshots/interleaf-library-light.jpg" alt="当前纸间书库与 EPUB、PDF 示例文档" loading="lazy" />
+            <img data-shot="settings" data-light="assets/screenshots/interleaf-ai-settings.jpg" data-dark="assets/screenshots/interleaf-ai-settings.jpg" src="assets/screenshots/interleaf-ai-settings.jpg" alt="纸间 API 连接与模型用途配置" loading="lazy" />
+            <img data-shot="shortcuts" data-light="assets/screenshots/interleaf-shortcuts.jpg" data-dark="assets/screenshots/interleaf-shortcuts.jpg" src="assets/screenshots/interleaf-shortcuts.jpg" alt="纸间当前快捷键设置" loading="lazy" />
+            <img data-shot="identity" data-light="assets/screenshots/interleaf-about.jpg" data-dark="assets/screenshots/interleaf-about.jpg" src="assets/screenshots/interleaf-about.jpg" alt="纸间 Interleaf 绿色标识与关于窗口" loading="lazy" />
           </div>
           <p class="shot-caption" data-en="Screenshots with a dark version follow the page's appearance.">有深色版本的截图会跟随本页外观切换。</p>
         </div>
@@ -506,7 +505,7 @@
             <ul class="list">
               <li><svg class="icon"><use href="#i-shield" /></svg><div><b data-en="Loopback only">只监听本机回环地址</b><span data-en="The Go service binds to a random 127.0.0.1 port with a per-launch token, and stops when the app closes.">Go 服务绑定 127.0.0.1 的随机端口，每次启动生成新令牌，应用关闭即停止。</span></div></li>
               <li><svg class="icon"><use href="#i-file" /></svg><div><b data-en="Untrusted documents, sanitized">文档内容按不可信处理</b><span data-en="EPUB imports check archive size and paths, and active content is removed before rendering.">EPUB 导入时检查压缩包大小与资源路径，并在渲染前移除活动内容。</span></div></li>
-              <li><svg class="icon"><use href="#i-terminal" /></svg><div><b data-en="You decide what AI sees">由你决定 AI 看到什么</b><span data-en="Questions send the selection, current chapter or page, and recent conversation; translation sends text and captions. Everything goes through the official CLI, from an empty temporary directory.">提问时只发送选区、当前章节或页面与近期对话，翻译时发送正文与图题；均经由官方 CLI，在临时空目录中运行。</span></div></li>
+              <li><svg class="icon"><use href="#i-terminal" /></svg><div><b data-en="You decide what AI sees">由你决定 AI 看到什么</b><span data-en="AI requests send the necessary passages, images and conversation context to the service you configure.">调用 AI 时，将所需原文、图片和会话上下文发送给你配置的模型服务。</span></div></li>
               <li><svg class="icon"><use href="#i-search" /></svg><div><b data-en="Lookups send identifiers only">在线补全只发编号</b><span data-en="Automatic paper lookup sends only the DOI or arXiv ID found in the file, and can be turned off in Settings.">自动补全论文信息只发送识别到的 DOI 或 arXiv 编号，可在设置中关闭。</span></div></li>
             </ul>
           </div>
@@ -517,7 +516,7 @@
             <div class="row">├── papers/         <span class="c" data-en="# original PDF files"># 原始 PDF</span></div>
             <div class="row">├── models/         <span class="c" data-en="# verified local layout model"># 经校验的本地版面模型</span></div>
             <div class="row">├── cache/          <span class="c" data-en="# EPUB resources, PDF analysis"># EPUB 资源、PDF 解析稿</span></div>
-            <div class="row">└── ai-work/        <span class="c" data-en="# temporary CLI dirs, removed after use"># 临时 CLI 目录，用完即删</span></div>
+            <div class="row">└── ai-work/        <span class="c" data-en="# local document-tool workspace"># 本地文档工具工作区</span></div>
             <div class="host"><i></i>127.0.0.1:<span id="port">49213</span> · token ••••••••</div>
           </div>
         </div>
@@ -528,7 +527,7 @@
           <div class="section-head reveal">
             <div class="kicker">Get started</div>
             <h2 data-en="Three steps to your first page.">三步，开始第一页。</h2>
-            <p class="lead" data-en="Download the installer, or build from source with Node.js 22+, pnpm 10 and Go 1.26.">下载安装包，或使用 Node.js 22+、pnpm 10 与 Go 1.26 从源码运行。</p>
+            <p class="lead" data-en="Download the installer, or build from source with Node.js 22+, pnpm 10.30.3 and Go 1.26.5+.">下载安装包，或使用 Node.js 22+、pnpm 10.30.3 与 Go 1.26.5+ 从源码运行。</p>
           </div>
           <div class="qs">
             <div class="qs-card reveal">
@@ -542,11 +541,10 @@ pnpm desktop</div>
             </div>
             <div class="qs-card reveal">
               <span class="n">2</span>
-              <h3 data-en="Sign in to a CLI (optional)">登录一个 CLI（可选）</h3>
-              <p data-en="Reading, search and notes work without AI. For AI help, sign in with the official CLI.">阅读、搜索与笔记都不需要 AI。想用 AI 助读时，用官方 CLI 登录即可。</p>
-              <div class="code"><button class="icon-btn copy" type="button" aria-label="复制"><svg class="icon"><use href="#i-copy" /></svg></button>claude auth login
-<span class="c"># or</span>
-codex login</div>
+              <h3 data-en="Configure AI (optional)">配置 AI（可选）</h3>
+              <p data-en="Reading, search and notes work without AI. For AI assistance, configure your endpoint, key and models in Settings.">阅读、搜索与笔记不需要 AI。需要 AI 助读时，在设置中配置 API 地址、Key 和用途模型。</p>
+              <div class="code"><button class="icon-btn copy" type="button" aria-label="复制"><svg class="icon"><use href="#i-copy" /></svg></button>OpenAI / Anthropic compatible API
+<span class="c" data-en="Settings → AI → endpoint, key, models">设置 → AI → 地址、Key、模型</span></div>
             </div>
             <div class="qs-card reveal">
               <span class="n">3</span>
@@ -568,11 +566,11 @@ codex login</div>
           <div class="faq reveal">
             <details>
               <summary data-en="Do I need an API key?">需要填写 API Key 吗？</summary>
-              <p data-en="No. Interleaf calls the official Claude Code, Codex or Kimi CLI you have already signed in to. Permissions, quotas, models and billing follow that CLI account.">不需要。纸间调用你已登录的官方 Claude Code、Codex 或 Kimi CLI；权限、额度、模型与计费都跟随该 CLI 账户。</p>
+              <p data-en="Local reading and annotations need no AI account. To use AI, configure an OpenAI- or Anthropic-compatible endpoint, an API key when required by that service, and your chosen models in Settings.">本地阅读和批注不需要 AI 账户。使用 AI 时，在设置中配置 OpenAI 或 Anthropic 兼容地址、服务所需的 API Key，以及各用途模型；费用和额度由对应服务决定。</p>
             </details>
             <details>
               <summary data-en="Are my documents uploaded?">我的文档会被上传吗？</summary>
-              <p data-en="Documents stay local. With a main agent enabled, the text and captions of imported PDFs are sent for translation and formula images are sent for conversion to LaTeX; figures and tables are not sent. Questions, explanations and summaries send the selection or current chapter / page and recent conversation through the CLI. Paper lookup sends only the DOI or arXiv ID.">文档本身留在本机。启用主 Agent 后，导入 PDF 的正文与图题会发送翻译，公式图片会发送转换为 LaTeX，图表和表格不会发送；提问、解释或总结时，选区或当前章节 / 页面以及近期对话会经由 CLI 发送。论文信息补全只发送 DOI 或 arXiv 编号。</p>
+              <p data-en="Original documents stay local. AI requests send required passages, images and conversation context to your configured provider; online research also queries public scholarly services. Paper metadata lookup sends detected DOI or arXiv identifiers.">原始文档保存在本机。调用 AI 时，所需原文、图片和会话上下文会发送给你配置的服务；联网研究另查询公开学术来源。论文信息补全发送检测到的 DOI 或 arXiv 编号。</p>
             </details>
             <details>
               <summary data-en="How do the paper and book libraries differ?">论文库和图书库有什么区别？</summary>
@@ -611,7 +609,7 @@ codex login</div>
         <nav>
           <a href="https://github.com/Tazewell/Interleaf" target="_blank" rel="noopener">GitHub</a>
           <a href="https://github.com/Tazewell/Interleaf/releases" target="_blank" rel="noopener" data-en="Releases">版本发布</a>
-          <a href="https://github.com/Tazewell/Interleaf/blob/main/docs/roadmap.md" target="_blank" rel="noopener" data-en="Roadmap">路线图</a>
+          <a href="https://github.com/Tazewell/Interleaf/issues" target="_blank" rel="noopener" data-en="Feature requests">功能建议</a>
           <a href="privacy/" data-en="Connector privacy">Connector 隐私政策</a>
         </nav>
       </div>

@@ -9,7 +9,7 @@ import (
 
 // Rules apply only to exact official HTTPS origins and their documented API
 // paths. A model name at a relay never selects a vendor or changes protocol.
-// Sources and review date: docs/api-provider-compatibility.md.
+// Rule behavior is covered by api_profile_test.go; the version records the review date.
 const apiRulesVersion = "2026-10-13.1"
 
 type apiEndpoint struct{ Vendor, Protocol, Base string }

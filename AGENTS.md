@@ -5,13 +5,13 @@ Local-first EPUB/PDF reader. Use Chinese for user-facing communication. Keep cha
 ## Architecture
 - `apps/web`: React + Vite renderer. Interleaf engines behind `ReaderAdapter`.
 - `apps/server`: Go loopback HTTP server; SQLite + original files; Readium EPUB parsing; native API model loops and document/research tools.
-- `apps/server/cmd/interleaf`: the `interleaf` command line; a client of the running app found through `server.json` in the library directory (`docs/cli.md`).
+- `apps/server/cmd/interleaf`: the `interleaf` command line; a client of the running app found through `server.json` in the library directory.
 - `apps/desktop`: Electron main/preload; starts Go, waits for readiness, stops it on exit.
 - `packages/ui`: actual shadcn Base Nova registry components, Base UI + Lucide. Do not replace primitives with handmade modals/buttons/tabs.
 - `packages/interleaf-core`: Document/Location/Annotation interfaces.
 - `packages/api-client`: generated OpenAPI types and transport.
 
-Native API chat streams through the existing SSE endpoint. Go owns the OpenAI/Anthropic model loop, tools, sessions and cancellation; do not launch external Codex, Claude, Kimi or Pi runtimes. Keep text/image paths incremental, require provider completion and validated sources before saving, and never switch to a fallback provider. A detached subscription does not cancel accepted background work. Frontend contract: `docs/agent-streaming-contract.md`.
+Native API chat streams through the existing SSE endpoint. Go owns the OpenAI/Anthropic model loop, tools, sessions and cancellation; do not launch external Codex, Claude, Kimi or Pi runtimes. Keep text/image paths incremental, require provider completion and validated sources before saving, and never switch to a fallback provider. A detached subscription does not cancel accepted background work. The frontend streaming contract is exercised against `docs/fixtures/agent-streaming-v1.json` by the Go and API-client tests.
 
 PDF rendering belongs in PDF.js, EPUB navigation in Readium. Never reduce EPUB positions to PDF page numbers. Readium navigator 2.11.1 uses shared 2.6.0; update these together after checking compatibility.
 

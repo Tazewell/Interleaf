@@ -1,217 +1,121 @@
 <p align="center">
-  <img src="assets/logo/interleaf-logo.svg" width="112" alt="Interleaf logo" />
+  <img src="assets/logo/interleaf-logo.svg" width="96" alt="Interleaf green page mark" />
 </p>
 
-<h1 align="center">Interleaf</h1>
+<h1 align="center">Interleaf · 纸间</h1>
 
-<p align="center"><a href="README.md">简体中文</a> | <b>English</b> | <a href="https://tazewell.github.io/Interleaf/">Website</a></p>
+<p align="center">A local-first EPUB/PDF reader for papers and books, with bilingual translation, annotations, notes, and AI-assisted reading.</p>
+<p align="center"><a href="README.md">简体中文</a> · <b>English</b> · <a href="https://github.com/Tazewell/Interleaf/releases">Releases</a></p>
 
-A local-first EPUB / PDF reader for books and papers, with side-by-side translations, annotations, and AI assistance grounded in the text you are reading.
-
-<p align="center">
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="website/assets/screenshots/pdf-dark.webp" />
-  <img src="website/assets/screenshots/pdf-light.webp" alt="Interleaf reading a PDF, with contents on the left and AI assistance on the right" />
+  <source media="(prefers-color-scheme: dark)" srcset="website/assets/screenshots/interleaf-pdf-dark.jpg" />
+  <img src="website/assets/screenshots/interleaf-pdf-light.jpg" alt="Current Interleaf PDF reader with document outline and annotation panel" />
 </picture>
-</p>
 
-Interleaf treats EPUB and PDF as core document formats. It separates books and papers into two libraries and shares contents, search, bilingual reading, annotation, and chat tools across both. Documents, reading progress, and notes stay on your machine. AI features can use an already authenticated Claude Code, Codex CLI, or Kimi Code CLI without a separate API key in Interleaf, or connect to an OpenAI- or Anthropic-compatible API with your own endpoint and key.
-
-Download installers from [GitHub Releases](https://github.com/Tazewell/Interleaf/releases): DMG for Apple Silicon Macs and EXE for Windows x64. Intel Mac builds are paused and Linux installers are not provided; you can also run from source. Installers have no trusted developer certificate and may require approval in your system security settings. See the [packaging and release guide (Chinese)](docs/releasing.md) for the workflow and validation scope.
+Interleaf keeps books and papers in separate libraries, with original files, notes, and reading history on your computer. Connect your own OpenAI- or Anthropic-compatible API for questions, translation, and research across your documents.
 
 ## Features
 
-**Libraries and paper management**
+- **Libraries for books and papers:** import EPUB/PDF, organize documents with categories, tags, reading states, and favorites; manage paper metadata, duplicates, related documents, and batch actions.
+- **Reading and annotations:** contents, text search, bookmarks, highlights, underlines, questions, notes, reading-position restoration, filtering, undo, and exports. Light, dark, and paper appearances are available.
+- **Bilingual reading:** original, side-by-side, and translated PDF views; chapter translation and linked source/translation reading for EPUB. Layout analysis runs locally; translation needs a configured API.
+- **AI reading and research:** quote passages in questions, follow answer sources back to the original, keep document conversations, and synthesize comparisons or research ideas across a category. Online research requires separate authorization.
+- **Import and citations:** DOI, arXiv, URL, or title import; Zotero migration, a browser connector, and GB/T 7714, APA, BibTeX, and RIS exports.
+- **Desktop and terminal:** Electron desktop app, in-app updates, proxy settings, diagnostic exports, editable shortcuts, and the `interleaf` command for searching, reading, and importing library documents.
 
-- **Book and paper libraries**: manage books and papers separately and move documents between them. The book library accepts EPUB / PDF; the paper library accepts PDFs up to 50 MB and 150 pages, asking first above 50 pages.
-- **Paper metadata**: edit authors, year, venue, DOI, arXiv ID, abstract, and more; online lookup never overwrites manual edits. Nested categories, tags with smart tag categories, list and sortable table views, reading status, batch actions, duplicate detection and merging, and two-way related papers.
-- **Journal ranks**: with an easyScholar key configured, show journal rank badges next to paper titles and choose which ranking systems to display.
-- **Several ways to add papers**: import by identifier, URL, or title; capture PDFs, metadata, and offline page snapshots from paper pages or search results with the [Interleaf Connector](docs/interleaf-connector.md) Chrome extension (Chinese); or [migrate from a local Zotero library](docs/zotero-migration.md) (Chinese), including PDFs, metadata, collections, tags, notes, and convertible annotations.
-- **Citations**: copy or batch-export GB/T 7714, APA, BibTeX, and RIS citations.
-- **Trash**: deleted documents keep their files, annotations, and conversations until permanently deleted, and can be undone or restored.
+The browser extension is not published to a store yet. Build `apps/connector`, enable developer mode in Chrome, and load its generated `dist/` directory.
 
-**Reading and translation**
+## Current screenshots
 
-- **Shared reading interface**: contents and search on the left, the document in the center, and AI chat and notes on the right. Resize or hide the sidebars.
-- **PDF analysis and translation**: page text and layout are analyzed locally; body text and captions are translated, and formula images are converted to LaTeX. Book PDFs are translated chapter by chapter. Progress appears as an overlay on the library cover, and you can read while processing continues. Hover a paragraph or figure to copy it, enlarge the original image, or ask AI about it.
-- **Bilingual EPUB reading**: books render inside the app with continuous scrolling or page turns. “Translate chapter” translates the current chapter on demand; original and translation scroll together, sentences highlight across both, and annotations are shared between them. Translations have their own font, size, and weight settings.
-- **Reading records**: bookmarks, highlights, underlines, question annotations, annotation tags, paper notes, and reading position restoration. Hover to preview notes; filter by color or tag, search notes, undo annotation changes, quote annotations, export Markdown, and open desktop `interleaf://` links. PDF internal links support hover previews and returning to your reading position.
-- **Reading preferences**: double-click to select a whole sentence, opt in to copying selections automatically, and customize highlight colors and translation fonts. Light, dark, paper, and system appearances also apply to the desktop window.
+Captured from the current app on **2026-10-31**, using the bundled original sample documents in a separate demonstration library. These images contain no personal conversations, API keys, or real provider endpoints. Light/dark variants follow GitHub's appearance.
 
-**AI assistance**
+### Library
 
-- **Questions and explanations**: translate or explain selections, quote multiple excerpts, summarize the current EPUB chapter or PDF page, revisit conversation history, and cancel generation. Questions include the paper title and abstract by default, with optional chapter text; questions about quoted excerpts include the surrounding chapter. Source references in answers jump back to the text and flash the source block.
-- **CLI or API**: detect local Claude Code / Codex CLI / Kimi Code CLI installations and login status and use your existing account through the official CLI, or configure an API connection using OpenAI Chat Completions or Anthropic Messages. Question answering and translation can use separate models and reasoning effort levels.
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="website/assets/screenshots/interleaf-library-dark.jpg" />
+  <img src="website/assets/screenshots/interleaf-library-light.jpg" alt="Interleaf library with EPUB/PDF samples, filters, and reading records" />
+</picture>
 
-**Desktop app**
+### AI settings
 
-- **In-app updates**: check for and download new versions with visible progress. Fixed-certificate macOS builds update in place; Windows verifies and installs updates silently, then reopens Interleaf.
-- **Proxy and diagnostics**: follow the system proxy, set a manual proxy, or connect directly, then test the connection. Export [diagnostic logs](docs/diagnostics.md) (Chinese) with sensitive fields filtered when something goes wrong.
-- **Offline release notes**: each version ships offline release notes, and update prompts link to GitHub feedback. Keyboard shortcuts are available in Settings.
+<img src="website/assets/screenshots/interleaf-ai-settings.jpg" alt="Current API settings with endpoint, protocol, and model roles" />
 
-See [paper-library behavior and manual checks (Chinese)](docs/paper-library.md) for import limits, online lookup, duplicate merging, and manual checks.
+### Keyboard shortcuts
 
-Each format retains reading controls suited to its layout:
+<img src="website/assets/screenshots/interleaf-shortcuts.jpg" alt="Current shortcut settings with search, editing, and reset controls" />
 
-| Capability                | EPUB                                                                        | PDF                                              |
-| ------------------------- | --------------------------------------------------------------------------- | ------------------------------------------------ |
-| Reading engine            | Sanitized chapters rendered in the app, parsed by Readium Go Toolkit        | PDF.js Viewer                                    |
-| Navigation                | Nested table of contents, chapter, in-chapter and cross-chapter links       | Document outline, page navigation                |
-| Layout                    | Continuous scrolling / page turns, font size, family, line spacing, margins | Continuous scrolling, zoom, fit to width         |
-| Translation               | On-demand chapter translation, side by side with the original               | Analyzed and translated after import             |
-| Search                    | SQLite FTS5 with literal substring matching                                 | Per-page text search                             |
-| Positions and annotations | Chapter resources, block IDs, and character ranges                          | Page numbers and normalized selection rectangles |
+### Interleaf identity
 
-In an empty library, click “先体验示例文档” (try sample documents) to load an original three-chapter EPUB and a two-page PDF included with the project.
+<img src="website/assets/screenshots/interleaf-about.jpg" alt="About Interleaf with the new green page mark and app version" />
 
-## Screenshots
+## Install or run from source
 
-Captured from the app with the bundled sample documents. Images follow GitHub's light / dark appearance.
+Published installers are available through [GitHub Releases](https://github.com/Tazewell/Interleaf/releases); check the release attachments for actual versions and platforms. The project builds Windows x64 EXE and Apple Silicon macOS DMG installers. Build installers on native Windows or macOS. If no installer is available yet, run from source.
 
-| Library                                                                                                                                                                                                                                        | Agent settings                                                                                                          |
-| ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
-| <picture> <source media="(prefers-color-scheme: dark)" srcset="website/assets/screenshots/library-dark.webp" /> <img src="website/assets/screenshots/library-light.webp" alt="Library with a PDF processing overlay on its cover" /></picture> | <img src="website/assets/screenshots/settings-light.webp" alt="Agent settings with Codex, Claude Code and Kimi Code" /> |
+Installers currently have no trusted developer signature or macOS notarization. Check the download source and checksums; your operating system may show a first-run security prompt.
 
-## Quick start
+### Run from source
 
-Requires **Node.js 22+, pnpm 10.30.3, and Go 1.26.5+**.
+Requires **Node.js 22+, pnpm 10.30.3, and Go 1.26.5+**:
 
 ```sh
 git clone https://github.com/Tazewell/Interleaf.git
 cd Interleaf
-pnpm install
+pnpm install --frozen-lockfile
 pnpm desktop
 ```
 
-`pnpm desktop` builds the Go service, web interface, and Electron app, then opens the desktop window. The main API listens on a random loopback port and stops when the application closes.
+Use `pnpm dev` for the browser development preview. Open the complete local URL printed in the terminal; it includes a temporary authentication token and must not be published. An empty book library offers bundled sample documents.
 
-If the Electron binary was not downloaded successfully during installation, run the following command and try again:
+The first build downloads and verifies approximately 67 MB of local layout-model weights. End users of packaged builds do not need Node.js, Go, Python, or PaddlePaddle.
 
-```sh
-node apps/desktop/node_modules/electron/install.js
-```
+## AI configuration and data
 
-## Using AI
+Local reading, search, and annotations work without AI. In **Settings → AI**, enter your API endpoint, key, and protocol, then choose models for chat, translation, images, and research. The built-in Go runtime calls that service directly; no external Codex, Claude Code, or Kimi CLI installation or login is required.
 
-AI is optional. Local reading, search, and annotations do not require an AI account.
+The key is stored by the local backend; the UI only reports whether one is configured. Model requests send the required passages, excerpts, images, and conversation context to your chosen service. Online research also queries public scholarly sources. Billing and data policies depend on the configured provider.
 
-**Through a CLI**: install the official CLI you want to use and sign in from your terminal:
+- Packaged libraries default to `Interleaf/library/` under the application user-data directory. Development desktop data uses `Interleaf Dev`; browser development uses the project's ignored `.interleaf/` directory.
+- Original files, SQLite data, reading history, annotations, and conversations stay local. No built-in cloud sync is provided.
+- Quit the app before backing up a library. A complete library may contain API configuration; remove private information before sharing it.
 
-```sh
-# Use Codex
-codex login
-
-# Or use Claude Code
-claude auth login
-```
-
-Interleaf does not install CLIs, read their credential files, or implement its own OAuth flow. Account permissions, quotas, model availability, and billing depend on the CLI login and the provider. Older CLI versions may need an upgrade to support the integration's command-line options.
-
-**Through an API**: choose API in Settings and enter the endpoint, key, and model. The request protocol is detected automatically for official endpoints, or you can choose OpenAI Chat Completions or Anthropic Messages manually; relay endpoints keep the root path you enter. The key is stored only by the local backend, and the interface only shows whether one is configured. See [API provider compatibility (Chinese)](docs/api-provider-compatibility.md) for per-provider reasoning effort rules.
-
-Open Interleaf settings, choose a primary Agent, and check the text and image capability results. Successful real requests produce green capability badges and resume waiting PDF translations. Question answering and translation can use separate models and supported reasoning effort levels; unspecified models use the recommendations for each task.
-
-The app bundles approximately 67 MB of layout-model weights, so the first PDF analysis can extract layout and locate image regions offline. Weights are fetched and verified during the build, not committed to Git. Python and PaddlePaddle do not need to be installed. Without a verified primary Agent, reading and region hover remain available while translation waits for configuration. Processing resumes after restart and reuses saved translations. Scanned pages are explicitly marked incomplete because OCR is not available.
-
-**Using AI sends relevant content off your machine.** Capability tests use a synthetic image. With a verified primary Agent configured, imported PDF body text and captions are sent for translation and formula images for LaTeX conversion; figures and tables are not sent for interpretation. EPUB chapter text is sent only after you click “Translate chapter”. When you request a translation, explanation, summary, or send a question, Interleaf passes the selected excerpts, the paper title and abstract, any included chapter or current page context, and recent conversation history to the CLI or API service. Chapter and context lengths are limited; a summary of the current page is not a summary of the entire paper.
-
-CLIs run in temporary empty directories. Claude is configured with tools and MCP disabled. Codex runs in a read-only sandbox with shell tools disabled. Raw CLI logs are not shown as answers. Codex streams text through App Server, Claude uses stream-json, Kimi uses ACP message chunks, and API connections use SSE. Text and image conversations both forward incremental output. See the [frontend integration contract (Chinese)](docs/agent-streaming-contract.md).
-
-## Local data
-
-Original files are stored on the filesystem. Document metadata, progress, annotations, conversations, and settings are stored in SQLite. Interleaf has no built-in cloud sync. Paper metadata lookup and online imports contact public paper services; automatic completion only sends detected DOI or arXiv IDs and can be turned off in Settings. Journal ranks are queried only after you configure an easyScholar key, and results are cached locally.
-
-| Mode                                | Data directory                                                                                   |
-| ----------------------------------- | ------------------------------------------------------------------------------------------------ |
-| Installed desktop app               | Electron `userData/library/`; typically `~/Library/Application Support/Interleaf/library/` on macOS |
-| Unpackaged desktop (`pnpm desktop`) | `~/Library/Application Support/Interleaf Dev/library/` on macOS                                     |
-| Browser development (`pnpm dev`)    | `.interleaf/` in the project root                                                                   |
-
-If you previously used `pnpm desktop` as your daily app, your old library is at `~/Library/Application Support/Interleaf/library/`. You can copy it to the new directory while Interleaf is closed.
-
-```text
-library/
-├── interleaf.sqlite       # Metadata, reading records, conversations, settings, and full-text index
-├── books/              # Original EPUB files
-├── papers/             # Original PDF files
-├── cache/              # EPUB resources; Markdown, images, and drafts under PDF analysis
-└── ai-work/            # Temporary CLI directories, removed after requests finish
-```
-
-Desktop runtime logs are kept in `userData/logs/` for up to 7 days and are never uploaded automatically. Close the application before backing up the entire data directory. The local API uses a randomly generated token for each launch and validates Host / Origin. EPUB imports check archive size and resource paths, and sanitize active content. Original files remain unchanged.
 
 ## Development
 
-Start the Go service and the web interface with hot reload:
-
 ```sh
-pnpm dev
+pnpm typecheck     # TypeScript checks
+pnpm test          # Go and frontend tests
+pnpm build         # Server, processor, web, desktop main process, and connector
+pnpm package       # Native Windows/macOS installer build
 ```
-
-The terminal prints a URL in the form `http://127.0.0.1:5173/#token=…`. Open the complete URL. Vite proxies requests to the Go service at `127.0.0.1:17840`. This token authenticates access to the local service; it is not an AI account credential. Do not share URLs containing the token.
-
-Development runs leave the connector port disabled unless `INTERLEAF_DEV_CONNECTOR=1` is set. Unpackaged desktop runs register `interleaf://` only with `INTERLEAF_DEV_PROTOCOL=1`.
-
-`pnpm dev`, `pnpm desktop` and `pnpm build` prepare the pinned layout model before running. The first build downloads approximately 67 MB; later builds verify and reuse the ignored `apps/processor/models/` cache. For an offline build, set `INTERLEAF_BUILD_LAYOUT_MODEL` to the absolute path of an existing copy of the pinned weights; size and SHA256 verification still apply. Installation, type checking and ordinary unit tests do not download the model.
-
-```sh
-pnpm typecheck     # TypeScript type checking
-pnpm test          # Go integration tests and Vitest
-pnpm build         # Build Go, web, and Electron
-pnpm api:generate  # Regenerate client types from OpenAPI
-```
-
-The project website lives in `website/` as static HTML, CSS and JavaScript with no build step. Preview it locally with `python3 -m http.server 4321 -d website` and open `http://127.0.0.1:4321/`.
-
-Tests cover document imports, persistence, resource access boundaries, CLI and API protocols, PDF parsing, and selected frontend regressions. Passing builds and tests does not replace manual checks with real documents and the application UI. See the [verification notes](docs/verification.md) (Chinese).
-
-## Technology and structure
-
-The frontend uses React, TypeScript, Vite, Tailwind CSS, shadcn/ui (Base UI), and Zustand. Electron manages windows, native file selection, app updates, and the Go service lifecycle. Go handles local documents, SQLite, search, and AI calls. PDF layout analysis runs locally in a Node processor with ONNX Runtime.
 
 ```text
 apps/
-├── desktop/       # Electron main / preload
-├── web/           # React UI, PDF.js and EPUB reader adapters
-├── server/        # Go local service
-├── processor/     # PDF layout analysis and the local layout model
-└── connector/     # Interleaf Connector Chrome extension
+├── web/                 React UI and EPUB/PDF engines
+├── desktop/             Electron main process and native features
+├── server/              Go local service, SQLite, and AI runtime
+├── processor/           Local PDF layout analysis and model
+└── connector/           Browser connector
 packages/
-├── ui/            # shadcn/ui + Base UI components
-├── interleaf-core/   # Document, Location, TOC, Annotation, ReaderAdapter
-└── api-client/    # OpenAPI types and API client
-docs/              # Scope, roadmap, API contract, and verification notes
-website/           # Static project website and README screenshots
-assets/            # Logo sources and app icons
+├── interleaf-core/      Shared document, position, and annotation types
+├── api-client/          API client and generated types
+└── ui/                  shadcn/ui and Base UI components
+website/                 Static website and current screenshots
+assets/                  Interleaf identity and platform icons
 ```
 
-The domain model centers on `Document`. PDF positions use page numbers and coordinates; EPUB positions use chapter resources, block IDs, and character ranges. The reading interface accesses each engine through `ReaderAdapter`. The project uses pnpm workspaces without Nx or Turborepo.
+Scanned-page OCR is not available. Fixed-layout EPUB, vertical text, RTL, and complex PDF layouts need more validation. Linux installers are not provided. Native installation, security prompts, and cross-version upgrades still require manual verification.
 
-## Current limitations and next steps
+## Publishing and updates
 
-The current version primarily targets DRM-free, horizontal left-to-right reflowable EPUBs and PDFs with text. OCR, password entry for protected PDFs, PDF thumbnails, background PDF full-text indexing, cross-document AI retrieval, independent conversation management, Ollama, and reading statistics are not yet supported. Highlights are not created for complex PDF selections spanning multiple pages.
+Keep the root and `apps/desktop/package.json` versions in sync and add notes for that version to `docs/release-notes.json`. Run checks, then execute `pnpm package` on native Windows/macOS. Installers are written to `release/`.
 
-Fixed-layout EPUBs, vertical text, RTL, complex footnotes, and large files need more testing with real documents. The desktop app handles macOS file-open events, but system file associations are not registered. Installers are built by CI without trusted developer signing or macOS notarization. See the [release and update guide (Chinese)](docs/releasing.md) for in-app update requirements.
+The automated release workflow runs when a GitHub Release is **published**; pushing code or a tag alone does not publish installers. It currently builds Windows x64 and Apple Silicon macOS together. Tagged Mac builds require the repository secrets `MAC_SIGN_P12` and `MAC_SIGN_P12_PASSWORD`; a failed platform blocks the combined upload.
 
-Planned for October 2026:
+Before the first release, verify installation, imports, reading, note persistence, and reopening. Use two actual installed versions to check that updates preserve data. A stable Release must include installers and `SHA256SUMS.txt`; installed apps check `Tazewell/Interleaf` for updates.
 
-- **Interleaf command line**: search, read, and import library documents from the terminal, for agents such as Claude Code and Codex as well as scripts.
-- **RAG support**: a broad upgrade to AI question answering, grounding answers in passages retrieved across chapters and documents.
-- **Large EPUB translation**: faster chapter translation, better job scheduling, and smoother resumption for long books.
+## Feedback and acknowledgements
 
-See the [roadmap](docs/roadmap.md) (Chinese) for longer-term plans.
+Report problems or suggest features through [GitHub Issues](https://github.com/Tazewell/Interleaf/issues).
 
-## Star History
-
-<a href="https://www.star-history.com/?repos=Tazewell%2FInterleaf&amp;type=date&amp;legend=top-left">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=Tazewell/Interleaf&amp;type=date&amp;legend=top-left&amp;theme=dark" />
-    <img src="https://api.star-history.com/svg?repos=Tazewell/Interleaf&amp;type=date&amp;legend=top-left" alt="Interleaf GitHub star history" />
-  </picture>
-</a>
-
-## Acknowledgments
-
-Thanks to [Readium](https://github.com/readium), [PDF.js](https://github.com/mozilla/pdf.js), [shadcn/ui](https://github.com/shadcn-ui/ui), and [Base UI](https://github.com/mui/base-ui). The shadcn components are included in `packages/ui`; their license is available in [packages/ui/LICENSE.md](packages/ui/LICENSE.md). See [third-party sources](docs/sources.md) (Chinese) for further attribution.
-
-[Project scope](docs/spec.md) · [Roadmap](docs/roadmap.md) · [OpenAPI](docs/openapi.yaml) · [Verification notes](docs/verification.md)
+Thanks to Readium, PDF.js, shadcn/ui, Base UI, and the other projects used by Interleaf. Their license, font, and model notices remain in the source tree.

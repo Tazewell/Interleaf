@@ -448,23 +448,6 @@
     pct.textContent = "64%";
   } else runCover();
 
-  /* Provider capability checks */
-  const caps = $$("#providers .cap");
-  async function runProviders() {
-    const wait = gate($("#providers"));
-    for (;;) {
-      caps.forEach((c) => c.classList.remove("ok"));
-      await wait(1000);
-      for (const cap of caps) {
-        await wait(380 + Math.random() * 300);
-        cap.classList.add("ok");
-      }
-      await wait(4200);
-    }
-  }
-  if (reduced) caps.forEach((c) => c.classList.add("ok"));
-  else runProviders();
-
   /* Search typing */
   const typed = $("#typed");
   const results = $$("#results .res");

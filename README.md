@@ -1,201 +1,121 @@
 <p align="center">
-  <img src="assets/logo/interleaf-logo.svg" width="112" alt="纸间 Interleaf 标识" />
+  <img src="assets/logo/interleaf-logo.svg" width="96" alt="纸间 Interleaf 绿色书页标识" />
 </p>
 
 <h1 align="center">纸间 Interleaf</h1>
 
-<p align="center"><b>简体中文</b> | <a href="README.en.md">English</a> | <a href="https://tazewell.github.io/Interleaf/">官网</a></p>
+<p align="center">本地优先的 EPUB / PDF 阅读器，支持论文管理、双语对照翻译、批注笔记与 AI 辅助精读。</p>
+<p align="center"><b>简体中文</b> · <a href="README.en.md">English</a> · <a href="https://github.com/Tazewell/Interleaf/releases">版本下载</a></p>
 
-一个本地优先的 EPUB / PDF AI 阅读器，用于阅读电子书与论文、对照译文、记录批注，以及结合原文向 AI 提问。
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="website/assets/screenshots/interleaf-pdf-dark.jpg" />
+  <img src="website/assets/screenshots/interleaf-pdf-light.jpg" alt="当前版本纸间：PDF 阅读、章节目录与批注面板" />
+</picture>
 
-<p align="center">
-  <img src="website/assets/screenshots/pdf-bilingual-ai.webp" alt="Interleaf 的 PDF 双语阅读界面：左侧目录，中间原文与译文，右侧 AI 助读" />
-</p>
-
-Interleaf 以 EPUB 和 PDF 为两种核心文档格式，将图书库与论文库分开管理，提供目录、搜索、双语对照、批注与 AI 助读。文档、阅读进度和笔记保存在本机。AI 由内置 Go 运行时直接连接设置中的 OpenAI 或 Anthropic 兼容 API，支持独立问答、翻译、图片与研究用途。参见[内置 AI 配置](docs/native-ai.md)与[主题研究](docs/topic-research.md)。
-
-可从[官网](https://tazewell.github.io/Interleaf/)了解项目，或在 [GitHub Releases](https://github.com/Tazewell/Interleaf/releases) 下载安装包：macOS（Apple Silicon）DMG 与 Windows x64 EXE。Intel Mac 安装包暂停构建，Linux 不提供安装包，也可以从源码运行。安装包没有受系统信任的开发者证书，首次运行可能需要允许系统安全提示。流程与验证范围见[安装包与发版说明](docs/releasing.md)。
+纸间将图书与论文分开管理，让原文、笔记和阅读记录保存在自己的电脑上。需要 AI 时，可配置自己的 OpenAI 或 Anthropic 兼容 API，在阅读过程中提问、翻译或围绕资料开展研究。
 
 ## 功能
 
-**书库与论文管理**
+- **图书与论文书库**：导入 EPUB / PDF，按分类、标签、阅读状态与星标整理文档；论文支持元数据补全、重复检测、关联文献和批量操作。
+- **阅读与批注**：目录与全文搜索、书签、高亮、下划线、问题和笔记；保存阅读位置，支持批注筛选、撤销与导出。界面提供浅色、深色和纸张外观。
+- **双语阅读**：PDF 原文、对照与译文视图；EPUB 按章翻译和原译文联动。PDF 版面解析在本地进行，翻译需要可用的 API 连接。
+- **AI 精读与主题研究**：引用原文提问，阅读可定位的回答来源；为文档维护独立会话，围绕分类中的资料生成综述、比较与研究想法。联网研究需单独授权。
+- **收录与引用**：从 DOI、arXiv、链接或标题导入，支持 Zotero 迁移、浏览器收录扩展，以及 GB/T 7714、APA、BibTeX、RIS 引用导出。
+- **桌面与命令行**：Electron 桌面应用、应用内更新、代理设置、诊断导出和自定义快捷键；`interleaf` 命令可检索、阅读和导入本机书库。
 
-- **图书库与论文库**：分别管理电子书和论文，可在两库间移动文档。图书库支持 EPUB / PDF；论文库只收 PDF，单个文件不超过 50 MB、150 页，超过 50 页时会先询问。
-- **论文信息**：编辑作者、年份、出处、DOI、arXiv、摘要等信息；在线补全不覆盖手动修改。支持嵌套分类、标签与智能标签分类、列表与可排序表格视图、阅读状态、批量操作、重复论文检测与合并、双向相关论文。
-- **期刊评级**：配置 easyScholar 密钥后，在论文标题旁显示期刊评级，可选择要显示的评级体系。
-- **多种收录方式**：通过编号、链接或标题导入；安装 [Interleaf Connector](docs/interleaf-connector.md) Chrome 扩展后，可从论文页面或搜索结果收录 PDF、论文信息和离线网页快照；也可[从本机 Zotero 迁移](docs/zotero-migration.md) PDF、论文信息、分类、标签、笔记和可转换的批注。
-- **引用导出**：支持 GB/T 7714、APA、BibTeX 和 RIS，可复制单篇引用或批量导出。
-- **回收站**：删除后保留原文件、批注和对话，可撤销或恢复；确认彻底删除后才移除数据。
+浏览器收录扩展尚未上架。当前可构建 `apps/connector`，在 Chrome 扩展管理中开启开发者模式，加载生成的 `dist/` 目录。
 
-**阅读与翻译**
+## 当前界面
 
-- **统一阅读界面**：左侧目录与搜索，中间正文，右侧 AI 对话与笔记；可调整侧栏宽度或收起侧栏。
-- **PDF 解析与翻译**：本地按页解析正文与版面，翻译正文和图题，并把公式图片转为 LaTeX；图书 PDF 按章翻译。进度显示在书库封面浮层中，可边处理边阅读。鼠标移到段落或图片上时，可复制内容、放大查看原图或让 AI 解释。
-- **EPUB 双语阅读**：正文在应用内连续滚动或翻页阅读，“翻译本章”按需翻译当前章节；原文与译文对照滚动，句子悬停联动，批注在原文和译文间共享。译文可单独设置字体、字号和字重。
-- **阅读记录**：书签、高亮、下划线、问题批注、批注标签、论文笔记与阅读位置恢复；悬停即可预览批注，支持按颜色和标签筛选、搜索笔记、撤销批注改动、摘录批注、Markdown 导出及桌面 `interleaf://` 链接。PDF 内部引用支持悬停预览和返回阅读位置。
-- **阅读偏好**：双击选中整句，可选开启选中文字自动复制；可自定义高亮颜色和译文字体；界面支持浅色、深色、纸张与跟随系统，桌面窗口外观同步切换。
+以下图片于 **2026-10-31** 从当前版本实际截取，使用独立演示书库中的项目自带示例文档。图片不包含个人聊天记录、API Key 或真实服务地址；浅色与深色图片会跟随 GitHub 外观切换。
 
-**AI 助读**
+### 书库
 
-- **问答与解释**：选区翻译与解释、多选区引用、EPUB 当前章节或 PDF 当前页总结、对话历史和生成取消。普通提问默认附带论文标题和摘要，可开启章节正文；引用选段提问时附带所在章节。回答中的出处可跳回原文并闪烁定位。
-- **内置 API 与主题研究**：按用途选择模型，维护独立文档会话；基于文件夹全范围资料生成综述、对比和有证据的研究想法，联网查新需明确授权。
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="website/assets/screenshots/interleaf-library-dark.jpg" />
+  <img src="website/assets/screenshots/interleaf-library-light.jpg" alt="纸间图书库：EPUB 与 PDF 示例、筛选与阅读记录" />
+</picture>
 
-**桌面应用**
+### AI 设置
 
-- **应用内更新**：检查并下载新版本，显示下载进度；macOS 固定证书版本原地更新，Windows 校验后静默安装并重新打开 Interleaf。
-- **代理与诊断**：在设置中选择跟随系统代理、手动代理或直连，并检测连接；遇到问题时可导出过滤敏感字段的[诊断日志](docs/diagnostics.md)。
-- **离线更新说明**：每个版本附带离线更新说明，可从更新提示直接到 GitHub 反馈。快捷键可在设置中修改。
+<img src="website/assets/screenshots/interleaf-ai-settings.jpg" alt="纸间当前 AI 设置：API 地址、协议与模型用途配置" />
 
-论文库的收录限制、联网查找、重复合并与人工检查步骤见[论文库说明](docs/paper-library.md)。
+### 快捷键
 
-两种格式各自保留适合其排版的阅读方式：
+<img src="website/assets/screenshots/interleaf-shortcuts.jpg" alt="纸间设置中的快捷键页面，可搜索、修改与恢复默认" />
 
-| 能力       | EPUB                                            | PDF                      |
-| ---------- | ----------------------------------------------- | ------------------------ |
-| 阅读内核   | 应用内渲染清理后的章节，Readium Go Toolkit 解析 | PDF.js Viewer            |
-| 导航       | 分级目录、章节跳转、章内与跨章链接              | Outline 目录、页码跳转   |
-| 排版       | 连续滚动 / 翻页、字号、字体、行距、页边距       | 连续滚动、缩放、适合宽度 |
-| 翻译       | 按章手动翻译，原文 / 译文对照                   | 导入后解析并翻译         |
-| 搜索       | SQLite FTS5，配合字面子串匹配                   | 逐页文本搜索             |
-| 定位与批注 | 章节资源、段落 ID 与字符范围                    | 页码与归一化选区矩形     |
+### 纸间标识
 
-空书库中可以点击“先体验示例文档”，加载项目附带的原创三章 EPUB 和两页 PDF。
+<img src="website/assets/screenshots/interleaf-about.jpg" alt="纸间关于窗口：绿色书页标识、Interleaf 名称与版本信息" />
 
-## 截图
+## 安装与运行
 
-以下截图来自应用本身，使用项目自带的示例文档；图片会跟随 GitHub 的浅色 / 深色外观。
+安装包入口为 [GitHub Releases](https://github.com/Tazewell/Interleaf/releases)，具体版本与平台以 Release 附件为准。项目支持构建 Windows x64 EXE 与 Apple Silicon macOS DMG；可在原生 Windows 或 macOS 环境构建对应平台的安装包。若页面尚无安装包，可从源码运行。
 
-| 书库                                                                                                                                                                                                                         | Agent 设置                                                                                                     |
-| ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
-| <picture> <source media="(prefers-color-scheme: dark)" srcset="website/assets/screenshots/library-dark.webp" /> <img src="website/assets/screenshots/library-light.webp" alt="书库，PDF 封面上显示后台处理进度" /></picture> | <img src="website/assets/screenshots/settings-light.webp" alt="Agent 设置：Codex、Claude Code 与 Kimi Code" /> |
+当前安装包尚无系统信任的开发者签名或 macOS 公证。下载后请核对来源和校验文件，系统首次运行可能出现安全提示。
 
-## 快速开始
+### 从源码运行
 
-需要 **Node.js 22+、pnpm 10.30.3 和 Go 1.26.5+**。
+准备 **Node.js 22+、pnpm 10.30.3、Go 1.26.5+**：
 
 ```sh
 git clone https://github.com/Tazewell/Interleaf.git
 cd Interleaf
-pnpm install
+pnpm install --frozen-lockfile
 pnpm desktop
 ```
 
-`pnpm desktop` 会构建 Go 服务、Web 界面和 Electron，然后打开桌面窗口。主 API 监听本机随机端口，并随应用关闭。
+开发浏览器预览可执行 `pnpm dev`。终端会输出带临时鉴权 token 的本机地址，使用完整地址打开，勿将该地址发布到仓库。空图书库中可点击“先体验示例文档”。
 
-若安装时 Electron 二进制未成功下载，可运行以下命令后重试：
+首次构建会下载并校验约 67 MB 的本地版面模型；终端用户使用已打包版本时无需安装 Node.js、Go、Python 或 PaddlePaddle。
 
-```sh
-node apps/desktop/node_modules/electron/install.js
-```
+## AI 配置与数据
 
-## 使用 AI
+本地阅读、搜索和批注不依赖 AI。启用 AI 时，在 **设置 → AI** 中填写 API 地址、Key 和协议，分别选择问答、翻译、图片及研究模型。内置 Go 运行时直接调用配置的模型服务；不需要安装或登录 Codex、Claude Code、Kimi 等外部 AI CLI。
 
-AI 是可选功能。本地阅读、搜索和批注不需要登录 AI 账户。
+API Key 由本机后端配置保存，界面只显示是否已配置。调用模型时，所需原文、选区、图片和会话上下文会发送给你配置的服务；联网研究还会查询公开学术来源。模型服务的费用与数据政策由对应服务决定。
 
-在设置中保存 API 地址、Key、协议及问答、翻译、图片、研究模型。内置运行时管理工具与会话，不启动外部 AI CLI，不读取其凭据，不自动切换备用服务。Key 仅存于本机后端私有配置。详见[内置 AI](docs/native-ai.md)、[主题研究](docs/topic-research.md)和[验证与人工预览步骤](docs/native-ai-research-validation.md)。
+- 安装版书库默认位于应用用户数据目录的 `Interleaf/library/`；开发桌面使用 `Interleaf Dev`，浏览器开发使用项目内 `.interleaf/`。
+- 原始文件、SQLite 数据库、阅读记录、批注和会话保存在本机，未内置云同步。
+- 备份前先退出应用。完整书库可能包含 API 配置，分享或上传前需移除私密信息。
 
-本地 PDF 版面处理器仍保留，内置模型离线提取版面与图块；扫描页尚不支持 OCR。调用 AI 时，所需原文、元数据、对话或主动选取的图片会发送到配置的模型服务；研究联网另向公开学术服务发送必要关键词。服务费用与真实回答质量需要用户自行核验。
-
-文本与图片增量显示，提供方完整结束、来源验证和保存成功后才确认完成。断开界面订阅不取消已接受的后台工作；显式停止、退出和迁移取消并等待任务。前端合同见[流式输出文档](docs/agent-streaming-contract.md)。
-## 本地数据
-
-原文件存放在文件系统，文档信息、进度、批注、对话与设置存放在 SQLite。Interleaf 没有内置云同步。论文元数据查找和在线导入会访问公开的论文服务；自动补全仅发送识别到的 DOI 或 arXiv 编号，可在设置中关闭。期刊评级只在配置 easyScholar 密钥后查询，并在本机缓存结果。
-
-| 运行方式                       | 数据目录                                                                                   |
-| ------------------------------ | ------------------------------------------------------------------------------------------ |
-| 已安装桌面版                   | Electron `userData/library/`；macOS 通常为 `~/Library/Application Support/Interleaf/library/` |
-| 未打包桌面版（`pnpm desktop`） | macOS 为 `~/Library/Application Support/Interleaf Dev/library/`                               |
-| 浏览器开发模式（`pnpm dev`）   | 项目根目录的 `.interleaf/`                                                                    |
-
-桌面版可在 **设置 → 论文库 → 书库位置** 中选择新的保存文件夹。Interleaf 会在其中新建 `Interleaf Library`，保存当前阅读状态后，复制 PDF、EPUB、笔记、批注、阅读记录及其他书库数据，校验成功后重启。已有的 `Interleaf Library` 不会被覆盖，原书库保留为迁移时的备份，之后的修改只写入新位置。笔记仍保存在书库数据库中，不单独导出文件；这不是 Zotero 持续同步。
-
-书库保存路径（包括上级目录）不能包含 `?`。自定义位置记录在 `userData/library-location.json`，命令行也会跟随该位置。若外接存储设备未连接或保存位置已被移走，桌面版会停止启动并提示错误，不会自动创建空书库。上表是未自定义时的默认目录。
-
-此前用 `pnpm desktop` 作为日常应用的人，旧书库仍在 `~/Library/Application Support/Interleaf/library/`；关闭 Interleaf 后可将其复制到新目录。
-
-```text
-library/
-├── interleaf.sqlite       # 文档信息、阅读记录、对话、设置与全文索引
-├── books/              # EPUB 原文件
-├── papers/             # PDF 原文件
-├── cache/              # EPUB 资源；PDF analysis 下的 Markdown、图片与解析稿
-└── ai-work/            # CLI 临时目录，请求结束后移除
-```
-
-桌面版的运行日志保存在 `userData/logs/`，最多保留 7 天，不会自动上传。备份前先关闭应用，再复制整个数据目录。本地 API 使用每次启动随机生成的 token，并校验 Host / Origin。EPUB 导入会检查压缩包大小、资源路径并清理活动内容；原文件保持原样。
 
 ## 开发
 
-启动 Go 服务和带热更新的 Web 界面：
-
-```sh
-pnpm dev
-```
-
-终端会输出 `http://127.0.0.1:5173/#token=…`，请用完整地址打开。Vite 将请求代理到 `127.0.0.1:17840` 的 Go 服务。该 token 用于本地服务鉴权，不是 AI 账户凭据，请勿分享带 token 的地址。
-
-开发运行默认不监听插件端口；设置 `INTERLEAF_DEV_CONNECTOR=1` 可启用。未打包桌面版默认不注册 `interleaf://`；设置 `INTERLEAF_DEV_PROTOCOL=1` 可启用。
-
-`pnpm dev`、`pnpm desktop` 和 `pnpm build` 会先准备固定版本的版面模型。首次构建需要下载约 67 MB，后续校验并复用 `apps/processor/models/` 中的构建缓存；该目录不进入 Git。离线构建可将 `INTERLEAF_BUILD_LAYOUT_MODEL` 设为已有权重文件的绝对路径，仍需通过大小和 SHA256 校验。`pnpm install`、类型检查和普通单元测试不下载模型。
-
 ```sh
 pnpm typecheck     # TypeScript 类型检查
-pnpm test          # Go 集成测试与 Vitest
-pnpm build         # 构建 Go、Web 和 Electron
-pnpm api:generate  # 从 OpenAPI 重新生成客户端类型
+pnpm test          # Go 与前端测试
+pnpm build         # 构建服务、处理器、Web、桌面主进程与扩展
+pnpm package       # 在原生 Windows / macOS 环境生成安装包
 ```
-
-项目官网位于 `website/`，是无需构建的静态 HTML / CSS / JavaScript。本地预览：`python3 -m http.server 4321 -d website`，然后打开 `http://127.0.0.1:4321/`。
-
-测试覆盖文档导入、持久化、资源访问边界、CLI 与 API 协议、PDF 解析与部分前端回归。构建和测试通过不能替代真实文档与界面的人工检查，详见[验证记录](docs/verification.md)。
-
-## 技术与结构
-
-前端使用 React、TypeScript、Vite、Tailwind CSS、shadcn/ui（Base UI）和 Zustand。Electron 负责窗口、原生文件选择、应用更新与 Go 服务生命周期。Go 管理本地文档、SQLite、搜索和 AI 调用。PDF 版面解析由 Node 处理器通过 ONNX Runtime 在本机完成。
 
 ```text
 apps/
-├── desktop/       # Electron main / preload
-├── web/           # React 界面、PDF.js 与 EPUB 阅读适配器
-├── server/        # Go 本地服务
-├── processor/     # PDF 版面解析与本地版面模型
-└── connector/     # Interleaf Connector Chrome 扩展
+├── web/                 React 界面与 EPUB / PDF 阅读引擎
+├── desktop/             Electron 主进程与原生能力
+├── server/              Go 本地服务、SQLite 与 AI 运行时
+├── processor/           PDF 版面解析与本地模型
+└── connector/           浏览器收录扩展
 packages/
-├── ui/            # shadcn/ui + Base UI 组件
-├── interleaf-core/   # Document、Location、TOC、Annotation、ReaderAdapter
-└── api-client/    # OpenAPI 类型与 API 客户端
-docs/              # 范围、路线图、接口与验证记录
-website/           # 项目官网静态页面与 README 截图
-assets/            # Logo 源文件与应用图标
+├── interleaf-core/      文档、定位、批注及共享类型
+├── api-client/          API 客户端与生成类型
+└── ui/                  shadcn/ui 与 Base UI 组件
+website/                 静态官网与当前界面截图
+assets/                  纸间标识与平台图标
 ```
 
-业务模型围绕 `Document` 组织。PDF 用页码和坐标定位；EPUB 使用章节资源、段落 ID 和字符范围定位。阅读界面通过 `ReaderAdapter` 调用各自的引擎。项目使用 pnpm workspace，不依赖 Nx 或 Turborepo。
+扫描件尚不支持 OCR；固定版式 EPUB、竖排、RTL 和复杂 PDF 排版仍需更多验证。当前没有 Linux 安装包。实际安装、系统签名提示和跨版本升级仍需原生平台验收。
 
-## 当前限制与后续计划
+## 发布与更新
 
-当前主要面向无 DRM、横排从左到右的可重排 EPUB 与含文本的 PDF。尚未支持 OCR、密码 PDF 输入、PDF 缩略图、后台 PDF 全文索引、跨文档 AI 检索、独立多会话管理、Ollama 和阅读统计。复杂跨页 PDF 选区暂不创建高亮。
+先同步根目录和 `apps/desktop/package.json` 的版本号，并为该版本填写 `docs/release-notes.json`。运行检查后，在原生 Windows / macOS 环境执行 `pnpm package`，安装包生成在 `release/`。
 
-固定版式 EPUB、竖排、RTL、复杂脚注和大文件仍需更多真实样本验证。桌面端已接入 macOS 文件打开事件，但尚未注册系统文件关联；安装包由 CI 构建，尚未提供受系统信任的开发者签名或 macOS 公证。应用内更新的条件见[发版与更新说明](docs/releasing.md)。
+GitHub 自动发布工作流由 **发布 Release** 触发，单独推送代码或 tag 不会生成正式附件。当前流水线同时构建 Windows x64 与 Apple Silicon macOS；Mac 正式构建需要仓库 Secrets `MAC_SIGN_P12` 和 `MAC_SIGN_P12_PASSWORD`，任一平台失败都会阻止统一上传。
 
-2026 年 10 月计划更新：
+首次发行前，先用测试安装包验收导入、阅读、笔记保存与重新打开，再用两个真实安装版本验收升级后数据保留。正式 Release 需提供安装包和 `SHA256SUMS.txt`；已安装应用从 `Tazewell/Interleaf` 检查更新。
 
-- **Interleaf 命令行工具**：在终端中检索、阅读和导入书库文档，供 Claude Code、Codex 等 Agent 和脚本使用。
-- **RAG 支持**：AI 问答全面优化，基于检索为回答提供跨章节、跨文档的原文依据。
-- **EPUB 大部头翻译优化**：改善大型图书的按章翻译速度、任务调度与续译体验。
+## 反馈与致谢
 
-更长期的计划见[路线图](docs/roadmap.md)。
+使用中遇到问题或有功能建议，请提交 [GitHub Issue](https://github.com/Tazewell/Interleaf/issues)。
 
-## Star History
-
-<a href="https://www.star-history.com/?repos=Tazewell%2FInterleaf&amp;type=date&amp;legend=top-left">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=Tazewell/Interleaf&amp;type=date&amp;legend=top-left&amp;theme=dark" />
-    <img src="https://api.star-history.com/svg?repos=Tazewell/Interleaf&amp;type=date&amp;legend=top-left" alt="Interleaf 的 GitHub Star 增长历史" />
-  </picture>
-</a>
-
-## 致谢
-
-感谢 [Readium](https://github.com/readium)、[PDF.js](https://github.com/mozilla/pdf.js)、[shadcn/ui](https://github.com/shadcn-ui/ui) 和 [Base UI](https://github.com/mui/base-ui)。shadcn 组件保留在 `packages/ui`，相关许可见 [packages/ui/LICENSE.md](packages/ui/LICENSE.md)。更多技术来源与归属见[第三方来源](docs/sources.md)。
-
-[项目范围](docs/spec.md) · [路线图](docs/roadmap.md) · [OpenAPI](docs/openapi.yaml) · [验证记录](docs/verification.md)
+感谢 Readium、PDF.js、shadcn/ui、Base UI 等项目。源码中的第三方许可、字体和模型来源说明会保留。
