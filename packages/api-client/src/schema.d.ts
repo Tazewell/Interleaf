@@ -4226,6 +4226,8 @@ export interface paths {
             parameters: {
                 query: {
                     role: components["schemas"]["AIModelRole"];
+                    /** @description Bypass and invalidate the cached catalog for the current connection */
+                    refresh?: "1";
                 };
                 header?: never;
                 path?: never;
@@ -4233,7 +4235,7 @@ export interface paths {
             };
             requestBody?: never;
             responses: {
-                /** @description API models and current capability checks */
+                /** @description Current endpoint model IDs and capability checks, excluding saved historical IDs */
                 200: {
                     headers: {
                         [name: string]: unknown;

@@ -205,7 +205,7 @@ it("hides a completed previous endpoint catalog while the next catalog is pendin
       (item) => item.textContent,
     );
   expect(names()).not.toContain("Model B");
-  expect(names()).toContain("model-a");
+  expect(names()).not.toContain("model-a");
   await act(async () => fail(new Error("B catalog unavailable")));
   expect(host.querySelector(".model-trigger-name")?.textContent).toBe(
     "model-a",

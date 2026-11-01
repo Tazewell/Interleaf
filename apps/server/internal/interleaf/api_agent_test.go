@@ -117,7 +117,7 @@ func TestAPIAgentUsesOnlyCheckedModels(t *testing.T) {
 		t.Fatalf("chosen model: %+v", got)
 	}
 	models, err := s.apiAgentModels(t.Context(), config)
-	if err != nil || len(models) != 4 || !models[3].Custom || models[3].Capability != nil || models[0].Capability == nil || !models[0].Capability.Vision {
+	if err != nil || len(models) != 3 || models[0].Capability == nil || !models[0].Capability.Vision {
 		t.Fatalf("models: %+v %v", models, err)
 	}
 	recommended := map[string]string{}

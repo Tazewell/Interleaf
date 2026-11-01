@@ -55,7 +55,7 @@ func (s *Server) agentModels(w http.ResponseWriter, r *http.Request) {
 		fail(w, 500, "无法读取 AI 配置")
 		return
 	}
-	models, err := s.nativeAIModels(ctx, stored)
+	models, err := s.nativeAIModels(ctx, stored, r.URL.Query().Get("refresh") == "1")
 	if err != nil {
 		fail(w, 502, "无法获取 API 模型列表："+safeNativeError(err, stored.Connection.Key))
 		return

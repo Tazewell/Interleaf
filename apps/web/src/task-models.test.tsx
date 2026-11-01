@@ -82,6 +82,141 @@ async function save() {
       .click(),
   );
 }
+async function refresh() {
+  await act(async () =>
+    Array.from(host.querySelectorAll("button"))
+      .find((button) => button.textContent === "刷新模型列表")!
+      .click(),
+  );
+}
+const catalogModel = (id: string) => ({
+  id,
+  name: id,
+  description: "",
+  isDefault: false,
+});
+const datalistIDs = () =>
+  Array.from(host.querySelectorAll("datalist option")).map(
+    (option) => (option as HTMLOptionElement).value,
+  );
+
+it("forces refresh and shares the new catalog with other selectors without adding a saved manual ID", async () => {
+  let current = "old-catalog";
+  vi.mocked(api.agentModels).mockImplementation(
+    async (_role, _signal, force) => {
+      if (force) current = "fresh-catalog";
+      return [catalogModel(current)];
+    },
+  );
+  await act(async () =>
+    root.render(
+      <>
+        <TaskModels disabled={false} />
+        <ModelSelector disabled={false} onSettings={() => {}} />
+      </>,
+    ),
+  );
+  expect(await selectorOptions()).not.toContain("opus");
+  await refresh();
+  expect(datalistIDs()).toEqual(["fresh-catalog"]);
+  const options = await selectorOptions();
+  expect(options).toContain("fresh-catalog");
+  expect(options).not.toContain("old-catalog");
+  expect(
+    (host.querySelector('[aria-label="问答模型"]') as HTMLInputElement).value,
+  ).toBe("opus");
+  expect(
+    (host.querySelector('[aria-label="问答模型"]') as HTMLInputElement)
+      .autocomplete,
+  ).toBe("off");
+});
+
+it("discards an older catalog completion after a forced refresh", async () => {
+  let complete!: (models: ReturnType<typeof catalogModel>[]) => void;
+  vi.mocked(api.agentModels).mockImplementation((_role, _signal, force) =>
+    force
+      ? Promise.resolve([catalogModel("fresh")])
+      : new Promise((resolve) => {
+          complete = resolve;
+        }),
+  );
+  await render();
+  const old = complete;
+  await refresh();
+  expect(datalistIDs()).toEqual(["fresh"]);
+  await act(async () => old([catalogModel("stale")]));
+  expect(datalistIDs()).toEqual(["fresh"]);
+});
+
+it("shows refresh failure with manual entry and clears previous options", async () => {
+  vi.mocked(api.agentModels)
+    .mockResolvedValueOnce([catalogModel("previous")])
+    .mockRejectedValue(new Error("catalog unavailable"));
+  await render();
+  expect(datalistIDs()).toEqual(["previous"]);
+  await refresh();
+  expect(datalistIDs()).toEqual([]);
+  expect(host.querySelector('[role="alert"]')?.textContent).toContain(
+    "手动输入",
+  );
+  await type("问答模型", "manual-after-failure");
+  await save();
+  expect(config.models.chat).toBe("manual-after-failure");
+});
+
+it("removes previous options from every selector when refresh fails", async () => {
+  let unavailable = false;
+  vi.mocked(api.agentModels).mockImplementation(
+    async (_role, _signal, force) => {
+      if (force) unavailable = true;
+      if (unavailable) throw new Error("catalog unavailable");
+      return [catalogModel("previous")];
+    },
+  );
+  await act(async () =>
+    root.render(
+      <>
+        <TaskModels disabled={false} />
+        <ModelSelector disabled={false} onSettings={() => {}} />
+      </>,
+    ),
+  );
+  expect(await selectorOptions()).toContain("previous");
+  await refresh();
+  expect(datalistIDs()).toEqual([]);
+  expect(await selectorOptions()).not.toContain("previous");
+  expect(document.querySelector('[role="listbox"]')?.textContent).toContain(
+    "catalog unavailable",
+  );
+});
+
+it.each(["endpoint", "credentials"])(
+  "ignores a late forced response after %s settings change",
+  async (change) => {
+    let complete!: (models: ReturnType<typeof catalogModel>[]) => void;
+    vi.mocked(api.agentModels).mockImplementation((_role, _signal, force) =>
+      force
+        ? new Promise((resolve) => {
+            complete = resolve;
+          })
+        : Promise.resolve([catalogModel("current")]),
+    );
+    await render();
+    await refresh();
+    config = {
+      ...config,
+      connection: {
+        ...config.connection,
+        url:
+          change === "endpoint" ? "https://new.test/v1" : config.connection.url,
+      },
+    };
+    await act(async () => useReaderStore.getState().setAIConfig(config));
+    expect(datalistIDs()).toEqual(["current"]);
+    await act(async () => complete([catalogModel("old-connection")]));
+    expect(datalistIDs()).toEqual(["current"]);
+  },
+);
 it("inherits research effort and keeps translation automatic", () => {
   expect(taskChoice(config, "research")).toEqual({ model: "", effort: "high" });
   expect(taskChoice(config, "translation")).toEqual({

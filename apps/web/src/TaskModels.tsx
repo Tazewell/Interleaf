@@ -1,4 +1,4 @@
-import { useEffect, useId, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { api } from "@interleaf/api";
 import {
   nativeConfigUpdate,
@@ -47,6 +47,7 @@ export function TaskModels({ disabled }: { disabled: boolean }) {
   const {
     aiConfig: config,
     aiCatalogRevision,
+    aiCatalogResult,
     invalidateAICatalog,
     setAIConfig,
     aiModelSaving: saving,
@@ -66,7 +67,7 @@ export function TaskModels({ disabled }: { disabled: boolean }) {
     Partial<Record<AIModelRole, NativeAICheck>>
   >({});
   const [wait, setWait] = useState("15");
-  const [retry, setRetry] = useState(0);
+  const catalogRequest = useRef<AbortController | null>(null);
   const revision = `${catalogRevision(config)}\n${aiCatalogRevision}`;
   useEffect(() => {
     setModelEdits({});
@@ -77,18 +78,50 @@ export function TaskModels({ disabled }: { disabled: boolean }) {
     setCatalog([]);
     setError("");
     if (!config?.connection.url || config.needsConfiguration) return;
+    if (
+      aiCatalogResult?.revision === aiCatalogRevision &&
+      aiCatalogResult.config === config
+    ) {
+      setCatalog(aiCatalogResult.models);
+      setError(
+        aiCatalogResult.error
+          ? `模型列表获取失败：${aiCatalogResult.error}。可手动输入模型 ID。`
+          : "",
+      );
+      return () => catalogRequest.current?.abort();
+    }
     const controller = new AbortController();
+    catalogRequest.current = controller;
     void api
       .agentModels("chat", controller.signal)
       .then((models) => {
         if (!controller.signal.aborted) setCatalog(models);
       })
       .catch((error) => {
-        if (!controller.signal.aborted) setError(error.message);
+        if (!controller.signal.aborted)
+          setError(`模型列表获取失败：${error.message}。可手动输入模型 ID。`);
       });
-    return () => controller.abort();
-  }, [revision, config, retry]);
+    return () => catalogRequest.current?.abort();
+  }, [revision, config, aiCatalogResult, aiCatalogRevision]);
   if (!config) return null;
+  const refresh = async () => {
+    catalogRequest.current?.abort();
+    const controller = new AbortController();
+    catalogRequest.current = controller;
+    setCatalog([]);
+    setError("");
+    try {
+      const models = await api.agentModels("chat", controller.signal, true);
+      if (!controller.signal.aborted)
+        invalidateAICatalog(config, { models, error: "" });
+    } catch (error) {
+      if (!controller.signal.aborted)
+        invalidateAICatalog(config, {
+          models: [],
+          error: (error as Error).message,
+        });
+    }
+  };
   const save = async () => {
     if (useReaderStore.getState().aiModelSaving) return;
     setAIModelSaving(true);
@@ -166,7 +199,7 @@ export function TaskModels({ disabled }: { disabled: boolean }) {
           variant="ghost"
           size="sm"
           disabled={disabled || saving}
-          onClick={() => setRetry((value) => value + 1)}
+          onClick={() => void refresh()}
         >
           刷新模型列表
         </Button>
@@ -201,6 +234,7 @@ export function TaskModels({ disabled }: { disabled: boolean }) {
                 id={`${id}-${role}`}
                 aria-label={`${label}模型`}
                 list={`${id}-models`}
+                autoComplete="off"
                 placeholder={placeholder}
                 value={model}
                 disabled={disabled || saving || !!checking}

@@ -77,6 +77,7 @@ export function ModelSelector({
   const {
     aiConfig: config,
     aiCatalogRevision,
+    aiCatalogResult,
     setAIConfig,
     aiModelSaving: saving,
     setAIModelSaving,
@@ -92,6 +93,7 @@ export function ModelSelector({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [retry, setRetry] = useState(0);
+  const previousRetry = useRef(0);
   const [open, setOpen] = useState(false);
   const [effortSaving, setEffortSaving] = useState(false);
   const [animateEffort, setAnimateEffort] = useState(true);
@@ -101,20 +103,34 @@ export function ModelSelector({
   useEffect(() => {
     if (!provider) return;
     const controller = new AbortController();
+    const retried = previousRetry.current !== retry;
+    previousRetry.current = retry;
+    const accept = (models: AgentModel[]) =>
+      setCatalog({
+        revision,
+        config,
+        models: models.map((model) => ({
+          ...model,
+          name: modelDisplayName(model.id, model.name),
+        })),
+      });
+    if (
+      !retried &&
+      aiCatalogResult?.revision === aiCatalogRevision &&
+      aiCatalogResult.config === config
+    ) {
+      accept(aiCatalogResult.models);
+      setError(aiCatalogResult.error);
+      setLoading(false);
+      return () => controller.abort();
+    }
+    accept([]);
     setLoading(true);
     setError("");
     void api
       .agentModels("chat", controller.signal)
       .then((models) => {
-        if (!controller.signal.aborted)
-          setCatalog({
-            revision,
-            config,
-            models: models.map((model) => ({
-              ...model,
-              name: modelDisplayName(model.id, model.name),
-            })),
-          });
+        if (!controller.signal.aborted) accept(models);
       })
       .catch((error: Error) => {
         if (!controller.signal.aborted) setError(error.message);
@@ -123,7 +139,7 @@ export function ModelSelector({
         if (!controller.signal.aborted) setLoading(false);
       });
     return () => controller.abort();
-  }, [provider, revision, retry, config]);
+  }, [provider, revision, retry, config, aiCatalogResult, aiCatalogRevision]);
   const models =
     catalog.revision === revision && catalog.config === config
       ? catalog.models
@@ -141,11 +157,7 @@ export function ModelSelector({
   useEffect(() => {
     setDraftEffort(null);
   }, [provider, configuredModel]);
-  // Preserve the configured ID even when it is absent from the current catalog.
-  const options =
-    current && !usable.some((model) => model.id === current.id)
-      ? [current, ...usable]
-      : usable;
+  const options = usable;
 
   const choose = async (value: string | null) => {
     if (

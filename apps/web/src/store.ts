@@ -5,6 +5,7 @@ import {
   type PaperItem,
   type ReaderTheme,
   type NativeAIConfig,
+  type AgentModel,
   type LibraryMode,
   type LibraryPreferences,
   type InterleafLinkTarget,
@@ -20,6 +21,12 @@ export const useReaderStore = create<{
   aiConfig?: NativeAIConfig;
   /** Runtime-only invalidation for every consumer of persisted model checks. */
   aiCatalogRevision: number;
+  aiCatalogResult?: {
+    config: NativeAIConfig;
+    revision: number;
+    models: AgentModel[];
+    error: string;
+  };
   aiModelSaving: boolean;
   libraryPreferences: LibraryPreferences;
   trash: Document[];
@@ -29,7 +36,10 @@ export const useReaderStore = create<{
   setLinkTarget: (target: InterleafLinkTarget | null) => void;
   setLibraryPreferences: (preferences: LibraryPreferences) => void;
   setAIConfig: (config: NativeAIConfig) => void;
-  invalidateAICatalog: (snapshot: NativeAIConfig) => void;
+  invalidateAICatalog: (
+    snapshot: NativeAIConfig,
+    result?: { models: AgentModel[]; error: string },
+  ) => void;
   setAIModelSaving: (saving: boolean) => void;
   setDocuments: (documents: Document[]) => void;
   open: (active: Document | null) => void;
@@ -49,11 +59,21 @@ export const useReaderStore = create<{
   setLinkTarget: (linkTarget) => set({ linkTarget }),
   setLibraryPreferences: (libraryPreferences) => set({ libraryPreferences }),
   setAIConfig: (aiConfig) => set({ aiConfig }),
-  invalidateAICatalog: (snapshot) =>
+  invalidateAICatalog: (snapshot, result) =>
     set((state) =>
       state.aiConfig?.connection.url === snapshot.connection.url &&
-      state.aiConfig.connection.protocol === snapshot.connection.protocol
-        ? { aiCatalogRevision: state.aiCatalogRevision + 1 }
+      state.aiConfig.connection.protocol === snapshot.connection.protocol &&
+      (!result || state.aiConfig === snapshot)
+        ? {
+            aiCatalogRevision: state.aiCatalogRevision + 1,
+            aiCatalogResult: result
+              ? {
+                  ...result,
+                  config: snapshot,
+                  revision: state.aiCatalogRevision + 1,
+                }
+              : undefined,
+          }
         : state,
     ),
   setAIModelSaving: (aiModelSaving) => set({ aiModelSaving }),

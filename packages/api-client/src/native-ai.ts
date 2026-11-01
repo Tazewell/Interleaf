@@ -14,10 +14,13 @@ export const nativeAI = {
       method: "PUT",
       body: JSON.stringify(config),
     }),
-  nativeAIModels: (role: AIModelRole, signal?: AbortSignal) =>
-    request<AgentModel[]>(`/api/ai/models?role=${encodeURIComponent(role)}`, {
-      signal,
-    }),
+  nativeAIModels: (role: AIModelRole, signal?: AbortSignal, refresh = false) =>
+    request<AgentModel[]>(
+      `/api/ai/models?role=${encodeURIComponent(role)}${refresh ? "&refresh=1" : ""}`,
+      {
+        signal,
+      },
+    ),
   checkNativeAI: (role: AIModelRole, model?: string, waitSeconds?: number) =>
     request<NativeAICheck>("/api/ai/check", {
       method: "POST",

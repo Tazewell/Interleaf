@@ -15,7 +15,7 @@ import (
 )
 
 // The "api" agent calls a protocol-aware endpoint with a
-// user-supplied key. Its models come from /models plus IDs the user adds, and
+// user-supplied key. Its catalog comes from /models, and
 // text models may be entered directly; vision and tools require an explicit
 // successful check. Unknown relays without metadata use low/medium/high.
 type apiAgentAdapter struct {
@@ -200,27 +200,24 @@ func (s *apiTranslationSession) close() {
 
 // apiCatalog binds model discovery to one endpoint snapshot. The cache key
 // covers the URL and key, so an edited connection never reuses another list.
-func (s *Server) apiCatalog(c APIConnection) func(context.Context) ([]AgentModel, error) {
+func (s *Server) apiCatalog(c APIConnection, refresh ...bool) func(context.Context) ([]AgentModel, error) {
 	sum := sha256.Sum256([]byte(c.URL + "\x00" + c.Key + "\x00" + c.Protocol))
 	key := "api:" + hex.EncodeToString(sum[:])
 	return func(ctx context.Context) ([]AgentModel, error) {
 		return s.cachedCatalog(ctx, key, func(ctx context.Context) ([]AgentModel, error) {
 			return discoverAPIModels(ctx, c)
-		})
+		}, refresh...)
 	}
 }
 
-// apiAgentModels lists the endpoint's models and the user's added IDs, each
-// with its current check result. Text models can be entered without a probe;
-// image recommendations require verified vision. Added IDs survive catalog errors.
-func (s *Server) nativeAIModels(ctx context.Context, c nativeAIStored) ([]AgentModel, error) {
-	listed, err := s.apiCatalog(c.Connection)(ctx)
-	models := append([]AgentModel{}, listed...)
-	for _, id := range c.Config.APIModels {
-		if !slices.ContainsFunc(models, func(m AgentModel) bool { return m.ID == id }) {
-			models = append(models, AgentModel{ID: id, Name: id, Custom: true})
-		}
+// nativeAIModels lists only the endpoint's current IDs, with their check results.
+// Saved manual choices remain usable by explicit ID, outside catalog options.
+func (s *Server) nativeAIModels(ctx context.Context, c nativeAIStored, refresh ...bool) ([]AgentModel, error) {
+	listed, err := s.apiCatalog(c.Connection, refresh...)(ctx)
+	if err != nil {
+		return nil, err
 	}
+	models := append([]AgentModel{}, listed...)
 	if len(models) == 0 {
 		if err == nil {
 			err = errors.New("API 未返回可用模型")

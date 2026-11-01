@@ -4079,12 +4079,18 @@
                     "required": true,
                     "schema": { "$ref": "#/components/schemas/AIModelRole" },
                   },
+                  {
+                    "in": "query",
+                    "name": "refresh",
+                    "description": "Bypass and invalidate the cached catalog for the current connection",
+                    "schema": { "type": "string", "enum": ["1"] },
+                  },
                 ],
               "responses":
                 {
                   "200":
                     {
-                      "description": "API models and current capability checks",
+                      "description": "Current endpoint model IDs and capability checks, excluding saved historical IDs",
                       "content":
                         {
                           "application/json":
