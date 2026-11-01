@@ -163,12 +163,39 @@ func TestRecoveryRefusesRetranslatingOrIncompleteData(t *testing.T) {
 		t.Fatal("annotation deleted while retranslating")
 	}
 }
+func TestRecoveryAutomaticOpeningDefersUntilTranslationComplete(t *testing.T) {
+	for _, status := range []string{"queued", "running", "paused", "failed"} {
+		t.Run(status, func(t *testing.T) {
+			s, _, m := completedTranslationFixture(t)
+			insertRecoveryMark(t, s, m.Blocks[0], "旧译文", "")
+			p, err := s.Store.processing("doc")
+			if err != nil {
+				t.Fatal(err)
+			}
+			p.Status = status
+			if err = s.Store.saveProcessing(p); err != nil {
+				t.Fatal(err)
+			}
+			s.translationMu.Lock()
+			out := request(t, s, "POST", "/api/documents/doc/annotations/recover", strings.NewReader(`{}`))
+			s.translationMu.Unlock()
+			if out.Code != 200 || decodeBody[map[string]bool](t, out.Body.Bytes())["checked"] {
+				t.Fatal("unfinished document should defer without an error", out.Code, out.Body.String())
+			}
+			var count int
+			_ = s.Store.DB.QueryRow("SELECT count(*) FROM annotations WHERE document_id='doc'").Scan(&count)
+			if count != 1 {
+				t.Fatal("deferred check changed annotations")
+			}
+		})
+	}
+}
 func TestRecoveryAndRetranslationAreMutuallyExclusive(t *testing.T) {
 	s, _, _ := completedTranslationFixture(t)
 	lock := s.annotationRecoveryLock("doc")
 	lock.Lock()
 	defer lock.Unlock()
-	for _, route := range []struct{ url, body string }{{"annotations/recover", `{}`}, {"assistance", `{"action":"retranslate"}`}} {
+	for _, route := range []struct{ url, body string }{{"annotations/recover", `{"force":true}`}, {"assistance", `{"action":"retranslate"}`}} {
 		out := request(t, s, "POST", "/api/documents/doc/"+route.url, strings.NewReader(route.body))
 		if out.Code != 409 {
 			t.Fatal(out.Code, out.Body.String())
@@ -396,23 +423,40 @@ func TestRecoveryCheckedFastPathAndBusyLocksDoNotWait(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, lock := range []*sync.Mutex{&s.annotationMu, &s.translationMu} {
-		lock.Lock()
-		out = httptest.NewRecorder()
-		done = make(chan struct{})
-		r = httptest.NewRequest("POST", "http://127.0.0.1:17840/api/documents/doc/annotations/recover", strings.NewReader(`{}`))
-		r.Header.Set("Authorization", "Bearer "+s.Token)
-		go func() { s.Handler().ServeHTTP(out, r); close(done) }()
-		waited = false
-		select {
-		case <-done:
-		case <-time.After(time.Second):
-			waited = true
+	for _, lock := range []*sync.Mutex{s.annotationRecoveryLock("doc"), &s.annotationMu, &s.translationMu} {
+		for _, force := range []bool{false, true} {
+			lock.Lock()
+			out = httptest.NewRecorder()
+			done = make(chan struct{})
+			body := `{}`
+			if force {
+				body = `{"force":true}`
+			}
+			r = httptest.NewRequest("POST", "http://127.0.0.1:17840/api/documents/doc/annotations/recover", strings.NewReader(body))
+			r.Header.Set("Authorization", "Bearer "+s.Token)
+			go func() { s.Handler().ServeHTTP(out, r); close(done) }()
+			waited = false
+			select {
+			case <-done:
+			case <-time.After(time.Second):
+				waited = true
+			}
+			lock.Unlock()
+			<-done
+			want := 200
+			if force {
+				want = 409
+			}
+			if waited || out.Code != want {
+				t.Fatal("busy lock queued check", out.Code)
+			}
+			if !force && decodeBody[map[string]bool](t, out.Body.Bytes())["checked"] {
+				t.Fatal("busy automatic check marked annotations as checked")
+			}
 		}
-		lock.Unlock()
-		<-done
-		if waited || out.Code != 409 {
-			t.Fatal("busy lock queued check", out.Code)
-		}
+	}
+	// The deferred automatic request must still perform recovery once idle.
+	if out = request(t, s, "POST", "/api/documents/doc/annotations/recover", strings.NewReader(`{}`)); out.Code != 200 || !decodeBody[map[string]bool](t, out.Body.Bytes())["checked"] {
+		t.Fatal("deferred recovery did not finish", out.Code, out.Body.String())
 	}
 }

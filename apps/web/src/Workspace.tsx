@@ -13,6 +13,7 @@ import {
   useState,
   useSyncExternalStore,
   type CSSProperties,
+  type SetStateAction,
 } from "react";
 import {
   Translate as Languages,
@@ -316,7 +317,12 @@ export function Workspace({
   const [translationSelection, setTranslationSelection] =
     useState<ReaderSelection | null>(null);
   const [selection, setSelection] = useState<ReaderSelection | null>(null);
-  const [annotations, setAnnotations] = useState<Annotation[]>([]);
+  const [annotations, replaceAnnotations] = useState<Annotation[]>([]);
+  const annotationRevision = useRef(0);
+  const setAnnotations = useCallback((next: SetStateAction<Annotation[]>) => {
+    annotationRevision.current++;
+    replaceAnnotations(next);
+  }, []);
   const recoveryDocument = useRef(doc.id);
   recoveryDocument.current = doc.id;
   const annotationSaving = useRef(false);
@@ -422,7 +428,8 @@ export function Workspace({
     selectedSession.documentId === doc.id ? selectedSession.id : "";
   if (!preferred) {
     try {
-      preferred = localStorage.getItem(`interleaf.chat-session.${doc.id}`) || "";
+      preferred =
+        localStorage.getItem(`interleaf.chat-session.${doc.id}`) || "";
     } catch {}
   }
   const currentSession =
@@ -543,30 +550,57 @@ export function Workspace({
     requestAnimationFrame(() => searchInput.current?.focus());
   });
   useEffect(() => {
-    let alive = true;
     session.activate();
     abort.current = null;
     if (currentSession) void session.load();
     setSending(false);
-    api
-      .recoverAnnotations(doc.id)
-      .catch((e) => toast.error(e.message))
-      .then(() => api.annotations(doc.id))
-      .then((a) => {
-        if (alive) {
-          setAnnotations(a);
-          setAnnotationsLoaded(true);
-        }
-      })
-      .catch((e) => toast.error(e.message));
     return () => {
-      alive = false;
       sendSerial.current++;
       abort.current?.abort();
       // A viewer switch must not abort its independently owned run.
       void flushProgress().catch((e) => toast.error(e.message));
     };
   }, [doc.id, session]);
+  const canRecoverAnnotations =
+    processing?.status === "complete" && !processing.retranslating;
+  useEffect(() => {
+    let alive = true;
+    let attempts = 0;
+    let timer: ReturnType<typeof setTimeout>;
+    const load = async () => {
+      let deferred = false;
+      if (canRecoverAnnotations) {
+        try {
+          attempts++;
+          const result = await api.recoverAnnotations(doc.id);
+          deferred = !result.checked;
+        } catch (e) {
+          if (alive) toast.error((e as Error).message);
+        }
+      }
+      if (!alive) return;
+      try {
+        const revision = annotationRevision.current;
+        const items = await api.annotations(doc.id);
+        if (alive) {
+          // A background snapshot cannot overwrite a newer save/delete/undo.
+          if (annotationRevision.current === revision) setAnnotations(items);
+          setAnnotationsLoaded(true);
+        }
+      } catch (e) {
+        if (alive) toast.error((e as Error).message);
+      }
+      // A transient snapshot/save lock must not turn opening a paper into an
+      // error toast. Retry a bounded number of times without blocking its marks.
+      if (alive && deferred && attempts < 3)
+        timer = setTimeout(() => void load(), attempts * 1000);
+    };
+    void load();
+    return () => {
+      alive = false;
+      clearTimeout(timer);
+    };
+  }, [doc.id, canRecoverAnnotations]);
   useEffect(() => {
     if (doc.type !== "pdf" || processing?.phase === "learning") return;
     let alive = true;

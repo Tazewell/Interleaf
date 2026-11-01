@@ -81,21 +81,37 @@ func (s *Server) recoverAnnotations(w http.ResponseWriter, r *http.Request) {
 		respond(w, 200, map[string]bool{"checked": true})
 		return
 	}
+	// Opening a reader may race its translation snapshot/subscription. An
+	// automatic check can defer; it is not a failed user-requested mutation.
+	if !req.Force {
+		p, err := s.Store.processing(document)
+		if err != nil || p.Status != "complete" || p.Retranslating {
+			respond(w, 200, map[string]bool{"checked": false})
+			return
+		}
+	}
+	busy := func(message string) {
+		if req.Force {
+			fail(w, 409, message)
+		} else {
+			respond(w, 200, map[string]bool{"checked": false})
+		}
+	}
 	lock := s.annotationRecoveryLock(document)
 	if !lock.TryLock() {
-		fail(w, 409, "正在检查批注或开始重译，请稍后重试")
+		busy("正在检查批注或开始重译，请稍后重试")
 		return
 	}
 	defer lock.Unlock()
 	// Never queue behind another document's recovery. All mutations and
 	// publication still share these existing locks, with bounded execution.
 	if !s.annotationMu.TryLock() {
-		fail(w, 409, "正在修改批注，请稍后重试")
+		busy("正在修改批注，请稍后重试")
 		return
 	}
 	defer s.annotationMu.Unlock()
 	if !s.translationMu.TryLock() {
-		fail(w, 409, "正在更新译文，请稍后重试")
+		busy("正在更新译文，请稍后重试")
 		return
 	}
 	defer s.translationMu.Unlock()

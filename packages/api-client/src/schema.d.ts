@@ -2104,7 +2104,7 @@ export interface paths {
                 };
             };
             responses: {
-                /** @description checked=false while processing or data is unavailable; no records deleted */
+                /** @description checked=false while processing, data is unavailable, or an automatic check encounters a busy mutation lock; no records deleted. Automatic checks may retry later. */
                 200: {
                     headers: {
                         [name: string]: unknown;
@@ -2115,7 +2115,7 @@ export interface paths {
                         };
                     };
                 };
-                /** @description Annotation check or retranslation is already starting */
+                /** @description An explicit force=true check encountered an annotation, translation, or retranslation mutation lock */
                 409: {
                     headers: {
                         [name: string]: unknown;
