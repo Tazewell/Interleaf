@@ -143,8 +143,16 @@ it("saves a different endpoint without carrying its old key or models", async ()
 });
 
 it("requires saving the drafted connection before using model controls", async () => {
+  vi.mocked(api.agentModels).mockResolvedValueOnce([
+    {
+      id: "edited-old-model",
+      name: "Edited",
+      description: "",
+      isDefault: false,
+    },
+  ]);
   await render();
-  await enter("问答模型", "edited-old-model");
+  await choose("问答模型", "edited-old-model");
   const button = (text: string) =>
     [...host.querySelectorAll<HTMLButtonElement>("button")].find(
       (element) => element.textContent === text,
@@ -154,7 +162,7 @@ it("requires saving the drafted connection before using model controls", async (
 
   await choose("服务商", "阿里百炼");
 
-  expect(input("问答模型").disabled).toBe(true);
+  expect(select("问答模型")?.disabled).toBe(true);
   expect(button("刷新模型列表").disabled).toBe(true);
   expect(button("保存模型").disabled).toBe(true);
   expect(button("检测问答").disabled).toBe(true);
@@ -163,8 +171,8 @@ it("requires saving the drafted connection before using model controls", async (
   await enter("API Key", "fake-bailian-key");
   await save();
 
-  expect(input("问答模型").disabled).toBe(false);
-  expect(input("问答模型").value).toBe("");
+  expect(select("问答模型")?.disabled).toBe(false);
+  expect(select("问答模型")?.textContent).toContain("自动选择推荐模型");
   expect(button("刷新模型列表").disabled).toBe(false);
   expect(button("检测问答").disabled).toBe(false);
 });
@@ -172,14 +180,14 @@ it("requires saving the drafted connection before using model controls", async (
 it("requires saving a typed or explicitly cleared key before using model controls", async () => {
   await render();
   await enter("API Key", "fake-replacement-key");
-  expect(input("问答模型").disabled).toBe(true);
+  expect(select("问答模型")?.disabled).toBe(true);
   await enter("API Key", "");
-  expect(input("问答模型").disabled).toBe(false);
+  expect(select("问答模型")?.disabled).toBe(false);
   const clear = [...host.querySelectorAll<HTMLButtonElement>("button")].find(
     (button) => button.textContent === "清空 Key／无需密钥",
   )!;
   await act(async () => clear.click());
-  expect(input("问答模型").disabled).toBe(true);
+  expect(select("问答模型")?.disabled).toBe(true);
 });
 
 it("preserves saved models and the secret when the connection is unchanged", async () => {

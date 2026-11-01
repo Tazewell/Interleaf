@@ -41,7 +41,10 @@ beforeEach(() => {
     apiModels: [],
   };
   useReaderStore.setState({ aiConfig: config, aiModelSaving: false });
-  vi.mocked(api.agentModels).mockResolvedValue([]);
+  vi.mocked(api.agentModels).mockResolvedValue([
+    catalogModel("opus"),
+    catalogModel("fast-model"),
+  ]);
   vi.mocked(api.aiConfig).mockImplementation(async () => config);
   vi.mocked(api.saveAIConfig).mockImplementation(async (value) => {
     config = {
@@ -63,16 +66,17 @@ afterEach(async () => {
 async function render() {
   await act(async () => root.render(<TaskModels disabled={false} />));
 }
-async function type(label: string, value: string) {
-  const input = host.querySelector(
-    `[aria-label="${label}"]`,
-  ) as HTMLInputElement;
+async function chooseModel(label: string, value: string) {
+  const trigger = host.querySelector<HTMLButtonElement>(
+    `button[aria-label="${label}"]`,
+  )!;
+  await act(async () => trigger.click());
+  const option = [
+    ...document.querySelectorAll<HTMLElement>('[role="option"]'),
+  ].find((item) => item.textContent === value)!;
   await act(async () => {
-    Object.getOwnPropertyDescriptor(
-      HTMLInputElement.prototype,
-      "value",
-    )!.set!.call(input, value);
-    input.dispatchEvent(new Event("input", { bubbles: true }));
+    option.dispatchEvent(new MouseEvent("pointerdown", { bubbles: true }));
+    option.click();
   });
 }
 async function save() {
@@ -95,10 +99,17 @@ const catalogModel = (id: string) => ({
   description: "",
   isDefault: false,
 });
-const datalistIDs = () =>
-  Array.from(host.querySelectorAll("datalist option")).map(
-    (option) => (option as HTMLOptionElement).value,
-  );
+const modelOptionIDs = async () => {
+  const trigger = host.querySelector<HTMLButtonElement>(
+    'button[aria-label="问答模型"]',
+  )!;
+  await act(async () => trigger.click());
+  const options = Array.from(document.querySelectorAll('[role="option"]'))
+    .map((item) => item.textContent)
+    .filter((text) => text !== "自动选择推荐模型");
+  await act(async () => trigger.click());
+  return options;
+};
 
 it("forces refresh and shares the new catalog with other selectors without adding a saved manual ID", async () => {
   let current = "old-catalog";
@@ -118,17 +129,14 @@ it("forces refresh and shares the new catalog with other selectors without addin
   );
   expect(await selectorOptions()).not.toContain("opus");
   await refresh();
-  expect(datalistIDs()).toEqual(["fresh-catalog"]);
+  expect(await modelOptionIDs()).toEqual(["fresh-catalog"]);
   const options = await selectorOptions();
   expect(options).toContain("fresh-catalog");
   expect(options).not.toContain("old-catalog");
   expect(
-    (host.querySelector('[aria-label="问答模型"]') as HTMLInputElement).value,
-  ).toBe("opus");
-  expect(
-    (host.querySelector('[aria-label="问答模型"]') as HTMLInputElement)
-      .autocomplete,
-  ).toBe("off");
+    host.querySelector('button[aria-label="问答模型"]')?.textContent,
+  ).toContain("opus");
+  expect(host.querySelector('input[aria-label="问答模型"]')).toBeNull();
 });
 
 it("discards an older catalog completion after a forced refresh", async () => {
@@ -143,25 +151,24 @@ it("discards an older catalog completion after a forced refresh", async () => {
   await render();
   const old = complete;
   await refresh();
-  expect(datalistIDs()).toEqual(["fresh"]);
+  expect(await modelOptionIDs()).toEqual(["fresh"]);
   await act(async () => old([catalogModel("stale")]));
-  expect(datalistIDs()).toEqual(["fresh"]);
+  expect(await modelOptionIDs()).toEqual(["fresh"]);
 });
 
-it("shows refresh failure with manual entry and clears previous options", async () => {
+it("shows refresh failure with retry guidance and clears previous options", async () => {
   vi.mocked(api.agentModels)
     .mockResolvedValueOnce([catalogModel("previous")])
     .mockRejectedValue(new Error("catalog unavailable"));
   await render();
-  expect(datalistIDs()).toEqual(["previous"]);
+  expect(await modelOptionIDs()).toEqual(["previous"]);
   await refresh();
-  expect(datalistIDs()).toEqual([]);
+  expect(await modelOptionIDs()).toEqual([]);
   expect(host.querySelector('[role="alert"]')?.textContent).toContain(
-    "手动输入",
+    "刷新后重新选择",
   );
-  await type("问答模型", "manual-after-failure");
-  await save();
-  expect(config.models.chat).toBe("manual-after-failure");
+  expect(host.querySelector('input[aria-label="问答模型"]')).toBeNull();
+  expect(config.models.chat).toBe("opus");
 });
 
 it("removes previous options from every selector when refresh fails", async () => {
@@ -183,7 +190,7 @@ it("removes previous options from every selector when refresh fails", async () =
   );
   expect(await selectorOptions()).toContain("previous");
   await refresh();
-  expect(datalistIDs()).toEqual([]);
+  expect(await modelOptionIDs()).toEqual([]);
   expect(await selectorOptions()).not.toContain("previous");
   expect(document.querySelector('[role="listbox"]')?.textContent).toContain(
     "catalog unavailable",
@@ -212,9 +219,9 @@ it.each(["endpoint", "credentials"])(
       },
     };
     await act(async () => useReaderStore.getState().setAIConfig(config));
-    expect(datalistIDs()).toEqual(["current"]);
+    expect(await modelOptionIDs()).toEqual(["current"]);
     await act(async () => complete([catalogModel("old-connection")]));
-    expect(datalistIDs()).toEqual(["current"]);
+    expect(await modelOptionIDs()).toEqual(["current"]);
   },
 );
 it("inherits research effort and keeps translation automatic", () => {
@@ -224,9 +231,88 @@ it("inherits research effort and keeps translation automatic", () => {
     effort: "medium",
   });
 });
-it("saves a manual translation choice without overwriting unedited roles or key", async () => {
+it("uses non-editable model selectors with only the latest catalog options", async () => {
+  config.apiModels = ["historical-model"];
+  vi.mocked(api.agentModels).mockResolvedValue([
+    catalogModel("opus"),
+    catalogModel("new-model"),
+  ]);
   await render();
-  await type("翻译模型", "manual-fast");
+  for (const label of ["问答模型", "翻译模型", "图片模型", "研究模型"]) {
+    expect(host.querySelector(`input[aria-label="${label}"]`)).toBeNull();
+    expect(host.querySelector(`button[aria-label="${label}"]`)).not.toBeNull();
+  }
+  expect(host.querySelector("datalist")).toBeNull();
+  const trigger = host.querySelector<HTMLButtonElement>(
+    '[aria-label="问答模型"]',
+  )!;
+  await act(async () => trigger.click());
+  const options = Array.from(document.querySelectorAll('[role="option"]')).map(
+    (item) => item.textContent,
+  );
+  expect(options).toContain("new-model");
+  expect(options).not.toContain("historical-model");
+});
+
+it("reopens the model list from its arrow and switches an existing selection", async () => {
+  vi.mocked(api.agentModels).mockResolvedValue([
+    catalogModel("opus"),
+    catalogModel("replacement"),
+  ]);
+  await render();
+  const trigger = host.querySelector<HTMLButtonElement>(
+    'button[aria-label="问答模型"]',
+  );
+  expect(trigger).not.toBeNull();
+  const openFromArrow = async () => {
+    await act(async () =>
+      trigger!
+        .querySelector("svg")!
+        .dispatchEvent(new MouseEvent("click", { bubbles: true })),
+    );
+  };
+  await openFromArrow();
+  const selected = document.querySelector(
+    '[role="option"][aria-selected="true"]',
+  );
+  expect(selected?.textContent).toBe("opus");
+  const replacement = [
+    ...document.querySelectorAll<HTMLElement>('[role="option"]'),
+  ].find((item) => item.textContent === "replacement")!;
+  await act(async () => {
+    replacement.dispatchEvent(new MouseEvent("pointerdown", { bubbles: true }));
+    replacement.click();
+  });
+  expect(trigger?.textContent).toContain("replacement");
+  await openFromArrow();
+  expect(
+    document.querySelector('[role="option"][aria-selected="true"]')
+      ?.textContent,
+  ).toBe("replacement");
+  const original = [
+    ...document.querySelectorAll<HTMLElement>('[role="option"]'),
+  ].find((item) => item.textContent === "opus")!;
+  await act(async () => {
+    original.dispatchEvent(new MouseEvent("pointerdown", { bubbles: true }));
+    original.click();
+  });
+  await save();
+  expect(config.models.chat).toBe("opus");
+  expect(config.apiModels).toEqual([]);
+});
+
+it("restores an automatic role choice without losing other roles or creating history", async () => {
+  config.models.translation = "fast-model";
+  await render();
+  await chooseModel("翻译模型", "自动选择快速模型");
+  await save();
+  expect(config.models.translation).toBe("");
+  expect(config.models.chat).toBe("opus");
+  expect(config.apiModels).toEqual([]);
+});
+it("saves a catalog translation choice without overwriting unedited roles or key", async () => {
+  await render();
+  await chooseModel("翻译模型", "fast-model");
   config = {
     ...config,
     models: { ...config.models, research: "concurrent-research" },
@@ -234,7 +320,7 @@ it("saves a manual translation choice without overwriting unedited roles or key"
   await save();
   expect(config.models).toEqual({
     chat: "opus",
-    translation: "manual-fast",
+    translation: "fast-model",
     research: "concurrent-research",
   });
   expect(api.saveAIConfig).toHaveBeenCalledWith(
@@ -244,29 +330,27 @@ it("saves a manual translation choice without overwriting unedited roles or key"
   );
   expect(config.connection.hasKey).toBe(true);
 });
-it("keeps typed models after catalog failure", async () => {
+it("preserves the saved choice after catalog failure without allowing text entry", async () => {
   vi.mocked(api.agentModels).mockRejectedValue(
     new Error("catalog unavailable"),
   );
   await render();
   expect(
-    (host.querySelector('[aria-label="问答模型"]') as HTMLInputElement).value,
-  ).toBe("opus");
-  await type("问答模型", "hand-entered");
-  await save();
-  expect(config.models.chat).toBe("hand-entered");
-  expect(config.apiModels).toContain("hand-entered");
+    host.querySelector('button[aria-label="问答模型"]')?.textContent,
+  ).toContain("opus");
+  expect(host.querySelector('input[aria-label="问答模型"]')).toBeNull();
+  expect(api.saveAIConfig).not.toHaveBeenCalled();
 });
 it("leaves the image model empty until a verified image model is configured", async () => {
   await render();
   expect(
-    (host.querySelector('[aria-label="图片模型"]') as HTMLInputElement).value,
-  ).toBe("");
+    host.querySelector('button[aria-label="图片模型"]')?.textContent,
+  ).toContain("仅使用已验证支持图片的问答模型");
   expect(api.checkNativeAI).not.toHaveBeenCalled();
 });
 it("rejects a stale model save after the endpoint changes", async () => {
   await render();
-  await type("翻译模型", "manual-fast");
+  await chooseModel("翻译模型", "fast-model");
   config = {
     ...config,
     connection: { ...config.connection, url: "https://changed.test/v1" },

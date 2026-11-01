@@ -85,7 +85,7 @@ export function TaskModels({ disabled }: { disabled: boolean }) {
       setCatalog(aiCatalogResult.models);
       setError(
         aiCatalogResult.error
-          ? `模型列表获取失败：${aiCatalogResult.error}。可手动输入模型 ID。`
+          ? `模型列表获取失败：${aiCatalogResult.error}。请刷新后重新选择。`
           : "",
       );
       return () => catalogRequest.current?.abort();
@@ -99,7 +99,7 @@ export function TaskModels({ disabled }: { disabled: boolean }) {
       })
       .catch((error) => {
         if (!controller.signal.aborted)
-          setError(`模型列表获取失败：${error.message}。可手动输入模型 ID。`);
+          setError(`模型列表获取失败：${error.message}。请刷新后重新选择。`);
       });
     return () => catalogRequest.current?.abort();
   }, [revision, config, aiCatalogResult, aiCatalogRevision]);
@@ -140,12 +140,6 @@ export function TaskModels({ disabled }: { disabled: boolean }) {
           ...nativeConfigUpdate(latest),
           models,
           efforts: { ...latest.efforts, ...effortEdits },
-          apiModels: [
-            ...new Set([
-              ...latest.apiModels,
-              ...(Object.values(models).filter(Boolean) as string[]),
-            ]),
-          ],
         }),
       );
     } catch (error) {
@@ -230,21 +224,40 @@ export function TaskModels({ disabled }: { disabled: boolean }) {
               >
                 {label}
               </label>
-              <Input
-                id={`${id}-${role}`}
-                aria-label={`${label}模型`}
-                list={`${id}-models`}
-                autoComplete="off"
-                placeholder={placeholder}
-                value={model}
+              <Select
+                value={model || null}
                 disabled={disabled || saving || !!checking}
-                onChange={(event) =>
-                  setModelEdits((old) => ({
-                    ...old,
-                    [role]: event.target.value,
-                  }))
-                }
-              />
+                onValueChange={(value) => {
+                  if (
+                    typeof value === "string" &&
+                    (value === "" || catalog.some((item) => item.id === value))
+                  )
+                    setModelEdits((old) => ({ ...old, [role]: value }));
+                }}
+              >
+                <SelectTrigger
+                  id={`${id}-${role}`}
+                  aria-label={`${label}模型`}
+                  className="min-w-0 flex-1"
+                >
+                  <SelectValue>
+                    <span className="truncate">{model || placeholder}</span>
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent align="start" alignItemWithTrigger={false}>
+                  <SelectItem value="">{placeholder}</SelectItem>
+                  {catalog.map((item) => (
+                    <SelectItem key={item.id} value={item.id}>
+                      {item.id}
+                    </SelectItem>
+                  ))}
+                  {catalog.length === 0 && (
+                    <p className="px-2 py-1.5 text-xs text-muted-foreground">
+                      暂无可选模型，请刷新列表
+                    </p>
+                  )}
+                </SelectContent>
+              </Select>
               <Select
                 value={effort}
                 disabled={disabled || saving || fixed || !!checking}
@@ -323,13 +336,6 @@ export function TaskModels({ disabled }: { disabled: boolean }) {
           </div>
         );
       })}
-      <datalist id={`${id}-models`}>
-        {catalog.map((model) => (
-          <option key={model.id} value={model.id}>
-            {model.name}
-          </option>
-        ))}
-      </datalist>
       <div className="flex flex-wrap items-center justify-end gap-2">
         <label className="text-xs text-muted-foreground">检测等待（秒）</label>
         <Input
