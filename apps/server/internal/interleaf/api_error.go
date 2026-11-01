@@ -182,6 +182,15 @@ func providerFailure(ctx context.Context, c APIConnection, status int, header ht
 	// Only known parameter names are extracted, never arbitrary upstream prose.
 	param := ""
 	message := envelope.Error.Message + " " + envelope.Base.Message + " " + envelope.Message
+	// Bailian also returns InvalidParameter for an unopened model product.
+	// Treat only its documented activation message as an access problem;
+	// ordinary HTTP400 parameter failures retain their original classification.
+	modelNotActivated := vendor == "bailian" && status == 400 &&
+		(code == "InvalidParameter" || code == "invalid_parameter_error" || typ == "invalid_parameter_error") &&
+		strings.HasPrefix(strings.ToLower(strings.TrimSpace(message)), "the product is not activated")
+	if modelNotActivated {
+		kind = ErrorPermission
+	}
 	for _, p := range []string{"reasoning_effort", "output_config.effort", "thinking.type", "thinking.budget_tokens", "thinking", "temperature", "top_p", "max_tokens", "max_completion_tokens", "stream_options", "model", "messages"} {
 		if envelope.Error.Param == p || strings.Contains(message, p) {
 			param = p
@@ -199,6 +208,9 @@ func providerFailure(ctx context.Context, c APIConnection, status int, header ht
 		t.Stage = stage
 	}
 	label := map[ErrorKind]string{ErrorConfiguration: "上游拒绝请求参数", ErrorAuthentication: "API 身份验证失败", ErrorPermission: "API 权限不足", ErrorModel: "API 模型或接口不存在或不可访问", ErrorBilling: "API 余额或配额不足", ErrorContext: "请求超过上下文或大小限制", ErrorContent: "上游内容策略拒绝请求", ErrorLimit: "API 限流或用量受限", ErrorUpstream: "上游请求失败，未能确定具体原因", ErrorTimeout: "上游请求超时"}[kind]
+	if modelNotActivated {
+		label = "百炼所选模型服务尚未开通，请在百炼模型市场开通后重试"
+	}
 	if param != "" {
 		label += "（参数：" + param + "）"
 	}
@@ -216,7 +228,7 @@ func providerFailure(ctx context.Context, c APIConnection, status int, header ht
 	return &apiFailure{&GenerationError{kind, label}, status, knownCode, knownType, param, upstreamID, stage}
 }
 func safeErrorCode(code string) string {
-	const codes = " invalid_api_key authentication_error invalid_authentication_error incorrect_api_key_error UNAUTHENTICATED permission_error permission_denied_error PERMISSION_DENIED billing_error insufficient_quota credit_balance_exhausted organization_spend_limit_exceeded project_spend_limit_exceeded rate_limit_error rate_limit_exceeded slow_down RESOURCE_EXHAUSTED context_length_exceeded request_too_large invalid_request_error unsupported_parameter unsupported_value invalid_value INVALID_ARGUMENT model_not_found not_found_error resource_not_found_error NOT_FOUND content_filter content_policy_violation overloaded_error server_is_overloaded api_error INTERNAL UNAVAILABLE 1000 1001 1002 1003 1004 1008 1113 1200 1210 1211 1212 1213 1214 1215 1220 1261 1301 1302 1305 1308 1309 1310 2013 "
+	const codes = " invalid_api_key authentication_error invalid_authentication_error incorrect_api_key_error UNAUTHENTICATED permission_error permission_denied_error PERMISSION_DENIED billing_error insufficient_quota credit_balance_exhausted organization_spend_limit_exceeded project_spend_limit_exceeded rate_limit_error rate_limit_exceeded slow_down RESOURCE_EXHAUSTED context_length_exceeded request_too_large invalid_request_error InvalidParameter invalid_parameter_error unsupported_parameter unsupported_value invalid_value INVALID_ARGUMENT model_not_found not_found_error resource_not_found_error NOT_FOUND content_filter content_policy_violation overloaded_error server_is_overloaded api_error INTERNAL UNAVAILABLE 1000 1001 1002 1003 1004 1008 1113 1200 1210 1211 1212 1213 1214 1215 1220 1261 1301 1302 1305 1308 1309 1310 2013 "
 	if code == "" {
 		return ""
 	}

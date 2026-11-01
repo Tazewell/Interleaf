@@ -112,3 +112,28 @@ func TestBailianTopLevelErrorKeepsSafeParameterOnly(t *testing.T) {
 		t.Fatal("raw error exposed sensitive data")
 	}
 }
+
+func TestBailianUnactivatedModelIsNotARequestParameterFailure(t *testing.T) {
+	for _, body := range []string{
+		`{"code":"InvalidParameter","message":"The product is not activated, please confirm that you have activated products and try again after activation.","request_id":"req_activation"}`,
+		`{"error":{"code":"invalid_parameter_error","message":"The product is not activated, please confirm that you have activated products and try again after activation."}}`,
+	} {
+		ctx, _ := traceAPI(t.Context(), APIConnection{URL: "https://dashscope.aliyuncs.com/compatible-mode/v1"}, "test")
+		err := providerFailure(ctx, APIConnection{URL: "https://dashscope.aliyuncs.com/compatible-mode/v1"}, 400, nil, []byte(body), "http")
+		if errorKind(err) != ErrorPermission || !strings.Contains(err.Error(), "模型服务尚未开通") || strings.Contains(err.Error(), "拒绝请求参数") {
+			t.Fatalf("model activation returned a misleading parameter error: %v", err)
+		}
+	}
+}
+
+func TestBailianActivationClassificationIsScoped(t *testing.T) {
+	for _, tc := range []struct{ url, body string }{
+		{"https://relay.test/v1", `{"code":"InvalidParameter","message":"The product is not activated"}`},
+		{"https://dashscope.aliyuncs.com/compatible-mode/v1", `{"code":"InvalidParameter","message":"Invalid reasoning_effort parameter"}`},
+	} {
+		err := providerFailure(t.Context(), APIConnection{URL: tc.url}, 400, nil, []byte(tc.body), "http")
+		if errorKind(err) != ErrorConfiguration || strings.Contains(err.Error(), "模型服务尚未开通") {
+			t.Fatalf("overrode another endpoint/parameter failure: %v", err)
+		}
+	}
+}
