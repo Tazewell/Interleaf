@@ -2,13 +2,15 @@ package interleaf
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
+	"sort"
 	"strconv"
 	"strings"
 )
 
-// Plain-text access for the `interleaf` command line. PDFs are read from the
-// layout index, so a PDF has text only after its layout has been parsed.
+// Plain-text access for the `interleaf` command line. PDFs prefer layout text
+// and use the cached native-text corpus for pages without layout.
 // EPUB text comes from the chapters. Units are pages for a PDF and reading-order
 // chapters for an EPUB.
 
@@ -25,7 +27,7 @@ type documentText struct {
 	Type       string `json:"type"`
 	// Units is the page count of a PDF or the chapter count of an EPUB.
 	Units int `json:"units"`
-	// Parsed is false for a PDF without a layout index; it then has no text.
+	// Parsed reports layout availability, independently of cached native text.
 	Parsed bool `json:"parsed"`
 	// ParsedPages lists the parsed pages of a partly parsed book; empty means all.
 	ParsedPages []int       `json:"parsedPages,omitempty"`
@@ -38,7 +40,7 @@ func (s *Server) readDocumentText(d Document, translations bool) (documentText, 
 	source, err := s.readTranslationSource(d.ID)
 	if err != nil {
 		if d.Type == "pdf" {
-			return out, nil
+			return s.cachedPDFText(d.ID, out), nil
 		}
 		return out, err
 	}
@@ -75,6 +77,9 @@ func (s *Server) readDocumentText(d Document, translations bool) (documentText, 
 		}
 		out.Units = len(chapter)
 	}
+	if d.Type == "pdf" && len(out.ParsedPages) > 0 {
+		out = s.cachedPDFText(d.ID, out)
+	}
 	if !translations {
 		return out, nil
 	}
@@ -100,6 +105,36 @@ func (s *Server) readDocumentText(d Document, translations bool) (documentText, 
 		out.Blocks[i].Translation = targets[out.Blocks[i].ID]
 	}
 	return out, nil
+}
+
+// Search/read requests consume saved text only; they never trigger extraction.
+// Preserve layout blocks on parsed pages and supplement only missing pages.
+func (s *Server) cachedPDFText(id string, out documentText) documentText {
+	var body string
+	if s.Store.DB.QueryRow("SELECT body FROM document_corpora WHERE document_id=?", id).Scan(&body) != nil {
+		return out
+	}
+	var c documentCorpus
+	if json.Unmarshal([]byte(body), &c) != nil || c.Coverage.TotalUnits < 1 {
+		return out
+	}
+	out.Units = max(out.Units, c.Coverage.TotalUnits)
+	parsed := map[int]bool{}
+	for _, page := range out.ParsedPages {
+		parsed[page] = true
+	}
+	for _, p := range c.Passages {
+		var location struct {
+			Type string `json:"type"`
+			Page int    `json:"page"`
+		}
+		if json.Unmarshal(p.Location, &location) != nil || location.Type != "pdf" || location.Page < 1 || location.Page > out.Units || parsed[location.Page] || strings.TrimSpace(p.Text) == "" {
+			continue
+		}
+		out.Blocks = append(out.Blocks, textBlock{ID: p.ID, Unit: location.Page, Label: "text", Text: p.Text})
+	}
+	sort.SliceStable(out.Blocks, func(i, j int) bool { return out.Blocks[i].Unit < out.Blocks[j].Unit })
+	return out
 }
 
 func (s *Server) documentText(w http.ResponseWriter, r *http.Request) {

@@ -17,6 +17,7 @@ import (
 const corpusVersion = "document-text-v3"
 
 var errCorpusBusy = errors.New("全文检索索引正在准备，请稍后重试")
+var errCorpusChanged = errors.New("原文或版面已更新，索引将重新准备")
 
 type corpusCoverage struct {
 	Status          string   `json:"status"`
@@ -100,6 +101,7 @@ func (s *Server) prepareDocumentCorpus(ctx context.Context, documentID string, p
 	if err != nil || d.DeletedAt != "" {
 		return nil, generationError(ErrorCanceled, "文档已不可用")
 	}
+	generation := s.parserGeneration(d.ID)
 	fingerprint, err := s.corpusFingerprintContext(ctx, d)
 	if err != nil {
 		return nil, err
@@ -108,6 +110,9 @@ func (s *Server) prepareDocumentCorpus(ctx context.Context, documentID string, p
 	if err = s.Store.DB.QueryRowContext(ctx, "SELECT body FROM document_corpora WHERE document_id=? AND fingerprint=?", d.ID, fingerprint).Scan(&body); err == nil {
 		var c documentCorpus
 		if json.Unmarshal([]byte(body), &c) == nil {
+			if s.parserGeneration(d.ID) != generation {
+				return nil, errCorpusChanged
+			}
 			c.DocumentID = d.ID
 			c.Fingerprint = fingerprint
 			return &c, nil
@@ -134,8 +139,15 @@ func (s *Server) prepareDocumentCorpus(ctx context.Context, documentID string, p
 	if ctx.Err() != nil {
 		return nil, ctx.Err()
 	}
-	if current, e := s.corpusFingerprintContext(ctx, d); e != nil || current != fingerprint {
-		return nil, generationError(ErrorProtocol, "原文已更新，请重试")
+	current, err := s.corpusFingerprintContext(ctx, d)
+	if err != nil {
+		if ctx.Err() != nil {
+			return nil, ctx.Err()
+		}
+		return nil, err
+	}
+	if current != fingerprint {
+		return nil, errCorpusChanged
 	}
 	raw, _ := json.Marshal(c)
 	if len(raw) > 32<<20 {
@@ -146,11 +158,22 @@ func (s *Server) prepareDocumentCorpus(ctx context.Context, documentID string, p
 		c.Passages[i].ID = c.Revision[:12] + fmt.Sprintf("-%d", i+1)
 	}
 	raw, _ = json.Marshal(c)
+	// Hashing and extraction above do not hold the publication lock. Keep only
+	// the final generation check and atomic index replacement under its read lock.
+	s.parserPublicationMu.RLock()
+	defer s.parserPublicationMu.RUnlock()
+	if s.parserGenerations[d.ID] != generation {
+		return nil, errCorpusChanged
+	}
 	tx, err := s.Store.DB.BeginTx(ctx, nil)
 	if err != nil {
 		return nil, err
 	}
 	defer tx.Rollback()
+	var deleted string
+	if err = tx.QueryRowContext(ctx, "SELECT deleted_at FROM documents WHERE id=?", d.ID).Scan(&deleted); err != nil || deleted != "" {
+		return nil, generationError(ErrorCanceled, "文档已不可用")
+	}
 	if _, err = tx.ExecContext(ctx, "DELETE FROM document_passages_fts WHERE document_id=?", d.ID); err != nil {
 		return nil, err
 	}
@@ -183,7 +206,7 @@ func (s *Server) prepareDocumentCorpus(ctx context.Context, documentID string, p
 }
 
 func (s *Store) queueDocumentCorpus(documentID string) error {
-	_, err := s.DB.Exec("INSERT INTO document_corpus_jobs(document_id,status) VALUES(?,'queued') ON CONFLICT(document_id) DO UPDATE SET status='queued'", documentID)
+	_, err := s.DB.Exec("INSERT INTO document_corpus_jobs(document_id,status) SELECT id,'queued' FROM documents WHERE id=? AND deleted_at='' ON CONFLICT(document_id) DO UPDATE SET status='queued'", documentID)
 	return err
 }
 
@@ -193,20 +216,26 @@ func (s *Store) queueDocumentCorpus(documentID string) error {
 func (s *Server) corpusWorker(ctx context.Context) {
 	tick := time.NewTicker(time.Second)
 	defer tick.Stop()
+	wait := false
 	for {
-		select {
-		case <-ctx.Done():
+		if ctx.Err() != nil {
 			return
-		case <-tick.C:
 		}
+		if wait {
+			select {
+			case <-ctx.Done():
+				return
+			case <-tick.C:
+			}
+		}
+		wait = true
 		var documentID string
-		// Avoid extracting PDF text while its existing layout pass is queued or
-		// running. Paused/failed layout and manual books can index without it.
+		// First text for every import takes priority over upgrading an existing
+		// corpus after layout. This lane never waits for heavyweight inference.
 		err := s.Store.DB.QueryRowContext(ctx, `SELECT j.document_id FROM document_corpus_jobs j
- JOIN documents d ON d.id=j.document_id LEFT JOIN document_processing p ON p.document_id=d.id
- WHERE j.status='queued' AND d.deleted_at='' AND NOT
- (d.type='pdf' AND COALESCE(p.phase,'')='learning' AND p.status IN ('queued','running'))
- ORDER BY j.rowid LIMIT 1`).Scan(&documentID)
+ JOIN documents d ON d.id=j.document_id LEFT JOIN document_corpora c ON c.document_id=d.id
+ WHERE j.status='queued' AND d.deleted_at=''
+ ORDER BY c.document_id IS NOT NULL,j.rowid LIMIT 1`).Scan(&documentID)
 		if err != nil {
 			continue
 		}
@@ -214,7 +243,15 @@ func (s *Server) corpusWorker(ctx context.Context) {
 		if err != nil {
 			continue
 		}
-		_, err = s.Store.DB.ExecContext(work, "UPDATE document_corpus_jobs SET status='running' WHERE document_id=? AND status='queued'", documentID)
+		claimed, claimErr := s.Store.DB.ExecContext(work, "UPDATE document_corpus_jobs SET status='running' WHERE document_id=? AND status='queued'", documentID)
+		var count int64
+		if claimErr == nil {
+			count, _ = claimed.RowsAffected()
+		}
+		if claimErr != nil || count != 1 {
+			finish()
+			continue
+		}
 		if err == nil {
 			child, cancel := context.WithTimeout(work, 3*time.Minute)
 			_, err = s.documentCorpus(child, documentID, nil)
@@ -222,13 +259,15 @@ func (s *Server) corpusWorker(ctx context.Context) {
 		}
 		if err == nil {
 			_, _ = s.Store.DB.Exec("DELETE FROM document_corpus_jobs WHERE document_id=? AND status='running'", documentID)
+			wait = false
 		} else {
 			status := "failed"
-			if work.Err() != nil || errors.Is(err, errCorpusBusy) {
+			if work.Err() != nil || errors.Is(err, errCorpusBusy) || errors.Is(err, errCorpusChanged) {
 				status = "queued"
 			}
 			_, _ = s.Store.DB.Exec("UPDATE document_corpus_jobs SET status=? WHERE document_id=? AND status='running'", status, documentID)
 			if status == "failed" {
+				wait = false
 				s.diagnosticEvent(slog.LevelWarn, "corpus.prepare.failed", "documentId", documentID, "errorCode", errorKind(err))
 			}
 		}

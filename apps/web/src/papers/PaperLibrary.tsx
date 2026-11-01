@@ -49,6 +49,10 @@ import { Checkbox } from "@interleaf/ui/components/checkbox";
 import { Input } from "@interleaf/ui/components/input";
 import { Progress } from "@interleaf/ui/components/progress";
 import {
+  backgroundLayoutLabel,
+  textIndexAvailability,
+} from "../processing-availability";
+import {
   Table,
   TableBody,
   TableCell,
@@ -1217,16 +1221,19 @@ function PaperProcessing({ job }: { job?: Processing }) {
   )
     return null;
   const parsing = job.phase === "learning";
+  const availability = textIndexAvailability(job);
   const status = parsing ? job.status : (job.translating?.status ?? job.status);
   const name = parsing ? "解析" : "翻译";
   const label =
-    status === "queued"
-      ? `等待${name}`
-      : status === "waiting"
-        ? "等待 AI 配置"
-        : status === "failed"
-          ? `${name}失败`
-          : `${name}中`;
+    parsing && job.textIndex
+      ? backgroundLayoutLabel(status)
+      : status === "queued"
+        ? `等待${name}`
+        : status === "waiting"
+          ? "等待 AI 配置"
+          : status === "failed"
+            ? `${name}失败`
+            : `${name}中`;
   const done = parsing ? job.pagesDone : job.translationsDone;
   const total = parsing ? job.pagesTotal : job.translationsTotal;
   const value =
@@ -1245,10 +1252,15 @@ function PaperProcessing({ job }: { job?: Processing }) {
     }
   };
   return (
-    <span className="paper-title-processing" role="status">
+    <span
+      className="paper-title-processing"
+      role="status"
+      title={availability?.description}
+    >
+      {availability && <span>{availability.label} ·</span>}
       <span>{label}</span>
       <Progress
-        aria-label={`${name}进度`}
+        aria-label={parsing && job.textIndex ? "版面解析进度" : `${name}进度`}
         value={value}
         className="processing-progress"
       />

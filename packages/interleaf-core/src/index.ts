@@ -569,6 +569,13 @@ export interface ProcessingStage {
   warning?: string;
 }
 export interface Processing {
+  /** PDF native-text availability, computed for list responses only. */
+  textIndex?: {
+    status:
+      "queued" | "running" | "ready" | "partial" | "unavailable" | "failed";
+    totalPages: number;
+    searchablePages: number;
+  };
   retranslating?: boolean;
   layoutRevision?: string;
   autoTranslateMaxPages?: number;

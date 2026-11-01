@@ -310,7 +310,7 @@ func runSearch(c *client, f *options, args []string, out io.Writer) error {
 	if len(hits) == f.limit {
 		fmt.Fprint(out, "（已达上限，可用 --limit 调大）")
 	}
-	fmt.Fprintln(out, "\n只搜索已解析版面的 PDF 和 EPUB。")
+	fmt.Fprintln(out, "\n搜索已建立文字索引的 PDF 和 EPUB。")
 	return nil
 }
 func unitName(docType string, unit int) string {
@@ -402,7 +402,7 @@ func runRead(c *client, f *options, args []string, out io.Writer) error {
 	if f.json {
 		return writeJSON(out, text)
 	}
-	if !text.Parsed {
+	if !text.Parsed && (len(text.Blocks) == 0 || f.side == "translation") {
 		return exitError{1, "这份 PDF 还没有完成版面解析，暂时读不到正文。论文导入后会自动解析，请等待解析完成；解析失败时可在 Interleaf 中重试。"}
 	}
 	fmt.Fprintf(out, "# %s\n", d.Title)
@@ -439,7 +439,7 @@ func runRead(c *client, f *options, args []string, out io.Writer) error {
 		fmt.Fprintf(out, "\n（%d 段尚未翻译）\n", untranslated)
 	}
 	if len(text.ParsedPages) > 0 {
-		fmt.Fprintf(out, "\n（这本书只解析了 %d 页；在 Interleaf 中翻译对应章节后可读到更多）\n", len(text.ParsedPages))
+		fmt.Fprintf(out, "\n（这本书已有 %d 页完成精细版面解析；其它页可读取已索引原文，译文按章节生成）\n", len(text.ParsedPages))
 	}
 	return nil
 }

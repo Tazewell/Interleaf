@@ -689,6 +689,80 @@ it("exports selected PDFs sequentially and prevents duplicate batch exports", as
   expect(button("导出").disabled).toBe(true);
 });
 
+it.each(["list", "table"] as const)(
+  "shows early text availability separately from layout progress in %s view",
+  async (layout) => {
+    const job: Processing = {
+      documentId: "a",
+      phase: "learning",
+      status: "running",
+      pagesDone: 3,
+      pagesTotal: 13,
+      translationsDone: 0,
+      translationsTotal: 0,
+      detail: "正在解析 PDF",
+      updatedAt: "2026-11-01T00:00:00Z",
+    };
+    const cases = [
+      ["queued", "等待索引"],
+      ["running", "建立索引中"],
+      ["ready", "可搜索"],
+      ["partial", "部分可搜索"],
+      ["unavailable", "可阅读"],
+      ["failed", "索引失败"],
+    ] as const;
+    for (const [status, label] of cases) {
+      jobs.set("a", {
+        ...job,
+        textIndex: {
+          status,
+          totalPages: 13,
+          searchablePages:
+            status === "ready" ? 13 : status === "partial" ? 4 : 0,
+        },
+      });
+      await act(async () => {
+        useReaderStore.setState({
+          libraryPreferences: { mode: "papers", papers: { layout } },
+        });
+        root.render(<Harness />);
+      });
+      const progress = row("Attention Is All You Need").querySelector(
+        ".paper-title-processing",
+      )!;
+      expect(progress.textContent).toContain(label);
+      expect(progress.textContent).toContain("后台解析");
+      expect(
+        progress
+          .querySelector('[role="progressbar"]')
+          ?.getAttribute("aria-label"),
+      ).toBe("版面解析进度");
+      expect(progress.textContent).not.toContain("全文可搜索");
+    }
+    jobs.set("a", {
+      ...job,
+      status: "queued",
+      textIndex: { status: "ready", totalPages: 13, searchablePages: 13 },
+    });
+    await act(async () => root.render(<Harness />));
+    expect(row("Attention Is All You Need").textContent).toContain(
+      "等待版面解析",
+    );
+    expect(row("Attention Is All You Need").textContent).toContain("可搜索");
+    jobs.set("a", { ...jobs.get("a")!, status: "failed" });
+    await act(async () => root.render(<Harness />));
+    expect(row("Attention Is All You Need").textContent).toContain(
+      "版面解析失败",
+    );
+    const retry = row(
+      "Attention Is All You Need",
+    ).querySelector<HTMLButtonElement>('[aria-label="重试解析"]')!;
+    await act(async () => retry.click());
+    expect(api.process).toHaveBeenCalledExactlyOnceWith("a");
+    expect(open).not.toHaveBeenCalled();
+  },
+);
+
 it("shows optional metadata columns and sorts publication dates without inventing missing precision", async () => {
   await act(async () =>
     useReaderStore.setState({

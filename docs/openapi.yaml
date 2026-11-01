@@ -7710,7 +7710,7 @@
                   "parsed":
                     {
                       "type": "boolean",
-                      "description": "False for a PDF without a layout index; it then has no blocks.",
+                      "description": "Reports layout availability. A PDF without layout may still return cached native-text blocks with page locations.",
                     },
                   "parsedPages":
                     {
@@ -8063,6 +8063,32 @@
               "type": "object",
               "properties":
                 {
+                  "textIndex":
+                    {
+                      "type": "object",
+                      "readOnly": true,
+                      "description": "PDF native-text availability, computed for list responses only; never persisted with the processing job.",
+                      "required": ["status", "totalPages", "searchablePages"],
+                      "properties":
+                        {
+                          "status":
+                            {
+                              "type": "string",
+                              "enum":
+                                [
+                                  "queued",
+                                  "running",
+                                  "ready",
+                                  "partial",
+                                  "unavailable",
+                                  "failed",
+                                ],
+                            },
+                          "totalPages": { "type": "integer", "minimum": 0 },
+                          "searchablePages":
+                            { "type": "integer", "minimum": 0 },
+                        },
+                    },
                   "enabled": { "type": "boolean" },
                   "manualTranslation": { "type": "boolean", "readOnly": true },
                   "retranslating": { "type": "boolean", "readOnly": true },

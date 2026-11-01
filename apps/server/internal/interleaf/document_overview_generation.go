@@ -246,7 +246,13 @@ func (s *Server) overviewWorker(ctx context.Context) {
 		case <-tick.C:
 		}
 		var job overviewJob
-		err := s.Store.DB.QueryRowContext(ctx, `SELECT j.document_id,j.job_id FROM document_overview_jobs j JOIN documents d ON d.id=j.document_id WHERE j.status='queued' AND d.deleted_at='' AND NOT EXISTS(SELECT 1 FROM document_corpus_jobs c WHERE c.document_id=d.id AND c.status IN ('queued','running')) ORDER BY j.rowid LIMIT 1`).Scan(&job.DocumentID, &job.ID)
+		// Quick native text makes reading/search available first. Paid summaries
+		// wait for fine layout so its new corpus revision cannot trigger a repeat.
+		err := s.Store.DB.QueryRowContext(ctx, `SELECT j.document_id,j.job_id FROM document_overview_jobs j JOIN documents d ON d.id=j.document_id
+ WHERE j.status='queued' AND d.deleted_at=''
+ AND NOT EXISTS(SELECT 1 FROM document_corpus_jobs c WHERE c.document_id=d.id AND c.status IN ('queued','running'))
+ AND NOT EXISTS(SELECT 1 FROM document_processing p WHERE p.document_id=d.id AND d.type='pdf' AND d.library='papers' AND p.phase='learning')
+ ORDER BY j.rowid LIMIT 1`).Scan(&job.DocumentID, &job.ID)
 		if err != nil {
 			continue
 		}
@@ -294,7 +300,7 @@ func (s *Server) overviewWorker(ctx context.Context) {
 		if e != nil {
 			status = "failed"
 			message = "概要生成失败，请重试（" + string(errorKind(e)) + "）"
-			if ctx.Err() != nil || errors.Is(e, errCorpusBusy) {
+			if ctx.Err() != nil || errors.Is(e, errCorpusBusy) || errors.Is(e, errCorpusChanged) {
 				status = "queued"
 				message = ""
 			}

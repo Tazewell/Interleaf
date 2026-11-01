@@ -10,6 +10,10 @@ import { api } from "@interleaf/api";
 import { Progress } from "@interleaf/ui/components/progress";
 import { Button } from "@interleaf/ui/components/button";
 import { toast } from "sonner";
+import {
+  backgroundLayoutLabel,
+  textIndexAvailability,
+} from "./processing-availability";
 
 export function useProcessing() {
   const [jobs, setJobs] = useState<Processing[]>([]);
@@ -107,6 +111,7 @@ export function CoverProcessing({
   unavailable?: boolean;
 }) {
   const nextPhase = coverPhase(job);
+  const availability = textIndexAvailability(job);
   const [phase, setPhase] = useState(nextPhase);
   const [retrying, setRetrying] = useState(false);
   const leaving = phase !== nextPhase;
@@ -163,7 +168,10 @@ export function CoverProcessing({
     >
       {stages.map((stage) => {
         const state = status(stage.key, stage.done);
-        const label = stageLabel(stage.label, state);
+        const label =
+          stage.key === "learning" && job.textIndex
+            ? backgroundLayoutLabel(state)
+            : stageLabel(stage.label, state);
         const count =
           stage.key === "learning"
             ? stage.value === null
@@ -181,6 +189,15 @@ export function CoverProcessing({
               stage.key === "translating" ? job.translating?.detail : job.detail
             }
           >
+            {stage.key === "learning" && availability && (
+              <div
+                className="processing-availability"
+                role="status"
+                title={availability.description}
+              >
+                {availability.label}
+              </div>
+            )}
             <div className="processing-step-heading" role="status">
               {stage.done && (
                 <Check className="size-3 processing-complete-icon" />
@@ -220,7 +237,7 @@ export function CoverProcessing({
             </div>
             {phase === "learning" && (
               <Progress
-                aria-label={label}
+                aria-label={job.textIndex ? "版面解析进度" : label}
                 value={stage.value ?? (stage.active && !unavailable ? null : 0)}
                 className="processing-progress"
               />
@@ -240,12 +257,17 @@ export function CoverProcessing({
                 size="xs"
                 variant="ghost"
                 className="cover-processing-action"
+                aria-label={job.textIndex ? "重试解析" : "重试学习"}
                 disabled={retrying || unavailable}
                 onClick={retry}
               >
                 <RefreshCw className="size-3" />
                 重试
-                {stage.key === "translating" ? "翻译" : "学习"}
+                {stage.key === "translating"
+                  ? "翻译"
+                  : job.textIndex
+                    ? "解析"
+                    : "学习"}
               </Button>
             )}
           </div>

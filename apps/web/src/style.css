@@ -2473,6 +2473,11 @@ kbd {
   font-size: 11px;
   gap: 5px;
 }
+.cover-processing .processing-availability {
+  margin-bottom: 5px;
+  font-size: 11px;
+  color: var(--foreground);
+}
 .cover-processing .processing-progress [data-slot="progress-track"] {
   height: 3px;
 }

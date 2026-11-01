@@ -20,6 +20,39 @@ type ProcessingStage struct {
 	Detail  string `json:"detail"`
 	Warning string `json:"warning,omitempty"`
 }
+
+// Text availability belongs to the response, not the persisted processing job.
+// The independent text and layout workers must not overwrite each other's state.
+type PDFTextIndex struct {
+	Status          string `json:"status"`
+	TotalPages      int    `json:"totalPages"`
+	SearchablePages int    `json:"searchablePages"`
+}
+
+type processingResponse struct {
+	Processing
+	TextIndex *PDFTextIndex `json:"textIndex,omitempty"`
+}
+
+func pdfTextIndex(body, status string) *PDFTextIndex {
+	index := &PDFTextIndex{Status: "unavailable"}
+	var coverage corpusCoverage
+	if json.Unmarshal([]byte(body), &coverage) == nil && coverage.TotalUnits > 0 {
+		index.TotalPages = coverage.TotalUnits
+		index.SearchablePages = max(0, min(coverage.SearchableUnits, index.TotalPages))
+		if index.SearchablePages == index.TotalPages {
+			index.Status = "ready"
+		} else if index.SearchablePages > 0 {
+			index.Status = "partial"
+		}
+		return index
+	}
+	if status == "queued" || status == "running" || status == "failed" {
+		index.Status = status
+	}
+	return index
+}
+
 type Processing struct {
 	AutoTranslateMaxPages *int   `json:"autoTranslateMaxPages,omitempty"`
 	ManualTranslation     bool   `json:"manualTranslation,omitempty"`
@@ -204,22 +237,28 @@ func (s *Store) enqueueDocument(d Document) error {
 	return e
 }
 func (s *Server) processingList(w http.ResponseWriter, r *http.Request) {
-	rows, e := s.Store.DB.Query("SELECT body FROM document_processing ORDER BY rowid DESC")
+	rows, e := s.Store.DB.Query(`SELECT p.body,d.type,CASE WHEN json_valid(c.body) THEN COALESCE(json_extract(c.body,'$.coverage'),'') ELSE '' END,COALESCE(j.status,'') FROM document_processing p
+ JOIN documents d ON d.id=p.document_id LEFT JOIN document_corpora c ON c.document_id=d.id
+ LEFT JOIN document_corpus_jobs j ON j.document_id=d.id ORDER BY p.rowid DESC`)
 	if e != nil {
 		fail(w, 500, "无法读取解析进度")
 		return
 	}
 	defer rows.Close()
-	out := []Processing{}
+	out := []processingResponse{}
 	for rows.Next() {
-		var b string
+		var b, kind, corpus, status string
 		var p Processing
-		if rows.Scan(&b) != nil || json.Unmarshal([]byte(b), &p) != nil {
+		if rows.Scan(&b, &kind, &corpus, &status) != nil || json.Unmarshal([]byte(b), &p) != nil {
 			fail(w, 500, "解析进度损坏")
 			return
 		}
 		normalizeNoTextProcessing(&p)
-		out = append(out, p)
+		response := processingResponse{Processing: p}
+		if kind == "pdf" {
+			response.TextIndex = pdfTextIndex(corpus, status)
+		}
+		out = append(out, response)
 	}
 	respond(w, 200, out)
 }
@@ -391,7 +430,12 @@ func (s *Server) StartProcessing(parent context.Context) func() {
 				s.processingMu.Lock()
 				var body string
 				// Documents in the trash keep their queue position until restored.
-				e := s.Store.DB.QueryRow("SELECT p.body FROM document_processing p JOIN documents d ON d.id=p.document_id WHERE p.phase=? AND p.status='queued' AND json_extract(p.body,'$.enabled')=1 AND d.deleted_at='' ORDER BY p.rowid LIMIT 1", phase).Scan(&body)
+				e := s.Store.DB.QueryRow(`SELECT p.body FROM document_processing p JOIN documents d ON d.id=p.document_id
+ WHERE p.phase=? AND p.status='queued' AND json_extract(p.body,'$.enabled')=1 AND d.deleted_at=''
+ AND NOT (p.phase='learning' AND d.type='pdf' AND d.library='papers'
+ AND NOT EXISTS(SELECT 1 FROM document_corpora c WHERE c.document_id=d.id)
+ AND EXISTS(SELECT 1 FROM document_corpus_jobs j WHERE j.document_id=d.id AND j.status IN ('queued','running')))
+ ORDER BY p.rowid LIMIT 1`, phase).Scan(&body)
 				var p Processing
 				if e == nil {
 					e = json.Unmarshal([]byte(body), &p)

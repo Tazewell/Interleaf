@@ -2747,7 +2747,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description Copy one previewed PDF, convert supported embedded marks into Reader annotations and remove only those marks from the copy. Source files are unchanged. */
+        /** @description Copy one previewed PDF, convert supported embedded marks into Interleaf annotations and remove only those marks from the copy. Source files are unchanged. */
         post: {
             parameters: {
                 query?: never;
@@ -6938,7 +6938,7 @@ export interface components {
             type: "epub" | "pdf";
             /** @description Page count of a PDF or chapter count of an EPUB. */
             units: number;
-            /** @description False for a PDF without a layout index; it then has no blocks. */
+            /** @description Reports layout availability. A PDF without layout may still return cached native-text blocks with page locations. */
             parsed: boolean;
             /** @description Parsed pages of a partly parsed book; absent means all. */
             parsedPages?: number[];
@@ -7082,6 +7082,13 @@ export interface components {
             warning?: string;
         };
         Processing: {
+            /** @description PDF native-text availability, computed for list responses only; never persisted with the processing job. */
+            readonly textIndex?: {
+                /** @enum {string} */
+                status: "queued" | "running" | "ready" | "partial" | "unavailable" | "failed";
+                totalPages: number;
+                searchablePages: number;
+            };
             enabled?: boolean;
             readonly manualTranslation?: boolean;
             readonly retranslating?: boolean;
@@ -7185,7 +7192,7 @@ export interface components {
             models: {
                 [key: string]: string;
             };
-            /** @description Reader effort by provider and model ID. Defaults to medium; adapted to SDK-native values on invocation. */
+            /** @description Interleaf effort by provider and model ID. Defaults to medium; adapted to SDK-native values on invocation. */
             efforts?: {
                 [key: string]: {
                     [key: string]: components["schemas"]["ReasoningEffort"];
