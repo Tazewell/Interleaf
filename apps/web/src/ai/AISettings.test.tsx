@@ -7,6 +7,11 @@ import { api } from "@interleaf/api";
 import { AISettings } from "./AISettings";
 import { useReaderStore } from "../store";
 
+// These integration tests exercise multiple real Base UI popups. On the
+// two-core CI runner their focus/positioning work can exceed the global 10s
+// limit; keep the additional budget local to this file.
+vi.setConfig({ testTimeout: 30_000 });
+
 vi.mock("@interleaf/api", () => ({
   api: {
     aiConfig: vi.fn(),
