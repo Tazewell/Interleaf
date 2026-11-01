@@ -11,6 +11,7 @@ let host: HTMLDivElement;
 let config: NativeAIConfig;
 let writes: Record<string, any>[];
 let probes: number;
+let catalogAvailable: boolean;
 beforeEach(() => {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   vi.stubGlobal(
@@ -34,15 +35,28 @@ beforeEach(() => {
   };
   writes = [];
   probes = 0;
+  catalogAvailable = false;
   useReaderStore.setState({ aiConfig: config, aiModelSaving: false });
   vi.stubGlobal(
     "fetch",
     vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
-      if (url.includes("/api/ai/models"))
+      if (url.includes("/api/ai/models")) {
+        if (catalogAvailable)
+          return new Response(
+            JSON.stringify([
+              {
+                id: "custom-fast",
+                name: "Custom Fast",
+                description: "",
+                isDefault: false,
+              },
+            ]),
+          );
         return new Response(JSON.stringify({ error: "模型列表暂不可用" }), {
           status: 502,
         });
+      }
       if (url.includes("/api/ai/check")) {
         probes++;
         return new Response(
@@ -104,21 +118,37 @@ async function click(text: string) {
   expect(button).toBeTruthy();
   await act(async () => button!.click());
 }
+async function chooseModel(label: string, value: string) {
+  const trigger = host.querySelector<HTMLButtonElement>(
+    `button[aria-label="${label}"]`,
+  )!;
+  await act(async () => trigger.click());
+  const option = [
+    ...document.querySelectorAll<HTMLElement>('[role="option"]'),
+  ].find((item) => item.textContent === value)!;
+  await act(async () => {
+    option.dispatchEvent(new MouseEvent("pointerdown", { bubbles: true }));
+    option.click();
+  });
+}
 
 it("configures one connection and role models without external Agent controls", async () => {
   await act(async () => root.render(<AISettings open />));
   expect(host.textContent).not.toMatch(/SDK|登录|安装|Codex|Claude Code|Kimi/);
   expect(host.querySelectorAll('[aria-label="API 地址"]')).toHaveLength(1);
   expect(
-    (host.querySelector('[aria-label="问答模型"]') as HTMLInputElement).value,
-  ).toBe("manual-chat");
+    host.querySelector('button[aria-label="问答模型"]')?.textContent,
+  ).toContain("manual-chat");
   expect(
-    (host.querySelector('[aria-label="研究模型"]') as HTMLInputElement)
-      .placeholder,
-  ).toBe("继承问答模型");
+    host.querySelector('button[aria-label="研究模型"]')?.textContent,
+  ).toContain("继承问答模型");
   expect(host.textContent).toContain("模型列表暂不可用");
+  expect(host.querySelector('input[aria-label="翻译模型"]')).toBeNull();
+  expect(writes).toHaveLength(0);
   expect(probes).toBe(0);
-  await change("翻译模型", "custom-fast");
+  catalogAvailable = true;
+  await click("刷新模型列表");
+  await chooseModel("翻译模型", "custom-fast");
   await click("保存模型");
   expect(config.models.translation).toBe("custom-fast");
   expect(config.models.chat).toBe("manual-chat");
@@ -142,8 +172,8 @@ it("requires connection confirmation before editing migrated role models or prom
   useReaderStore.setState({ aiConfig: config });
   await act(async () => root.render(<AISettings open />));
   expect(
-    (host.querySelector('[aria-label="翻译模型"]') as HTMLInputElement)
-      .disabled,
+    host.querySelector<HTMLButtonElement>('button[aria-label="翻译模型"]')
+      ?.disabled,
   ).toBe(true);
   expect((host.querySelector("textarea") as HTMLTextAreaElement).disabled).toBe(
     true,
