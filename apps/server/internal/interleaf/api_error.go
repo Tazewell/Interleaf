@@ -68,8 +68,10 @@ func apiRequestID(h http.Header, key string) string {
 func (e *apiFailure) Unwrap() error { return e.GenerationError }
 func providerFailure(ctx context.Context, c APIConnection, status int, header http.Header, body []byte, stage string) error {
 	var envelope struct {
-		Type      string `json:"type"`
-		RequestID string `json:"request_id"`
+		Type      string          `json:"type"`
+		RequestID string          `json:"request_id"`
+		Code      json.RawMessage `json:"code"`
+		Message   string          `json:"message"`
 		Error     struct {
 			Code    json.RawMessage `json:"code"`
 			Type    string          `json:"type"`
@@ -84,6 +86,9 @@ func providerFailure(ctx context.Context, c APIConnection, status int, header ht
 	}
 	decoded := json.Unmarshal(body, &envelope) == nil
 	code := strings.Trim(string(envelope.Error.Code), "\"")
+	if code == "" || code == "null" {
+		code = strings.Trim(string(envelope.Code), "\"")
+	}
 	if code == "null" {
 		code = ""
 	}
@@ -176,7 +181,7 @@ func providerFailure(ctx context.Context, c APIConnection, status int, header ht
 	}
 	// Only known parameter names are extracted, never arbitrary upstream prose.
 	param := ""
-	message := envelope.Error.Message + " " + envelope.Base.Message
+	message := envelope.Error.Message + " " + envelope.Base.Message + " " + envelope.Message
 	for _, p := range []string{"reasoning_effort", "output_config.effort", "thinking.type", "thinking.budget_tokens", "thinking", "temperature", "top_p", "max_tokens", "max_completion_tokens", "stream_options", "model", "messages"} {
 		if envelope.Error.Param == p || strings.Contains(message, p) {
 			param = p

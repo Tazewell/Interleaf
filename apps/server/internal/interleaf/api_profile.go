@@ -10,7 +10,11 @@ import (
 // Rules apply only to exact official HTTPS origins and their documented API
 // paths. A model name at a relay never selects a vendor or changes protocol.
 // Rule behavior is covered by api_profile_test.go; the version records the review date.
-const apiRulesVersion = "2026-10-13.1"
+const apiRulesVersion = "2026-11-01.1"
+
+// Only documented regional workspace domains, not arbitrary subdomains or
+// look-alike suffixes, share the Bailian compatibility contract.
+var bailianWorkspaceHost = regexp.MustCompile(`^[a-z0-9][a-z0-9-]*\.(cn-beijing|ap-southeast-1|ap-northeast-1|eu-central-1|us-east-1|cn-hongkong)\.maas\.aliyuncs\.com$`)
 
 type apiEndpoint struct{ Vendor, Protocol, Base string }
 
@@ -49,10 +53,18 @@ func resolveAPIEndpoint(c APIConnection) apiEndpoint {
 			if path == "" || path == "/v1" {
 				e.Vendor = "deepseek"
 			}
-		case "api.minimax.io", "api.minimaxi.com":
+		case "api.minimax.io", "api.minimaxi.com", "api.minimax.cn":
 			if path == "" || path == "/v1" {
 				e.Vendor = "minimax"
 				path = "/v1"
+			}
+		case "dashscope.aliyuncs.com", "dashscope-intl.aliyuncs.com", "dashscope-us.aliyuncs.com", "cn-hongkong.dashscope.aliyuncs.com":
+			if path == "/compatible-mode/v1" {
+				e.Vendor = "bailian"
+			}
+		default:
+			if path == "/compatible-mode/v1" && bailianWorkspaceHost.MatchString(strings.ToLower(u.Hostname())) {
+				e.Vendor = "bailian"
 			}
 		}
 		if e.Vendor != "custom" {
@@ -103,6 +115,26 @@ func reasoningRule(e apiEndpoint, model string, advertised []string) apiReasonin
 		return r
 	}
 	switch e.Vendor {
+	case "bailian":
+		if e.Protocol != "openai" {
+			return r
+		}
+		// Bailian is a separate deployment contract, including for resold
+		// DeepSeek/Kimi models. Unknown IDs keep the server's default thinking
+		// settings rather than receiving guessed low/medium/high parameters.
+		// https://docs.bailian.console.aliyun.com/zh/model-studio/qwen-api-via-openai-chat-completions
+		switch strings.ToLower(model) {
+		case "deepseek-v4-pro", "glm-5.2", "glm-5.1", "glm-5":
+			levels("high", "max")
+		case "deepseek-v4.1-flash", "deepseek-v4-flash-0731", "deepseek-v4-pro-0813", "glm-5.3", "kimi-k3":
+			levels("low", "high", "max")
+		case "qwen3.8-max", "qwen3.8-max-0902", "qwen3.8-flash", "qwen3.8-2.4t-a95b", "qwen3.8-27b", "qwen3.8-omni-flash":
+			levels("low", "medium", "xhigh")
+		case "kimi/kimi-k3", "kimi/kimi-k3.1-pro", "kimi/kimi-k3.1-pro-highspeed":
+			levels("max")
+		case "minimax/minimax-m3.1-flash":
+			levels("low", "medium", "high", "xhigh", "max")
+		}
 	case "openai":
 		if e.Protocol != "openai" {
 			return r
