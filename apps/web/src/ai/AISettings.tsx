@@ -14,12 +14,19 @@ import { TaskModels } from "../TaskModels";
 import { TranslationPromptSettings } from "../TranslationPromptSettings";
 import { useReaderStore } from "../store";
 import { toast } from "sonner";
+import {
+  inferProvider,
+  providerPresets,
+  sameConnection,
+  type ProviderPreset,
+} from "./provider-presets";
 
 export function AISettings({ open }: { open: boolean }) {
   const { aiConfig: config, setAIConfig, aiModelSaving } = useReaderStore();
   const [url, setURL] = useState("");
   const [protocol, setProtocol] =
     useState<NativeAIConfig["connection"]["protocol"]>("openai");
+  const [provider, setProvider] = useState<ProviderPreset>("custom");
   const [key, setKey] = useState("");
   const [clearKey, setClearKey] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -45,6 +52,7 @@ export function AISettings({ open }: { open: boolean }) {
   useEffect(() => {
     setURL(config?.connection.url ?? "");
     setProtocol(config?.connection.protocol ?? "openai");
+    setProvider(inferProvider(config?.connection));
     setKey("");
     setClearKey(false);
   }, [
@@ -52,6 +60,10 @@ export function AISettings({ open }: { open: boolean }) {
     config?.connection.protocol,
     config?.connection.hasKey,
   ]);
+  const keepsSavedConnection =
+    !!config && sameConnection(config.connection, { url, protocol });
+  const connectionDraftChanged =
+    !keepsSavedConnection || !!key.trim() || clearKey;
   const saveConnection = async () => {
     if (!config) return;
     setSaving(true);
@@ -64,6 +76,11 @@ export function AISettings({ open }: { open: boolean }) {
         url: url.trim(),
         ...(key.trim() ? { key: key.trim() } : clearKey ? { key: null } : {}),
       };
+      if (!sameConnection(latest.connection, update.connection)) {
+        update.models = {};
+        update.efforts = {};
+        update.apiModels = [];
+      }
       setAIConfig(await api.saveAIConfig(update));
       setKey("");
       setClearKey(false);
@@ -96,15 +113,57 @@ export function AISettings({ open }: { open: boolean }) {
             }}
           >
             <Select
-              value={protocol}
+              value={provider}
               disabled={saving || aiModelSaving}
               onValueChange={(value) => {
-                if (value === "openai" || value === "anthropic")
+                const preset = providerPresets.find(
+                  (item) => item.id === value,
+                );
+                if (!preset && value !== "custom") return;
+                setProvider(value as ProviderPreset);
+                if (preset) {
+                  setURL(preset.url);
+                  setProtocol("openai");
+                }
+                setKey("");
+                setClearKey(false);
+              }}
+            >
+              <SelectTrigger aria-label="服务商">
+                <SelectValue>
+                  {providerPresets.find((item) => item.id === provider)
+                    ?.label ?? "自定义"}
+                </SelectValue>
+              </SelectTrigger>
+              <SelectContent>
+                {providerPresets.map((preset) => (
+                  <SelectItem key={preset.id} value={preset.id}>
+                    {preset.label}
+                  </SelectItem>
+                ))}
+                <SelectItem value="custom">自定义</SelectItem>
+              </SelectContent>
+            </Select>
+            {provider === "bailian" && (
+              <p className="text-xs text-muted-foreground">
+                默认北京地域；其它地域请选自定义，地址与 Key 须属于同一地域。
+              </p>
+            )}
+            <Select
+              value={protocol}
+              disabled={saving || aiModelSaving || provider !== "custom"}
+              onValueChange={(value) => {
+                if (value === "openai" || value === "anthropic") {
                   setProtocol(value);
+                  setKey("");
+                  setClearKey(false);
+                }
               }}
             >
               <SelectTrigger aria-label="API 协议">
-                <SelectValue />
+                <SelectValue>
+                  {protocol === "openai" ? "OpenAI 兼容" : "Anthropic"}
+                </SelectValue>
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="openai">OpenAI 兼容</SelectItem>
@@ -115,15 +174,19 @@ export function AISettings({ open }: { open: boolean }) {
               aria-label="API 地址"
               placeholder="https://example.com/v1"
               value={url}
-              disabled={saving || aiModelSaving}
-              onChange={(event) => setURL(event.target.value)}
+              disabled={saving || aiModelSaving || provider !== "custom"}
+              onChange={(event) => {
+                setURL(event.target.value);
+                setKey("");
+                setClearKey(false);
+              }}
             />
             <Input
               aria-label="API Key"
               type="password"
               autoComplete="off"
               placeholder={
-                config.connection.hasKey
+                keepsSavedConnection && config.connection.hasKey
                   ? "已保存；留空保留当前 Key"
                   : "API Key（本地服务可不填）"
               }
@@ -155,7 +218,16 @@ export function AISettings({ open }: { open: boolean }) {
               </Button>
             </div>
           </form>
-          <TaskModels disabled={saving || !!config.needsConfiguration} />
+          {connectionDraftChanged && (
+            <p className="text-xs text-muted-foreground">
+              先保存连接，再选择模型。
+            </p>
+          )}
+          <TaskModels
+            disabled={
+              saving || !!config.needsConfiguration || connectionDraftChanged
+            }
+          />
           <TranslationPromptSettings
             value={config.translationPrompt ?? ""}
             disabled={saving || aiModelSaving || !!config.needsConfiguration}
