@@ -751,12 +751,12 @@ export function Workspace({
     setNoteOpen(true);
     adapter?.clearSelection();
   };
-  const askAnnotationAI = (annotation: Annotation) => {
-    const quote = { text: annotation.quote, location: annotation.location };
+  const quoteToChat = (quote: ReaderSelection) => {
     setQuotes((items) =>
       [
         ...items.filter(
           (item) =>
+            item.text !== quote.text ||
             JSON.stringify(item.location) !== JSON.stringify(quote.location),
         ),
         quote,
@@ -765,8 +765,13 @@ export function Workspace({
     setRight(true);
     setRightTab("ai");
     adapter?.clearSelection();
+    setSelection(null);
+    setAnnotationTarget(null);
+    setHoveredAnnotation(null);
     requestAnimationFrame(() => composeInput.current?.focus());
   };
+  const quoteAnnotation = (annotation: Annotation) =>
+    quoteToChat({ text: annotation.quote, location: annotation.location });
   const saveAnnotationText = async (
     annotation: Annotation,
     patch: { note: string; tags: string[] },
@@ -860,30 +865,21 @@ export function Workspace({
     void go?.catch((error) => toast.error(error.message));
   };
   const addQuote = () => {
-    if (selection) {
-      setQuotes((items) => [...items, selection].slice(-6));
-      setRight(true);
-      setRightTab("ai");
-      adapter?.clearSelection();
-      setSelection(null);
-    }
+    if (selection) quoteToChat(selection);
   };
   const send = async (
     question = prompt,
     selected = quotes,
     useSection = false,
     attachments = images,
-    directImage = false,
   ) => {
     if (abort.current || session.getSnapshot().busy || aiModelSaving) return;
+    if (!question.trim()) return;
     if (!provider) {
       toast.info("请先在设置中选择 Agent SDK");
       onSettings();
       return;
     }
-    if (!question.trim() && attachments.length)
-      question = "请解释附件中的图表或公式。";
-    if (!question.trim()) return;
     if (!session.getSnapshot().loaded) {
       toast.error("对话记录尚未加载，请重新加载。");
       return;
@@ -904,7 +900,7 @@ export function Workspace({
       );
       const { context } = captured;
       if (controller.signal.aborted) return;
-      if (!directImage) setPrompt("");
+      setPrompt("");
       await session.send({
         provider,
         prompt: question,
@@ -916,16 +912,15 @@ export function Workspace({
       if (serial !== sendSerial.current) return;
       const answer = session.getSnapshot().pending;
       if (
-        !directImage &&
         ["saved", "syncing"].includes(
           session.getSnapshot().pending?.phase || "",
         )
       ) {
-        setQuotes([]);
+        setQuotes((current) =>
+          current.filter((quote) => !selected.includes(quote)),
+        );
         setImages((current) =>
-          current.filter(
-            (image) => !attachments.some((sent) => sent.id === image.id),
-          ),
+          current.filter((image) => !attachments.includes(image)),
         );
       }
       return answer?.phase === "saved" ? answer.savedId : undefined;
@@ -968,18 +963,16 @@ export function Workspace({
       return;
     }
     if (!block.image) {
-      if (action === "explain")
-        void send("请解释这段原文的含义，区分原文结论与你的补充说明。", [
-          {
-            text: block.text,
-            location: {
-              type: "pdf",
-              page: block.page,
-              quote: block.text,
-              rects: [block.bounds],
-            },
+      if (action === "attach" || action === "explain")
+        quoteToChat({
+          text: block.text,
+          location: {
+            type: "pdf",
+            page: block.page,
+            quote: block.text,
+            rects: [block.bounds],
           },
-        ]);
+        });
       return;
     }
     const image: ImageAttachment = {
@@ -992,32 +985,16 @@ export function Workspace({
       setPreviewImage(image);
       return;
     }
-    if (sending) {
-      toast.info("请等待当前回答完成");
-      return;
-    }
+    if (action !== "attach" && action !== "explain") return;
     setRight(true);
     setRightTab("ai");
-    if (action === "explain") {
-      void send(
-        "请详细解释这张图表或公式，说明图中信息、符号及其在原文中的含义，区分事实与推断。",
-        [],
-        false,
-        [image],
-        true,
-      );
-      return;
-    }
-    if (images.some((item) => item.id === image.id)) {
-      composeInput.current?.focus();
-      return;
-    }
+    requestAnimationFrame(() => composeInput.current?.focus());
+    if (images.some((item) => item.id === image.id)) return;
     if (images.length >= 4) {
       toast.info("每次最多附加 4 张图片");
       return;
     }
     setImages((current) => [...current, image]);
-    requestAnimationFrame(() => composeInput.current?.focus());
   };
   const imageAttachments = (items: ImageAttachment[], removable = false) => (
     <div className="image-attachments">
@@ -1603,7 +1580,7 @@ export function Workspace({
                 deleting={deleting.has(selectedAnnotation.id)}
                 onDelete={(id) => void removeAnnotation(id)}
                 onNote={editAnnotationNote}
-                onAskAI={askAnnotationAI}
+                onQuote={quoteAnnotation}
                 onAnswer={(annotation) => void answerQuestion(annotation)}
                 onColor={(annotation, color) => void recolor(annotation, color)}
               />
@@ -1632,16 +1609,8 @@ export function Workspace({
                 >
                   <StickyNote />
                 </IconButton>
-                <IconButton
-                  label="问 AI"
-                  onClick={() =>
-                    void send(
-                      "请解释这段文字的含义，区分原文结论与你的补充说明。",
-                      [selection],
-                    )
-                  }
-                >
-                  <Sparkles />
+                <IconButton label="引用到 AI 对话" onClick={addQuote}>
+                  <Quote />
                 </IconButton>
                 <IconButton
                   label="划词翻译"
@@ -1690,10 +1659,6 @@ export function Workspace({
                     >
                       <CircleHelp />
                       提问
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={addQuote}>
-                      <Quote />
-                      引用到对话
                     </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
@@ -1974,7 +1939,7 @@ export function Workspace({
                           !adapter ||
                           aiModelSaving ||
                           !provider ||
-                          (!prompt.trim() && !images.length)
+                          !prompt.trim()
                         }
                         onClick={() => void send()}
                       >

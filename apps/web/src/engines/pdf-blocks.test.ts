@@ -148,23 +148,23 @@ it("attaches clicks, keeps action buttons interactive, and does not attach drags
   await act(async () => {
     event("pointermove");
   });
-  const explain = page.querySelector<HTMLButtonElement>(
-    '[data-block-action="explain"]',
+  const attach = page.querySelector<HTMLButtonElement>(
+    '[data-block-action="attach"]',
   )!;
   const preview = page.querySelector<HTMLButtonElement>(
     '[data-block-action="preview"]',
   )!;
-  expect(explain).not.toBeNull();
+  expect(attach).not.toBeNull();
   expect(preview).not.toBeNull();
   await act(async () => {
-    explain.dispatchEvent(
+    attach.dispatchEvent(
       new MouseEvent("pointermove", { bubbles: true, buttons: 1 }),
     );
-    explain.click();
+    attach.click();
     preview.click();
   });
   expect(action.mock.calls.map((call) => call[1])).toEqual([
-    "explain",
+    "attach",
     "preview",
   ]);
   event("pointerdown");
@@ -258,7 +258,8 @@ it("shows passive feedback during positioning, fades it on completion and keeps 
   const layer = new PDFBlockOverlay(host);
   layer.setBlocks([text]);
   layer.setFocusBlock(text.id);
-  const outline = () => page.querySelector<HTMLElement>(".interleaf-block-focus");
+  const outline = () =>
+    page.querySelector<HTMLElement>(".interleaf-block-focus");
   expect(outline()?.dataset.blockId).toBe(text.id);
   expect(outline()?.children).toHaveLength(0);
   expect(page.querySelector("[data-block-action]")).toBeNull();
@@ -271,7 +272,7 @@ it("shows passive feedback during positioning, fades it on completion and keeps 
       }),
     ),
   );
-  expect(page.querySelector('[data-block-action="explain"]')).not.toBeNull();
+  expect(page.querySelector('[data-block-action="attach"]')).not.toBeNull();
   expect(page.querySelector('[data-block-action="translate"]')).toBeNull();
   expect(outline()).toBeNull(); // no double tint on the same block
   host.dispatchEvent(new Event("scroll"));

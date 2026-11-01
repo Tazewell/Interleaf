@@ -5,6 +5,7 @@ import {
   Note as StickyNote,
   NotePencil as SquarePen,
   Sparkle as Sparkles,
+  Quotes as Quote,
 } from "@phosphor-icons/react";
 import { Button } from "@interleaf/ui/components/button";
 import {
@@ -30,7 +31,7 @@ export function AnnotationToolbar({
   deleting = false,
   onDelete,
   onNote,
-  onAskAI,
+  onQuote,
   onAnswer,
   onColor,
 }: {
@@ -40,7 +41,7 @@ export function AnnotationToolbar({
   deleting?: boolean;
   onDelete: (id: string) => void;
   onNote: (annotation: Annotation) => void;
-  onAskAI: (annotation: Annotation) => void;
+  onQuote: (annotation: Annotation) => void;
   onAnswer?: (annotation: Annotation) => void;
   onColor?: (annotation: Annotation, color: string) => void;
 }) {
@@ -58,7 +59,11 @@ export function AnnotationToolbar({
           Icon: Sparkles,
           onClick: () => onAnswer(annotation),
         }
-      : { label: "问 AI", Icon: Sparkles, onClick: () => onAskAI(annotation) };
+      : {
+          label: "引用到 AI 对话",
+          Icon: Quote,
+          onClick: () => onQuote(annotation),
+        };
   const action = ({
     label,
     Icon,
