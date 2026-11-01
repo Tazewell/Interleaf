@@ -1,0 +1,8 @@
+.release-notes-dialog {
+  max-height: min(760px, calc(100dvh - 2rem));
+  overflow-y: auto;
+  scrollbar-width: none;
+}
+.release-notes-dialog::-webkit-scrollbar {
+  display: none;
+}

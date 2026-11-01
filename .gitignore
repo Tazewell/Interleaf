@@ -1,0 +1,31 @@
+node_modules/
+dist/
+bin/
+.interleaf/
+# Legacy development libraries remain private during migration.
+.reader/
+*.log
+.DS_Store
+coverage/
+.env
+.env.*
+!.env.example
+!.env.*.example
+# Local credentials and release-signing material must never enter source control.
+ai-connections.json
+ai-connections.json.*
+*.p12
+*.p12.*
+*.pfx
+*.pfx.*
+*.pem
+*.key
+*-mac-sign/
+AGENTS.local.md
+apps/web/public/pdf-assets/
+
+apps/desktop/staging/
+apps/processor/models/
+release/
+.claude/
+docs/MAKE.epub

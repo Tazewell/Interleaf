@@ -1,0 +1,918 @@
+import {
+  app,
+  BrowserWindow,
+  dialog,
+  ipcMain,
+  session,
+  nativeTheme,
+  shell,
+} from "electron";
+import { spawn, type ChildProcess } from "node:child_process";
+import { join, resolve } from "node:path";
+import { createInterface } from "node:readline";
+import { readFile, realpath, lstat } from "node:fs/promises";
+import {
+  libraryDirectory,
+  migrateLibrary,
+  stopLibraryServer,
+} from "./library-location";
+import { randomBytes } from "node:crypto";
+import { homedir } from "node:os";
+import { annotationUndoShortcut } from "../../../packages/interleaf-core/src/undo-shortcut";
+import { zoomCommand } from "../../../packages/interleaf-core/src/zoom-shortcut";
+import {
+  INTERLEAF_SCHEME,
+  parseInterleafLink,
+  type InterleafLinkTarget,
+} from "../../../packages/interleaf-core/src/interleaf-link";
+import { writeClipboardImage, writeClipboardText } from "./clipboard";
+import {
+  ProxySettingsService,
+  electronProxyConfiguration,
+} from "./proxy-settings";
+import { startUpdateService } from "./update-service";
+import { devIsolation } from "./dev-isolation";
+import { configureBibliographyExport } from "./bibliography-export";
+import { BilingualPDFSaveService } from "./bilingual-pdf-export";
+import { startDiagnosticService } from "./diagnostic-service";
+import { serverSpawnDiagnostics } from "./server-spawn-diagnostics";
+import { discoverEndNote } from "./endnote-discovery";
+import { commandLineStatus, setCommandLine } from "./command-line";
+const isolation = devIsolation({
+  isPackaged: app.isPackaged,
+  env: process.env,
+});
+if (isolation.userDataDirectory)
+  app.setPath(
+    "userData",
+    join(app.getPath("appData"), isolation.userDataDirectory),
+  );
+let updateService: Awaited<ReturnType<typeof startUpdateService>> | undefined;
+let diagnostics: ReturnType<typeof startDiagnosticService> | undefined;
+let child: ChildProcess | undefined;
+let serverURL = "";
+let serverToken = "";
+let bibliographyExportCapability = "";
+let window: BrowserWindow | undefined;
+let quitting = false;
+let closing = false;
+let flushed = false;
+let restartRequested = false;
+let proxySettings: ProxySettingsService;
+let activeLibrary: string | undefined;
+let choosingLibrary = false;
+let bilingualPDFSave: BilingualPDFSaveService | undefined;
+let serverStop: Promise<void> | undefined;
+let serverClosed: Promise<void> = Promise.resolve();
+let quitJoin: Promise<void> | undefined;
+let quitJoined = false;
+function stopOwnedServer() {
+  return (serverStop ??= (async () => {
+    if (child) await stopLibraryServer(child);
+    await serverClosed;
+  })());
+}
+let pendingLibraryMove:
+  { destination: string; resolve: (moved: boolean) => void } | undefined;
+const root = resolve(__dirname, "../..");
+function bundledBinary(name: "interleaf-server" | "interleaf") {
+  const file = process.platform === "win32" ? `${name}.exe` : name;
+  return app.isPackaged
+    ? join(process.resourcesPath, "bin", file)
+    : join(root, "desktop", "bin", file);
+}
+function serverBinary() {
+  return bundledBinary("interleaf-server");
+}
+const commandLineHost = () => ({
+  platform: process.platform,
+  packaged: app.isPackaged,
+  binary: bundledBinary("interleaf"),
+  env: process.env,
+});
+async function startServer() {
+  const childEnv = proxySettings.activeEnvironment;
+  serverToken = randomBytes(32).toString("hex");
+  bibliographyExportCapability = randomBytes(32).toString("hex");
+  diagnostics?.logs.secrets.push(bibliographyExportCapability);
+  diagnostics?.logs.secrets.push(serverToken);
+  diagnostics?.record("server.start_requested");
+  const binary = serverBinary();
+  const web = app.isPackaged
+    ? join(process.resourcesPath, "web")
+    : join(root, "web", "dist");
+  child = spawn(
+    binary,
+    [
+      "--port",
+      "0",
+      "--logs",
+      diagnostics!.directory,
+      "--session",
+      diagnostics!.logs.sessionId,
+      "--data",
+      activeLibrary!,
+      "--shutdown-on-stdin",
+      "--web",
+      web,
+      ...(!isolation.enableConnector ? ["--connector=false"] : []),
+    ],
+    {
+      env: {
+        ...childEnv,
+        INTERLEAF_TOKEN: serverToken,
+        INTERLEAF_EXPORT_CAPABILITY: bibliographyExportCapability,
+        INTERLEAF_NODE: process.execPath,
+        INTERLEAF_PROCESSOR: app.isPackaged
+          ? join(process.resourcesPath, "processor", "main.mjs")
+          : join(root, "processor", "dist", "main.mjs"),
+      },
+      stdio: ["pipe", "pipe", "pipe"],
+    },
+  );
+  // Observe close from spawn time: exitCode may be set before stdio is closed.
+  serverClosed = new Promise((resolve) =>
+    child!.once("close", () => resolve()),
+  );
+  const stderrLines = createInterface({ input: child.stderr! });
+  stderrLines.on("line", (line) =>
+    diagnostics?.logs.record("server-stderr", {
+      level: "error",
+      event: "server.stderr",
+      detail: line.slice(0, 16000),
+    }),
+  );
+  child.once("close", () => stderrLines.close());
+  return new Promise<string>((accept, reject) => {
+    const timer = setTimeout(() => {
+      reject(new Error("本地服务启动超时"));
+    }, 20000);
+    child!.once("error", (err) => {
+      diagnostics?.logs.record("desktop", {
+        level: "error",
+        event: "server.spawn_failed",
+        ...serverSpawnDiagnostics(binary, err),
+      });
+      clearTimeout(timer);
+      reject(err);
+    });
+    child!.once("exit", (code) => {
+      diagnostics?.logs.record("desktop", {
+        level: quitting ? "info" : "error",
+        event: "server.exited",
+        exitCode: code,
+      });
+      clearTimeout(timer);
+      reject(new Error(`本地服务已退出 (${code})`));
+      if (window && !quitting) {
+        void diagnostics!
+          .failure(
+            "纸间本地服务已停止",
+            "已保存的文档和笔记仍保留在本地。可先导出诊断包，再重新打开纸间。",
+          )
+          .then(() => {
+            flushed = true;
+            app.quit();
+          });
+      }
+    });
+    const lines = createInterface({ input: child!.stdout! });
+    lines.once("line", (line) => {
+      try {
+        const ready = JSON.parse(line);
+        serverURL = ready.url;
+        diagnostics?.record("server.ready");
+        clearTimeout(timer);
+        lines.close();
+        accept(serverURL);
+      } catch {
+        clearTimeout(timer);
+        reject(new Error("本地服务返回了无效启动信息"));
+      }
+    });
+  });
+}
+/** Window background before the renderer paints, matching the theme. */
+function windowBackground(appearance: unknown) {
+  if (appearance === "sepia") return "#eeede7";
+  return nativeTheme.shouldUseDarkColors ? "#171717" : "#ffffff";
+}
+// Long papers wait for the reader's choice. The renderer refers to them by
+// one-time IDs, never by path.
+const largePapers = new Map<string, string>();
+async function importPaths(
+  paths: string[],
+  library: "books" | "papers" = "books",
+  allowLarge = false,
+  folder = "",
+) {
+  const accepted = library === "papers" ? /\.pdf$/i : /\.(epub|pdf)$/i;
+  const large: Array<{ id: string; name: string; pages: number }> = [];
+  for (const path of paths) {
+    if (!accepted.test(path)) continue;
+    const data = await readFile(path);
+    const name = path.split(/[\\/]/).pop()!;
+    const form = new FormData();
+    form.append("library", library);
+    if (allowLarge) form.append("allowLarge", "1");
+    if (folder.startsWith("smart:"))
+      form.append("smartCategory", folder.slice(6));
+    else if (folder)
+      form.append(
+        "folder",
+        folder.startsWith("folder:") ? folder.slice(7) : folder,
+      );
+    form.append("file", new Blob([data]), name);
+    const response = await fetch(`${serverURL}/api/documents`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${serverToken}` },
+      body: form,
+    });
+    if (!response.ok) {
+      const failure = await response.json();
+      if (failure.code !== "large-paper") throw new Error(failure.error);
+      const id = randomBytes(16).toString("hex");
+      largePapers.set(id, path);
+      large.push({ id, name, pages: failure.pages });
+    }
+  }
+  window?.webContents.send("interleaf:library-changed");
+  return large;
+}
+// interleaf:// links reach one window. The renderer claims queued links once its
+// listener exists; later links are sent directly.
+const primary = app.requestSingleInstanceLock();
+if (!primary) app.quit();
+const pendingLinks: InterleafLinkTarget[] = [];
+let linksClaimed = false;
+function openLink(link: string) {
+  const target = parseInterleafLink(link);
+  if (!target) return;
+  if (linksClaimed && window && !window.isDestroyed()) {
+    window.webContents.send("interleaf:open-link", target);
+    if (window.isMinimized()) window.restore();
+    window.focus();
+  } else pendingLinks.push(target);
+}
+const linkArgument = (argv: string[]) =>
+  argv.find((arg) => arg.toLowerCase().startsWith(`${INTERLEAF_SCHEME}://`));
+app.on("open-url", (event, link) => {
+  event.preventDefault();
+  openLink(link);
+});
+app.on("second-instance", (_event, argv) => {
+  const link = linkArgument(argv);
+  if (link) openLink(link);
+  else if (window && !window.isDestroyed()) {
+    if (window.isMinimized()) window.restore();
+    window.focus();
+  }
+});
+{
+  const link = linkArgument(process.argv);
+  if (link) openLink(link);
+}
+const pendingFiles: string[] = [];
+app.on("open-file", (event, path) => {
+  event.preventDefault();
+  if (serverURL)
+    void importPaths([path]).catch((e) =>
+      dialog.showErrorBox("导入失败", e.message),
+    );
+  else pendingFiles.push(path);
+});
+app
+  .whenReady()
+  .then(async () => {
+    if (!primary) return;
+    diagnostics = startDiagnosticService(
+      () => window,
+      () => activeLibrary,
+    );
+    ipcMain.on("interleaf:diagnostic-event", (event, value) =>
+      diagnostics!.receive(event, value),
+    );
+    ipcMain.on("interleaf:diagnostic-settings", (event, value) =>
+      diagnostics!.receiveSettings(event, value),
+    );
+    ipcMain.handle("interleaf:export-diagnostics", (event) =>
+      diagnostics!.invoke(event),
+    );
+    // Development runs need the entry script registered beside Electron.
+    if (isolation.registerProtocol) {
+      if (process.defaultApp && process.argv.length >= 2)
+        app.setAsDefaultProtocolClient(INTERLEAF_SCHEME, process.execPath, [
+          resolve(process.argv[1]),
+        ]);
+      else app.setAsDefaultProtocolClient(INTERLEAF_SCHEME);
+    }
+    proxySettings = await ProxySettingsService.open(
+      app.getPath("userData"),
+      process.env,
+    );
+    await session.defaultSession.setProxy(
+      electronProxyConfiguration(proxySettings.activeSettings),
+    );
+    activeLibrary = await libraryDirectory(app.getPath("userData"));
+    const url = await startServer();
+    session.defaultSession.setPermissionRequestHandler(
+      (contents, permission, callback, details) => {
+        // Only Reader's own page may list installed fonts, for the
+        // translation font picker; every other request stays denied.
+        let origin = "";
+        try {
+          origin = new URL(details.requestingUrl).origin;
+        } catch {
+          /* not a URL */
+        }
+        callback(
+          permission === "local-fonts" &&
+            contents === window?.webContents &&
+            origin === new URL(url).origin,
+        );
+      },
+    );
+    const preferences: unknown = await fetch(`${url}/api/settings`, {
+      headers: { Authorization: `Bearer ${serverToken}` },
+    })
+      .then((r) => (r.ok ? r.json() : {}))
+      .catch(() => ({}));
+    diagnostics.setSettings(preferences);
+    const appearance =
+      typeof preferences === "object" &&
+      preferences !== null &&
+      "appearance" in preferences
+        ? preferences.appearance
+        : undefined;
+    nativeTheme.themeSource =
+      appearance === "light" || appearance === "dark"
+        ? appearance
+        : appearance === "sepia"
+          ? "light"
+          : "system";
+    window = new BrowserWindow({
+      width: 1440,
+      height: 940,
+      minWidth: 1000,
+      minHeight: 660,
+      title: "纸间 Interleaf",
+      ...(process.platform === "darwin"
+        ? {
+            titleBarStyle: "hidden" as const,
+            trafficLightPosition: { x: 20, y: 20 },
+          }
+        : { autoHideMenuBar: true }),
+      backgroundColor: windowBackground(appearance),
+      webPreferences: {
+        preload: join(__dirname, "preload.cjs"),
+        contextIsolation: true,
+        nodeIntegration: false,
+        sandbox: true,
+      },
+    });
+    window.webContents.on("render-process-gone", (_event, details) => {
+      void bilingualPDFSave?.stop();
+      diagnostics!.logs.record("desktop", {
+        level: "error",
+        event: "renderer.exited",
+        reason: details.reason,
+        exitCode: details.exitCode,
+      });
+      if (!quitting)
+        void diagnostics!
+          .failure("纸间界面已停止", "可先导出诊断包，再重新打开纸间。")
+          .then(() => {
+            flushed = true;
+            app.quit();
+          });
+    });
+    window.webContents.on("did-fail-load", (_event, code) =>
+      diagnostics?.logs.record("desktop", {
+        level: "error",
+        event: "renderer.load_failed",
+        code,
+      }),
+    );
+    window.on("close", (event) => {
+      if (flushed) return;
+      event.preventDefault();
+      if (closing) return;
+      closing = true;
+      const stoppedBilingualSave = bilingualPDFSave?.stop();
+      window!.webContents.send("interleaf:flush");
+      const timer = setTimeout(() => {
+        void finish("保存超时，请重试。");
+      }, 10000);
+      const handler = (event: Electron.IpcMainEvent, error: string | null) => {
+        if (
+          event.sender !== window?.webContents ||
+          event.senderFrame !== window.webContents.mainFrame
+        )
+          return;
+        void finish(error);
+      };
+      let finished = false;
+      const finish = async (error: string | null) => {
+        if (finished) return;
+        finished = true;
+        clearTimeout(timer);
+        ipcMain.removeListener("interleaf:flushed", handler);
+        await stoppedBilingualSave;
+        if (error) {
+          // A failed flush must never produce a migrated, stale snapshot.
+          pendingLibraryMove?.resolve(false);
+          pendingLibraryMove = undefined;
+          diagnostics?.record("reading.flush_failed", new Error(error));
+          const result = await dialog.showMessageBox(window!, {
+            type: "warning",
+            message: "阅读数据尚未保存",
+            detail: error,
+            buttons: ["返回阅读", "仍然退出"],
+            defaultId: 0,
+            cancelId: 0,
+          });
+          if (result.response === 0) {
+            closing = false;
+            configureBilingualSave();
+            restartRequested = false;
+            return;
+          }
+        }
+        if (pendingLibraryMove) {
+          const move = pendingLibraryMove;
+          pendingLibraryMove = undefined;
+          quitting = true; // This server exit is intentional.
+          updateService?.stop();
+          proxySettings?.stop();
+          try {
+            await migrateLibrary(
+              app.getPath("userData"),
+              activeLibrary!,
+              move.destination,
+              serverBinary(),
+              stopOwnedServer,
+            );
+            move.resolve(true);
+          } catch (error) {
+            await dialog.showMessageBox(window!, {
+              type: "error",
+              message: "书库迁移失败",
+              detail: `${(error as Error).message}\n原书库已保留，将重新打开原来的位置。`,
+              buttons: ["重新打开纸间"],
+            });
+            move.resolve(false);
+          }
+        }
+        flushed = true;
+        window?.close();
+      };
+      ipcMain.on("interleaf:flushed", handler);
+    });
+    // Let the renderer handle reading shortcuts; editable fields keep native undo.
+    window.webContents.on("before-input-event", (_event, input) => {
+      window?.webContents.setIgnoreMenuShortcuts(
+        input.type === "keyDown" &&
+          (annotationUndoShortcut({
+            key: input.key,
+            metaKey: input.meta,
+            ctrlKey: input.control,
+            shiftKey: input.shift,
+            altKey: input.alt,
+            isComposing: input.isComposing,
+          }) ||
+            ((input.meta || input.control) &&
+              !input.shift &&
+              !input.alt &&
+              input.key.toLowerCase() === "f") ||
+            zoomCommand({
+              key: input.key,
+              code: input.code,
+              metaKey: input.meta,
+              ctrlKey: input.control,
+              altKey: input.alt,
+              isComposing: input.isComposing,
+            }) !== null),
+      );
+    });
+    window.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
+    window.webContents.on("will-navigate", (event, target) => {
+      if (new URL(target).origin !== url) event.preventDefault();
+    });
+    window.webContents.on("will-attach-webview", (event) =>
+      event.preventDefault(),
+    );
+    ipcMain.handle("interleaf:clipboard-write", (event, text: unknown) =>
+      writeClipboardText(event, text, window?.webContents, url),
+    );
+    ipcMain.handle(
+      "interleaf:clipboard-write-image",
+      (event, data: unknown, text: unknown) =>
+        writeClipboardImage(event, data, text, window?.webContents, url),
+    );
+    const settingsSender = (event: Electron.IpcMainInvokeEvent) => {
+      if (
+        event.sender !== window?.webContents ||
+        event.senderFrame !== window.webContents.mainFrame ||
+        new URL(event.senderFrame.url).origin !== url
+      )
+        throw new Error("Invalid sender");
+    };
+    function configureBilingualSave() {
+      bilingualPDFSave = new BilingualPDFSaveService({
+        context: () => ({
+          contents: window?.webContents,
+          appURL: url,
+          serverURL,
+          token: serverToken,
+          library: activeLibrary!,
+          available: !closing && !quitting && !restartRequested,
+        }),
+        choose: async (defaultPath) => {
+          const result = await dialog.showSaveDialog(window!, {
+            title: "保存双语 PDF",
+            defaultPath,
+            filters: [{ name: "PDF", extensions: ["pdf"] }],
+          });
+          return result.canceled ? null : result.filePath || null;
+        },
+        fetch: (target, init) => fetch(target, init),
+      });
+    }
+    configureBilingualSave();
+    ipcMain.handle("interleaf:save-bilingual-pdf", (event, input: unknown) =>
+      bilingualPDFSave!.save(event, input),
+    );
+    ipcMain.handle(
+      "interleaf:cancel-bilingual-pdf-save",
+      (event, input: unknown) => bilingualPDFSave!.cancel(event, input),
+    );
+    ipcMain.handle("interleaf:library-location", (event) => {
+      settingsSender(event);
+      return activeLibrary;
+    });
+    ipcMain.handle("interleaf:move-library", async (event) => {
+      settingsSender(event);
+      if (choosingLibrary || closing || restartRequested) return false;
+      choosingLibrary = true;
+      try {
+        const selected = await dialog.showOpenDialog(window!, {
+          title: "选择书库保存位置（将在其中新建 Interleaf Library）",
+          properties: ["openDirectory", "createDirectory"],
+        });
+        if (selected.canceled || !selected.filePaths[0]) return false;
+        const destination = join(
+          await realpath(selected.filePaths[0]),
+          "Interleaf Library",
+        );
+        // The server's SQLite DSN treats ? as the start of query parameters.
+        if (destination.includes("?"))
+          throw new Error("书库路径不能包含 ?，请选择其他位置。");
+        try {
+          await lstat(destination);
+          throw new Error(
+            "所选位置已有 Interleaf Library 文件夹，请选择其他位置。",
+          );
+        } catch (error) {
+          if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+        }
+        const confirmed = await dialog.showMessageBox(window!, {
+          type: "question",
+          message: "迁移书库并重启纸间？",
+          detail: `新位置：${destination}\nPDF、笔记、批注和阅读记录将一起复制。原书库保留。`,
+          buttons: ["迁移并重启", "取消"],
+          defaultId: 0,
+          cancelId: 1,
+        });
+        if (confirmed.response !== 0 || closing || quitting) return false;
+        return await new Promise<boolean>((resolve) => {
+          pendingLibraryMove = { destination, resolve };
+          restartRequested = true;
+          app.quit();
+        });
+      } finally {
+        choosingLibrary = false;
+      }
+    });
+    ipcMain.handle("interleaf:proxy-settings", (event) => {
+      settingsSender(event);
+      return proxySettings.state();
+    });
+    ipcMain.handle("interleaf:save-proxy-settings", (event, value: unknown) => {
+      settingsSender(event);
+      return proxySettings.save(value);
+    });
+    ipcMain.handle("interleaf:check-proxy", (event, value: unknown) => {
+      settingsSender(event);
+      return proxySettings.check(value, serverBinary());
+    });
+    ipcMain.handle("interleaf:command-line", (event) => {
+      settingsSender(event);
+      return commandLineStatus(commandLineHost());
+    });
+    ipcMain.handle("interleaf:set-command-line", (event, installed: unknown) => {
+      settingsSender(event);
+      if (typeof installed !== "boolean") throw new Error("Invalid request");
+      return setCommandLine(commandLineHost(), installed);
+    });
+    ipcMain.handle("interleaf:restart", (event) => {
+      settingsSender(event);
+      if (closing || restartRequested) return;
+      restartRequested = true;
+      app.quit();
+    });
+    ipcMain.handle("interleaf:appearance", (event, appearance: unknown) => {
+      if (
+        event.sender !== window?.webContents ||
+        event.senderFrame !== window.webContents.mainFrame
+      )
+        throw new Error("Invalid sender");
+      if (
+        appearance !== "light" &&
+        appearance !== "sepia" &&
+        appearance !== "dark" &&
+        appearance !== "system"
+      )
+        throw new Error("Invalid appearance");
+      // Paper is a light theme for native chrome with its own background.
+      nativeTheme.themeSource = appearance === "sepia" ? "light" : appearance;
+      window.setBackgroundColor(windowBackground(appearance));
+    });
+    ipcMain.handle(
+      "interleaf:document-file",
+      async (event, id: unknown, type: unknown, action: unknown) => {
+        if (
+          event.sender !== window?.webContents ||
+          event.senderFrame !== window.webContents.mainFrame
+        )
+          throw new Error("Invalid sender");
+        // Only library-owned copies, addressed by content hash, can be reached.
+        if (
+          typeof id !== "string" ||
+          !/^[0-9a-f]{32}$/.test(id) ||
+          (type !== "pdf" && type !== "epub") ||
+          (action !== "show" && action !== "open")
+        )
+          throw new Error("Invalid document");
+        const file = join(
+          activeLibrary!,
+          type === "pdf" ? "papers" : "books",
+          `${id}.${type}`,
+        );
+        if (action === "show") shell.showItemInFolder(file);
+        else {
+          const error = await shell.openPath(file);
+          if (error) throw new Error(error);
+        }
+      },
+    );
+    ipcMain.handle("interleaf:take-links", (event) => {
+      if (
+        event.sender !== window?.webContents ||
+        event.senderFrame !== window.webContents.mainFrame
+      )
+        throw new Error("Invalid sender");
+      linksClaimed = true;
+      return pendingLinks.splice(0);
+    });
+    ipcMain.handle("interleaf:open-external", async (event, url: unknown) => {
+      if (
+        event.sender !== window?.webContents ||
+        event.senderFrame !== window.webContents.mainFrame
+      )
+        throw new Error("Invalid sender");
+      if (typeof url !== "string" || !/^https?:\/\//i.test(url))
+        throw new Error("Invalid link");
+      await shell.openExternal(new URL(url).toString());
+    });
+    let endnoteSearch: { id: string; controller: AbortController } | undefined;
+    const checkEndnoteSender = (event: Electron.IpcMainInvokeEvent) => {
+      if (
+        event.sender !== window?.webContents ||
+        event.senderFrame !== window.webContents.mainFrame
+      )
+        throw new Error("Invalid sender");
+    };
+    ipcMain.handle("interleaf:find-endnote", async (event, id: unknown) => {
+      checkEndnoteSender(event);
+      if (typeof id !== "string" || id.length > 100)
+        throw new Error("Invalid search");
+      endnoteSearch?.controller.abort();
+      const search = { id, controller: new AbortController() };
+      endnoteSearch = search;
+      const roots = [
+        app.getPath("documents"),
+        app.getPath("desktop"),
+        app.getPath("downloads"),
+        join(homedir(), "Developer"),
+      ];
+      if (process.env.OneDrive)
+        roots.push(join(process.env.OneDrive, "Documents"));
+      try {
+        return await discoverEndNote(
+          roots,
+          process.platform,
+          search.controller.signal,
+        );
+      } finally {
+        if (endnoteSearch === search) endnoteSearch = undefined;
+      }
+    });
+    ipcMain.handle("interleaf:cancel-endnote-search", (event, id: unknown) => {
+      checkEndnoteSender(event);
+      if (endnoteSearch && endnoteSearch.id === id)
+        endnoteSearch.controller.abort();
+    });
+    ipcMain.handle(
+      "interleaf:choose-endnote",
+      async (event, directory: unknown) => {
+        checkEndnoteSender(event);
+        const selected = await dialog.showOpenDialog(window!, {
+          title: directory
+            ? "选择 EndNote 文献库所在目录"
+            : "选择 EndNote 文献库",
+          properties: directory ? ["openDirectory"] : ["openFile"],
+          ...(!directory
+            ? {
+                filters: [
+                  { name: "EndNote 文献库", extensions: ["enl", "enlp"] },
+                ],
+              }
+            : {}),
+        });
+        return selected.canceled ? null : selected.filePaths[0] || null;
+      },
+    );
+    ipcMain.handle("interleaf:choose-zotero-directory", async (event) => {
+      if (
+        event.sender !== window?.webContents ||
+        event.senderFrame !== window.webContents.mainFrame
+      )
+        throw new Error("Invalid sender");
+      const selected = await dialog.showOpenDialog(window, {
+        title: "选择 Zotero 目录",
+        properties: ["openDirectory"],
+      });
+      return selected.canceled ? null : selected.filePaths[0] || null;
+    });
+    ipcMain.handle(
+      "interleaf:import",
+      async (event, library: unknown, folder: unknown) => {
+        if (
+          event.sender !== window?.webContents ||
+          event.senderFrame !== window.webContents.mainFrame
+        )
+          throw new Error("Invalid sender");
+        if (library !== "books" && library !== "papers")
+          throw new Error("Invalid library");
+        if (typeof folder !== "string" || (library !== "papers" && folder))
+          throw new Error("Invalid folder");
+        const selected = await dialog.showOpenDialog(window, {
+          properties: ["openFile", "multiSelections"],
+          filters:
+            library === "papers"
+              ? [{ name: "PDF", extensions: ["pdf"] }]
+              : [{ name: "EPUB / PDF", extensions: ["epub", "pdf"] }],
+        });
+        return selected.canceled
+          ? []
+          : importPaths(selected.filePaths, library, false, folder);
+      },
+    );
+    ipcMain.handle(
+      "interleaf:import-large",
+      async (event, ids: unknown, library: unknown, folder: unknown) => {
+        if (
+          event.sender !== window?.webContents ||
+          event.senderFrame !== window.webContents.mainFrame
+        )
+          throw new Error("Invalid sender");
+        if (
+          !Array.isArray(ids) ||
+          (library !== "books" && library !== "papers") ||
+          typeof folder !== "string" ||
+          (library !== "papers" && folder)
+        )
+          throw new Error("Invalid import");
+        const paths = ids.flatMap((id) => {
+          const path = typeof id === "string" ? largePapers.get(id) : undefined;
+          if (path) largePapers.delete(id);
+          return path ? [path] : [];
+        });
+        await importPaths(paths, library, true, folder);
+      },
+    );
+    ipcMain.handle(
+      "interleaf:configure-bibliography-export",
+      async (event, options: unknown) => {
+        if (
+          event.sender !== window?.webContents ||
+          event.senderFrame !== window.webContents.mainFrame
+        )
+          throw new Error("Invalid sender");
+        return configureBibliographyExport(options, {
+          choose: async (defaultPath) => {
+            const result = await dialog.showSaveDialog(window!, {
+              defaultPath,
+              filters: [{ name: "BibTeX / BibLaTeX", extensions: ["bib"] }],
+            });
+            return result.canceled ? null : result.filePath || null;
+          },
+          confirmTakeover: async (path) => {
+            const result = await dialog.showMessageBox(window!, {
+              type: "question",
+              message: "备份并接管此参考文献文件？",
+              detail: `${path}\nReader 将先保留备份，再持续更新此文件。外部修改后会停止覆盖。`,
+              buttons: ["取消", "备份并接管"],
+              defaultId: 0,
+              cancelId: 0,
+            });
+            return result.response === 1;
+          },
+          register: async (target) => {
+            const response = await fetch(`${serverURL}/api/papers/exports`, {
+              method: "POST",
+              headers: {
+                Authorization: `Bearer ${serverToken}`,
+                "Content-Type": "application/json",
+                "X-Interleaf-Export-Capability": bibliographyExportCapability,
+              },
+              body: JSON.stringify(target),
+            });
+            const result = (await response.json()) as { error?: string };
+            if (!response.ok)
+              throw new Error(result.error || "无法配置自动导出");
+            return result;
+          },
+        });
+      },
+    );
+    await window.loadURL(`${url}/#token=${serverToken}`);
+    if (pendingFiles.length) await importPaths(pendingFiles.splice(0));
+    updateService = await startUpdateService(window);
+    ipcMain.handle("interleaf:check-updates", (event) => {
+      if (
+        event.sender !== window?.webContents ||
+        event.senderFrame !== window.webContents.mainFrame
+      )
+        throw new Error("Invalid sender");
+      return updateService?.check();
+    });
+  })
+  .catch(async (error) => {
+    diagnostics?.record("desktop.start_failed", error);
+    if (diagnostics)
+      await diagnostics.failure(
+        "无法打开纸间",
+        "可导出启动日志供开发者排查，然后退出重试。",
+      );
+    else dialog.showErrorBox("无法打开纸间", String(error));
+    flushed = true;
+    app.quit();
+  });
+app.on("before-quit", (event) => {
+  if (window && !window.isDestroyed() && !flushed) {
+    event.preventDefault();
+    window.close();
+    return;
+  }
+  // All exits (including startup failure and crashed/destroyed renderers) share
+  // one stop owner. stdin EOF lets Go cancel and join its work on Windows too.
+  if (!quitJoined) {
+    event.preventDefault();
+    if (!quitJoin) {
+      quitting = true;
+      diagnostics?.record("desktop.stopping");
+      updateService?.stop();
+      proxySettings?.stop();
+      quitJoin = (async () => {
+        await bilingualPDFSave?.stop();
+        await stopOwnedServer();
+        quitJoined = true;
+        app.quit();
+      })().catch(async (error) => {
+        restartRequested = false;
+        diagnostics?.record("desktop.stop_failed", error);
+        dialog.showErrorBox(
+          "纸间尚未退出",
+          `本地服务未确认停止，未重新启动。\n${String(error)}`,
+        );
+        // Cleanup success and process closure are separate barriers. Keep the
+        // rejected stop owner for migration/restart, but allow a plain exit
+        // after a late or unsuccessful close. exitCode alone is not a join.
+        await serverClosed;
+        restartRequested = false;
+        quitJoined = true;
+        app.quit();
+      });
+    }
+    return;
+  }
+  quitting = true;
+  if (restartRequested) {
+    restartRequested = false;
+    app.relaunch();
+  }
+});
+for (const signal of ["SIGINT", "SIGTERM"] as const)
+  process.on(signal, () => app.quit());
+app.on("window-all-closed", () => app.quit());

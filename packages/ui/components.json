@@ -1,0 +1,20 @@
+{
+  "$schema": "https://ui.shadcn.com/schema.json",
+  "style": "base-nova",
+  "rsc": false,
+  "tsx": true,
+  "tailwind": {
+    "config": "",
+    "css": "../../apps/web/src/style.css",
+    "baseColor": "neutral",
+    "cssVariables": true
+  },
+  "iconLibrary": "lucide",
+  "aliases": {
+    "components": "@interleaf/ui/components",
+    "utils": "@interleaf/ui/lib/utils",
+    "ui": "@interleaf/ui/components",
+    "lib": "@interleaf/ui/lib",
+    "hooks": "@interleaf/ui/hooks"
+  }
+}

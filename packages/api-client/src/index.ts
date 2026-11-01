@@ -1,0 +1,815 @@
+import { diagnosticFetch, reportDiagnostic } from "./diagnostics";
+import {
+  diagnosticError,
+  diagnosticRoute,
+} from "../../interleaf-core/src/diagnostics";
+export { setDiagnosticReporter, reportDiagnostic } from "./diagnostics";
+import {
+  consumeTranslationStream,
+  type TranslationEvent,
+} from "./translation-stream";
+import { consumeChatStream, type ChatStreamEvent } from "./chat-stream";
+export { ChatStreamError, type ChatStreamEvent } from "./chat-stream";
+import createClient from "openapi-fetch";
+import type { components, paths } from "./schema";
+import type {
+  ChatRun,
+  DocumentChatSession,
+  Document,
+  PaperItem,
+  PaperPatch,
+  PaperAttachmentRole,
+  BibliographyMode,
+  BibliographyExport,
+  BibliographyPreview,
+  BibliographyDecision,
+  DocumentOverview,
+  OverviewJob,
+  TagBoard,
+  DocumentLocation,
+  Annotation,
+  SearchResult,
+  Provider,
+  Message,
+  ReaderTheme,
+  SourceReference,
+  Processing,
+  ProcessingUsage,
+  PDFBlock,
+  LibraryMode,
+  LibraryPreferences,
+  ReleasePreferences,
+  PaperMetadata,
+  PaperMetadataField,
+  ReadingStatus,
+  JournalRankConfig,
+  JournalRankResult,
+} from "@interleaf/core";
+import { request, sessionToken, RequestError } from "./transport";
+import { nativeAI } from "./native-ai";
+export { researchAPI } from "./research";
+export { configureAPI, RequestError } from "./transport";
+export * from "./native-ai";
+export function publicationURL(documentId: string, resource: string) {
+  return `/pub/${encodeURIComponent(sessionToken)}/${encodeURIComponent(documentId)}/${resource}`;
+}
+export function blockImageURL(
+  documentId: string,
+  blockId: string,
+  revision?: string,
+) {
+  return publicationURL(
+    documentId,
+    `assets/${encodeURIComponent(blockId)}.png${revision ? `?v=${encodeURIComponent(revision)}` : ""}`,
+  );
+}
+export const client = createClient<paths>();
+client.use({
+  onRequest({ request }) {
+    request.headers.set("Authorization", `Bearer ${sessionToken}`);
+    reportDiagnostic({
+      level: "info",
+      event: "api.start",
+      route: diagnosticRoute(new URL(request.url).pathname),
+      method: request.method,
+    });
+    return request;
+  },
+  onResponse({ request, response }) {
+    reportDiagnostic({
+      level: response.ok ? "info" : "error",
+      event: "api.finish",
+      route: diagnosticRoute(new URL(request.url).pathname),
+      method: request.method,
+      status: response.status,
+      requestId: response.headers.get("X-Interleaf-Request-ID") || undefined,
+    });
+    return response;
+  },
+  onError({ request, error }) {
+    reportDiagnostic({
+      level: "error",
+      event: "api.failed",
+      route: diagnosticRoute(new URL(request.url).pathname),
+      method: request.method,
+    });
+    return;
+  },
+});
+// Keep annotation writes and undo in the same client order, including failures.
+let annotationQueue = Promise.resolve();
+let annotationSession = "";
+function annotationRequest<T>(path: string, init: RequestInit): Promise<T> {
+  annotationSession ||= crypto.randomUUID();
+  const operation = annotationQueue.then(() =>
+    request<T>(path, {
+      ...init,
+      headers: {
+        ...init.headers,
+        "X-Interleaf-Undo-Session": annotationSession,
+      },
+    }),
+  );
+  annotationQueue = operation.then(
+    () => {},
+    () => {},
+  );
+  return operation;
+}
+export type ZoteroScan = components["schemas"]["ZoteroScan"];
+export type ZoteroImportResult = components["schemas"]["ZoteroImportResult"];
+export const api = {
+  papers: (trash = false) =>
+    request<PaperItem[]>(`/api/papers${trash ? "?trash=true" : ""}`),
+  paper: (id: string) =>
+    request<PaperItem>(`/api/papers/${encodeURIComponent(id)}`),
+  createPaper: (patch: PaperPatch) =>
+    request<PaperItem>("/api/papers", {
+      method: "POST",
+      body: JSON.stringify(patch),
+    }),
+  updatePaper: (id: string, patch: PaperPatch) =>
+    request<PaperItem>(`/api/papers/${encodeURIComponent(id)}`, {
+      method: "PATCH",
+      body: JSON.stringify(patch),
+    }),
+  trashPaper: (id: string) =>
+    request<PaperItem>(`/api/papers/${encodeURIComponent(id)}/trash`, {
+      method: "POST",
+    }),
+  restorePaper: (id: string) =>
+    request<PaperItem>(`/api/papers/${encodeURIComponent(id)}/restore`, {
+      method: "POST",
+    }),
+  removePaper: (id: string) =>
+    request<void>(`/api/papers/${encodeURIComponent(id)}`, {
+      method: "DELETE",
+    }),
+  attachPaper: (
+    id: string,
+    documentId: string,
+    role: PaperAttachmentRole,
+    primary = false,
+  ) =>
+    request<PaperItem>(
+      `/api/papers/${encodeURIComponent(id)}/attachments/${encodeURIComponent(documentId)}`,
+      { method: "PUT", body: JSON.stringify({ role, primary }) },
+    ),
+  detachPaper: (id: string, documentId: string) =>
+    request<PaperItem>(
+      `/api/papers/${encodeURIComponent(id)}/attachments/${encodeURIComponent(documentId)}`,
+      { method: "DELETE" },
+    ),
+  mergePapers: (
+    id: string,
+    input: {
+      ids: string[];
+      citationKey?: string;
+      confirmCitationChange?: boolean;
+      patch?: Pick<PaperPatch, "title" | "author" | "metadata">;
+    },
+  ) =>
+    request<PaperItem>(`/api/papers/${encodeURIComponent(id)}/merge`, {
+      method: "POST",
+      body: JSON.stringify(input),
+    }),
+  ensureCitationKeys: (ids: string[]) =>
+    request<PaperItem[]>("/api/papers/citation-keys", {
+      method: "POST",
+      body: JSON.stringify({ ids }),
+    }),
+  previewBibliography: (text: string) =>
+    request<BibliographyPreview>("/api/papers/bibliography/preview", {
+      method: "POST",
+      body: JSON.stringify({ text }),
+    }),
+  importBibliography: (
+    text: string,
+    decisions: BibliographyDecision[],
+    confirmCitationChange = false,
+  ) =>
+    request<PaperItem[]>("/api/papers/bibliography/import", {
+      method: "POST",
+      body: JSON.stringify({ text, decisions, confirmCitationChange }),
+    }),
+  exportBibliography: (ids: string[], mode: BibliographyMode = "bibtex") =>
+    request<{ text: string }>("/api/papers/bibliography/export", {
+      method: "POST",
+      body: JSON.stringify({ ids, mode }),
+    }),
+  bibliographyExports: () =>
+    request<BibliographyExport[]>("/api/papers/exports"),
+  refreshBibliographyExport: (id: string) =>
+    request<BibliographyExport>(
+      `/api/papers/exports/${encodeURIComponent(id)}/refresh`,
+      { method: "POST" },
+    ),
+  removeBibliographyExport: (id: string) =>
+    request<void>(`/api/papers/exports/${encodeURIComponent(id)}`, {
+      method: "DELETE",
+    }),
+  journalRankConfig: () =>
+    request<JournalRankConfig>("/api/journal-ranks/config"),
+  saveJournalRankConfig: (config: {
+    enabled: boolean;
+    filterMode: JournalRankConfig["filterMode"];
+    selected: string[];
+    key?: string;
+  }) =>
+    request<JournalRankConfig>("/api/journal-ranks/config", {
+      method: "PUT",
+      body: JSON.stringify(config),
+    }),
+  documentJournalRank: (id: string, refresh = false) =>
+    request<JournalRankResult>(
+      `/api/documents/${encodeURIComponent(id)}/journal-rank${refresh ? "?refresh=1" : ""}`,
+    ),
+  connectorStatus: () =>
+    request<
+      paths["/api/connector/status"]["get"]["responses"][200]["content"]["application/json"]
+    >("/api/connector/status"),
+  connectorRevision: () =>
+    request<{ revision: number }>("/api/connector/revision"),
+  snapshotStatus: (id: string) =>
+    request<{ available: boolean; sourceUrl?: string }>(
+      `/api/documents/${encodeURIComponent(id)}/snapshot`,
+    ),
+  scanEndNote: (directory: string) =>
+    request<ZoteroScan>("/api/import/endnote/scan", {
+      method: "POST",
+      body: JSON.stringify({ directory }),
+    }),
+  importEndNote: (
+    scanId: string,
+    entryId: string,
+    options?: { library: LibraryMode; allowLarge: boolean },
+  ) =>
+    request<ZoteroImportResult>("/api/import/endnote", {
+      method: "POST",
+      body: JSON.stringify({ scanId, entryId, ...options }),
+    }),
+  zoteroDefaults: () => request<{ directory: string }>("/api/import/zotero"),
+  scanZotero: (directory: string, linkedBase = "") =>
+    request<ZoteroScan>("/api/import/zotero/scan", {
+      method: "POST",
+      body: JSON.stringify({ directory, linkedBase }),
+    }),
+  importZotero: (
+    scanId: string,
+    entryId: string,
+    options?: { library: LibraryMode; allowLarge: boolean },
+  ) =>
+    request<ZoteroImportResult>("/api/import/zotero", {
+      method: "POST",
+      body: JSON.stringify({ scanId, entryId, ...options }),
+    }),
+  chatUsage: (id: string) =>
+    request<ProcessingUsage>(
+      `/api/documents/${encodeURIComponent(id)}/chat-usage`,
+    ),
+  processingUsage: (id: string) =>
+    request<ProcessingUsage>(
+      `/api/documents/${encodeURIComponent(id)}/processing-usage`,
+    ),
+  tagBoards: () => request<TagBoard[]>("/api/tag-boards"),
+  createTagBoard: (board: Omit<TagBoard, "id">) =>
+    request<TagBoard>("/api/tag-boards", {
+      method: "POST",
+      body: JSON.stringify(board),
+    }),
+  updateTagBoard: (id: string, board: Omit<TagBoard, "id">) =>
+    request<TagBoard>(`/api/tag-boards/${encodeURIComponent(id)}`, {
+      method: "PUT",
+      body: JSON.stringify(board),
+    }),
+  removeTagBoard: (id: string) =>
+    request<void>(`/api/tag-boards/${encodeURIComponent(id)}`, {
+      method: "DELETE",
+    }),
+  translateSelection: (
+    selection: { text: string; context?: { before: string; after: string } },
+    signal: AbortSignal,
+  ) =>
+    request<{ text: string }>("/api/translate-selection", {
+      method: "POST",
+      body: JSON.stringify({ text: selection.text, ...selection.context }),
+      signal,
+    }),
+  translationStream: async (
+    id: string,
+    signal: AbortSignal,
+    onEvent: (event: TranslationEvent) => void,
+  ) => {
+    const response = await diagnosticFetch(
+      `/api/documents/${encodeURIComponent(id)}/translations/stream`,
+      {
+        headers: {
+          Authorization: `Bearer ${sessionToken}`,
+          Accept: "text/event-stream",
+        },
+        signal,
+      },
+    );
+    if (
+      !response.ok ||
+      !response.body ||
+      !response.headers.get("content-type")?.startsWith("text/event-stream")
+    ) {
+      throw new Error(`无法订阅译文 (${response.status})`);
+    }
+    return consumeTranslationStream(response.body, signal, onEvent);
+  },
+  epubChapters: (id: string, signal?: AbortSignal) =>
+    request<import("@interleaf/core").EPUBChapters>(
+      `/api/documents/${encodeURIComponent(id)}/epub-chapters`,
+      { signal },
+    ),
+  epubChapter: (id: string, href: string, signal?: AbortSignal) =>
+    request<{ html: string }>(
+      `/api/documents/${encodeURIComponent(id)}/epub-chapter?href=${encodeURIComponent(href)}`,
+      { signal },
+    ),
+  epubBlocks: (id: string) =>
+    request<import("@interleaf/core").EPUBReadingBlock[]>(
+      `/api/documents/${id}/epub-blocks`,
+    ),
+  translations: (id: string) =>
+    request<import("@interleaf/core").TranslationBlock[]>(
+      `/api/documents/${id}/translations`,
+    ),
+  createBilingualPDF: (
+    id: string,
+    options: Pick<
+      import("@interleaf/core").BilingualPDFOptions,
+      "layout" | "fromPage" | "toPage"
+    >,
+    signal?: AbortSignal,
+  ) =>
+    request<import("@interleaf/core").BilingualPDFJob>(
+      `/api/documents/${encodeURIComponent(id)}/bilingual-pdf`,
+      { method: "POST", body: JSON.stringify(options), signal },
+    ),
+  bilingualPDF: (id: string, job: string, signal?: AbortSignal) =>
+    request<import("@interleaf/core").BilingualPDFJob>(
+      `/api/documents/${encodeURIComponent(id)}/bilingual-pdf/${encodeURIComponent(job)}`,
+      { signal },
+    ),
+  startBilingualPDF: (
+    id: string,
+    job: string,
+    input: import("@interleaf/core").BilingualPDFStart,
+    signal?: AbortSignal,
+  ) =>
+    request<import("@interleaf/core").BilingualPDFJob>(
+      `/api/documents/${encodeURIComponent(id)}/bilingual-pdf/${encodeURIComponent(job)}/start`,
+      { method: "POST", body: JSON.stringify(input), signal },
+    ),
+  cancelBilingualPDF: (id: string, job: string) =>
+    request<void>(
+      `/api/documents/${encodeURIComponent(id)}/bilingual-pdf/${encodeURIComponent(job)}`,
+      { method: "DELETE" },
+    ),
+  attachBilingualPDF: (id: string, job: string, signal?: AbortSignal) =>
+    request<Document>(
+      `/api/documents/${encodeURIComponent(id)}/bilingual-pdf/${encodeURIComponent(job)}/attachment`,
+      { method: "POST", body: "{}", signal },
+    ),
+  exportTranslation: async (
+    id: string,
+    format: "markdown" | "zip",
+    signal?: AbortSignal,
+    notesMarkdown = "",
+  ): Promise<Blob> => {
+    const response = await diagnosticFetch(
+      `/api/documents/${encodeURIComponent(id)}/translations/export?format=${format}`,
+      {
+        method: notesMarkdown ? "POST" : "GET",
+        headers: {
+          Authorization: `Bearer ${sessionToken}`,
+          ...(notesMarkdown && { "Content-Type": "application/json" }),
+        },
+        ...(notesMarkdown && { body: JSON.stringify({ notesMarkdown }) }),
+        signal,
+      },
+    );
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({}));
+      throw new RequestError(data.error || `导出失败 (${response.status})`);
+    }
+    return response.blob();
+  },
+  translate: (id: string, blockId = "") =>
+    request<{ queued: boolean }>(`/api/documents/${id}/translations`, {
+      method: "POST",
+      body: JSON.stringify({ blockId }),
+    }),
+  /** Queues the entire page range through the shared translation workers. */
+  translateRange: (id: string, fromPage: number, toPage: number) =>
+    request<{
+      queued: number;
+      characters: number;
+      nextPage: number;
+      /** The chapter's pages are parsed first, then translated. */
+      parsing: boolean;
+    }>(`/api/documents/${id}/translations/range`, {
+      method: "POST",
+      body: JSON.stringify({ fromPage, toPage }),
+    }),
+  translateEPUBChapter: (
+    id: string,
+    location: import("@interleaf/core").EPUBLocation,
+  ) =>
+    request<{ queued: number; characters: number; hasMore: boolean }>(
+      `/api/documents/${id}/translations/chapter`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          location: {
+            type: "epub",
+            href: location.href,
+            blockId: location.blockId,
+            locator: location.locator,
+            start: location.start,
+            end: location.end,
+          },
+        }),
+      },
+    ),
+  assistance: (id: string) =>
+    request<Processing>(`/api/documents/${id}/assistance`),
+  setAssistance: (
+    id: string,
+    action: "start" | "pause" | "resume" | "retranslate",
+  ) =>
+    request<Processing>(`/api/documents/${id}/assistance`, {
+      method: "POST",
+      body: JSON.stringify({ action }),
+    }),
+  overviewJobs: () => request<OverviewJob[]>("/api/overviews"),
+  documentOverview: (id: string) =>
+    request<DocumentOverview>(
+      `/api/documents/${encodeURIComponent(id)}/overview`,
+    ),
+  generateOverview: (id: string, regenerate = false) =>
+    request<DocumentOverview>(
+      `/api/documents/${encodeURIComponent(id)}/overview`,
+      { method: "POST", body: JSON.stringify({ regenerate }) },
+    ),
+  cancelOverview: (id: string) =>
+    request<void>(`/api/documents/${encodeURIComponent(id)}/overview/job`, {
+      method: "DELETE",
+    }),
+  processing: () => request<Processing[]>("/api/processing"),
+  process: (id: string) =>
+    request<Processing>(`/api/documents/${id}/processing`, { method: "POST" }),
+  blocks: (id: string) => request<PDFBlock[]>(`/api/documents/${id}/blocks`),
+  ...nativeAI,
+  // Existing callers use these names while runtime migration completes.
+  aiConfig: nativeAI.nativeAIConfig,
+  agentModels: nativeAI.nativeAIModels,
+  saveAIConfig: nativeAI.saveNativeAIConfig,
+  documents: async (): Promise<Document[]> => {
+    const { data, error } = await client.GET("/api/documents");
+    if (error) throw new Error(error.error);
+    return data;
+  },
+  /** Papers over 100 pages or 100 MB fail with code "large-paper" unless allowLarge. */
+  import: (
+    file: File,
+    library: LibraryMode = "books",
+    allowLarge = false,
+    folder = "",
+  ) => {
+    const form = new FormData();
+    form.append("library", library);
+    if (allowLarge) form.append("allowLarge", "1");
+    if (folder.startsWith("smart:"))
+      form.append("smartCategory", folder.slice(6));
+    else if (folder)
+      form.append(
+        "folder",
+        folder.startsWith("folder:") ? folder.slice(7) : folder,
+      );
+    form.append("file", file);
+    return request<Document>("/api/documents", { method: "POST", body: form });
+  },
+  /** Import a paper from an arXiv ID, DOI, paper link, PDF link or title. */
+  resolveDocument: (
+    ref: string,
+    options?: {
+      library: LibraryMode;
+      allowLarge: boolean;
+      folder?: string;
+      smartCategory?: string;
+    },
+  ) =>
+    request<Document>("/api/documents/resolve", {
+      method: "POST",
+      body: JSON.stringify({ ref, ...options }),
+    }),
+  lookupMetadata: (id: string) =>
+    request<Document>(
+      `/api/documents/${encodeURIComponent(id)}/metadata/lookup`,
+      { method: "POST" },
+    ),
+  removeDocument: (id: string) =>
+    request<void>(`/api/documents/${encodeURIComponent(id)}`, {
+      method: "DELETE",
+    }),
+  trashDocument: (id: string) =>
+    request<Document>(`/api/documents/${encodeURIComponent(id)}/trash`, {
+      method: "POST",
+    }),
+  relateDocuments: (id: string, other: string) =>
+    request<Document>(
+      `/api/documents/${encodeURIComponent(id)}/related/${encodeURIComponent(other)}`,
+      { method: "PUT" },
+    ),
+  unrelateDocuments: (id: string, other: string) =>
+    request<Document>(
+      `/api/documents/${encodeURIComponent(id)}/related/${encodeURIComponent(other)}`,
+      { method: "DELETE" },
+    ),
+  mergeDocuments: (id: string, from: string[]) =>
+    request<{ document: Document; trashed: string[] }>(
+      `/api/documents/${encodeURIComponent(id)}/merge`,
+      { method: "POST", body: JSON.stringify({ from }) },
+    ),
+  restoreDocument: (id: string) =>
+    request<Document>(`/api/documents/${encodeURIComponent(id)}/restore`, {
+      method: "POST",
+    }),
+  trash: (library: LibraryMode) =>
+    request<Document[]>(`/api/trash?library=${library}`),
+  emptyTrash: (library: LibraryMode) =>
+    request<{ removed: number }>(`/api/trash?library=${library}`, {
+      method: "DELETE",
+    }),
+  classify: (id: string) =>
+    request<Document>(`/api/documents/${id}/classification`, {
+      method: "POST",
+    }),
+  update: (
+    id: string,
+    patch: {
+      title?: string;
+      author?: string;
+      category?: Document["category"];
+      tags?: string[];
+      folders?: string[];
+      favorite?: boolean;
+      progress?: DocumentLocation;
+      percentage?: number;
+      library?: LibraryMode;
+      metadata?: Partial<Pick<PaperMetadata, PaperMetadataField>>;
+      readingStatus?: ReadingStatus;
+    },
+  ) =>
+    request<Document>(`/api/documents/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(patch),
+    }),
+  recoverAnnotations: (id: string, force = false) =>
+    request<{ checked: boolean }>(`/api/documents/${id}/annotations/recover`, {
+      method: "POST",
+      body: JSON.stringify({ force }),
+    }),
+  annotations: (id: string) =>
+    request<Annotation[]>(`/api/documents/${id}/annotations`),
+  annotate: (
+    id: string,
+    annotation: Pick<
+      Annotation,
+      "kind" | "location" | "quote" | "note" | "color"
+    >,
+  ) =>
+    annotationRequest<components["schemas"]["SavedAnnotation"]>(
+      `/api/documents/${id}/annotations`,
+      {
+        method: "POST",
+        body: JSON.stringify(annotation),
+      },
+    ),
+  updateAnnotationNote: (id: string, annotation: string, note: string) =>
+    annotationRequest<Annotation>(
+      `/api/documents/${id}/annotations/${annotation}`,
+      {
+        method: "PATCH",
+        body: JSON.stringify({ note }),
+      },
+    ),
+  updateAnnotation: (
+    id: string,
+    annotation: string,
+    patch: {
+      note?: string;
+      answerId?: string;
+      resolved?: boolean;
+      color?: string;
+      tags?: string[];
+    },
+  ) =>
+    annotationRequest<Annotation>(
+      `/api/documents/${id}/annotations/${annotation}`,
+      {
+        method: "PATCH",
+        body: JSON.stringify(patch),
+      },
+    ),
+  documentNote: (id: string) =>
+    request<{ body: string; updatedAt?: string }>(
+      `/api/documents/${encodeURIComponent(id)}/note`,
+    ),
+  saveDocumentNote: (id: string, body: string) =>
+    request<{ body: string; updatedAt?: string }>(
+      `/api/documents/${encodeURIComponent(id)}/note`,
+      { method: "PUT", body: JSON.stringify({ body }) },
+    ),
+  undoAnnotation: (id: string) =>
+    annotationRequest<{ undone: boolean; annotations: Annotation[] }>(
+      `/api/documents/${encodeURIComponent(id)}/annotations/undo`,
+      { method: "POST" },
+    ),
+  removeAnnotation: (id: string, annotation: string) =>
+    annotationRequest<void>(`/api/documents/${id}/annotations/${annotation}`, {
+      method: "DELETE",
+    }),
+  search: (id: string, query: string) =>
+    request<SearchResult[]>(
+      `/api/documents/${id}/search?q=${encodeURIComponent(query)}`,
+    ),
+  messages: (id: string, signal?: AbortSignal) =>
+    request<Message[]>(`/api/documents/${id}/messages`, { signal }),
+  chatSessions: (id: string, signal?: AbortSignal) =>
+    request<DocumentChatSession[]>(`/api/documents/${id}/chat-sessions`, {
+      signal,
+    }),
+  createChatSession: (id: string, provider: string) =>
+    request<DocumentChatSession>(`/api/documents/${id}/chat-sessions`, {
+      method: "POST",
+      body: JSON.stringify({ provider }),
+    }),
+  updateChatSession: (
+    id: string,
+    sessionId: string,
+    patch: { title?: string; provider?: string },
+  ) =>
+    request<DocumentChatSession>(
+      `/api/documents/${id}/chat-sessions/${sessionId}`,
+      { method: "PATCH", body: JSON.stringify(patch) },
+    ),
+  sessionMessages: (id: string, sessionId: string, signal?: AbortSignal) =>
+    request<Message[]>(
+      `/api/documents/${id}/chat-sessions/${sessionId}/messages`,
+      { signal },
+    ),
+  startChatRun: (
+    id: string,
+    sessionId: string,
+    input: {
+      provider: string;
+      prompt: string;
+      context: string;
+      userMessageId?: string;
+      references: SourceReference[];
+      attachments: string[];
+      readingLocation?: DocumentLocation;
+    },
+  ) =>
+    request<ChatRun>(`/api/documents/${id}/chat-sessions/${sessionId}/chat`, {
+      method: "POST",
+      body: JSON.stringify(input),
+      signal: AbortSignal.timeout(30_000),
+    }),
+  cancelChatRun: (id: string, sessionId: string, runId: string) =>
+    request<{ ok: boolean }>(
+      `/api/documents/${id}/chat-sessions/${sessionId}/runs/${runId}/cancel`,
+      { method: "POST", signal: AbortSignal.timeout(30_000) },
+    ),
+  validateEvidence: (id: string, message: string, source: string) =>
+    request<{ valid: boolean }>(
+      `/api/documents/${encodeURIComponent(id)}/messages/${encodeURIComponent(message)}/sources/${encodeURIComponent(source)}`,
+    ),
+  providers: (checkAuth = true) =>
+    request<Provider[]>(`/api/providers${checkAuth ? "" : "?auth=skip"}`),
+  /** Rename a category across a library, or remove it when `to` is omitted. */
+  changeLibraryFolder: (library: LibraryMode, from: string, to?: string) =>
+    request<{ changed: number }>(`/api/libraries/${library}/folders`, {
+      method: "POST",
+      body: JSON.stringify(to === undefined ? { from } : { from, to }),
+    }),
+  changeLibraryTag: (library: LibraryMode, from: string, to?: string) =>
+    request<{ changed: number }>(`/api/libraries/${library}/tags`, {
+      method: "POST",
+      body: JSON.stringify(to === undefined ? { from } : { from, to }),
+    }),
+  libraryPreferences: () =>
+    request<LibraryPreferences>("/api/preferences/library"),
+  saveLibraryPreferences: (preferences: LibraryPreferences) =>
+    request<LibraryPreferences>("/api/preferences/library", {
+      method: "PUT",
+      body: JSON.stringify(preferences),
+    }),
+  shortcutPreferences: () =>
+    request<Record<string, { key: string; shift: boolean }>>(
+      "/api/preferences/shortcuts",
+    ),
+  saveShortcutPreferences: (
+    preferences: Record<string, { key: string; shift: boolean }>,
+  ) =>
+    request<Record<string, { key: string; shift: boolean }>>(
+      "/api/preferences/shortcuts",
+      { method: "PUT", body: JSON.stringify(preferences) },
+    ),
+  // Keep the existing storage bucket so previously acknowledged updates stay read.
+  releasePreferences: () =>
+    request<ReleasePreferences>("/api/preferences/guide"),
+  saveReleasePreferences: (preferences: ReleasePreferences) =>
+    request<ReleasePreferences>("/api/preferences/guide", {
+      method: "PUT",
+      body: JSON.stringify(preferences),
+    }),
+  settings: () => request<Partial<ReaderTheme>>("/api/settings"),
+  saveSettings: (theme: ReaderTheme) =>
+    request<ReaderTheme>("/api/settings", {
+      method: "PUT",
+      body: JSON.stringify(theme),
+    }),
+};
+export async function chat(
+  id: string,
+  provider: string,
+  prompt: string,
+  context: string,
+  signal: AbortSignal,
+  onDelta: (text: string) => void,
+  references: SourceReference[] = [],
+  attachments: string[] = [],
+  onFallback?: (message: string) => void,
+  onEvent?: (event: ChatStreamEvent) => void,
+  readingLocation?: DocumentLocation,
+  userMessageId?: string,
+) {
+  const response = await diagnosticFetch(`/api/documents/${id}/chat`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${sessionToken}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      provider,
+      prompt,
+      context,
+      references,
+      readingLocation,
+      attachments,
+      userMessageId,
+    }),
+    signal,
+  });
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({}));
+    throw new Error(data.error || `AI 请求失败 (${response.status})`);
+  }
+  if (!response.body) throw new Error("没有收到 AI 输出");
+  try {
+    await consumeChatStream(response.body, signal, (event) => {
+      onEvent?.(event);
+      if (event.event === "delta") onDelta(event.data.text);
+      if (event.event === "fallback") onFallback?.(event.data.message);
+    });
+    reportDiagnostic({
+      level: "info",
+      event: "chat.stream_finish",
+      requestId: response.headers.get("X-Interleaf-Request-ID") || undefined,
+    });
+  } catch (error) {
+    reportDiagnostic({
+      level: signal.aborted ? "info" : "error",
+      event: signal.aborted ? "chat.stream_cancelled" : "chat.stream_failed",
+      requestId: response.headers.get("X-Interleaf-Request-ID") || undefined,
+      ...diagnosticError(error),
+    });
+    throw error;
+  }
+}
+
+/** Attach/replay a run without starting another model request. */
+export async function watchChatRun(
+  id: string,
+  sessionId: string,
+  runId: string,
+  signal: AbortSignal,
+  emit: (event: ChatStreamEvent) => void,
+) {
+  const response = await diagnosticFetch(
+    `/api/documents/${id}/chat-sessions/${sessionId}/runs/${runId}/events`,
+    { headers: { Authorization: `Bearer ${sessionToken}` }, signal },
+  );
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({}));
+    throw new Error(data.error || `读取运行失败 (${response.status})`);
+  }
+  if (!response.body) throw new Error("没有收到运行事件");
+  await consumeChatStream(response.body, signal, emit);
+}

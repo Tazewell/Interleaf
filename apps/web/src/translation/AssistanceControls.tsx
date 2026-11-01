@@ -1,0 +1,220 @@
+import { useEffect, useRef, useState } from "react";
+import {
+  Check,
+  FileMagnifyingGlass as FileSearch,
+  Pause,
+  ArrowCounterClockwise as RotateCcw,
+  Translate as Languages,
+} from "@phosphor-icons/react";
+import type { EPUBLocation, LibraryMode, Processing } from "@interleaf/core";
+import { api } from "@interleaf/api";
+import { Button } from "@interleaf/ui/components/button";
+import {
+  AlertDialog,
+  AlertDialogTrigger,
+  AlertDialogContent,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogCancel,
+} from "@interleaf/ui/components/alert-dialog";
+import { toast } from "sonner";
+import type { PageRange } from "./chapters";
+
+type Action = "start" | "pause" | "resume" | "chapter";
+
+/**
+ * Papers translate the whole document with start, pause and resume. Books
+ * translate the current chapter on request; the server caps each request.
+ */
+export function AssistanceControls({
+  documentId,
+  processing,
+  library = "papers",
+  chapter,
+  epubChapter,
+}: {
+  documentId: string;
+  processing?: Processing;
+  library?: LibraryMode;
+  /** The chapter at the reading position, read when the button is pressed. */
+  chapter?: () => PageRange | undefined;
+  epubChapter?: () => EPUBLocation | undefined;
+}) {
+  const [saved, setSaved] = useState<Processing>();
+  const [busy, setBusy] = useState(false);
+  const [confirming, setConfirming] = useState(false);
+  const serial = useRef(0);
+  const job =
+    saved &&
+    (!processing ||
+      Date.parse(saved.updatedAt) > Date.parse(processing.updatedAt))
+      ? saved
+      : processing;
+  useEffect(() => {
+    let alive = true;
+    setSaved(undefined);
+    setBusy(false);
+    setConfirming(false);
+    void api
+      .assistance(documentId)
+      .then((p) => {
+        if (alive) setSaved(p);
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+      serial.current++;
+    };
+  }, [documentId]);
+  const complete = job?.status === "complete";
+  const paperParsing =
+    library === "papers" &&
+    !epubChapter &&
+    job?.phase === "learning" &&
+    !job.retranslating &&
+    !complete;
+  const parsingPending = paperParsing && job.status !== "failed";
+  const [action, label]: [Action, string] =
+    job?.enabled && job.status === "failed"
+      ? ["resume", "重试翻译"]
+      : job?.enabled && !complete
+        ? ["pause", "暂停翻译"]
+        : !job?.enabled
+          ? epubChapter &&
+            (!job?.startedAt || job.translating?.status === "complete")
+            ? ["chapter", "翻译本章"]
+            : job?.startedAt && !job.manualTranslation
+              ? ["resume", "继续翻译"]
+              : ["start", "翻译"]
+          : library === "books"
+            ? ["chapter", "翻译本章"]
+            : ["start", "翻译完成"];
+  const finished = complete && action !== "chapter";
+  const actionLabel = paperParsing
+    ? job.status === "failed"
+      ? "重试解析"
+      : job.status === "running"
+        ? "解析中"
+        : "等待解析"
+    : job?.retranslating
+      ? action === "pause"
+        ? "暂停重译"
+        : "继续重译"
+      : label;
+  const run = async () => {
+    if (action !== "chapter") return api.setAssistance(documentId, action);
+    if (epubChapter) {
+      const location = epubChapter();
+      if (!location?.href) throw new Error("正文仍在加载，请稍后再试");
+      await api.translateEPUBChapter(documentId, location);
+      return api.assistance(documentId);
+    }
+    const range = chapter?.();
+    if (!range) return undefined;
+    const result = await api.translateRange(
+      documentId,
+      range.fromPage,
+      range.toPage,
+    );
+    if (result.parsing) toast("正在解析本章，完成后开始翻译");
+    return api.assistance(documentId);
+  };
+  return (
+    <div className="assistance-controls">
+      <Button
+        variant="ghost"
+        size="sm"
+        disabled={busy || !job || finished || parsingPending}
+        title={
+          action === "chapter"
+            ? "翻译当前完整章节，复用已完成译文"
+            : job?.enabled
+              ? job.detail
+              : epubChapter
+                ? "继续已请求章节的翻译"
+                : "使用当前 AI 连接翻译全文与公式"
+        }
+        onClick={async () => {
+          const operation = ++serial.current;
+          setBusy(true);
+          try {
+            const next = await run();
+            if (next && operation === serial.current) setSaved(next);
+          } catch (e) {
+            if (operation === serial.current) toast.error((e as Error).message);
+          } finally {
+            if (operation === serial.current) setBusy(false);
+          }
+        }}
+      >
+        {parsingPending ? (
+          <FileSearch />
+        ) : finished ? (
+          <Check />
+        ) : action === "pause" ? (
+          <Pause />
+        ) : action === "resume" && job?.status === "failed" ? (
+          <RotateCcw />
+        ) : (
+          <Languages />
+        )}
+        {actionLabel}
+      </Button>
+      {finished && library === "papers" && !epubChapter && (
+        <AlertDialog open={confirming} onOpenChange={setConfirming}>
+          <AlertDialogTrigger
+            render={
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                disabled={busy}
+                title="重新翻译"
+                aria-label="重新翻译"
+              />
+            }
+          >
+            <RotateCcw />
+          </AlertDialogTrigger>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>重新翻译全文？</AlertDialogTitle>
+              <AlertDialogDescription>
+                将重新解析全文版面，并使用当前 Agent
+                翻译模型和已保存的翻译提示词重新翻译。解析成功前保留现有内容；仍能对应原文的旧译文会在新结果完成后逐段替换。
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={busy}>取消</AlertDialogCancel>
+              <Button
+                disabled={busy}
+                onClick={async () => {
+                  const operation = ++serial.current;
+                  setBusy(true);
+                  try {
+                    const next = await api.setAssistance(
+                      documentId,
+                      "retranslate",
+                    );
+                    if (operation === serial.current) {
+                      setConfirming(false);
+                      setSaved(next);
+                    }
+                  } catch (e) {
+                    if (operation === serial.current)
+                      toast.error((e as Error).message);
+                  } finally {
+                    if (operation === serial.current) setBusy(false);
+                  }
+                }}
+              >
+                {busy ? "正在开始…" : "开始重新翻译"}
+              </Button>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      )}
+    </div>
+  );
+}

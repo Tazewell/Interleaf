@@ -1,0 +1,42 @@
+diff --git a/dist/fontkit.es.js b/dist/fontkit.es.js
+index 2711b07413d1eb095487d4fddc7273f4afc1d82b..ec1cd496200ea0ca71a3ffefd5b9848c10ebbef0 100755
+--- a/dist/fontkit.es.js
++++ b/dist/fontkit.es.js
+@@ -32663,7 +32663,15 @@ var TTFGlyphEncoder = /*#__PURE__*/function () {
+       if (c.command === 'closePath') {
+         endPtsOfContours.push(pointCount - 1);
+       }
+-    } // Close the path if the last command didn't already
++    }
++
++    // Flush the final TrueType flag run before coordinate bytes (MIT fontkit).
++    // Without its repeat count, variable-font subsets corrupt P/D/B/X outlines.
++    if (same > 0) {
++      flags.push(same);
++    }
++
++    // Close the path if the last command didn't already
+ 
+ 
+     if (path.commands.length > 1 && path.commands[path.commands.length - 1].command !== 'closePath') {
+diff --git a/dist/fontkit.umd.js b/dist/fontkit.umd.js
+index c18af0e3cfce5893cc0012cc3a4e2b69c78d4c95..de3d28aaacb3c9bd10cecefe8df28a0a9d781bbf 100755
+--- a/dist/fontkit.umd.js
++++ b/dist/fontkit.umd.js
+@@ -40813,7 +40813,15 @@
+ 	      if (c.command === 'closePath') {
+ 	        endPtsOfContours.push(pointCount - 1);
+ 	      }
+-	    } // Close the path if the last command didn't already
++	    }
++
++	    // Flush the final TrueType flag run before coordinate bytes (MIT fontkit).
++	    // Without its repeat count, variable-font subsets corrupt P/D/B/X outlines.
++	    if (same > 0) {
++	      flags.push(same);
++	    }
++
++	    // Close the path if the last command didn't already
+ 
+ 
+ 	    if (path.commands.length > 1 && path.commands[path.commands.length - 1].command !== 'closePath') {

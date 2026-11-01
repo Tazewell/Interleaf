@@ -1,0 +1,47 @@
+{
+  "captured_on": "2026-10-31",
+  "app_version": "0.8.7",
+  "ui_commit": "239e329",
+  "sample_documents_commit": "f9e2d30",
+  "method": "Direct browser viewport screenshots of the running Interleaf app; JPEG, unedited",
+  "library": "Isolated demonstration library using bundled original EPUB/PDF samples",
+  "personal_configuration_included": false,
+  "removed_legacy_assets": [
+    "library-dark.webp",
+    "pdf-light.webp",
+    "library-light.webp",
+    "settings-light.webp",
+    "pdf-bilingual-ai.webp",
+    "pdf-dark.webp"
+  ],
+  "files": [
+    {
+      "name": "interleaf-library-light.jpg",
+      "sha256": "abcd5a70d050044d004facc9991e7da716448587cff19883c6a30ea91dad4161"
+    },
+    {
+      "name": "interleaf-library-dark.jpg",
+      "sha256": "6e6dd0adee139956b5ed66c7ac90cd9190240a0b4e4e50bd87f2fe242bc6ddac"
+    },
+    {
+      "name": "interleaf-pdf-light.jpg",
+      "sha256": "4f8d210840607af3ed3042d09e2a9821d6b23f18dd4ef5c310ff8e293bb779cb"
+    },
+    {
+      "name": "interleaf-pdf-dark.jpg",
+      "sha256": "8c2c111807005a60b6f0130cd51fed116fa9b0a6e37aaa1ae2416810eb75d17e"
+    },
+    {
+      "name": "interleaf-ai-settings.jpg",
+      "sha256": "453b68f6c62163c117be7c1d39924a8bc07b15771805d2a690821f9d4e695487"
+    },
+    {
+      "name": "interleaf-shortcuts.jpg",
+      "sha256": "4b093b81e4e6ab3f902e1c87df02d57c3cd8b3e4a7daa50e2909a46a07f5da11"
+    },
+    {
+      "name": "interleaf-about.jpg",
+      "sha256": "e6f55d520c09b60509e83ebe7a4ce2f8c1d3e9af8901767a7c3f652f2654e1ed"
+    }
+  ]
+}
