@@ -837,5 +837,11 @@ export interface DocumentChatSession {
   latestRun?: ChatRun;
 }
 
+export interface ChatSessionDeletion {
+  ok: boolean;
+  unlinkedAnnotationIds: string[];
+  replacement?: DocumentChatSession;
+}
+
 export * from "./native-ai";
 export type * from "./research";

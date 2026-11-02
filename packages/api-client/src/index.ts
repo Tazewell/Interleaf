@@ -14,6 +14,7 @@ import createClient from "openapi-fetch";
 import type { components, paths } from "./schema";
 import type {
   ChatRun,
+  ChatSessionDeletion,
   DocumentChatSession,
   Document,
   PaperItem,
@@ -657,6 +658,11 @@ export const api = {
     request<DocumentChatSession>(
       `/api/documents/${id}/chat-sessions/${sessionId}`,
       { method: "PATCH", body: JSON.stringify(patch) },
+    ),
+  deleteChatSession: (id: string, sessionId: string) =>
+    request<ChatSessionDeletion>(
+      `/api/documents/${encodeURIComponent(id)}/chat-sessions/${encodeURIComponent(sessionId)}`,
+      { method: "DELETE" },
     ),
   sessionMessages: (id: string, sessionId: string, signal?: AbortSignal) =>
     request<Message[]>(

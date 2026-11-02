@@ -19,6 +19,12 @@ type ChatSession struct {
 	LatestRun  *ChatRun `json:"latestRun,omitempty"`
 }
 
+type ChatSessionDeletion struct {
+	OK                    bool         `json:"ok"`
+	UnlinkedAnnotationIDs []string     `json:"unlinkedAnnotationIds"`
+	Replacement           *ChatSession `json:"replacement,omitempty"`
+}
+
 // Migrate in a single transaction. IDs, evidence, reading positions and annotation
 // links stay intact; the old provider continuation moves with the transcript.
 func (s *Store) ensureDefaultChatSession(documentID, provider string) (string, error) {
@@ -197,6 +203,147 @@ func (s *Server) updateChatSession(w http.ResponseWriter, r *http.Request) {
 	}
 	respond(w, 200, v)
 }
+func (s *Server) deleteChatSession(w http.ResponseWriter, r *http.Request) {
+	documentID, sessionID := r.PathValue("id"), r.PathValue("session")
+	doc, err := s.Store.Document(documentID)
+	if err != nil || doc.DeletedAt != "" {
+		fail(w, 404, "文档不存在")
+		return
+	}
+	ctx, finish, err := s.beginDocumentTask(r.Context(), documentID)
+	if err != nil {
+		fail(w, 409, "文档不可用")
+		return
+	}
+	defer finish()
+	// Hold the generation lock through commit: a checked session cannot accept
+	// another run between the activity check and transcript cleanup.
+	s.chatMu.Lock()
+	defer s.chatMu.Unlock()
+	session, err := s.Store.chatSession(documentID, sessionID)
+	if errors.Is(err, sql.ErrNoRows) {
+		fail(w, 404, "会话不存在")
+		return
+	}
+	if err != nil {
+		fail(w, 500, "无法读取会话")
+		return
+	}
+	if s.chatRuns[sessionID] != nil || s.chatReservations[sessionID] {
+		fail(w, 409, "请先停止当前会话的回答生成，再删除会话")
+		return
+	}
+	// Undo snapshots must change with the stored annotations, including marks
+	// currently deleted but still restorable from history.
+	s.annotationMu.Lock()
+	defer s.annotationMu.Unlock()
+	tx, err := s.Store.DB.BeginTx(ctx, nil)
+	if err != nil {
+		fail(w, 500, "无法删除会话")
+		return
+	}
+	defer tx.Rollback()
+	var running int
+	if err = tx.QueryRowContext(ctx, "SELECT count(*) FROM chat_runs WHERE session_id=? AND json_extract(body,'$.status')='running'", sessionID).Scan(&running); err != nil {
+		fail(w, 500, "无法读取运行状态")
+		return
+	}
+	if running != 0 {
+		fail(w, 409, "请先停止当前会话的回答生成，再删除会话")
+		return
+	}
+	result, removed, err := deleteChatSessionTx(ctx, tx, session)
+	if err != nil {
+		fail(w, 500, "无法删除会话")
+		return
+	}
+	history, err := s.annotationHistoryWithoutAnswers(documentID, removed)
+	if err != nil {
+		fail(w, 500, "无法更新批注撤销记录")
+		return
+	}
+	if err = tx.Commit(); err != nil {
+		fail(w, 500, "无法删除会话")
+		return
+	}
+	s.annotationHistory = history
+	respond(w, 200, result)
+}
+
+func deleteChatSessionTx(ctx context.Context, tx *sql.Tx, session ChatSession) (ChatSessionDeletion, map[string]bool, error) {
+	result := ChatSessionDeletion{OK: true, UnlinkedAnnotationIDs: []string{}}
+	removed := map[string]bool{}
+	rows, err := tx.QueryContext(ctx, "SELECT id FROM messages WHERE document_id=? AND json_extract(body,'$.sessionId')=?", session.DocumentID, session.ID)
+	if err != nil {
+		return result, nil, err
+	}
+	for rows.Next() {
+		var messageID string
+		if err = rows.Scan(&messageID); err != nil {
+			break
+		}
+		removed[messageID] = true
+	}
+	rowErr := rows.Err()
+	rows.Close()
+	if err != nil || rowErr != nil {
+		return result, nil, errors.Join(err, rowErr)
+	}
+	const targetMessages = "SELECT id FROM messages WHERE document_id=? AND json_extract(body,'$.sessionId')=?"
+	rows, err = tx.QueryContext(ctx, "SELECT id FROM annotations WHERE document_id=? AND json_extract(body,'$.answerId') IN ("+targetMessages+") ORDER BY id", session.DocumentID, session.DocumentID, session.ID)
+	if err != nil {
+		return result, nil, err
+	}
+	for rows.Next() {
+		var annotationID string
+		if err = rows.Scan(&annotationID); err != nil {
+			break
+		}
+		result.UnlinkedAnnotationIDs = append(result.UnlinkedAnnotationIDs, annotationID)
+	}
+	rowErr = rows.Err()
+	rows.Close()
+	if err != nil || rowErr != nil {
+		return result, nil, errors.Join(err, rowErr)
+	}
+	for _, query := range []string{
+		"UPDATE annotations SET body=json_remove(body,'$.answerId') WHERE document_id=? AND json_extract(body,'$.answerId') IN (" + targetMessages + ")",
+		"DELETE FROM chat_agent_runs WHERE document_id=? AND json_extract(body,'$.messageId') IN (" + targetMessages + ")",
+	} {
+		if _, err = tx.ExecContext(ctx, query, session.DocumentID, session.DocumentID, session.ID); err != nil {
+			return result, nil, err
+		}
+	}
+	// Match the complete session prefix literally; LIKE would interpret '_' and
+	// '%' inside historical session IDs as wildcards.
+	prefix := conversationProvider(session.ID, "")
+	if _, err = tx.ExecContext(ctx, "DELETE FROM document_conversations WHERE document_id=? AND substr(provider,1,length(?))=?", session.DocumentID, prefix, prefix); err != nil {
+		return result, nil, err
+	}
+	if _, err = tx.ExecContext(ctx, "DELETE FROM messages WHERE document_id=? AND json_extract(body,'$.sessionId')=?", session.DocumentID, session.ID); err != nil {
+		return result, nil, err
+	}
+	if _, err = tx.ExecContext(ctx, "DELETE FROM chat_runs WHERE session_id=?", session.ID); err != nil {
+		return result, nil, err
+	}
+	if _, err = tx.ExecContext(ctx, "DELETE FROM chat_sessions WHERE id=? AND document_id=?", session.ID, session.DocumentID); err != nil {
+		return result, nil, err
+	}
+	var remaining int
+	if err = tx.QueryRowContext(ctx, "SELECT count(*) FROM chat_sessions WHERE document_id=?", session.DocumentID).Scan(&remaining); err != nil {
+		return result, nil, err
+	}
+	if remaining == 0 {
+		stamp := now()
+		replacement := ChatSession{ID: id(), DocumentID: session.DocumentID, Title: "默认会话", Provider: session.Provider, CreatedAt: stamp, UpdatedAt: stamp}
+		if _, err = tx.ExecContext(ctx, "INSERT INTO chat_sessions(id,document_id,title,provider,created_at,updated_at) VALUES(?,?,?,?,?,?)", replacement.ID, replacement.DocumentID, replacement.Title, replacement.Provider, replacement.CreatedAt, replacement.UpdatedAt); err != nil {
+			return result, nil, err
+		}
+		result.Replacement = &replacement
+	}
+	return result, removed, nil
+}
+
 func (s *Server) sessionMessages(w http.ResponseWriter, r *http.Request) {
 	v, err := s.Store.chatSession(r.PathValue("id"), r.PathValue("session"))
 	if err != nil {
