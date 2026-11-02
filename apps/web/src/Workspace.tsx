@@ -47,6 +47,7 @@ import { api, blockImageURL } from "@interleaf/api";
 import {
   locationLabel,
   type DocumentChatSession,
+  type ChatSessionDeletion,
   type Annotation,
   type Document as ReaderDocument,
   type DocumentLocation,
@@ -109,7 +110,7 @@ import { ProcessingUsageDialog } from "./ProcessingUsage";
 import { ModelSelector } from "./ModelSelector";
 import { SourceReferences } from "./SourceReferences";
 import { ChatSession } from "./chat/chat-session";
-import { getChatSession } from "./chat/session-registry";
+import { forgetChatSession, getChatSession } from "./chat/session-registry";
 import { SessionPicker } from "./chat/SessionPicker";
 import { AssistantPanel } from "./chat/AssistantPanel";
 import { ImagePreview, imageLabel } from "./ImagePreview";
@@ -434,6 +435,13 @@ export function Workspace({
   }
   const currentSession =
     sessions.find((s) => s.id === preferred) ?? sessions[0];
+  const visibleSessions = useRef({
+    documentId: doc.id,
+    sessions,
+    currentSession,
+  });
+  visibleSessions.current = { documentId: doc.id, sessions, currentSession };
+  const deletedSessions = useRef(new Map<string, Set<string>>());
   const provider: string =
     aiConfig?.connection.url && !aiConfig.needsConfiguration ? "api" : "";
   const sessionListSerial = useRef(0);
@@ -444,7 +452,12 @@ export function Workspace({
       currentDocument.current === doc.id &&
       serial === sessionListSerial.current
     ) {
-      setSessionCatalog({ documentId: doc.id, items });
+      setSessionCatalog({
+        documentId: doc.id,
+        items: items.filter(
+          (item) => !deletedSessions.current.get(doc.id)?.has(item.id),
+        ),
+      });
       setSessionError("");
     }
   }, [doc.id]);
@@ -492,9 +505,45 @@ export function Workspace({
     setQuotes(saved?.quotes ?? []);
     setImages(saved?.images ?? []);
     return () => {
-      composerDrafts.current.set(composerKey, composerValue.current);
+      if (!deletedSessions.current.get(doc.id)?.has(currentSession?.id ?? ""))
+        composerDrafts.current.set(composerKey, composerValue.current);
     };
   }, [composerKey]);
+  const sessionDeleted = (id: string, result: ChatSessionDeletion) => {
+    // Successful old-document mutations still release their own resources.
+    // Their late response must never select a conversation in the new document.
+    forgetChatSession(doc.id, id);
+    composerDrafts.current.delete(`${doc.id}:${id}`);
+    const removed = deletedSessions.current.get(doc.id) ?? new Set<string>();
+    removed.add(id);
+    deletedSessions.current.set(doc.id, removed);
+    try {
+      const key = `interleaf.chat-session.${doc.id}`;
+      if (localStorage.getItem(key) === id) localStorage.removeItem(key);
+    } catch {}
+    if (currentDocument.current !== doc.id) return;
+    sessionListSerial.current++;
+    const visible = visibleSessions.current;
+    const remaining = visible.sessions.filter((item) => !removed.has(item.id));
+    if (
+      result.replacement &&
+      !remaining.some((item) => item.id === result.replacement!.id)
+    )
+      remaining.push(result.replacement);
+    setSessionCatalog({ documentId: doc.id, items: remaining });
+    if (visible.currentSession?.id === id) {
+      selectSession(remaining[0]?.id ?? "");
+    }
+    const unlinked = new Set(result.unlinkedAnnotationIds);
+    if (unlinked.size)
+      setAnnotations((items) =>
+        items.map((item) => {
+          if (!unlinked.has(item.id)) return item;
+          const { answerId: _deletedAnswer, ...annotation } = item;
+          return annotation;
+        }),
+      );
+  };
   useEffect(() => {
     let alive = true;
     void api
@@ -1733,6 +1782,7 @@ export function Workspace({
                   running={sending}
                   onChange={selectSession}
                   onRefresh={refreshSessions}
+                  onDeleted={sessionDeleted}
                 />
                 {sessionError && (
                   <div
