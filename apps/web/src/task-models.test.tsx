@@ -191,10 +191,9 @@ it("removes previous options from every selector when refresh fails", async () =
   expect(await selectorOptions()).toContain("previous");
   await refresh();
   expect(await modelOptionIDs()).toEqual([]);
-  expect(await selectorOptions()).not.toContain("previous");
-  expect(document.querySelector('[role="listbox"]')?.textContent).toContain(
-    "catalog unavailable",
-  );
+  const options = await selectorOptions();
+  expect(options).not.toContain("previous");
+  expect(options).toContain("catalog unavailable");
 });
 
 it.each(["endpoint", "credentials"])(
@@ -400,17 +399,14 @@ async function selectorOptions() {
   const popover = host.querySelector(
     '[aria-label="选择模型和 Effort"]',
   ) as HTMLButtonElement;
-  if (!document.querySelector(".effort-panel"))
+  if (popover.getAttribute("aria-expanded") !== "true")
     await act(async () => popover.click());
   const select = document.querySelector(
     '[aria-label="选择模型"]',
   ) as HTMLButtonElement;
   if (select.getAttribute("aria-expanded") !== "true")
     await act(async () => select.click());
-  return (
-    Array.from(document.querySelectorAll('[role="listbox"]')).at(-1)
-      ?.textContent ?? ""
-  );
+  return document.querySelector('.model-select-menu[data-open]')?.textContent ?? "";
 }
 it.each([false, true])(
   "refreshes another ModelSelector after an explicit check changes text=%s",
