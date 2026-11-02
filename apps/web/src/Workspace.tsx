@@ -319,10 +319,18 @@ export function Workspace({
     useState<ReaderSelection | null>(null);
   const [selection, setSelection] = useState<ReaderSelection | null>(null);
   const [annotations, replaceAnnotations] = useState<Annotation[]>([]);
+  const deletedAnswerIds = useRef(new Set<string>());
   const annotationRevision = useRef(0);
   const setAnnotations = useCallback((next: SetStateAction<Annotation[]>) => {
     annotationRevision.current++;
-    replaceAnnotations(next);
+    replaceAnnotations((items) =>
+      (typeof next === "function" ? next(items) : next).map((item) => {
+        if (!item.answerId || !deletedAnswerIds.current.has(item.answerId))
+          return item;
+        const { answerId: _deletedAnswer, ...annotation } = item;
+        return annotation;
+      }),
+    );
   }, []);
   const recoveryDocument = useRef(doc.id);
   recoveryDocument.current = doc.id;
@@ -512,7 +520,8 @@ export function Workspace({
   const sessionDeleted = (id: string, result: ChatSessionDeletion) => {
     // Successful old-document mutations still release their own resources.
     // Their late response must never select a conversation in the new document.
-    forgetChatSession(doc.id, id);
+    for (const messageId of forgetChatSession(doc.id, id))
+      deletedAnswerIds.current.add(messageId);
     composerDrafts.current.delete(`${doc.id}:${id}`);
     const removed = deletedSessions.current.get(doc.id) ?? new Set<string>();
     removed.add(id);
@@ -539,6 +548,7 @@ export function Workspace({
       setAnnotations((items) =>
         items.map((item) => {
           if (!unlinked.has(item.id)) return item;
+          if (item.answerId) deletedAnswerIds.current.add(item.answerId);
           const { answerId: _deletedAnswer, ...annotation } = item;
           return annotation;
         }),

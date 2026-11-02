@@ -38,6 +38,7 @@ vi.mock("@interleaf/api", () => ({
       apiModels: [],
     })),
     annotations: vi.fn(async () => structuredClone(annotations)),
+    updateAnnotation: vi.fn(),
     messages: vi.fn(async () => []),
     sessionMessages: vi.fn(async () => []),
     chatSessions: vi.fn(async (id: string) =>
@@ -75,8 +76,25 @@ vi.mock("./chat/SessionPicker", () => ({
 vi.mock("./chat/AssistantPanel", () => ({ AssistantPanel: () => null }));
 vi.mock("./ModelSelector", () => ({ ModelSelector: () => null }));
 vi.mock("./NotesPanel", () => ({
-  NotesPanel: ({ annotations: items }: { annotations: Annotation[] }) => (
-    <output aria-label="批注内容">{JSON.stringify(items)}</output>
+  NotesPanel: ({
+    annotations: items,
+    onSave,
+  }: {
+    annotations: Annotation[];
+    onSave: (
+      annotation: Annotation,
+      patch: { note: string; tags: string[] },
+    ) => Promise<boolean>;
+  }) => (
+    <>
+      <output aria-label="批注内容">{JSON.stringify(items)}</output>
+      <button
+        aria-label="保存批注笔记"
+        onClick={() => void onSave(items[0], { note: "Edited note", tags: [] })}
+      >
+        保存笔记
+      </button>
+    </>
   ),
 }));
 vi.mock("./DocumentOverview", () => ({ DocumentOverviewDialog: () => null }));
@@ -97,6 +115,70 @@ vi.mock("@interleaf/ui/components/resizable", async () => {
     usePanelRef: () => useRef(null),
   };
 });
+
+it.each([false, true])(
+  "does not restore a deleted answer from a delayed annotation save (new link: %s)",
+  async (newLink) => {
+    const annotation: Annotation = {
+      id: "delayed-question",
+      documentId: doc.id,
+      kind: "question",
+      quote: "Keep quote",
+      note: "Original note",
+      location: { type: "pdf", page: 1 },
+      color: "yellow",
+      createdAt: "",
+      ...(newLink ? {} : { answerId: "removed-answer" }),
+    };
+    annotations = [annotation];
+    await act(async () => render(otherDoc));
+    await act(async () => render());
+    if (newLink) {
+      vi.mocked(api.sessionMessages).mockResolvedValueOnce([
+        {
+          id: "removed-answer",
+          documentId: doc.id,
+          sessionId: a.id,
+          role: "assistant",
+          content: "Saved answer",
+          createdAt: "",
+        },
+      ]);
+      await act(async () => getChatSession(doc.id, a.id).load());
+    }
+    await act(async () =>
+      [...host.querySelectorAll<HTMLElement>('[role="tab"]')]
+        .find((tab) => tab.textContent?.startsWith("批注"))!
+        .click(),
+    );
+    let finish!: (annotation: Annotation) => void;
+    vi.mocked(api.updateAnnotation).mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve;
+        }),
+    );
+    await act(async () =>
+      host
+        .querySelector<HTMLButtonElement>('[aria-label="保存批注笔记"]')!
+        .click(),
+    );
+    await deleted(a.id, { ok: true, unlinkedAnnotationIds: [annotation.id] });
+    await act(async () =>
+      finish({
+        ...annotation,
+        note: "Edited note",
+        answerId: "removed-answer",
+      }),
+    );
+    const [saved] = JSON.parse(
+      host.querySelector('[aria-label="批注内容"]')!.textContent!,
+    );
+    expect(saved.note).toBe("Edited note");
+    expect(saved.quote).toBe("Keep quote");
+    expect(saved.answerId).toBeUndefined();
+  },
+);
 
 const doc = paper({ id: "managed-doc" });
 const otherDoc = paper({ id: "another-doc" });
