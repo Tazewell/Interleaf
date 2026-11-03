@@ -57,6 +57,14 @@ beforeEach(() => {
   vi.clearAllMocks();
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   vi.stubGlobal("PointerEvent", MouseEvent);
+  vi.stubGlobal(
+    "ResizeObserver",
+    class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    },
+  );
   useReaderStore.setState({ aiConfig: config, aiModelSaving: false });
   vi.mocked(api.aiConfig).mockResolvedValue(config);
   host = document.createElement("div");
@@ -142,4 +150,36 @@ it("keeps selection auto-copy opt-in and lets reading settings toggle it", async
 it("does not expose automatic chapter context", async () => {
   await act(async () => root.render(<Settings open onOpenChange={() => {}} />));
   expect(host.querySelector('[aria-label="提问时附带本章原文"]')).toBeNull();
+});
+
+it("switches appearance through its own tabs while keeping display settings selected", async () => {
+  const previous = useReaderStore.getState().theme;
+  useReaderStore.setState({
+    theme: { ...previous, appearance: "light", mode: "light" },
+  });
+  try {
+    await act(async () =>
+      root.render(<Settings open onOpenChange={() => {}} />),
+    );
+    const categories = host.querySelector('[aria-label="设置分类"]')!;
+    expect(categories.getAttribute("aria-orientation")).toBe("vertical");
+    const display = [
+      ...categories.querySelectorAll<HTMLButtonElement>('[role="tab"]'),
+    ].find((tab) => tab.textContent === "显示")!;
+    await act(async () => display.click());
+    const appearances = host.querySelector('[aria-label="界面主题"]')!;
+    const dark = [
+      ...appearances.querySelectorAll<HTMLButtonElement>('[role="tab"]'),
+    ].find((tab) => tab.textContent === "深色")!;
+    await act(async () => dark.click());
+    expect(useReaderStore.getState().theme.appearance).toBe("dark");
+    expect(dark.getAttribute("aria-selected")).toBe("true");
+    expect(display.getAttribute("aria-selected")).toBe("true");
+    const displayPanel = host.querySelector(
+      '[aria-labelledby="' + display.id + '"]',
+    )!;
+    expect(displayPanel.hasAttribute("hidden")).toBe(false);
+  } finally {
+    await act(async () => useReaderStore.setState({ theme: previous }));
+  }
 });

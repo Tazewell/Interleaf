@@ -9,6 +9,7 @@ import "@fontsource-variable/inter/wght.css";
 import "./style.css";
 import "./rounded-interface.css";
 import "./reader-rounded.css";
+import "./settings-rounded.css";
 import { installDiagnostics } from "./diagnostics";
 import { installScrollbars } from "./scrollbars";
 import { migrateLegacyStorage } from "./legacy-storage";

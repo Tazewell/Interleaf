@@ -186,7 +186,7 @@ export function TaskModels({ disabled }: { disabled: boolean }) {
     }
   };
   return (
-    <div className="space-y-3">
+    <div className="task-model-settings space-y-3">
       <div className="flex items-center justify-between">
         <h3 className="text-sm font-medium">用途模型</h3>
         <Button
@@ -216,8 +216,8 @@ export function TaskModels({ disabled }: { disabled: boolean }) {
             : (checks[role] ??
               selectedAgentModel(catalog, model, role)?.capability);
         return (
-          <div key={role} className="space-y-1">
-            <div className="flex items-center gap-2">
+          <div key={role} className="task-model-setting space-y-1">
+            <div className="task-model-controls flex items-center gap-2">
               <label
                 htmlFor={`${id}-${role}`}
                 className="w-10 shrink-0 text-sm"

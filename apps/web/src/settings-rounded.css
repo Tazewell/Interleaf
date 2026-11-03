@@ -1,0 +1,331 @@
+/* The settings rail and sheet share the app's semantic appearance colors. */
+.settings-dialog.settings-dialog {
+  width: min(1000px, calc(100vw - 32px));
+  max-width: calc(100vw - 32px);
+  height: min(780px, calc(100dvh - 40px));
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 0;
+  overflow: hidden;
+  padding: 12px;
+  border-radius: 24px;
+  background: var(--rail);
+}
+
+.settings-dialog > [data-slot="dialog-header"] {
+  min-height: 54px;
+  justify-content: center;
+  padding: 4px 44px 16px 12px;
+}
+
+.settings-dialog > [data-slot="dialog-close"] {
+  top: 20px;
+  right: 20px;
+  border-radius: 10px;
+}
+
+.settings-dialog .settings-tabs {
+  display: grid;
+  grid-template-columns: 136px minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+  gap: 12px;
+  min-height: 0;
+}
+
+.settings-dialog .settings-nav.settings-nav {
+  grid-area: 1 / 1;
+  align-self: start;
+  align-items: stretch;
+  justify-content: start;
+  width: 100%;
+  height: auto;
+  gap: 4px;
+  padding: 8px 2px;
+  border-radius: 14px;
+  background: transparent;
+}
+
+.settings-dialog .settings-nav [data-slot="tabs-trigger"] {
+  flex: none;
+  justify-content: start;
+  min-height: 42px;
+  height: auto;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--ink-muted);
+}
+
+.settings-dialog .settings-nav [data-slot="tabs-trigger"][data-active] {
+  color: var(--ink);
+}
+
+.settings-dialog .settings-nav [data-slot="tabs-indicator"] {
+  border: 0;
+  border-radius: 12px;
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+  transition-property: top, height, left, width;
+}
+
+.settings-dialog .settings-panel {
+  grid-area: 1 / 2;
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  padding: 28px 32px;
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  background: var(--surface);
+  color: var(--ink);
+  line-height: 1.6;
+  scrollbar-gutter: stable;
+}
+
+.settings-dialog .settings-title,
+.settings-dialog .settings-panel [aria-label="快捷键设置"] > h2 {
+  margin: 0 0 24px;
+  color: var(--ink);
+  font-size: 20px;
+  font-weight: 500;
+  line-height: 1.4;
+}
+
+.settings-dialog .settings-panel h3 {
+  line-height: 1.6;
+}
+
+.settings-dialog .settings-panel .text-xs {
+  font-size: 12px;
+  line-height: 1.75;
+}
+
+.settings-dialog .settings-panel input:not([type="color"]),
+.settings-dialog .settings-panel [data-slot="select-trigger"] {
+  min-height: 38px;
+  max-width: 100%;
+  border-radius: 10px;
+  background: var(--app-bg);
+  font-size: 13px;
+}
+
+.settings-dialog .settings-panel textarea {
+  min-height: 146px;
+  padding: 12px;
+  border-radius: 12px;
+  background: var(--app-bg);
+  font-size: 14px;
+  line-height: 1.8;
+}
+
+.settings-dialog .settings-panel [data-slot="button"] {
+  min-height: 36px;
+  border-radius: 10px;
+}
+
+.settings-dialog .settings-panel [role="checkbox"] {
+  margin-top: 3px;
+  border-radius: 5px;
+}
+
+.settings-dialog .settings-panel [role="checkbox"][data-checked] {
+  border-color: var(--ui-accent);
+  background: var(--ui-accent);
+  color: var(--surface);
+}
+
+.settings-dialog .settings-appearance.settings-appearance {
+  width: 100%;
+  max-width: 460px;
+  height: 46px;
+  padding: 4px;
+  border-radius: 14px;
+}
+
+.settings-dialog .settings-appearance [role="tab"] {
+  min-width: 0;
+  min-height: 36px;
+  padding-inline: 8px;
+  border-radius: 10px;
+  font-size: 13px;
+}
+
+.settings-dialog .settings-appearance [data-slot="tabs-indicator"] {
+  border-radius: 10px;
+}
+
+.settings-dialog .ai-settings {
+  min-width: 0;
+}
+
+.settings-dialog .ai-settings-tabs {
+  gap: 24px;
+}
+
+.settings-dialog .ai-settings-nav.ai-settings-nav {
+  height: 42px;
+  padding: 4px;
+  border-radius: 12px;
+}
+
+.settings-dialog .ai-settings-nav [role="tab"] {
+  min-height: 32px;
+  padding-inline: 16px;
+  border-radius: 9px;
+  font-size: 13px;
+}
+
+.settings-dialog .ai-settings-nav [data-slot="tabs-indicator"] {
+  border-radius: 9px;
+}
+
+.settings-dialog .ai-settings-section {
+  flex: none;
+}
+
+.settings-dialog .ai-connection-form {
+  display: grid;
+  gap: 8px;
+}
+
+.settings-dialog .ai-connection-form > * {
+  margin-block: 0;
+}
+
+.settings-dialog .ai-connection-form > .settings-field-label {
+  margin-top: 12px;
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.settings-dialog .ai-connection-form > .settings-field-label:first-child {
+  margin-top: 0;
+}
+
+.settings-dialog .ai-connection-form > .flex:last-child {
+  margin-top: 12px;
+}
+
+.settings-dialog .ai-connection-form [type="submit"] {
+  border-color: var(--ui-accent);
+  background: var(--ui-accent);
+  color: var(--background);
+}
+
+.settings-dialog .ai-model-settings .task-model-setting {
+  margin-top: 0;
+  padding-block: 16px;
+}
+
+.settings-dialog .ai-model-settings .task-model-setting + .task-model-setting {
+  border-top: 1px solid var(--line);
+}
+
+.settings-dialog .ai-model-settings .task-model-controls {
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr) 108px auto;
+  gap: 8px;
+}
+
+.settings-dialog .ai-model-settings .task-model-controls > * {
+  width: auto;
+  min-width: 0;
+}
+
+.settings-dialog .ai-model-settings [role="status"],
+.settings-dialog .ai-model-settings [role="alert"] {
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 760px) {
+  .settings-dialog.settings-dialog {
+    width: calc(100vw - 20px);
+    max-width: calc(100vw - 20px);
+    height: calc(100dvh - 24px);
+    padding: 8px;
+    border-radius: 20px;
+  }
+
+  .settings-dialog .settings-tabs {
+    grid-template-columns: 104px minmax(0, 1fr);
+    gap: 8px;
+  }
+
+  .settings-dialog .settings-nav [data-slot="tabs-trigger"] {
+    gap: 7px;
+    padding: 10px 8px;
+  }
+
+  .settings-dialog .settings-panel {
+    padding: 22px 20px;
+    border-radius: 16px;
+  }
+
+  .settings-dialog .ai-model-settings .task-model-controls {
+    grid-template-columns: minmax(0, 1fr) 96px;
+  }
+
+  .settings-dialog .ai-model-settings .task-model-controls > label,
+  .settings-dialog
+    .ai-model-settings
+    .task-model-controls
+    > [data-slot="select-trigger"]:first-of-type {
+    grid-column: 1 / -1;
+  }
+
+  .settings-dialog .highlight-color-row {
+    flex-wrap: wrap;
+  }
+}
+
+@media (max-width: 480px) {
+  .settings-dialog .settings-tabs {
+    grid-template-columns: 76px minmax(0, 1fr);
+    gap: 6px;
+  }
+
+  .settings-dialog .settings-nav [data-slot="tabs-trigger"] {
+    justify-content: center;
+    gap: 0;
+    padding-inline: 4px;
+  }
+
+  .settings-dialog .settings-nav [data-slot="tabs-trigger"] > svg {
+    display: none;
+  }
+
+  .settings-dialog .settings-panel {
+    padding: 20px 14px;
+  }
+
+  .settings-dialog .ai-settings-nav [role="tab"] {
+    padding-inline: 8px;
+  }
+
+  .settings-dialog .settings-appearance [role="tab"] {
+    padding-inline: 4px;
+    font-size: 12px;
+  }
+
+  .settings-dialog .settings-panel .flex:has(> input[type="password"]),
+  .settings-dialog
+    .settings-panel
+    .flex:has(> [aria-labelledby="journal-rank-filter-label"]) {
+    flex-wrap: wrap;
+  }
+
+  .settings-dialog .settings-panel .grid-cols-2 {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (pointer: coarse) {
+  .settings-dialog .settings-panel [data-slot="button"],
+  .settings-dialog .settings-nav [data-slot="tabs-trigger"],
+  .settings-dialog .settings-panel [data-slot="select-trigger"] {
+    min-height: 44px;
+  }
+}
