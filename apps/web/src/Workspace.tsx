@@ -68,12 +68,8 @@ import { Button } from "@interleaf/ui/components/button";
 import { Badge } from "@interleaf/ui/components/badge";
 import { Input } from "@interleaf/ui/components/input";
 import { Textarea } from "@interleaf/ui/components/textarea";
-import {
-  Tabs,
-  TabsList,
-  TabsTrigger,
-  TabsContent,
-} from "@interleaf/ui/components/tabs";
+import { SlidingTabsList } from "./controls/SlidingTabsList";
+import { Tabs, TabsTrigger, TabsContent } from "@interleaf/ui/components/tabs";
 import { ScrollArea } from "@interleaf/ui/components/scroll-area";
 import {
   DropdownMenu,
@@ -1154,9 +1150,6 @@ export function Workspace({
           </span>
           <Badge variant="secondary">{doc.type.toUpperCase()}</Badge>
         </div>
-        <div className="interleaf-toolbar-center">
-          <div ref={setReadingToolbar} />
-        </div>
         <div className="toolbar-actions">
           {returnLocation && (
             <Button
@@ -1209,12 +1202,12 @@ export function Workspace({
                     });
                   }}
                 >
-                  <TabsList className="w-full" aria-label="阅读配色">
+                  <SlidingTabsList className="w-full" aria-label="阅读配色">
                     <TabsTrigger value="light">浅色</TabsTrigger>
                     <TabsTrigger value="dark">深色</TabsTrigger>
                     <TabsTrigger value="sepia">纸张</TabsTrigger>
                     <TabsTrigger value="gray">灰色</TabsTrigger>
-                  </TabsList>
+                  </SlidingTabsList>
                 </Tabs>
               </div>
               <div className="appearance-section">
@@ -1499,7 +1492,7 @@ export function Workspace({
               className="h-full gap-0"
             >
               <div className="panel-header">
-                <TabsList className="panel-tabs">
+                <SlidingTabsList className="panel-tabs" aria-label="阅读导航">
                   <TabsTrigger value="toc">
                     <ListTree className="size-3.5" />
                     目录
@@ -1508,7 +1501,7 @@ export function Workspace({
                     <Search className="size-3.5" />
                     搜索
                   </TabsTrigger>
-                </TabsList>
+                </SlidingTabsList>
               </div>
               <TabsContent value="toc" className="min-h-0 flex-1">
                 <ScrollArea className="h-full">
@@ -1588,6 +1581,7 @@ export function Workspace({
         />
         <ResizablePanel id="reading" minSize="30%">
           <div className="reading-pane" ref={readingPane}>
+            <div className="reading-toolbar-host" ref={setReadingToolbar} />
             {(() => {
               const ReadingView =
                 doc.type === "pdf" ? PDFReadingView : EPUBReadingView;
@@ -1746,7 +1740,7 @@ export function Workspace({
               className="h-full gap-0"
             >
               <div className="panel-header">
-                <TabsList className="panel-tabs">
+                <SlidingTabsList className="panel-tabs" aria-label="阅读侧栏">
                   <TabsTrigger value="ai">
                     <ChatCircleDots className="size-3.5" />
                     对话
@@ -1755,7 +1749,7 @@ export function Workspace({
                     <StickyNote className="size-3.5" />
                     批注<small>{annotations.length || ""}</small>
                   </TabsTrigger>
-                </TabsList>
+                </SlidingTabsList>
                 <div className="panel-header-actions">
                   <Button
                     variant="ghost"
@@ -1951,6 +1945,7 @@ export function Workspace({
                   {!!images.length && imageAttachments(images, true)}
                   <Textarea
                     ref={composeInput}
+                    rows={2}
                     aria-label="向 AI 提问"
                     placeholder="问一个问题，或引用选中的文字…"
                     value={prompt}

@@ -17,7 +17,8 @@ import type {
   Processing,
 } from "@interleaf/core";
 import { api, publicationURL } from "@interleaf/api";
-import { Tabs, TabsList, TabsTrigger } from "@interleaf/ui/components/tabs";
+import { Tabs, TabsTrigger } from "@interleaf/ui/components/tabs";
+import { SlidingTabsList } from "../controls/SlidingTabsList";
 import { Button } from "@interleaf/ui/components/button";
 import { toast } from "sonner";
 import { InterleafView } from "../InterleafView";
@@ -334,11 +335,11 @@ export function EPUBReadingView({
         epubChapter={() => position.current}
       />
       <Tabs value={mode} onValueChange={(value) => changeMode(value as Mode)}>
-        <TabsList>
+        <SlidingTabsList aria-label="阅读模式">
           <TabsTrigger value="source">原文</TabsTrigger>
           <TabsTrigger value="parallel">对照</TabsTrigger>
           <TabsTrigger value="translation">译文</TabsTrigger>
-        </TabsList>
+        </SlidingTabsList>
       </Tabs>
     </div>
   );

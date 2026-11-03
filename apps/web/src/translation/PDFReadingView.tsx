@@ -28,7 +28,8 @@ import type {
 import { defaultTheme, isPDFPageDecoration } from "@interleaf/core";
 import { api } from "@interleaf/api";
 import { Button } from "@interleaf/ui/components/button";
-import { Tabs, TabsList, TabsTrigger } from "@interleaf/ui/components/tabs";
+import { Tabs, TabsTrigger } from "@interleaf/ui/components/tabs";
+import { SlidingTabsList } from "../controls/SlidingTabsList";
 import {
   Tooltip,
   TooltipContent,
@@ -861,11 +862,11 @@ export function PDFReadingView({
         }}
       />
       <Tabs value={mode} onValueChange={(v) => changeMode(v as Mode)}>
-        <TabsList>
+        <SlidingTabsList aria-label="阅读模式">
           <TabsTrigger value="source">原页</TabsTrigger>
           <TabsTrigger value="parallel">对照</TabsTrigger>
           <TabsTrigger value="translation">译文</TabsTrigger>
-        </TabsList>
+        </SlidingTabsList>
       </Tabs>
     </div>
   );

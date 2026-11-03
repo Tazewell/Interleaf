@@ -162,7 +162,7 @@ export function AssistantPanel({
                   />
                 )}
                 {assistant ? (
-                  message ? (
+                  !content ? null : message ? (
                     renderAnswer(message, markdown)
                   ) : (
                     markdown
