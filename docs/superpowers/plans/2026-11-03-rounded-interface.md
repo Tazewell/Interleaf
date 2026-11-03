@@ -1,6 +1,6 @@
 # Rounded Interface Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** Implement the approved library, reader, import and settings sketches using existing real app flows.
 
@@ -32,10 +32,10 @@
 
 **Interfaces:** `SlidingTabsList` accepts the same props as `TabsList` and is used inside existing `Tabs` with ordinary `TabsTrigger` children. It commits by activating the target native tab only at pointer release; click and keyboard stay owned by Base UI. CSS class `sliding-tabs-list` is shared by all consumers.
 
-- [ ] Write RED regressions for drag release/cancel/disabled targets/external selection; implement wrapper and prove GREEN.
-- [ ] Replace top library mode buttons with controlled Tabs using the wrapper and existing switchMode callback; adapt meaningful existing app navigation tests.
-- [ ] Apply shared semantic colors, rounded library surfaces and detail overview/info tabs without removing actions/fields.
-- [ ] Run focused tests/typecheck; inspect and commit scoped changes.
+- [x] Write RED regressions for drag release/cancel/disabled targets/external selection; implement wrapper and prove GREEN.
+- [x] Replace top library mode buttons with controlled Tabs using the wrapper and existing switchMode callback; adapt meaningful existing app navigation tests.
+- [x] Apply shared semantic colors, rounded library surfaces and detail overview/info tabs without removing actions/fields.
+- [x] Run focused tests/typecheck; inspect and commit scoped changes.
 
 ### Task 2: Reading toolbar and conversation (reader agent)
 
@@ -43,10 +43,10 @@
 
 **Interfaces:** consume `SlidingTabsList` from `../controls/SlidingTabsList` in translation modules (adjust relative paths elsewhere); do not change the wrapper or shared CSS/global library files.
 
-- [ ] Retain adapter/translation/session lifecycles; use the shared sliding list for embedded mode controls and appropriate panel tabs.
-- [ ] Refine chat hierarchy, real pending states, quote/image cards and compact composer to the approved sketch; no fabricated progress.
-- [ ] Add a behavioral regression only when presentation changes alter pending-state or reference behavior; run reader/chat/composer tests.
-- [ ] Report exact files, verification and limitations; leave changes uncommitted for root integration.
+- [x] Retain adapter/translation/session lifecycles; use the shared sliding list for embedded mode controls and appropriate panel tabs.
+- [x] Refine chat hierarchy, real pending states, quote/image cards and compact composer to the approved sketch; no fabricated progress.
+- [x] Add a behavioral regression only when presentation changes alter pending-state or reference behavior; run reader/chat/composer tests.
+- [x] Report exact files, verification and limitations; leave changes uncommitted for root integration.
 
 ### Task 3: Settings surfaces (settings agent)
 
@@ -54,10 +54,10 @@
 
 **Interfaces:** consume shared `SlidingTabsList` from `./controls/SlidingTabsList` or `../controls/SlidingTabsList`. Root imports CSS. Preserve all six categories and real config save/probe/catalog flows; reorganize AI connection/models/translation prompt as real sub-tabs.
 
-- [ ] Update Base UI navigation/layout and appearance controls to the approved rounded design.
-- [ ] Group AI content without replacing real fields, API key persistence rules, models or tests with mock data.
-- [ ] Test tab switching retains drafts, provider/catalog guards still work, and current settings tests pass.
-- [ ] Report changes and tests; no commit or other owner's files.
+- [x] Update Base UI navigation/layout and appearance controls to the approved rounded design.
+- [x] Group AI content without replacing real fields, API key persistence rules, models or tests with mock data.
+- [x] Test tab switching retains drafts, provider/catalog guards still work, and current settings tests pass.
+- [x] Report changes and tests; no commit or other owner's files.
 
 ### Task 4: Import surfaces (import agent)
 
@@ -65,15 +65,23 @@
 
 **Interfaces:** consume shared `SlidingTabsList`; retain `ImportPaperDialog {open,onOpenChange,onChooseFiles(folder)}` public props. Reuse true BibTeX content in an embedded form or controlled child dialog, preserving standalone import support and all confirmations. Do not modify App/global styles.
 
-- [ ] Use four meaningful entry tabs and existing classified reference/native-file/migration/BibTeX flows.
-- [ ] Preserve busy/close/error/merge-confirmation boundaries; no fake queue or progress, no new import API.
-- [ ] Add regressions for tab/input retention and classification/embedded BibTeX as appropriate; run import suites.
-- [ ] Report files and checks; leave scoped changes uncommitted.
+- [x] Use four meaningful entry tabs and existing classified reference/native-file/migration/BibTeX flows.
+- [x] Preserve busy/close/error/merge-confirmation boundaries; no fake queue or progress, no new import API.
+- [x] Add regressions for tab/input retention and classification/embedded BibTeX as appropriate; run import suites.
+- [x] Report files and checks; leave scoped changes uncommitted.
 
 ### Task 5: Integration, review and preview (root)
 
-- [ ] Review each feature diff against the approved spec; resolve material interaction issues with regressions.
-- [ ] Wire all styles, run `pnpm typecheck`, `pnpm test`, `pnpm build` against the exact tree in the configured environment.
-- [ ] Perform fresh-context final review; keep existing users' data/config untouched.
-- [ ] Update owned preview, verify assets and readiness without paid model calls or browser automation.
-- [ ] Commit coherent changes as Tazewell, ensure clean dev/main unchanged, report preview and manual verification steps.
+- [x] Review each feature diff against the approved spec; resolve material interaction issues with regressions.
+- [x] Wire all styles, run `pnpm typecheck`, `pnpm test`, `pnpm build` against the exact tree in the configured environment.
+- [x] Perform fresh-context final review; keep existing users' data/config untouched.
+- [x] Update owned preview, verify assets and readiness without paid model calls or browser automation.
+- [x] Commit coherent changes as Tazewell, ensure clean dev/main unchanged, report preview and manual verification steps.
+
+## Verification record — 2026-11-03
+
+- Independent review found nested tab orientation leakage and pointer-click focus handoff; both were fixed. Release/focus regressions were observed failing before the fix and passed afterward, including focus-activated tabs without duplicate selection.
+- Final `pnpm typecheck`, `pnpm test --maxWorkers=4`, and `pnpm build` passed against an exact copy of the final 893 source files in the existing WSL verification environment. Go packages passed; Vitest reported 184 files passed, 3 skipped, with 1,338 tests passed and 5 skipped.
+- Updated the owned loopback preview using verified web assets. HTTP readiness confirmed the new entry assets and the generated own-orientation horizontal segment rule; no user library or API configuration was changed.
+- Browser visual acceptance was not automated, following AGENTS.md. The user can check the library/detail tabs, drag and keyboard mode switching, import draft retention and settings in light/dark/sepia appearances. Native touch feel, macOS chrome and display scaling still require manual inspection on the corresponding devices.
+- Implementation remains on `dev`; no merge, push or release was performed.
