@@ -958,9 +958,8 @@ export function Workspace({
         attachments.length > 0,
       );
       const { context } = captured;
-      if (controller.signal.aborted) return;
-      setPrompt("");
-      await session.send({
+      if (controller.signal.aborted || session.getSnapshot().busy) return;
+      const response = session.send({
         provider,
         prompt: question,
         context,
@@ -968,13 +967,11 @@ export function Workspace({
         readingLocation: captured.readingLocation,
         attachments,
       });
-      if (serial !== sendSerial.current) return;
-      const answer = session.getSnapshot().pending;
-      if (
-        ["saved", "syncing"].includes(
-          session.getSnapshot().pending?.phase || "",
-        )
-      ) {
+      // The session owns its captured input as soon as generation starts.
+      // Leave the composer ready for the next question independently of how
+      // long the answer takes or whether its completion can be confirmed.
+      if (session.getSnapshot().busy) {
+        setPrompt((current) => (current === question ? "" : current));
         setQuotes((current) =>
           current.filter((quote) => !selected.includes(quote)),
         );
@@ -982,6 +979,9 @@ export function Workspace({
           current.filter((image) => !attachments.includes(image)),
         );
       }
+      await response;
+      if (serial !== sendSerial.current) return;
+      const answer = session.getSnapshot().pending;
       return answer?.phase === "saved" ? answer.savedId : undefined;
     } catch (e) {
       if (serial === sendSerial.current && (e as Error).name !== "AbortError")

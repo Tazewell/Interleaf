@@ -39,7 +39,10 @@ vi.mock("./progress", () => ({
 }));
 vi.mock("./chat/session-registry", () => ({ getChatSession: () => session }));
 vi.mock("./ModelSelector", () => ({ ModelSelector: () => null }));
-vi.mock("./chat/AssistantPanel", () => ({ AssistantPanel: () => null }));
+vi.mock("./chat/AssistantPanel", () => ({
+  AssistantPanel: ({ empty }: { empty: ReactNode }) =>
+    showChatEmpty ? empty : null,
+}));
 vi.mock("./NotesPanel", () => ({ NotesPanel: () => <p>批注列表</p> }));
 vi.mock("./DocumentOverview", () => ({ DocumentOverviewDialog: () => null }));
 vi.mock("./ProcessingUsage", () => ({ ProcessingUsageDialog: () => null }));
@@ -117,6 +120,7 @@ let history: Message[];
 let requests: ChatInput[];
 let finishAnswer: (() => void) | undefined;
 let deferAnswer: boolean;
+let showChatEmpty: boolean;
 let restoreAnimations: () => void;
 const input = () =>
   host.querySelector<HTMLTextAreaElement>('textarea[aria-label="向 AI 提问"]')!;
@@ -170,6 +174,7 @@ beforeEach(async () => {
   history = [];
   requests = [];
   deferAnswer = false;
+  showChatEmpty = false;
   finishAnswer = undefined;
   session = new ChatSession(
     doc.id,
@@ -342,8 +347,9 @@ it("preserves new references and a follow-up draft when an earlier answer finish
   await click("引用图片到 AI 对话");
   await click("发送问题");
   expect(requests).toHaveLength(1);
+  expect(host.querySelector(".chat-compose .image-attachment")).toBeNull();
+  expect(host.querySelector(".quote-chips")).toBeNull();
   await type("Follow-up question");
-  await click("移除附件：第 3 页 · 图表");
   await click("引用图片到 AI 对话");
   await act(async () =>
     readerEvents.blockAction!(
@@ -368,4 +374,81 @@ it("preserves new references and a follow-up draft when an earlier answer finish
   expect(host.querySelectorAll(".chat-compose .image-attachment")).toHaveLength(
     1,
   );
+});
+
+it("clears only the submitted references as soon as the answer starts", async () => {
+  deferAnswer = true;
+  await type("Explain this figure");
+  await click("引用此段到 AI 对话");
+  await click("引用图片到 AI 对话");
+  await click("发送问题");
+  expect(session.getSnapshot().busy).toBe(true);
+  expect(requests).toHaveLength(1);
+  expect(requests[0].attachments).toMatchObject([{ id: "figure" }]);
+  expect(requests[0].references).toHaveLength(1);
+  expect(input().value).toBe("");
+  expect(host.querySelector(".chat-compose .image-attachment")).toBeNull();
+  expect(host.querySelector(".quote-chips")).toBeNull();
+});
+
+it("keeps the draft and references when preparation rejects the question before sending", async () => {
+  await act(async () =>
+    readerEvents.selection({
+      text: "x".repeat(256001),
+      location: { type: "pdf", page: 2 },
+      anchor: { x: 120, top: 100, bottom: 120 },
+    }),
+  );
+  await click("引用到 AI 对话");
+  await click("引用图片到 AI 对话");
+  await type("Keep this question");
+  await click("发送问题");
+  expect(requests).toHaveLength(0);
+  expect(input().value).toBe("Keep this question");
+  expect(host.querySelector(".chat-compose .image-attachment")).not.toBeNull();
+  expect(host.querySelector(".quote-chips")).not.toBeNull();
+});
+
+it("keeps references when another run starts while page context is being prepared", async () => {
+  showChatEmpty = true;
+  await type("My next question");
+  await click("引用图片到 AI 对话");
+  let finishContext!: (context: string) => void;
+  const context = vi.spyOn(adapter, "getContext").mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        finishContext = resolve;
+      }),
+  );
+  try {
+    await act(async () =>
+      [...host.querySelectorAll<HTMLButtonElement>("button")]
+        .find((item) => item.textContent?.includes("总结当前页面"))!
+        .click(),
+    );
+    deferAnswer = true;
+    let running!: Promise<void>;
+    await act(async () => {
+      running = session.send({
+        provider: "api",
+        prompt: "Restored running question",
+        context: "",
+        references: [],
+        attachments: [],
+      });
+    });
+    await act(async () => finishContext("Page context"));
+    expect(requests).toHaveLength(1);
+    expect(requests[0].prompt).toBe("Restored running question");
+    expect(input().value).toBe("My next question");
+    expect(
+      host.querySelector(".chat-compose .image-attachment"),
+    ).not.toBeNull();
+    await act(async () => {
+      finishAnswer!();
+      await running;
+    });
+  } finally {
+    context.mockRestore();
+  }
 });
