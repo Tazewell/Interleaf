@@ -86,6 +86,14 @@
   background: transparent;
   color: var(--ink);
 }
+/* Nested vertical settings tabs must not change a horizontal segment's layout. */
+.sliding-tabs-list[data-orientation="horizontal"] {
+  flex-direction: row;
+}
+.sliding-tabs-list[data-orientation="horizontal"] > [role="tab"] {
+  width: auto;
+  justify-content: center;
+}
 .sliding-tabs-list > [data-slot="tabs-indicator"] {
   border: 1px solid color-mix(in srgb, var(--line) 65%, transparent);
   border-radius: 8px;

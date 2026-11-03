@@ -7,6 +7,7 @@ type Drag = {
   x: number;
   y: number;
   active: HTMLElement;
+  pressed?: HTMLElement | null;
   bounds: DOMRect;
   moved: boolean;
   cancelled?: boolean;
@@ -18,6 +19,7 @@ export function SlidingTabsList({
   className,
   onPointerDownCapture,
   onClickCapture,
+  activateOnFocus,
   ...props
 }: ComponentProps<typeof TabsList>) {
   const element = useRef<HTMLDivElement | null>(null);
@@ -93,9 +95,8 @@ export function SlidingTabsList({
     const end = (event: PointerEvent) => {
       const state = drag.current;
       if (!state || event.pointerId !== state.id) return;
-      const commit =
+      const released =
         !state.cancelled &&
-        state.moved &&
         event.type === "pointerup" &&
         valid(state) &&
         event.clientX >= state.bounds.left &&
@@ -104,7 +105,29 @@ export function SlidingTabsList({
         event.clientY <= state.bounds.bottom;
       if (state.cancelled || state.moved || !valid(state)) suppressClick();
       clear();
-      if (!commit) return;
+      const enabled = (tab: HTMLElement) =>
+        !tab.hasAttribute("disabled") &&
+        tab.getAttribute("aria-disabled") !== "true";
+      const focus = (tab: HTMLElement) => {
+        const activates =
+          activateOnFocus && list.ownerDocument.activeElement !== tab;
+        tab.focus({ preventScroll: true });
+        return activates;
+      };
+      if (!released) return;
+      if (!state.moved) {
+        const target = (event.target as Element).closest<HTMLElement>(
+          '[role="tab"]',
+        );
+        if (
+          target &&
+          target === state.pressed &&
+          enabled(target) &&
+          focus(target)
+        )
+          suppressClick();
+        return;
+      }
       const target = tabs().reduce<HTMLElement | undefined>((best, tab) => {
         const distance = (item: HTMLElement) => {
           const rect = item.getBoundingClientRect();
@@ -112,15 +135,10 @@ export function SlidingTabsList({
         };
         return !best || distance(tab) < distance(best) ? tab : best;
       }, undefined);
-      if (
-        target &&
-        !target.hasAttribute("disabled") &&
-        target.getAttribute("aria-disabled") !== "true"
-      ) {
+      if (target && enabled(target)) {
         // The release-generated click is blocked; this explicit click uses the normal Base UI path.
         blockClick.current = false;
-        target.click();
-        target.focus({ preventScroll: true });
+        if (!focus(target)) target.click();
         suppressClick();
       }
     };
@@ -162,11 +180,12 @@ export function SlidingTabsList({
       window.removeEventListener("blur", cancel);
       window.removeEventListener("resize", cancel);
     };
-  }, []);
+  }, [activateOnFocus]);
 
   return (
     <TabsList
       {...props}
+      activateOnFocus={activateOnFocus}
       ref={setRef}
       className={cn("sliding-tabs-list", className)}
       onPointerDownCapture={(event) => {
@@ -197,6 +216,7 @@ export function SlidingTabsList({
           x: event.clientX,
           y: event.clientY,
           active,
+          pressed: target,
           bounds: list.getBoundingClientRect(),
           moved: false,
         };

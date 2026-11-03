@@ -8,17 +8,17 @@ import { SlidingTabsList } from "./SlidingTabsList";
 let host: HTMLDivElement, root: Root, selected: string[], value: string;
 let bounds: ReturnType<typeof vi.spyOn>;
 const labels = ["original", "parallel", "translation"];
-const draw = (next = value, disabled = false) => {
+const draw = (next = value, disabled = false, activateOnFocus = false) => {
   value = next;
   root.render(
     <Tabs
       value={value}
       onValueChange={(next) => {
         selected.push(String(next));
-        draw(String(next), disabled);
+        draw(String(next), disabled, activateOnFocus);
       }}
     >
-      <SlidingTabsList aria-label="模式">
+      <SlidingTabsList aria-label="模式" activateOnFocus={activateOnFocus}>
         {labels.map((label) => (
           <TabsTrigger
             key={label}
@@ -35,19 +35,26 @@ const draw = (next = value, disabled = false) => {
 const tab = (index: number) =>
   host.querySelectorAll<HTMLButtonElement>('[role="tab"]')[index];
 const list = () => host.querySelector<HTMLElement>('[role="tablist"]')!;
-async function pointer(type: string, x: number) {
+async function pointer(
+  type: string,
+  x: number,
+  target = list(),
+  releaseClick?: HTMLElement,
+) {
   await act(async () => {
     const event = new MouseEvent(type, {
       bubbles: true,
       clientX: x,
       clientY: 15,
       button: 0,
+      cancelable: true,
     });
     Object.defineProperties(event, {
       pointerId: { value: 1 },
       isPrimary: { value: true },
     });
-    list().dispatchEvent(event);
+    target.dispatchEvent(event);
+    releaseClick?.click();
   });
 }
 beforeEach(async () => {
@@ -134,8 +141,7 @@ it.each(["resize", "blur"])(
     await pointer("pointerdown", 40);
     await pointer("pointermove", 180);
     await act(async () => window.dispatchEvent(new Event(event)));
-    await pointer("pointerup", 180);
-    await act(async () => tab(2).click());
+    await pointer("pointerup", 180, list(), tab(2));
     expect(selected).toEqual([]);
   },
 );
@@ -169,4 +175,34 @@ it("retains ordinary clicks and keyboard navigation", async () => {
   // Base UI uses manual activation by default; Enter generates a click in a browser.
   await act(async () => tab(2).click());
   expect(tab(2).getAttribute("aria-selected")).toBe("true");
+});
+it.each([false, true])(
+  "hands focus to a clicked tab only after release (activateOnFocus=%s)",
+  async (automatic) => {
+    await act(async () => {
+      draw("original", false, automatic);
+    });
+    await act(async () => tab(0).focus());
+    await pointer("pointerdown", 110, tab(1));
+    expect(document.activeElement).toBe(tab(0));
+    expect(selected).toEqual([]);
+    await pointer("pointerup", 110, tab(1));
+    expect(document.activeElement).toBe(tab(1));
+    await act(async () => tab(1).click());
+    expect(selected).toEqual(["parallel"]);
+    await act(async () =>
+      document.activeElement!.dispatchEvent(
+        new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }),
+      ),
+    );
+    expect(document.activeElement).toBe(tab(2));
+  },
+);
+it("activates a drag destination once when focus also activates tabs", async () => {
+  await act(async () => draw("original", false, true));
+  await pointer("pointerdown", 40, tab(0));
+  await pointer("pointermove", 180, tab(0));
+  await pointer("pointerup", 180, tab(0), tab(0));
+  expect(selected).toEqual(["translation"]);
+  expect(document.activeElement).toBe(tab(2));
 });
