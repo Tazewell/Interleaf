@@ -30,6 +30,8 @@ import {
 } from "./LargePaperDialog";
 import type { Document, LibraryMode } from "@interleaf/core";
 import { Button } from "@interleaf/ui/components/button";
+import { Tabs, TabsTrigger } from "@interleaf/ui/components/tabs";
+import { SlidingTabsList } from "./controls/SlidingTabsList";
 import { Input } from "@interleaf/ui/components/input";
 import { TooltipProvider } from "@interleaf/ui/components/tooltip";
 import {
@@ -517,20 +519,23 @@ export function App() {
                 >
                   <PanelLeft />
                 </Button>
-                <nav className="gnav-modes" aria-label="切换书库">
-                  {(["papers", "books"] as const).map((item) => (
-                    <Button
-                      key={item}
-                      variant="ghost"
-                      className="gnav-mode"
-                      data-active={mode === item || undefined}
-                      aria-pressed={mode === item}
-                      onClick={() => switchMode(item)}
-                    >
-                      {libraryModes[item].label}
-                    </Button>
-                  ))}
-                </nav>
+                <Tabs
+                  className="gnav-modes"
+                  value={mode}
+                  onValueChange={(value) => switchMode(value as LibraryMode)}
+                >
+                  <SlidingTabsList aria-label="切换书库">
+                    {(["papers", "books"] as const).map((item) => (
+                      <TabsTrigger
+                        key={item}
+                        value={item}
+                        className="gnav-mode"
+                      >
+                        {libraryModes[item].label}
+                      </TabsTrigger>
+                    ))}
+                  </SlidingTabsList>
+                </Tabs>
               </div>
               <button
                 type="button"

@@ -7,6 +7,7 @@ import { installCloseFlush } from "./close-flush";
 import { AppCrash, ErrorBoundary } from "./ErrorBoundary";
 import "@fontsource-variable/inter/wght.css";
 import "./style.css";
+import "./rounded-interface.css";
 import { installDiagnostics } from "./diagnostics";
 import { installScrollbars } from "./scrollbars";
 import { migrateLegacyStorage } from "./legacy-storage";

@@ -163,6 +163,7 @@ it("opens topic research from the selected folder without opening a document", a
 
 it("shows details on click and saves an edited field as manual metadata", async () => {
   await act(async () => row("Attention Is All You Need").click());
+  await act(async () => button("信息").click());
   const detail = host.querySelector(".paper-detail")!;
   const venue = detail.querySelector<HTMLInputElement>('[aria-label="出处"]')!;
   expect(venue.value).toBe("NeurIPS");
@@ -174,6 +175,27 @@ it("shows details on click and saves an edited field as manual metadata", async 
   expect(api.update).toHaveBeenCalledExactlyOnceWith("a", {
     metadata: { venue: "NIPS 2017" },
   });
+});
+
+it("keeps detail fields and actions available across overview and information tabs", async () => {
+  await act(async () => row("Attention Is All You Need").click());
+  const detail = host.querySelector(".paper-detail")!;
+  const overview = detail.querySelector<HTMLElement>(
+    '[role="tabpanel"]:not([hidden])',
+  )!;
+  expect(overview.textContent).toContain("摘要");
+  expect(overview.textContent).toContain("分类");
+  await act(async () => button("信息").click());
+  expect(overview.hidden).toBe(true);
+  const field = detail.querySelector<HTMLInputElement>('[aria-label="出处"]')!;
+  field.value = "Draft venue";
+  await act(async () => button("概览").click());
+  await act(async () => button("信息").click());
+  expect(detail.querySelector('[aria-label="出处"]')).toBe(field);
+  expect(field.value).toBe("Draft venue");
+  expect(detail.querySelector('[aria-label="加星标"]')).not.toBeNull();
+  expect(detail.querySelector(".paper-detail-open")).not.toBeNull();
+  expect(api.update).not.toHaveBeenCalled();
 });
 
 it("selects all visible papers and changes their status together", async () => {

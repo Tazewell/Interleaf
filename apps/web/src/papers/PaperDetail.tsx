@@ -29,6 +29,8 @@ import {
 } from "@interleaf/ui/components/dialog";
 import { Input } from "@interleaf/ui/components/input";
 import { Textarea } from "@interleaf/ui/components/textarea";
+import { Tabs, TabsContent, TabsTrigger } from "@interleaf/ui/components/tabs";
+import { SlidingTabsList } from "../controls/SlidingTabsList";
 import {
   Select,
   SelectContent,
@@ -247,7 +249,7 @@ export function PaperDetail({
         <div className="paper-detail-actions">
           <DropdownMenu>
             <DropdownMenuTrigger
-              render={<Button size="sm" variant="outline" />}
+              render={<Button size="sm" variant="outline" aria-label="引用" />}
             >
               <Quote />
             </DropdownMenuTrigger>
@@ -305,159 +307,185 @@ export function PaperDetail({
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
-        <PaperAttachments doc={doc} open={actions.open} />
-        <section className="paper-abstract">
-          <div className="flex items-center justify-between">
-            <h3>摘要</h3>
-            <Button
-              size="xs"
-              variant="ghost"
-              onClick={() => setEditingAbstract(!editingAbstract)}
-            >
-              {editingAbstract ? "完成" : m.abstract ? "编辑" : "添加"}
-            </Button>
-          </div>
-          {editingAbstract ? (
-            <Field doc={doc} name="abstract" multiline />
-          ) : m.abstract ? (
-            <>
-              <p data-open={abstractOpen}>{m.abstract}</p>
-              {m.abstract.length > 180 && (
+        <Tabs defaultValue="overview" className="paper-detail-tabs">
+          <SlidingTabsList aria-label="论文详情分组">
+            <TabsTrigger value="overview">概览</TabsTrigger>
+            <TabsTrigger value="information">信息</TabsTrigger>
+          </SlidingTabsList>
+          <TabsContent
+            value="overview"
+            keepMounted
+            className="paper-detail-section"
+          >
+            <PaperAttachments doc={doc} open={actions.open} />
+            <section className="paper-abstract">
+              <div className="flex items-center justify-between">
+                <h3>摘要</h3>
                 <Button
                   size="xs"
-                  variant="link"
-                  className="px-0"
-                  onClick={() => setAbstractOpen(!abstractOpen)}
+                  variant="ghost"
+                  onClick={() => setEditingAbstract(!editingAbstract)}
                 >
-                  {abstractOpen ? "收起" : "展开全文"}
+                  {editingAbstract ? "完成" : m.abstract ? "编辑" : "添加"}
                 </Button>
-              )}
-            </>
-          ) : null}
-        </section>
-        <dl className="paper-fields">
-          <dt>备注</dt>
-          <dd>
-            <Field doc={doc} name="remark" multiline />
-          </dd>
-          <dt>分类</dt>
-          <dd>
-            <FolderChips
-              doc={doc}
-              categories={categories}
-              onNew={() => actions.newCategory([doc])}
-            />
-          </dd>
-          <dt>标签</dt>
-          <dd>
-            <TagChips doc={doc} />
-          </dd>
-        </dl>
-        <div className="paper-fields-heading">
-          <h3>论文信息</h3>
-          {m.lookup === "pending" && (
-            <span className="text-xs text-muted-foreground">
-              解析后自动查找
-            </span>
-          )}
-          <Button
-            size="xs"
-            variant="ghost"
-            className="ml-auto"
-            disabled={lookingUp || doc.metadataOnly}
-            title="按 DOI、arXiv 编号或标题查找"
-            onClick={() => {
-              setLookingUp(true);
-              void lookupPaper(doc).finally(() => setLookingUp(false));
-            }}
+              </div>
+              {editingAbstract ? (
+                <Field doc={doc} name="abstract" multiline />
+              ) : m.abstract ? (
+                <>
+                  <p data-open={abstractOpen}>{m.abstract}</p>
+                  {m.abstract.length > 180 && (
+                    <Button
+                      size="xs"
+                      variant="link"
+                      className="px-0"
+                      onClick={() => setAbstractOpen(!abstractOpen)}
+                    >
+                      {abstractOpen ? "收起" : "展开全文"}
+                    </Button>
+                  )}
+                </>
+              ) : null}
+            </section>
+            <dl className="paper-fields">
+              <dt>备注</dt>
+              <dd>
+                <Field doc={doc} name="remark" multiline />
+              </dd>
+              <dt>分类</dt>
+              <dd>
+                <FolderChips
+                  doc={doc}
+                  categories={categories}
+                  onNew={() => actions.newCategory([doc])}
+                />
+              </dd>
+              <dt>标签</dt>
+              <dd>
+                <TagChips doc={doc} />
+              </dd>
+            </dl>
+            {(doc.noteCount > 0 ||
+              doc.highlightCount > 0 ||
+              doc.openQuestionCount > 0) && (
+              <p className="paper-annotation-counts">
+                {[
+                  doc.noteCount && `${doc.noteCount} 条批注`,
+                  doc.highlightCount && `${doc.highlightCount} 处划线`,
+                  doc.openQuestionCount &&
+                    `${doc.openQuestionCount} 个问题待回答`,
+                ]
+                  .filter(Boolean)
+                  .join(" · ")}
+              </p>
+            )}
+            {!doc.metadataOnly && <RelatedPapers doc={doc} />}
+          </TabsContent>
+          <TabsContent
+            value="information"
+            keepMounted
+            className="paper-detail-section"
           >
-            {lookingUp ? (
-              <LoaderCircle className="animate-spin" />
-            ) : (
-              <RefreshCw />
-            )}
-            查找论文信息
-          </Button>
-        </div>
-        <dl className="paper-fields">
-          <dt>类型</dt>
-          <dd>
-            <Select
-              value={m.itemType || ""}
-              onValueChange={(value) => {
-                if (value) void saveField(doc, "itemType", value);
-              }}
-            >
-              <SelectTrigger size="sm" aria-label="论文类型" className="w-full">
-                <SelectValue>
-                  {m.itemType ? itemTypeLabels[m.itemType] : "未设置"}
-                </SelectValue>
-              </SelectTrigger>
-              <SelectContent>
-                {(Object.keys(itemTypeLabels) as PaperItemType[]).map((key) => (
-                  <SelectItem key={key} value={key}>
-                    {itemTypeLabels[key]}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </dd>
-          <dt>作者</dt>
-          <dd>
-            <AuthorChips doc={doc} />
-          </dd>
-          <FieldRow doc={doc} name="date" />
-          <FieldRow doc={doc} name="doi" />
-          <FieldRow doc={doc} name="arxiv" />
-          <dt>链接</dt>
-          <dd className="flex items-center gap-1">
-            <Field doc={doc} name="url" />
-            {link && (
+            <div className="paper-fields-heading">
+              <h3>论文信息</h3>
+              {m.lookup === "pending" && (
+                <span className="text-xs text-muted-foreground">
+                  解析后自动查找
+                </span>
+              )}
               <Button
-                size="icon-xs"
+                size="xs"
                 variant="ghost"
-                aria-label="打开论文主页"
-                title={link}
-                onClick={() => openLink(link)}
+                className="ml-auto"
+                disabled={lookingUp || doc.metadataOnly}
+                title="按 DOI、arXiv 编号或标题查找"
+                onClick={() => {
+                  setLookingUp(true);
+                  void lookupPaper(doc).finally(() => setLookingUp(false));
+                }}
               >
-                <ExternalLink />
+                {lookingUp ? (
+                  <LoaderCircle className="animate-spin" />
+                ) : (
+                  <RefreshCw />
+                )}
+                查找论文信息
               </Button>
-            )}
-          </dd>
-          {(
-            [
-              "venue",
-              "volume",
-              "issue",
-              "pages",
-              "publisher",
-              "affiliation",
-            ] as PaperMetadataField[]
-          ).map((name) => (
-            <FieldRow key={name} doc={doc} name={name} />
-          ))}
-          <FieldRow doc={doc} name="shortTitle" />
-          <dt>添加于</dt>
-          <dd className="paper-field-static">
-            {relativeTime(doc.createdAt)}
-            {wasOpened(doc) && ` · 上次打开 ${relativeTime(doc.lastOpenedAt)}`}
-          </dd>
-        </dl>
-        {(doc.noteCount > 0 ||
-          doc.highlightCount > 0 ||
-          doc.openQuestionCount > 0) && (
-          <p className="paper-annotation-counts">
-            {[
-              doc.noteCount && `${doc.noteCount} 条批注`,
-              doc.highlightCount && `${doc.highlightCount} 处划线`,
-              doc.openQuestionCount && `${doc.openQuestionCount} 个问题待回答`,
-            ]
-              .filter(Boolean)
-              .join(" · ")}
-          </p>
-        )}
-        <PaperCitationKey doc={doc} />
-        {!doc.metadataOnly && <RelatedPapers doc={doc} />}
+            </div>
+            <dl className="paper-fields">
+              <dt>类型</dt>
+              <dd>
+                <Select
+                  value={m.itemType || ""}
+                  onValueChange={(value) => {
+                    if (value) void saveField(doc, "itemType", value);
+                  }}
+                >
+                  <SelectTrigger
+                    size="sm"
+                    aria-label="论文类型"
+                    className="w-full"
+                  >
+                    <SelectValue>
+                      {m.itemType ? itemTypeLabels[m.itemType] : "未设置"}
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectContent>
+                    {(Object.keys(itemTypeLabels) as PaperItemType[]).map(
+                      (key) => (
+                        <SelectItem key={key} value={key}>
+                          {itemTypeLabels[key]}
+                        </SelectItem>
+                      ),
+                    )}
+                  </SelectContent>
+                </Select>
+              </dd>
+              <dt>作者</dt>
+              <dd>
+                <AuthorChips doc={doc} />
+              </dd>
+              <FieldRow doc={doc} name="date" />
+              <FieldRow doc={doc} name="doi" />
+              <FieldRow doc={doc} name="arxiv" />
+              <dt>链接</dt>
+              <dd className="flex items-center gap-1">
+                <Field doc={doc} name="url" />
+                {link && (
+                  <Button
+                    size="icon-xs"
+                    variant="ghost"
+                    aria-label="打开论文主页"
+                    title={link}
+                    onClick={() => openLink(link)}
+                  >
+                    <ExternalLink />
+                  </Button>
+                )}
+              </dd>
+              {(
+                [
+                  "venue",
+                  "volume",
+                  "issue",
+                  "pages",
+                  "publisher",
+                  "affiliation",
+                ] as PaperMetadataField[]
+              ).map((name) => (
+                <FieldRow key={name} doc={doc} name={name} />
+              ))}
+              <FieldRow doc={doc} name="shortTitle" />
+              <dt>添加于</dt>
+              <dd className="paper-field-static">
+                {relativeTime(doc.createdAt)}
+                {wasOpened(doc) &&
+                  ` · 上次打开 ${relativeTime(doc.lastOpenedAt)}`}
+              </dd>
+            </dl>
+            <PaperCitationKey doc={doc} />
+          </TabsContent>
+        </Tabs>
       </div>
     </aside>
   );
