@@ -126,7 +126,7 @@ export function AssistantPanel({
                 {assistant && (
                   <div className="chat-assistant-identity">
                     <Leaf size={17} aria-hidden="true" />
-                    <span>纸间</span>
+                    <span>Interleaf</span>
                   </div>
                 )}
                 {waiting && (

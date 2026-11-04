@@ -1,4 +1,65 @@
 /* Conversation proportions from the approved embedded-toolbar reader sketch. */
+.workspace .session-manager-trigger {
+  flex: none;
+  min-height: 32px;
+  height: auto;
+  gap: 6px;
+  padding: 6px 9px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.workspace .session-manager-trigger:hover {
+  border-color: var(--line-strong);
+  background: var(--ui-wash);
+}
+
+.workspace .session-manager-trigger svg {
+  width: 16px;
+  height: 16px;
+}
+
+.chat-session-manager[data-slot="dialog-content"] {
+  width: min(480px, calc(100vw - 32px));
+  max-width: calc(100vw - 32px);
+  padding: 24px;
+  gap: 20px;
+  border-radius: 20px;
+  background: var(--ui-panel);
+}
+
+.chat-session-manager-list {
+  display: grid;
+  gap: 8px;
+  max-height: 60dvh;
+  overflow-y: auto;
+}
+
+.chat-session-manager-row {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 4px;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+}
+
+.chat-session-manager-action {
+  flex: none;
+  min-height: 32px;
+  gap: 5px;
+  padding-inline: 8px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 400;
+}
+
 .workspace .chat-messages {
   display: flex;
   flex-direction: column;

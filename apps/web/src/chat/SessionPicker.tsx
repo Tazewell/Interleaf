@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import {
   PencilSimple,
   CircleNotch,
-  DotsThree,
+  Chats,
   Trash,
   Check,
 } from "@phosphor-icons/react";
@@ -216,15 +216,16 @@ function DocumentSessionPicker({
           <PencilSimple />
         </Button>
         <Button
-          variant="ghost"
-          size="icon-xs"
-          className="session-picker-action"
+          variant="outline"
+          size="sm"
+          className="session-manager-trigger"
           title="会话管理"
           aria-label="会话管理"
           disabled={saving || !sessions.length}
           onClick={() => setManagerOpen(true)}
         >
-          <DotsThree />
+          <Chats />
+          会话管理
         </Button>
       </div>
       <Dialog
@@ -233,19 +234,19 @@ function DocumentSessionPicker({
           if (!operation.current.pending) setManagerOpen(open);
         }}
       >
-        <DialogContent className="sm:max-w-md" showCloseButton={!saving}>
+        <DialogContent
+          className="chat-session-manager sm:max-w-md"
+          showCloseButton={!saving}
+        >
           <DialogHeader>
             <DialogTitle>会话管理</DialogTitle>
             <DialogDescription>管理当前文档的对话。</DialogDescription>
           </DialogHeader>
-          <div className="max-h-[60vh] overflow-y-auto -mx-1 px-1">
+          <div className="chat-session-manager-list">
             {sessions
               .filter((item) => !removed.has(item.id))
               .map((item) => (
-                <div
-                  key={item.id}
-                  className="flex items-center gap-1 border-b py-2 last:border-0"
-                >
+                <div key={item.id} className="chat-session-manager-row">
                   <Button
                     variant="ghost"
                     className="h-auto min-w-0 flex-1 justify-start gap-2 px-2 py-2 text-left"
@@ -267,18 +268,20 @@ function DocumentSessionPicker({
                   </Button>
                   <Button
                     variant="ghost"
-                    size="icon-sm"
+                    size="sm"
+                    className="chat-session-manager-action"
                     aria-label={`重命名会话：${item.title}`}
                     title="重命名"
                     disabled={saving}
                     onClick={() => rename(item)}
                   >
                     <PencilSimple />
+                    重命名
                   </Button>
                   <Button
                     variant="ghost"
-                    size="icon-sm"
-                    className="text-destructive"
+                    size="sm"
+                    className="chat-session-manager-action text-destructive"
                     aria-label={`删除会话：${item.title}`}
                     title={
                       isRunning(item)
@@ -292,6 +295,7 @@ function DocumentSessionPicker({
                     }}
                   >
                     <Trash />
+                    删除
                   </Button>
                 </div>
               ))}
