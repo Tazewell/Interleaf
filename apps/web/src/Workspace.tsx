@@ -1140,12 +1140,6 @@ export function Workspace({
           >
             <ArrowLeft />
           </IconButton>
-          <span className="interleaf-title" title={doc.title}>
-            {doc.title}
-          </span>
-          <Badge variant="secondary">{doc.type.toUpperCase()}</Badge>
-        </div>
-        <div className="toolbar-actions">
           <IconButton
             label="目录与搜索"
             active={left}
@@ -1154,6 +1148,12 @@ export function Workspace({
           >
             <PanelLeft />
           </IconButton>
+          <span className="interleaf-title" title={doc.title}>
+            {doc.title}
+          </span>
+          <Badge variant="secondary">{doc.type.toUpperCase()}</Badge>
+        </div>
+        <div className="toolbar-actions">
           {returnLocation && (
             <Button
               variant="outline"
