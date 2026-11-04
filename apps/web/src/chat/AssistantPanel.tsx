@@ -4,6 +4,7 @@ import {
   ArrowsClockwise,
   BookOpen,
   CircleNotch,
+  Leaf,
 } from "@phosphor-icons/react";
 import { ProviderGlyph } from "../ProviderIdentity";
 import type { Message } from "@interleaf/core";
@@ -122,6 +123,12 @@ export function AssistantPanel({
                 data-message-id={message?.id}
                 className={`chat-message ${assistant ? "assistant" : "user"}`}
               >
+                {assistant && (
+                  <div className="chat-assistant-identity">
+                    <Leaf size={17} aria-hidden="true" />
+                    <span>纸间</span>
+                  </div>
+                )}
                 {waiting && (
                   <div className="chat-waiting" role="status">
                     <span
@@ -169,8 +176,13 @@ export function AssistantPanel({
                   )
                 ) : (
                   <>
-                    {message && references(message)}
                     <div className="chat-question">{content}</div>
+                    {message && (
+                      <div className="chat-question-context">
+                        {references(message)}
+                        {extras(message)}
+                      </div>
+                    )}
                   </>
                 )}
                 {answer?.fallback && (
@@ -184,7 +196,7 @@ export function AssistantPanel({
                 {assistant && !!content && (
                   <AnswerActions content={content} timestamp={timestamp} />
                 )}
-                {message && extras(message)}
+                {assistant && message && extras(message)}
               </div>
             );
           })}

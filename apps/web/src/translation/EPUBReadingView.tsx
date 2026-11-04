@@ -328,13 +328,19 @@ export function EPUBReadingView({
   };
   const toolbar = (
     <div className="translation-toolbar">
-      <AssistanceControls
-        documentId={doc.id}
-        processing={processing}
-        library="books"
-        epubChapter={() => position.current}
-      />
-      <Tabs value={mode} onValueChange={(value) => changeMode(value as Mode)}>
+      <div className="reading-translation-actions">
+        <AssistanceControls
+          documentId={doc.id}
+          processing={processing}
+          library="books"
+          epubChapter={() => position.current}
+        />
+      </div>
+      <Tabs
+        className="reading-mode-tabs"
+        value={mode}
+        onValueChange={(value) => changeMode(value as Mode)}
+      >
         <SlidingTabsList aria-label="阅读模式">
           <TabsTrigger value="source">原文</TabsTrigger>
           <TabsTrigger value="parallel">对照</TabsTrigger>

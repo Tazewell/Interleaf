@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from "react";
 import {
-  Plus,
   PencilSimple,
   CircleNotch,
   DotsThree,
@@ -209,12 +208,10 @@ function DocumentSessionPicker({
           variant="ghost"
           size="icon-xs"
           className="session-picker-action"
-          title="重命名会话"
-          aria-label="重命名会话"
-          disabled={!current || saving}
-          onClick={() => {
-            if (current) rename(current);
-          }}
+          title="新建会话"
+          aria-label="新建会话"
+          disabled={saving}
+          onClick={() => void create()}
         >
           <PencilSimple />
         </Button>
@@ -228,17 +225,6 @@ function DocumentSessionPicker({
           onClick={() => setManagerOpen(true)}
         >
           <DotsThree />
-        </Button>
-        <Button
-          variant="ghost"
-          size="icon-xs"
-          className="session-picker-action"
-          title="新建会话"
-          aria-label="新建会话"
-          disabled={saving}
-          onClick={() => void create()}
-        >
-          <Plus />
         </Button>
       </div>
       <Dialog

@@ -24,7 +24,6 @@ import {
   CaretLeft as ChevronLeft,
   CaretRight as ChevronRight,
   CaretDown as ChevronDown,
-  TreeStructure as ListTree,
   MagnifyingGlass as Search,
   BookmarkSimple as BookmarkPlus,
   DotsThree as Ellipsis,
@@ -69,7 +68,12 @@ import { Badge } from "@interleaf/ui/components/badge";
 import { Input } from "@interleaf/ui/components/input";
 import { Textarea } from "@interleaf/ui/components/textarea";
 import { SlidingTabsList } from "./controls/SlidingTabsList";
-import { Tabs, TabsTrigger, TabsContent } from "@interleaf/ui/components/tabs";
+import {
+  Tabs,
+  TabsList,
+  TabsTrigger,
+  TabsContent,
+} from "@interleaf/ui/components/tabs";
 import { ScrollArea } from "@interleaf/ui/components/scroll-area";
 import {
   DropdownMenu,
@@ -1136,6 +1140,12 @@ export function Workspace({
           >
             <ArrowLeft />
           </IconButton>
+          <span className="interleaf-title" title={doc.title}>
+            {doc.title}
+          </span>
+          <Badge variant="secondary">{doc.type.toUpperCase()}</Badge>
+        </div>
+        <div className="toolbar-actions">
           <IconButton
             label="目录与搜索"
             active={left}
@@ -1144,13 +1154,6 @@ export function Workspace({
           >
             <PanelLeft />
           </IconButton>
-          <span className="toolbar-divider" />
-          <span className="interleaf-title" title={doc.title}>
-            {doc.title}
-          </span>
-          <Badge variant="secondary">{doc.type.toUpperCase()}</Badge>
-        </div>
-        <div className="toolbar-actions">
           {returnLocation && (
             <Button
               variant="outline"
@@ -1481,8 +1484,8 @@ export function Workspace({
           collapsible
           collapsedSize={0}
           style={{ overflow: "hidden" }}
-          defaultSize="15%"
-          minSize="180px"
+          defaultSize="13%"
+          minSize="140px"
           maxSize="30%"
         >
           <aside className="interleaf-sidebar" data-open={left} inert={!left}>
@@ -1491,17 +1494,23 @@ export function Workspace({
               onValueChange={(value) => setLeftTab(String(value))}
               className="h-full gap-0"
             >
-              <div className="panel-header">
-                <SlidingTabsList className="panel-tabs" aria-label="阅读导航">
-                  <TabsTrigger value="toc">
-                    <ListTree className="size-3.5" />
+              <div className="panel-header reader-navigation-header">
+                <TabsList
+                  className="panel-tabs reader-navigation-tabs"
+                  aria-label="阅读导航"
+                >
+                  <TabsTrigger value="toc" className="reader-navigation-title">
                     目录
                   </TabsTrigger>
-                  <TabsTrigger value="search">
+                  <TabsTrigger
+                    value="search"
+                    className="reader-navigation-search"
+                    aria-label="搜索文档内容"
+                  >
                     <Search className="size-3.5" />
-                    搜索
+                    <span className="sr-only">搜索</span>
                   </TabsTrigger>
-                </SlidingTabsList>
+                </TabsList>
               </div>
               <TabsContent value="toc" className="min-h-0 flex-1">
                 <ScrollArea className="h-full">
@@ -1577,7 +1586,7 @@ export function Workspace({
         </ResizablePanel>
         <ResizableHandle
           disabled={!left}
-          className={left ? "" : "sidebar-handle-closed"}
+          className={`reader-navigation-resizer${left ? "" : " sidebar-handle-closed"}`}
         />
         <ResizablePanel id="reading" minSize="30%">
           <div className="reading-pane" ref={readingPane}>
@@ -1721,7 +1730,7 @@ export function Workspace({
         </ResizablePanel>
         <ResizableHandle
           disabled={!right}
-          className={right ? "" : "sidebar-handle-closed"}
+          className={`reader-assistant-resizer${right ? "" : " sidebar-handle-closed"}`}
         />
         <ResizablePanel
           id="assistant"
@@ -1729,8 +1738,8 @@ export function Workspace({
           collapsible
           collapsedSize={0}
           style={{ overflow: "hidden" }}
-          defaultSize="25%"
-          minSize="250px"
+          defaultSize="31%"
+          minSize="280px"
           maxSize="45%"
         >
           <aside className="assistant-sidebar" data-open={right} inert={!right}>

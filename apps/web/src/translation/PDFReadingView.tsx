@@ -844,24 +844,30 @@ export function PDFReadingView({
   );
   const toolbar = (
     <div className="translation-toolbar">
-      {!autoCenterHost && autoCenterButton}
-      <AssistanceControls
-        documentId={doc.id}
-        processing={processing}
-        library={doc.library}
-        chapter={() => {
-          const location = facade.current?.getLocation();
-          if (location?.type !== "pdf") return undefined;
-          return chapterRange(
-            outline.current,
-            location.page,
-            engine?.getPageCount?.() ||
-              Math.max(1, ...blocks.map((b) => b.page)),
-            headingPages(blocks),
-          );
-        }}
-      />
-      <Tabs value={mode} onValueChange={(v) => changeMode(v as Mode)}>
+      <div className="reading-translation-actions">
+        {!autoCenterHost && autoCenterButton}
+        <AssistanceControls
+          documentId={doc.id}
+          processing={processing}
+          library={doc.library}
+          chapter={() => {
+            const location = facade.current?.getLocation();
+            if (location?.type !== "pdf") return undefined;
+            return chapterRange(
+              outline.current,
+              location.page,
+              engine?.getPageCount?.() ||
+                Math.max(1, ...blocks.map((b) => b.page)),
+              headingPages(blocks),
+            );
+          }}
+        />
+      </div>
+      <Tabs
+        className="reading-mode-tabs"
+        value={mode}
+        onValueChange={(v) => changeMode(v as Mode)}
+      >
         <SlidingTabsList aria-label="阅读模式">
           <TabsTrigger value="source">原页</TabsTrigger>
           <TabsTrigger value="parallel">对照</TabsTrigger>
