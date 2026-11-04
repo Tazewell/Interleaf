@@ -10,6 +10,8 @@ import "./style.css";
 import "./rounded-interface.css";
 import "./reader-rounded.css";
 import "./reader-chat-sketch.css";
+import "./selection-surface.css";
+import "./selection-translation.css";
 import "./settings-rounded.css";
 import "./imports-rounded.css";
 import { installDiagnostics } from "./diagnostics";

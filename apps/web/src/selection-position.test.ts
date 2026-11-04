@@ -1,7 +1,21 @@
 // @vitest-environment jsdom
 import { expect, it, vi } from "vitest";
 import { toolbarPosition } from "./SelectionToolbar";
-import { selectionAnchor } from "./engines/selection-anchor";
+import {
+  selectionAnchor,
+  isSelectionToolbar,
+} from "./engines/selection-anchor";
+it("protects inline translation and its menu as part of the source selection surface", () => {
+  const surface = document.createElement("div");
+  surface.className = "selection-surface";
+  const text = document.createElement("p");
+  surface.append(text);
+  const menu = document.createElement("div");
+  menu.dataset.selectionPreserve = "";
+  expect(isSelectionToolbar(text)).toBe(true);
+  expect(isSelectionToolbar(menu)).toBe(true);
+  expect(isSelectionToolbar(document.createElement("p"))).toBe(false);
+});
 it("places the toolbar next to the release point and flips above the bottom edge", () => {
   const pane = { left: 300, top: 60, right: 1000, bottom: 800 };
   const size = { width: 340, height: 44 };

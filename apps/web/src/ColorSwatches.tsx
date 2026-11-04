@@ -80,6 +80,7 @@ export function ColorSwatchPicker({
       </PopoverTrigger>
       {/* Keep the page selection alive while the palette is open. */}
       <PopoverContent
+        data-selection-preserve=""
         align="start"
         sideOffset={8}
         className="w-auto gap-0 p-2"

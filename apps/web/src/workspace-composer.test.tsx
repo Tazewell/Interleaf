@@ -5,6 +5,7 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import {
   defaultTheme,
   type Message,
+  type Annotation,
   type NativeAIConfig,
   type PDFBlock,
   type ReaderAdapter,
@@ -14,6 +15,8 @@ import { TooltipProvider } from "@interleaf/ui/components/tooltip";
 import { Workspace } from "./Workspace";
 import { ChatSession, type ChatInput } from "./chat/chat-session";
 import { paper } from "./papers/fixtures";
+import { api } from "@interleaf/api";
+import { useReaderStore } from "./store";
 
 vi.mock("sonner", () => ({
   toast: { error: vi.fn(), info: vi.fn(), success: vi.fn() },
@@ -28,6 +31,13 @@ vi.mock("@interleaf/api", () => ({
     ]),
     blocks: vi.fn(async () => []),
     translations: vi.fn(async () => []),
+    translateSelection: vi.fn(async () => ({ text: "便携译文" })),
+    annotate: vi.fn(
+      async (
+        documentId: string,
+        input: Omit<Annotation, "id" | "documentId" | "createdAt">,
+      ) => ({ ...input, documentId, id: "selection-mark", createdAt: "" }),
+    ),
   },
   blockImageURL: (_documentId: string, blockId: string) =>
     `/images/${blockId}.png`,
@@ -67,6 +77,10 @@ vi.mock("./translation/PDFReadingView", async () => {
       );
     },
   };
+});
+vi.mock("./translation/EPUBReadingView", async () => {
+  const view = await import("./translation/PDFReadingView");
+  return { EPUBReadingView: view.PDFReadingView };
 });
 vi.mock("@interleaf/ui/components/resizable", async () => {
   const { useRef } = await import("react");
@@ -113,8 +127,8 @@ let readerEvents: ReaderEvents;
 const adapter = {
   getLocation: () => ({ type: "pdf", page: 2 }),
   getContext: async () => "Page context",
-  clearSelection: () => readerEvents.selection(null),
-} as ReaderAdapter;
+  clearSelection: vi.fn(() => readerEvents.selection(null)),
+} as unknown as ReaderAdapter;
 let root: Root, host: HTMLDivElement, session: ChatSession;
 let history: Message[];
 let requests: ChatInput[];
@@ -122,6 +136,19 @@ let finishAnswer: (() => void) | undefined;
 let deferAnswer: boolean;
 let showChatEmpty: boolean;
 let restoreAnimations: () => void;
+function Harness({ document = doc }: { document?: typeof doc } = {}) {
+  const theme = useReaderStore((state) => state.theme);
+  return (
+    <TooltipProvider>
+      <Workspace
+        document={document}
+        theme={theme}
+        onBack={() => {}}
+        onSettings={() => {}}
+      />
+    </TooltipProvider>
+  );
+}
 const input = () =>
   host.querySelector<HTMLTextAreaElement>('textarea[aria-label="向 AI 提问"]')!;
 const button = (label: string) =>
@@ -143,6 +170,10 @@ async function type(question: string) {
 }
 beforeEach(async () => {
   vi.clearAllMocks();
+  useReaderStore.setState({ theme: { ...defaultTheme } });
+  vi.mocked(api.translateSelection)
+    .mockReset()
+    .mockResolvedValue({ text: "便携译文" });
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   vi.stubGlobal("PointerEvent", MouseEvent);
   vi.stubGlobal(
@@ -211,18 +242,7 @@ beforeEach(async () => {
   host = document.createElement("div");
   document.body.append(host);
   root = createRoot(host);
-  await act(async () =>
-    root.render(
-      <TooltipProvider>
-        <Workspace
-          document={doc}
-          theme={defaultTheme}
-          onBack={() => {}}
-          onSettings={() => {}}
-        />
-      </TooltipProvider>,
-    ),
-  );
+  await act(async () => root.render(<Harness />));
 });
 afterEach(async () => {
   finishAnswer?.();
@@ -232,6 +252,199 @@ afterEach(async () => {
   document.body.innerHTML = "";
   restoreAnimations();
   vi.unstubAllGlobals();
+});
+
+const selectedPassage = {
+  text: "Selected passage",
+  context: { before: "Before", after: "After" },
+  location: { type: "pdf" as const, page: 2 },
+  anchor: { x: 100, top: 80, bottom: 100 },
+};
+const settleSelection = () =>
+  act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 400));
+  });
+it("keeps selection translation manual by default and shows it below actions without sending chat", async () => {
+  await act(async () => readerEvents.selection(selectedPassage));
+  await settleSelection();
+  expect(api.translateSelection).not.toHaveBeenCalled();
+  await click("划词翻译");
+  expect(api.translateSelection).toHaveBeenCalledExactlyOnceWith(
+    selectedPassage,
+    expect.any(AbortSignal),
+  );
+  expect(
+    host.querySelector(".selection-surface [data-selection-translation]")
+      ?.textContent,
+  ).toContain("便携译文");
+  expect(adapter.clearSelection).not.toHaveBeenCalled();
+  expect(requests).toEqual([]);
+});
+it("automatically translates settled selected text only when enabled", async () => {
+  await act(async () =>
+    useReaderStore.getState().setTheme({ autoTranslateSelection: true }),
+  );
+  await act(async () => readerEvents.selection(selectedPassage));
+  await settleSelection();
+  expect(api.translateSelection).toHaveBeenCalledExactlyOnceWith(
+    selectedPassage,
+    expect.any(AbortSignal),
+  );
+  expect(host.textContent).toContain("便携译文");
+  expect(requests).toEqual([]);
+});
+it("cancels the automatic debounce when the preference is disabled", async () => {
+  await act(async () =>
+    useReaderStore.getState().setTheme({ autoTranslateSelection: true }),
+  );
+  await act(async () => readerEvents.selection(selectedPassage));
+  await act(async () =>
+    useReaderStore.getState().setTheme({ autoTranslateSelection: false }),
+  );
+  await settleSelection();
+  expect(api.translateSelection).not.toHaveBeenCalled();
+  expect(host.querySelector("[data-selection-translation]")).toBeNull();
+});
+it("enables automatic translation from the selected-text menu and preserves its selected source", async () => {
+  await act(async () => readerEvents.selection(selectedPassage));
+  await click("更多文字操作");
+  const automatic = [
+    ...document.querySelectorAll<HTMLElement>('[role="menuitemcheckbox"]'),
+  ].find((item) => item.textContent?.includes("自动划词翻译"));
+  expect(automatic).toBeDefined();
+  await act(async () => {
+    automatic!.click();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  });
+  expect(useReaderStore.getState().theme.autoTranslateSelection).toBe(true);
+  await settleSelection();
+  expect(api.translateSelection).toHaveBeenCalledExactlyOnceWith(
+    selectedPassage,
+    expect.any(AbortSignal),
+  );
+});
+it("does not restart translation for an equivalent selection or a moved viewport anchor", async () => {
+  await act(async () =>
+    useReaderStore.getState().setTheme({ autoTranslateSelection: true }),
+  );
+  await act(async () => readerEvents.selection(selectedPassage));
+  await settleSelection();
+  await act(async () =>
+    readerEvents.selection({
+      ...selectedPassage,
+      anchor: { x: 120, top: 90, bottom: 110 },
+    }),
+  );
+  await settleSelection();
+  expect(api.translateSelection).toHaveBeenCalledTimes(1);
+  expect(host.textContent).toContain("便携译文");
+});
+it("keeps the source snapshot for quoting after interacting inside its translation card", async () => {
+  await act(async () => readerEvents.selection(selectedPassage));
+  await click("划词翻译");
+  const card = host.querySelector("[data-selection-translation]")!;
+  expect(card).not.toBeNull();
+  await act(async () => {
+    card.querySelector<HTMLButtonElement>("button")!.focus();
+    readerEvents.selection(null);
+  });
+  expect(host.querySelector("[data-selection-translation]")).not.toBeNull();
+  await click("引用到 AI 对话");
+  expect(host.querySelector(".quote-chips")?.textContent).toContain(
+    selectedPassage.text,
+  );
+  expect(host.querySelector("[data-selection-translation]")).toBeNull();
+  expect(api.translateSelection).toHaveBeenCalledTimes(1);
+});
+it("aborts an inline request when the engine clears selection outside the card", async () => {
+  vi.mocked(api.translateSelection).mockImplementation(
+    () => new Promise(() => {}),
+  );
+  await act(async () => readerEvents.selection(selectedPassage));
+  await click("划词翻译");
+  const signal = vi.mocked(api.translateSelection).mock.calls[0][1];
+  await act(async () => readerEvents.selection(null));
+  expect(signal.aborted).toBe(true);
+  expect(host.querySelector("[data-selection-translation]")).toBeNull();
+});
+it("highlights the original source after card interaction and closes the translation", async () => {
+  await act(async () => readerEvents.selection(selectedPassage));
+  await click("划词翻译");
+  const card = host.querySelector("[data-selection-translation]")!;
+  await act(async () => {
+    card.querySelector<HTMLButtonElement>("button")!.focus();
+    readerEvents.selection(null);
+  });
+  await click("高亮");
+  expect(api.annotate).toHaveBeenCalledExactlyOnceWith(
+    doc.id,
+    expect.objectContaining({
+      kind: "highlight",
+      quote: selectedPassage.text,
+      location: selectedPassage.location,
+    }),
+  );
+  expect(host.querySelector("[data-selection-translation]")).toBeNull();
+});
+it("keeps translation through repeated progress at the same reading location and closes on navigation", async () => {
+  await act(async () => readerEvents.location({ type: "pdf", page: 2 }, 0.2));
+  await act(async () => readerEvents.selection(selectedPassage));
+  await click("划词翻译");
+  await act(async () => readerEvents.location({ type: "pdf", page: 2 }, 0.2));
+  expect(host.querySelector("[data-selection-translation]")).not.toBeNull();
+  await act(async () => {
+    readerEvents.selection(null);
+    readerEvents.location({ type: "pdf", page: 3 }, 0.3);
+  });
+  expect(host.querySelector("[data-selection-translation]")).toBeNull();
+  expect(
+    host.querySelector('[role="toolbar"][aria-label="选中文字操作"]'),
+  ).toBeNull();
+});
+it("keeps EPUB translated selection when its captured reading location follows in the same event", async () => {
+  const book = {
+    ...doc,
+    type: "epub" as const,
+    library: "books" as const,
+    progress: {
+      type: "epub" as const,
+      href: "chapter.xhtml",
+      start: 0,
+      end: 0,
+    },
+  };
+  await act(async () => {
+    root.render(<Harness key="epub-document" document={book} />);
+    useReaderStore.getState().setTheme({ autoTranslateSelection: true });
+  });
+  const excerpt = {
+    ...selectedPassage,
+    location: {
+      type: "epub" as const,
+      href: "chapter.xhtml",
+      start: 4,
+      end: 20,
+      translation: {
+        blockId: "paragraph",
+        sourceHash: "hash",
+        sentenceIndexes: [0],
+        start: 0,
+        end: 16,
+      },
+    },
+  };
+  await act(async () => {
+    readerEvents.selection(excerpt);
+    readerEvents.location(excerpt.location, 0.25);
+  });
+  await settleSelection();
+  expect(api.translateSelection).toHaveBeenCalledExactlyOnceWith(
+    excerpt,
+    expect.any(AbortSignal),
+  );
+  expect(
+    host.querySelector("[data-selection-translation]")?.textContent,
+  ).toContain("便携译文");
 });
 
 it("quotes a paragraph without sending or replacing the reader's question", async () => {

@@ -29,6 +29,12 @@ export function InterleafView({
   const adapter = useRef<ReaderAdapter | null>(null);
   const latest = useRef({ theme, annotations, blocks, events, onReady });
   latest.current = { theme, annotations, blocks, events, onReady };
+  // This interaction preference does not change page rendering. Reapplying a
+  // PDF theme would clear the native selection used by the translation menu.
+  const renderingThemeKey = JSON.stringify({
+    ...theme,
+    autoTranslateSelection: undefined,
+  });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   useEffect(() => {
@@ -121,8 +127,10 @@ export function InterleafView({
     };
   }, [doc.id]);
   useEffect(() => {
-    void adapter.current?.setTheme(theme).catch((e) => toast.error(e.message));
-  }, [theme]);
+    void adapter.current
+      ?.setTheme(latest.current.theme)
+      .catch((e) => toast.error(e.message));
+  }, [renderingThemeKey]);
   useEffect(() => {
     void adapter.current
       ?.highlight(annotations)

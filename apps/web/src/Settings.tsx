@@ -341,6 +341,22 @@ export function Settings({
             <section className="mb-6">
               <label className="flex items-start gap-2 text-sm">
                 <Checkbox
+                  checked={theme.autoTranslateSelection === true}
+                  onCheckedChange={(checked) =>
+                    setTheme({ autoTranslateSelection: checked === true })
+                  }
+                />
+                <span>
+                  自动划词翻译
+                  <span className="block text-xs text-muted-foreground">
+                    选定文字后，在选区菜单下方自动显示 AI 译文
+                  </span>
+                </span>
+              </label>
+            </section>
+            <section className="mb-6">
+              <label className="flex items-start gap-2 text-sm">
+                <Checkbox
                   checked={theme.linkTranslationAnnotations !== false}
                   onCheckedChange={(checked) =>
                     setTheme({ linkTranslationAnnotations: !!checked })

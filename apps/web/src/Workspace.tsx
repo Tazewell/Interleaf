@@ -1,6 +1,10 @@
 import { useShortcut } from "./shortcuts/shortcuts";
 import { usePaperUI } from "./papers/state";
-import { SelectionTranslation } from "./SelectionTranslation";
+import {
+  SelectionTranslation,
+  selectionTranslationKey,
+} from "./SelectionTranslation";
+import { isSelectionToolbar } from "./engines/selection-anchor";
 import { LinkPreviewPanel } from "./LinkPreviewPanel";
 import { AnnotationHoverCard } from "./AnnotationHoverCard";
 import { AnnotationQuote } from "./AnnotationQuote";
@@ -79,6 +83,8 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuCheckboxItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@interleaf/ui/components/dropdown-menu";
 import {
@@ -315,9 +321,34 @@ export function Workspace({
         : undefined,
     [doc.type, sidebarTOC, location],
   );
-  const [translationSelection, setTranslationSelection] =
-    useState<ReaderSelection | null>(null);
+  const [translationRequest, setTranslationRequest] = useState<{
+    selection: ReaderSelection;
+    automatic: boolean;
+  } | null>(null);
+  const translationSelection = translationRequest?.selection ?? null;
   const [selection, setSelection] = useState<ReaderSelection | null>(null);
+  const activeSelection = selection ?? translationSelection;
+  const closeSelectionUI = useCallback(() => {
+    setSelection(null);
+    setTranslationRequest(null);
+    adapter?.clearSelection();
+  }, [adapter]);
+  useEffect(() => {
+    if (
+      theme.autoTranslateSelection === true &&
+      selection?.anchor &&
+      selection.text.trim()
+    ) {
+      const key = selectionTranslationKey(selection);
+      setTranslationRequest((current) =>
+        current && selectionTranslationKey(current.selection) === key
+          ? current
+          : { selection, automatic: true },
+      );
+    } else if (theme.autoTranslateSelection !== true) {
+      setTranslationRequest((current) => (current?.automatic ? null : current));
+    }
+  }, [selection, theme.autoTranslateSelection]);
   const [annotations, replaceAnnotations] = useState<Annotation[]>([]);
   const deletedAnswerIds = useRef(new Set<string>());
   const annotationRevision = useRef(0);
@@ -713,7 +744,9 @@ export function Workspace({
         .catch((error) => toast.error(error.message));
   }, [adapter, doc.id, doc.type, researchTarget]);
   const saveLocation = (next: DocumentLocation, percent: number) => {
-    setTranslationSelection(null);
+    if (JSON.stringify(next) !== JSON.stringify(location)) {
+      setTranslationRequest(null);
+    }
     setLocation(next);
     if (navigationRef.current?.settle()) setReturnLocation(undefined);
     if (next.type === "pdf") setPageInput(String(next.page));
@@ -727,7 +760,7 @@ export function Workspace({
     color = markColor,
   ) => {
     const written = kind === "note" || kind === "question";
-    const source = written ? noteSelection : selection;
+    const source = written ? noteSelection : activeSelection;
     const target = kind === "bookmark" ? location : source?.location;
     if (!target || annotationSaving.current) return;
     annotationSaving.current = true;
@@ -753,6 +786,8 @@ export function Workspace({
               color,
             });
       setAnnotations((items) => applySavedAnnotation(items, a));
+      setTranslationRequest(null);
+      setSelection(null);
       adapter?.clearSelection();
       if (kind === "bookmark")
         toast.success("已添加书签", { id: "interleaf-annotation-save" });
@@ -773,6 +808,7 @@ export function Workspace({
     (items) => {
       setAnnotations(items);
       setAnnotationTarget(null);
+      setTranslationRequest(null);
       adapter?.clearSelection();
       setSelection(null);
     },
@@ -785,7 +821,7 @@ export function Workspace({
     ? activeAnnotation(annotations, annotationTarget.ids)
     : undefined;
   const selectAnnotation = (target: ReaderAnnotationTarget | null) => {
-    if (target) setTranslationSelection(null);
+    if (target) setTranslationRequest(null);
     setHoveredAnnotation(null);
     setAnnotationTarget(target);
     const annotation = target
@@ -796,7 +832,23 @@ export function Workspace({
   const selectText = (next: ReaderSelection | null) => {
     if (next) {
       setHoveredAnnotation(null);
-      setTranslationSelection(null);
+      setTranslationRequest((current) =>
+        current &&
+        selectionTranslationKey(current.selection) ===
+          selectionTranslationKey(next)
+          ? current
+          : null,
+      );
+    } else {
+      const node = window.getSelection()?.anchorNode;
+      const selectedElement =
+        node instanceof Element ? node : node?.parentElement;
+      if (
+        !isSelectionToolbar(document.activeElement) &&
+        !isSelectionToolbar(selectedElement ?? null)
+      ) {
+        setTranslationRequest(null);
+      }
     }
     setSelection(next);
     selectionClipboard.selection(next);
@@ -808,6 +860,7 @@ export function Workspace({
     setNoteSelection({ text: annotation.quote, location: annotation.location });
     setNote(annotation.note);
     setNoteOpen(true);
+    setTranslationRequest(null);
     adapter?.clearSelection();
   };
   const quoteToChat = (quote: ReaderSelection) => {
@@ -825,6 +878,7 @@ export function Workspace({
     setRightTab("ai");
     adapter?.clearSelection();
     setSelection(null);
+    setTranslationRequest(null);
     setAnnotationTarget(null);
     setHoveredAnnotation(null);
     requestAnimationFrame(() => composeInput.current?.focus());
@@ -924,7 +978,7 @@ export function Workspace({
     void go?.catch((error) => toast.error(error.message));
   };
   const addQuote = () => {
-    if (selection) quoteToChat(selection);
+    if (activeSelection) quoteToChat(activeSelection);
   };
   const send = async (
     question = prompt,
@@ -1634,7 +1688,7 @@ export function Workspace({
                 />
               );
             })()}
-            {!selection && annotationTarget && selectedAnnotation && (
+            {!activeSelection && annotationTarget && selectedAnnotation && (
               <AnnotationToolbar
                 annotation={selectedAnnotation}
                 anchor={annotationTarget.anchor}
@@ -1648,8 +1702,22 @@ export function Workspace({
               />
             )}
 
-            {selection?.anchor && (
-              <SelectionToolbar anchor={selection.anchor} pane={readingPane}>
+            {activeSelection?.anchor && !noteOpen && (
+              <SelectionToolbar
+                anchor={activeSelection.anchor}
+                pane={readingPane}
+                onClose={closeSelectionUI}
+                content={
+                  translationRequest && (
+                    <SelectionTranslation
+                      inline
+                      selection={translationRequest.selection}
+                      delayMs={translationRequest.automatic ? 350 : 0}
+                      onClose={closeSelectionUI}
+                    />
+                  )
+                }
+              >
                 <ColorSwatchPicker color={markColor} onPick={chooseColor} />
                 <IconButton
                   label="高亮"
@@ -1663,9 +1731,10 @@ export function Workspace({
                   onClick={() => {
                     setNoteKind("note");
                     setEditingAnnotation(null);
-                    setNoteSelection(selection);
+                    setNoteSelection(activeSelection);
                     setNote("");
                     setNoteOpen(true);
+                    setTranslationRequest(null);
                     adapter?.clearSelection();
                   }}
                 >
@@ -1677,9 +1746,13 @@ export function Workspace({
                 <IconButton
                   label="划词翻译"
                   onClick={() => {
-                    setTranslationSelection(selection);
-                    setSelection(null);
-                    adapter?.clearSelection();
+                    setTranslationRequest(
+                      (current) =>
+                        current ?? {
+                          selection: activeSelection,
+                          automatic: false,
+                        },
+                    );
                   }}
                 >
                   <Languages />
@@ -1699,10 +1772,21 @@ export function Workspace({
                     <Ellipsis />
                   </DropdownMenuTrigger>
                   <DropdownMenuContent
+                    data-selection-preserve=""
                     align="end"
                     className="w-40"
                     onMouseDown={(event) => event.preventDefault()}
                   >
+                    <DropdownMenuCheckboxItem
+                      checked={theme.autoTranslateSelection === true}
+                      onCheckedChange={(checked) =>
+                        setTheme({ autoTranslateSelection: checked === true })
+                      }
+                    >
+                      <Languages />
+                      自动划词翻译
+                    </DropdownMenuCheckboxItem>
+                    <DropdownMenuSeparator />
                     <DropdownMenuItem
                       onClick={() => void annotate("underline")}
                     >
@@ -1713,9 +1797,10 @@ export function Workspace({
                       onClick={() => {
                         setNoteKind("question");
                         setEditingAnnotation(null);
-                        setNoteSelection(selection);
+                        setNoteSelection(activeSelection);
                         setNote("");
                         setNoteOpen(true);
+                        setTranslationRequest(null);
                         adapter?.clearSelection();
                       }}
                     >
@@ -2048,13 +2133,8 @@ export function Workspace({
         </ResizablePanel>
       </ResizablePanelGroup>
 
-      <SelectionTranslation
-        key={`selection-translation-${doc.id}`}
-        selection={translationSelection}
-        onClose={() => setTranslationSelection(null)}
-      />
       <AnnotationHoverCard
-        target={!selection && !noteOpen ? hoveredAnnotation : null}
+        target={!activeSelection && !noteOpen ? hoveredAnnotation : null}
         annotations={annotations}
         onEdit={editAnnotationNote}
       />
