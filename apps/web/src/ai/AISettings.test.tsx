@@ -75,10 +75,27 @@ async function save() {
   );
 }
 
+async function switchTab(label: string) {
+  const tab = [
+    ...host.querySelectorAll<HTMLButtonElement>('[role="tab"]'),
+  ].find((element) => element.textContent === label);
+  expect(tab, `missing tab ${label}`).toBeDefined();
+  await act(async () => tab!.click());
+  expect(tab!.getAttribute("aria-selected")).toBe("true");
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   vi.stubGlobal("PointerEvent", MouseEvent);
+  vi.stubGlobal(
+    "ResizeObserver",
+    class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    },
+  );
   vi.mocked(api.saveAIConfig).mockImplementation(async (update) => ({
     ...saved,
     ...update,
@@ -96,6 +113,50 @@ afterEach(async () => {
   await act(async () => root.unmount());
   host.remove();
   vi.unstubAllGlobals();
+});
+
+it("retains connection and translation prompt drafts across AI tabs without saving", async () => {
+  await render();
+  await enter("API Key", "fake-unsaved-key");
+  await switchTab("翻译提示");
+  const textarea = host.querySelector("textarea")!;
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(
+      HTMLTextAreaElement.prototype,
+      "value",
+    )!.set!.call(textarea, "未保存的术语要求");
+    textarea.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+  await switchTab("模型");
+  expect(select("问答模型")?.disabled).toBe(true);
+  await switchTab("连接");
+  expect(input("API Key").value).toBe("fake-unsaved-key");
+  await switchTab("翻译提示");
+  expect(host.querySelector("textarea")?.value).toBe("未保存的术语要求");
+  expect(api.saveAIConfig).not.toHaveBeenCalled();
+});
+
+it("retains model choices across AI tabs and saves only when requested", async () => {
+  vi.mocked(api.agentModels).mockResolvedValueOnce([
+    { id: "catalog-model", name: "Catalog", description: "", isDefault: false },
+  ]);
+  await render();
+  await switchTab("模型");
+  await choose("问答模型", "catalog-model");
+  await switchTab("连接");
+  await switchTab("翻译提示");
+  await switchTab("模型");
+  expect(select("问答模型")?.textContent).toContain("catalog-model");
+  expect(api.saveAIConfig).not.toHaveBeenCalled();
+  const saveModels = [
+    ...host.querySelectorAll<HTMLButtonElement>("button"),
+  ].find((element) => element.textContent === "保存模型")!;
+  await act(async () => saveModels.click());
+  expect(api.saveAIConfig).toHaveBeenCalledWith(
+    expect.objectContaining({
+      models: expect.objectContaining({ chat: "catalog-model" }),
+    }),
+  );
 });
 
 it.each([
@@ -157,6 +218,7 @@ it("requires saving the drafted connection before using model controls", async (
     },
   ]);
   await render();
+  await switchTab("模型");
   await choose("问答模型", "edited-old-model");
   const button = (text: string) =>
     [...host.querySelectorAll<HTMLButtonElement>("button")].find(
@@ -165,6 +227,7 @@ it("requires saving the drafted connection before using model controls", async (
   expect(button("刷新模型列表").disabled).toBe(false);
   expect(button("保存模型").disabled).toBe(false);
 
+  await switchTab("连接");
   await choose("服务商", "阿里百炼");
 
   expect(select("问答模型")?.disabled).toBe(true);

@@ -81,6 +81,53 @@ func annotationDiff(before, after map[string]string) annotationChange {
 	return change
 }
 
+// The caller holds annotationMu and publishes the returned history only after
+// committing the matching transcript deletion. Preserve every other field and
+// both sides of each undo operation, so unrelated edits remain undoable.
+func (s *Server) annotationHistoryWithoutAnswers(document string, removed map[string]bool) ([]annotationChange, error) {
+	history := append([]annotationChange(nil), s.annotationHistory...)
+	for i, entry := range history {
+		if entry.document != document {
+			continue
+		}
+		entry.size = 0
+		for side, snapshot := range []map[string]string{entry.before, entry.after} {
+			cleaned := make(map[string]string, len(snapshot))
+			for id, body := range snapshot {
+				if body != "" {
+					var fields map[string]json.RawMessage
+					if err := json.Unmarshal([]byte(body), &fields); err != nil {
+						return nil, err
+					}
+					var answer string
+					if raw := fields["answerId"]; len(raw) > 0 {
+						if err := json.Unmarshal(raw, &answer); err != nil {
+							return nil, err
+						}
+					}
+					if removed[answer] {
+						delete(fields, "answerId")
+						data, err := json.Marshal(fields)
+						if err != nil {
+							return nil, err
+						}
+						body = string(data)
+					}
+				}
+				cleaned[id] = body
+				entry.size += len(id) + len(body)
+			}
+			if side == 0 {
+				entry.before = cleaned
+			} else {
+				entry.after = cleaned
+			}
+		}
+		history[i] = entry
+	}
+	return history, nil
+}
+
 // Serialize all annotation HTTP mutations, including clients without history.
 // Diffs include every mark absorbed by the merge transaction.
 func (s *Server) recordAnnotation(next http.HandlerFunc) http.HandlerFunc {

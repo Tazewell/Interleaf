@@ -1,6 +1,10 @@
 import { useShortcut } from "./shortcuts/shortcuts";
 import { usePaperUI } from "./papers/state";
-import { SelectionTranslation } from "./SelectionTranslation";
+import {
+  SelectionTranslation,
+  selectionTranslationKey,
+} from "./SelectionTranslation";
+import { isSelectionToolbar } from "./engines/selection-anchor";
 import { LinkPreviewPanel } from "./LinkPreviewPanel";
 import { AnnotationHoverCard } from "./AnnotationHoverCard";
 import { AnnotationQuote } from "./AnnotationQuote";
@@ -24,7 +28,6 @@ import {
   CaretLeft as ChevronLeft,
   CaretRight as ChevronRight,
   CaretDown as ChevronDown,
-  TreeStructure as ListTree,
   MagnifyingGlass as Search,
   BookmarkSimple as BookmarkPlus,
   DotsThree as Ellipsis,
@@ -47,6 +50,7 @@ import { api, blockImageURL } from "@interleaf/api";
 import {
   locationLabel,
   type DocumentChatSession,
+  type ChatSessionDeletion,
   type Annotation,
   type Document as ReaderDocument,
   type DocumentLocation,
@@ -67,6 +71,7 @@ import { Button } from "@interleaf/ui/components/button";
 import { Badge } from "@interleaf/ui/components/badge";
 import { Input } from "@interleaf/ui/components/input";
 import { Textarea } from "@interleaf/ui/components/textarea";
+import { SlidingTabsList } from "./controls/SlidingTabsList";
 import {
   Tabs,
   TabsList,
@@ -78,6 +83,8 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuCheckboxItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@interleaf/ui/components/dropdown-menu";
 import {
@@ -109,7 +116,7 @@ import { ProcessingUsageDialog } from "./ProcessingUsage";
 import { ModelSelector } from "./ModelSelector";
 import { SourceReferences } from "./SourceReferences";
 import { ChatSession } from "./chat/chat-session";
-import { getChatSession } from "./chat/session-registry";
+import { forgetChatSession, getChatSession } from "./chat/session-registry";
 import { SessionPicker } from "./chat/SessionPicker";
 import { AssistantPanel } from "./chat/AssistantPanel";
 import { ImagePreview, imageLabel } from "./ImagePreview";
@@ -314,14 +321,47 @@ export function Workspace({
         : undefined,
     [doc.type, sidebarTOC, location],
   );
-  const [translationSelection, setTranslationSelection] =
-    useState<ReaderSelection | null>(null);
+  const [translationRequest, setTranslationRequest] = useState<{
+    selection: ReaderSelection;
+    automatic: boolean;
+  } | null>(null);
+  const translationSelection = translationRequest?.selection ?? null;
   const [selection, setSelection] = useState<ReaderSelection | null>(null);
+  const activeSelection = selection ?? translationSelection;
+  const closeSelectionUI = useCallback(() => {
+    setSelection(null);
+    setTranslationRequest(null);
+    adapter?.clearSelection();
+  }, [adapter]);
+  useEffect(() => {
+    if (
+      theme.autoTranslateSelection === true &&
+      selection?.anchor &&
+      selection.text.trim()
+    ) {
+      const key = selectionTranslationKey(selection);
+      setTranslationRequest((current) =>
+        current && selectionTranslationKey(current.selection) === key
+          ? current
+          : { selection, automatic: true },
+      );
+    } else if (theme.autoTranslateSelection !== true) {
+      setTranslationRequest((current) => (current?.automatic ? null : current));
+    }
+  }, [selection, theme.autoTranslateSelection]);
   const [annotations, replaceAnnotations] = useState<Annotation[]>([]);
+  const deletedAnswerIds = useRef(new Set<string>());
   const annotationRevision = useRef(0);
   const setAnnotations = useCallback((next: SetStateAction<Annotation[]>) => {
     annotationRevision.current++;
-    replaceAnnotations(next);
+    replaceAnnotations((items) =>
+      (typeof next === "function" ? next(items) : next).map((item) => {
+        if (!item.answerId || !deletedAnswerIds.current.has(item.answerId))
+          return item;
+        const { answerId: _deletedAnswer, ...annotation } = item;
+        return annotation;
+      }),
+    );
   }, []);
   const recoveryDocument = useRef(doc.id);
   recoveryDocument.current = doc.id;
@@ -434,6 +474,13 @@ export function Workspace({
   }
   const currentSession =
     sessions.find((s) => s.id === preferred) ?? sessions[0];
+  const visibleSessions = useRef({
+    documentId: doc.id,
+    sessions,
+    currentSession,
+  });
+  visibleSessions.current = { documentId: doc.id, sessions, currentSession };
+  const deletedSessions = useRef(new Map<string, Set<string>>());
   const provider: string =
     aiConfig?.connection.url && !aiConfig.needsConfiguration ? "api" : "";
   const sessionListSerial = useRef(0);
@@ -444,7 +491,12 @@ export function Workspace({
       currentDocument.current === doc.id &&
       serial === sessionListSerial.current
     ) {
-      setSessionCatalog({ documentId: doc.id, items });
+      setSessionCatalog({
+        documentId: doc.id,
+        items: items.filter(
+          (item) => !deletedSessions.current.get(doc.id)?.has(item.id),
+        ),
+      });
       setSessionError("");
     }
   }, [doc.id]);
@@ -492,9 +544,47 @@ export function Workspace({
     setQuotes(saved?.quotes ?? []);
     setImages(saved?.images ?? []);
     return () => {
-      composerDrafts.current.set(composerKey, composerValue.current);
+      if (!deletedSessions.current.get(doc.id)?.has(currentSession?.id ?? ""))
+        composerDrafts.current.set(composerKey, composerValue.current);
     };
   }, [composerKey]);
+  const sessionDeleted = (id: string, result: ChatSessionDeletion) => {
+    // Successful old-document mutations still release their own resources.
+    // Their late response must never select a conversation in the new document.
+    for (const messageId of forgetChatSession(doc.id, id))
+      deletedAnswerIds.current.add(messageId);
+    composerDrafts.current.delete(`${doc.id}:${id}`);
+    const removed = deletedSessions.current.get(doc.id) ?? new Set<string>();
+    removed.add(id);
+    deletedSessions.current.set(doc.id, removed);
+    try {
+      const key = `interleaf.chat-session.${doc.id}`;
+      if (localStorage.getItem(key) === id) localStorage.removeItem(key);
+    } catch {}
+    if (currentDocument.current !== doc.id) return;
+    sessionListSerial.current++;
+    const visible = visibleSessions.current;
+    const remaining = visible.sessions.filter((item) => !removed.has(item.id));
+    if (
+      result.replacement &&
+      !remaining.some((item) => item.id === result.replacement!.id)
+    )
+      remaining.push(result.replacement);
+    setSessionCatalog({ documentId: doc.id, items: remaining });
+    if (visible.currentSession?.id === id) {
+      selectSession(remaining[0]?.id ?? "");
+    }
+    const unlinked = new Set(result.unlinkedAnnotationIds);
+    if (unlinked.size)
+      setAnnotations((items) =>
+        items.map((item) => {
+          if (!unlinked.has(item.id)) return item;
+          if (item.answerId) deletedAnswerIds.current.add(item.answerId);
+          const { answerId: _deletedAnswer, ...annotation } = item;
+          return annotation;
+        }),
+      );
+  };
   useEffect(() => {
     let alive = true;
     void api
@@ -654,7 +744,9 @@ export function Workspace({
         .catch((error) => toast.error(error.message));
   }, [adapter, doc.id, doc.type, researchTarget]);
   const saveLocation = (next: DocumentLocation, percent: number) => {
-    setTranslationSelection(null);
+    if (JSON.stringify(next) !== JSON.stringify(location)) {
+      setTranslationRequest(null);
+    }
     setLocation(next);
     if (navigationRef.current?.settle()) setReturnLocation(undefined);
     if (next.type === "pdf") setPageInput(String(next.page));
@@ -668,7 +760,7 @@ export function Workspace({
     color = markColor,
   ) => {
     const written = kind === "note" || kind === "question";
-    const source = written ? noteSelection : selection;
+    const source = written ? noteSelection : activeSelection;
     const target = kind === "bookmark" ? location : source?.location;
     if (!target || annotationSaving.current) return;
     annotationSaving.current = true;
@@ -694,6 +786,8 @@ export function Workspace({
               color,
             });
       setAnnotations((items) => applySavedAnnotation(items, a));
+      setTranslationRequest(null);
+      setSelection(null);
       adapter?.clearSelection();
       if (kind === "bookmark")
         toast.success("已添加书签", { id: "interleaf-annotation-save" });
@@ -714,6 +808,7 @@ export function Workspace({
     (items) => {
       setAnnotations(items);
       setAnnotationTarget(null);
+      setTranslationRequest(null);
       adapter?.clearSelection();
       setSelection(null);
     },
@@ -726,7 +821,7 @@ export function Workspace({
     ? activeAnnotation(annotations, annotationTarget.ids)
     : undefined;
   const selectAnnotation = (target: ReaderAnnotationTarget | null) => {
-    if (target) setTranslationSelection(null);
+    if (target) setTranslationRequest(null);
     setHoveredAnnotation(null);
     setAnnotationTarget(target);
     const annotation = target
@@ -737,7 +832,23 @@ export function Workspace({
   const selectText = (next: ReaderSelection | null) => {
     if (next) {
       setHoveredAnnotation(null);
-      setTranslationSelection(null);
+      setTranslationRequest((current) =>
+        current &&
+        selectionTranslationKey(current.selection) ===
+          selectionTranslationKey(next)
+          ? current
+          : null,
+      );
+    } else {
+      const node = window.getSelection()?.anchorNode;
+      const selectedElement =
+        node instanceof Element ? node : node?.parentElement;
+      if (
+        !isSelectionToolbar(document.activeElement) &&
+        !isSelectionToolbar(selectedElement ?? null)
+      ) {
+        setTranslationRequest(null);
+      }
     }
     setSelection(next);
     selectionClipboard.selection(next);
@@ -749,14 +860,15 @@ export function Workspace({
     setNoteSelection({ text: annotation.quote, location: annotation.location });
     setNote(annotation.note);
     setNoteOpen(true);
+    setTranslationRequest(null);
     adapter?.clearSelection();
   };
-  const askAnnotationAI = (annotation: Annotation) => {
-    const quote = { text: annotation.quote, location: annotation.location };
+  const quoteToChat = (quote: ReaderSelection) => {
     setQuotes((items) =>
       [
         ...items.filter(
           (item) =>
+            item.text !== quote.text ||
             JSON.stringify(item.location) !== JSON.stringify(quote.location),
         ),
         quote,
@@ -765,8 +877,14 @@ export function Workspace({
     setRight(true);
     setRightTab("ai");
     adapter?.clearSelection();
+    setSelection(null);
+    setTranslationRequest(null);
+    setAnnotationTarget(null);
+    setHoveredAnnotation(null);
     requestAnimationFrame(() => composeInput.current?.focus());
   };
+  const quoteAnnotation = (annotation: Annotation) =>
+    quoteToChat({ text: annotation.quote, location: annotation.location });
   const saveAnnotationText = async (
     annotation: Annotation,
     patch: { note: string; tags: string[] },
@@ -860,30 +978,21 @@ export function Workspace({
     void go?.catch((error) => toast.error(error.message));
   };
   const addQuote = () => {
-    if (selection) {
-      setQuotes((items) => [...items, selection].slice(-6));
-      setRight(true);
-      setRightTab("ai");
-      adapter?.clearSelection();
-      setSelection(null);
-    }
+    if (activeSelection) quoteToChat(activeSelection);
   };
   const send = async (
     question = prompt,
     selected = quotes,
     useSection = false,
     attachments = images,
-    directImage = false,
   ) => {
     if (abort.current || session.getSnapshot().busy || aiModelSaving) return;
+    if (!question.trim()) return;
     if (!provider) {
       toast.info("请先在设置中选择 Agent SDK");
       onSettings();
       return;
     }
-    if (!question.trim() && attachments.length)
-      question = "请解释附件中的图表或公式。";
-    if (!question.trim()) return;
     if (!session.getSnapshot().loaded) {
       toast.error("对话记录尚未加载，请重新加载。");
       return;
@@ -903,9 +1012,8 @@ export function Workspace({
         attachments.length > 0,
       );
       const { context } = captured;
-      if (controller.signal.aborted) return;
-      if (!directImage) setPrompt("");
-      await session.send({
+      if (controller.signal.aborted || session.getSnapshot().busy) return;
+      const response = session.send({
         provider,
         prompt: question,
         context,
@@ -913,21 +1021,21 @@ export function Workspace({
         readingLocation: captured.readingLocation,
         attachments,
       });
-      if (serial !== sendSerial.current) return;
-      const answer = session.getSnapshot().pending;
-      if (
-        !directImage &&
-        ["saved", "syncing"].includes(
-          session.getSnapshot().pending?.phase || "",
-        )
-      ) {
-        setQuotes([]);
+      // The session owns its captured input as soon as generation starts.
+      // Leave the composer ready for the next question independently of how
+      // long the answer takes or whether its completion can be confirmed.
+      if (session.getSnapshot().busy) {
+        setPrompt((current) => (current === question ? "" : current));
+        setQuotes((current) =>
+          current.filter((quote) => !selected.includes(quote)),
+        );
         setImages((current) =>
-          current.filter(
-            (image) => !attachments.some((sent) => sent.id === image.id),
-          ),
+          current.filter((image) => !attachments.includes(image)),
         );
       }
+      await response;
+      if (serial !== sendSerial.current) return;
+      const answer = session.getSnapshot().pending;
       return answer?.phase === "saved" ? answer.savedId : undefined;
     } catch (e) {
       if (serial === sendSerial.current && (e as Error).name !== "AbortError")
@@ -968,18 +1076,16 @@ export function Workspace({
       return;
     }
     if (!block.image) {
-      if (action === "explain")
-        void send("请解释这段原文的含义，区分原文结论与你的补充说明。", [
-          {
-            text: block.text,
-            location: {
-              type: "pdf",
-              page: block.page,
-              quote: block.text,
-              rects: [block.bounds],
-            },
+      if (action === "attach" || action === "explain")
+        quoteToChat({
+          text: block.text,
+          location: {
+            type: "pdf",
+            page: block.page,
+            quote: block.text,
+            rects: [block.bounds],
           },
-        ]);
+        });
       return;
     }
     const image: ImageAttachment = {
@@ -992,32 +1098,16 @@ export function Workspace({
       setPreviewImage(image);
       return;
     }
-    if (sending) {
-      toast.info("请等待当前回答完成");
-      return;
-    }
+    if (action !== "attach" && action !== "explain") return;
     setRight(true);
     setRightTab("ai");
-    if (action === "explain") {
-      void send(
-        "请详细解释这张图表或公式，说明图中信息、符号及其在原文中的含义，区分事实与推断。",
-        [],
-        false,
-        [image],
-        true,
-      );
-      return;
-    }
-    if (images.some((item) => item.id === image.id)) {
-      composeInput.current?.focus();
-      return;
-    }
+    requestAnimationFrame(() => composeInput.current?.focus());
+    if (images.some((item) => item.id === image.id)) return;
     if (images.length >= 4) {
       toast.info("每次最多附加 4 张图片");
       return;
     }
     setImages((current) => [...current, image]);
-    requestAnimationFrame(() => composeInput.current?.focus());
   };
   const imageAttachments = (items: ImageAttachment[], removable = false) => (
     <div className="image-attachments">
@@ -1112,14 +1202,10 @@ export function Workspace({
           >
             <PanelLeft />
           </IconButton>
-          <span className="toolbar-divider" />
           <span className="interleaf-title" title={doc.title}>
             {doc.title}
           </span>
           <Badge variant="secondary">{doc.type.toUpperCase()}</Badge>
-        </div>
-        <div className="interleaf-toolbar-center">
-          <div ref={setReadingToolbar} />
         </div>
         <div className="toolbar-actions">
           {returnLocation && (
@@ -1173,12 +1259,12 @@ export function Workspace({
                     });
                   }}
                 >
-                  <TabsList className="w-full" aria-label="阅读配色">
+                  <SlidingTabsList className="w-full" aria-label="阅读配色">
                     <TabsTrigger value="light">浅色</TabsTrigger>
                     <TabsTrigger value="dark">深色</TabsTrigger>
                     <TabsTrigger value="sepia">纸张</TabsTrigger>
                     <TabsTrigger value="gray">灰色</TabsTrigger>
-                  </TabsList>
+                  </SlidingTabsList>
                 </Tabs>
               </div>
               <div className="appearance-section">
@@ -1396,12 +1482,12 @@ export function Workspace({
             </PopoverContent>
           </Popover>
           <IconButton
-            label="Agent 与批注"
+            label={right ? "收起右侧栏" : "展开右侧栏"}
             active={right}
             expanded={right}
             onClick={() => setRight(!right)}
           >
-            <Sparkles />
+            <PanelLeft className="rotate-180" />
           </IconButton>
           <DropdownMenu>
             <DropdownMenuTrigger
@@ -1452,8 +1538,8 @@ export function Workspace({
           collapsible
           collapsedSize={0}
           style={{ overflow: "hidden" }}
-          defaultSize="15%"
-          minSize="180px"
+          defaultSize="13%"
+          minSize="140px"
           maxSize="30%"
         >
           <aside className="interleaf-sidebar" data-open={left} inert={!left}>
@@ -1462,15 +1548,21 @@ export function Workspace({
               onValueChange={(value) => setLeftTab(String(value))}
               className="h-full gap-0"
             >
-              <div className="panel-header">
-                <TabsList className="panel-tabs">
-                  <TabsTrigger value="toc">
-                    <ListTree className="size-3.5" />
+              <div className="panel-header reader-navigation-header">
+                <TabsList
+                  className="panel-tabs reader-navigation-tabs"
+                  aria-label="阅读导航"
+                >
+                  <TabsTrigger value="toc" className="reader-navigation-title">
                     目录
                   </TabsTrigger>
-                  <TabsTrigger value="search">
+                  <TabsTrigger
+                    value="search"
+                    className="reader-navigation-search"
+                    aria-label="搜索文档内容"
+                  >
                     <Search className="size-3.5" />
-                    搜索
+                    <span className="sr-only">搜索</span>
                   </TabsTrigger>
                 </TabsList>
               </div>
@@ -1548,10 +1640,11 @@ export function Workspace({
         </ResizablePanel>
         <ResizableHandle
           disabled={!left}
-          className={left ? "" : "sidebar-handle-closed"}
+          className={`reader-navigation-resizer${left ? "" : " sidebar-handle-closed"}`}
         />
         <ResizablePanel id="reading" minSize="30%">
           <div className="reading-pane" ref={readingPane}>
+            <div className="reading-toolbar-host" ref={setReadingToolbar} />
             {(() => {
               const ReadingView =
                 doc.type === "pdf" ? PDFReadingView : EPUBReadingView;
@@ -1595,7 +1688,7 @@ export function Workspace({
                 />
               );
             })()}
-            {!selection && annotationTarget && selectedAnnotation && (
+            {!activeSelection && annotationTarget && selectedAnnotation && (
               <AnnotationToolbar
                 annotation={selectedAnnotation}
                 anchor={annotationTarget.anchor}
@@ -1603,14 +1696,28 @@ export function Workspace({
                 deleting={deleting.has(selectedAnnotation.id)}
                 onDelete={(id) => void removeAnnotation(id)}
                 onNote={editAnnotationNote}
-                onAskAI={askAnnotationAI}
+                onQuote={quoteAnnotation}
                 onAnswer={(annotation) => void answerQuestion(annotation)}
                 onColor={(annotation, color) => void recolor(annotation, color)}
               />
             )}
 
-            {selection?.anchor && (
-              <SelectionToolbar anchor={selection.anchor} pane={readingPane}>
+            {activeSelection?.anchor && !noteOpen && (
+              <SelectionToolbar
+                anchor={activeSelection.anchor}
+                pane={readingPane}
+                onClose={closeSelectionUI}
+                content={
+                  translationRequest && (
+                    <SelectionTranslation
+                      inline
+                      selection={translationRequest.selection}
+                      delayMs={translationRequest.automatic ? 350 : 0}
+                      onClose={closeSelectionUI}
+                    />
+                  )
+                }
+              >
                 <ColorSwatchPicker color={markColor} onPick={chooseColor} />
                 <IconButton
                   label="高亮"
@@ -1624,31 +1731,28 @@ export function Workspace({
                   onClick={() => {
                     setNoteKind("note");
                     setEditingAnnotation(null);
-                    setNoteSelection(selection);
+                    setNoteSelection(activeSelection);
                     setNote("");
                     setNoteOpen(true);
+                    setTranslationRequest(null);
                     adapter?.clearSelection();
                   }}
                 >
                   <StickyNote />
                 </IconButton>
-                <IconButton
-                  label="问 AI"
-                  onClick={() =>
-                    void send(
-                      "请解释这段文字的含义，区分原文结论与你的补充说明。",
-                      [selection],
-                    )
-                  }
-                >
-                  <Sparkles />
+                <IconButton label="引用到 AI 对话" onClick={addQuote}>
+                  <Quote />
                 </IconButton>
                 <IconButton
                   label="划词翻译"
                   onClick={() => {
-                    setTranslationSelection(selection);
-                    setSelection(null);
-                    adapter?.clearSelection();
+                    setTranslationRequest(
+                      (current) =>
+                        current ?? {
+                          selection: activeSelection,
+                          automatic: false,
+                        },
+                    );
                   }}
                 >
                   <Languages />
@@ -1668,10 +1772,21 @@ export function Workspace({
                     <Ellipsis />
                   </DropdownMenuTrigger>
                   <DropdownMenuContent
+                    data-selection-preserve=""
                     align="end"
                     className="w-40"
                     onMouseDown={(event) => event.preventDefault()}
                   >
+                    <DropdownMenuCheckboxItem
+                      checked={theme.autoTranslateSelection === true}
+                      onCheckedChange={(checked) =>
+                        setTheme({ autoTranslateSelection: checked === true })
+                      }
+                    >
+                      <Languages />
+                      自动划词翻译
+                    </DropdownMenuCheckboxItem>
+                    <DropdownMenuSeparator />
                     <DropdownMenuItem
                       onClick={() => void annotate("underline")}
                     >
@@ -1682,18 +1797,15 @@ export function Workspace({
                       onClick={() => {
                         setNoteKind("question");
                         setEditingAnnotation(null);
-                        setNoteSelection(selection);
+                        setNoteSelection(activeSelection);
                         setNote("");
                         setNoteOpen(true);
+                        setTranslationRequest(null);
                         adapter?.clearSelection();
                       }}
                     >
                       <CircleHelp />
                       提问
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={addQuote}>
-                      <Quote />
-                      引用到对话
                     </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
@@ -1703,7 +1815,7 @@ export function Workspace({
         </ResizablePanel>
         <ResizableHandle
           disabled={!right}
-          className={right ? "" : "sidebar-handle-closed"}
+          className={`reader-assistant-resizer${right ? "" : " sidebar-handle-closed"}`}
         />
         <ResizablePanel
           id="assistant"
@@ -1711,8 +1823,8 @@ export function Workspace({
           collapsible
           collapsedSize={0}
           style={{ overflow: "hidden" }}
-          defaultSize="25%"
-          minSize="250px"
+          defaultSize="31%"
+          minSize="280px"
           maxSize="45%"
         >
           <aside className="assistant-sidebar" data-open={right} inert={!right}>
@@ -1722,7 +1834,7 @@ export function Workspace({
               className="h-full gap-0"
             >
               <div className="panel-header">
-                <TabsList className="panel-tabs">
+                <SlidingTabsList className="panel-tabs" aria-label="阅读侧栏">
                   <TabsTrigger value="ai">
                     <ChatCircleDots className="size-3.5" />
                     对话
@@ -1731,7 +1843,7 @@ export function Workspace({
                     <StickyNote className="size-3.5" />
                     批注<small>{annotations.length || ""}</small>
                   </TabsTrigger>
-                </TabsList>
+                </SlidingTabsList>
                 <div className="panel-header-actions">
                   <Button
                     variant="ghost"
@@ -1768,6 +1880,7 @@ export function Workspace({
                   running={sending}
                   onChange={selectSession}
                   onRefresh={refreshSessions}
+                  onDeleted={sessionDeleted}
                 />
                 {sessionError && (
                   <div
@@ -1926,6 +2039,7 @@ export function Workspace({
                   {!!images.length && imageAttachments(images, true)}
                   <Textarea
                     ref={composeInput}
+                    rows={2}
                     aria-label="向 AI 提问"
                     placeholder="问一个问题，或引用选中的文字…"
                     value={prompt}
@@ -1974,7 +2088,7 @@ export function Workspace({
                           !adapter ||
                           aiModelSaving ||
                           !provider ||
-                          (!prompt.trim() && !images.length)
+                          !prompt.trim()
                         }
                         onClick={() => void send()}
                       >
@@ -2019,13 +2133,8 @@ export function Workspace({
         </ResizablePanel>
       </ResizablePanelGroup>
 
-      <SelectionTranslation
-        key={`selection-translation-${doc.id}`}
-        selection={translationSelection}
-        onClose={() => setTranslationSelection(null)}
-      />
       <AnnotationHoverCard
-        target={!selection && !noteOpen ? hoveredAnnotation : null}
+        target={!activeSelection && !noteOpen ? hoveredAnnotation : null}
         annotations={annotations}
         onEdit={editAnnotationNote}
       />

@@ -5,7 +5,6 @@ import { useEffect, useState } from "react";
 import {
   FileText,
   Robot as Bot,
-  Check,
   HighlighterCircle as Highlighter,
   Books as Library,
   Monitor,
@@ -44,6 +43,7 @@ import {
   TabsTrigger,
 } from "@interleaf/ui/components/tabs";
 import { HighlightColorsEditor } from "./HighlightColorsEditor";
+import { SlidingTabsList } from "./controls/SlidingTabsList";
 import { ProxySettings } from "./ProxySettings";
 import {
   primaryLibraryMode,
@@ -109,14 +109,18 @@ export function Settings({
     useReaderStore((s) => s.libraryPreferences.papers) || {};
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="settings-dialog p-6 sm:max-w-3xl">
+      <DialogContent className="settings-dialog">
         <DialogHeader>
           <DialogTitle>设置</DialogTitle>
           <DialogDescription className="sr-only">
             AI 连接、显示、阅读、快捷键、诊断与论文库
           </DialogDescription>
         </DialogHeader>
-        <Tabs defaultValue="agent" className="settings-tabs">
+        <Tabs
+          defaultValue="agent"
+          orientation="vertical"
+          className="settings-tabs"
+        >
           <TabsList aria-label="设置分类" className="settings-nav">
             <TabsTrigger value="agent">
               <Bot />
@@ -151,6 +155,7 @@ export function Settings({
             className="settings-panel"
             keepMounted
           >
+            <h2 className="settings-title">诊断</h2>
             {window.interleafDesktop?.proxySettings && (
               <div className="mb-6">
                 <ProxySettings open={open} />
@@ -166,6 +171,7 @@ export function Settings({
             </section>
           </TabsContent>
           <TabsContent value="display" className="settings-panel" keepMounted>
+            <h2 className="settings-title">显示</h2>
             <section className="mb-6">
               <h3
                 id="primary-library-label"
@@ -204,35 +210,36 @@ export function Settings({
             </section>
             <section>
               <h3 className="mb-3 text-sm font-medium">界面主题</h3>
-              <div className="flex gap-2">
-                {(["light", "sepia", "dark", "system"] as const).map(
-                  (mode, i) => (
-                    <Button
-                      key={mode}
-                      aria-pressed={(theme.appearance ?? "system") === mode}
-                      variant={
-                        (theme.appearance ?? "system") === mode
-                          ? "default"
-                          : "outline"
-                      }
-                      onClick={() =>
-                        setTheme({
-                          appearance: mode,
-                          mode:
-                            mode === "dark" || mode === "sepia"
-                              ? mode
-                              : "light",
-                        })
-                      }
-                    >
-                      {["浅色", "纸张", "深色", "跟随系统"][i]}
-                      {(theme.appearance ?? "system") === mode && (
-                        <Check className="size-3" />
-                      )}
-                    </Button>
-                  ),
-                )}
-              </div>
+              <Tabs
+                value={theme.appearance ?? "system"}
+                onValueChange={(value) => {
+                  if (
+                    value !== "light" &&
+                    value !== "sepia" &&
+                    value !== "dark" &&
+                    value !== "system"
+                  )
+                    return;
+                  setTheme({
+                    appearance: value,
+                    mode:
+                      value === "dark" || value === "sepia" ? value : "light",
+                  });
+                }}
+              >
+                <SlidingTabsList
+                  aria-label="界面主题"
+                  className="settings-appearance"
+                >
+                  {(["light", "sepia", "dark", "system"] as const).map(
+                    (mode, i) => (
+                      <TabsTrigger key={mode} value={mode}>
+                        {["浅色", "纸张", "深色", "跟随系统"][i]}
+                      </TabsTrigger>
+                    ),
+                  )}
+                </SlidingTabsList>
+              </Tabs>
             </section>
             <section className="mt-6">
               <label
@@ -282,6 +289,7 @@ export function Settings({
             </section>
           </TabsContent>
           <TabsContent value="reading" className="settings-panel" keepMounted>
+            <h2 className="settings-title">阅读</h2>
             <section className="mb-6 space-y-4">
               <label className="block text-sm">
                 文档上下文上限（可选）
@@ -333,6 +341,22 @@ export function Settings({
             <section className="mb-6">
               <label className="flex items-start gap-2 text-sm">
                 <Checkbox
+                  checked={theme.autoTranslateSelection === true}
+                  onCheckedChange={(checked) =>
+                    setTheme({ autoTranslateSelection: checked === true })
+                  }
+                />
+                <span>
+                  自动划词翻译
+                  <span className="block text-xs text-muted-foreground">
+                    选定文字后，在选区菜单下方自动显示 AI 译文
+                  </span>
+                </span>
+              </label>
+            </section>
+            <section className="mb-6">
+              <label className="flex items-start gap-2 text-sm">
+                <Checkbox
                   checked={theme.linkTranslationAnnotations !== false}
                   onCheckedChange={(checked) =>
                     setTheme({ linkTranslationAnnotations: !!checked })
@@ -352,6 +376,7 @@ export function Settings({
             </section>
           </TabsContent>
           <TabsContent value="papers" className="settings-panel" keepMounted>
+            <h2 className="settings-title">论文库</h2>
             {window.interleafDesktop?.libraryLocation && (
               <div className="mb-6">
                 <LibraryLocationSettings open={open} />

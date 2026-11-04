@@ -5829,7 +5829,57 @@ export interface paths {
         get?: never;
         put?: never;
         post?: never;
-        delete?: never;
+        /** Delete an idle session and its history; preserve annotations and unlink its answers */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                    session: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Deleted; includes a new empty default session when the last session was removed */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ChatSessionDeletion"];
+                    };
+                };
+                /** @description Document or document-scoped session does not exist */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                /** @description Session has an active, reserved or persisted running generation */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                /** @description Error; session and history are retained */
+                default: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+            };
+        };
         options?: never;
         head?: never;
         /** Rename a session or change its backend while idle */
@@ -7432,6 +7482,11 @@ export interface components {
             error?: string;
             startedAt: string;
             finishedAt?: string;
+        };
+        ChatSessionDeletion: {
+            ok: boolean;
+            unlinkedAnnotationIds: string[];
+            replacement?: components["schemas"]["DocumentChatSession"];
         };
         DocumentChatSession: {
             id: string;

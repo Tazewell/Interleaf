@@ -341,6 +341,8 @@ export type Appearance = "light" | "sepia" | "dark" | "system";
 export interface ReaderTheme {
   /** Opt in to copying text selections and selected annotations. */
   autoCopySelection?: boolean;
+  /** Translate settled text selections in the reading toolbar when enabled. */
+  autoTranslateSelection?: boolean;
   autoTranslatePDF?: boolean;
   /** 0 means manual only; otherwise auto translate papers up to this many pages. */
   autoTranslateMaxPages?: number;
@@ -379,6 +381,7 @@ export interface HighlightColor {
 }
 export const defaultTheme: ReaderTheme = {
   autoCopySelection: false,
+  autoTranslateSelection: false,
   autoTranslatePDF: true,
   pdfDarkImageMode: "adaptive",
   pdfDarkContrast: "soft",
@@ -835,6 +838,12 @@ export interface DocumentChatSession {
   createdAt: string;
   updatedAt: string;
   latestRun?: ChatRun;
+}
+
+export interface ChatSessionDeletion {
+  ok: boolean;
+  unlinkedAnnotationIds: string[];
+  replacement?: DocumentChatSession;
 }
 
 export * from "./native-ai";

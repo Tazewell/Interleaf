@@ -28,7 +28,8 @@ import type {
 import { defaultTheme, isPDFPageDecoration } from "@interleaf/core";
 import { api } from "@interleaf/api";
 import { Button } from "@interleaf/ui/components/button";
-import { Tabs, TabsList, TabsTrigger } from "@interleaf/ui/components/tabs";
+import { Tabs, TabsTrigger } from "@interleaf/ui/components/tabs";
+import { SlidingTabsList } from "../controls/SlidingTabsList";
 import {
   Tooltip,
   TooltipContent,
@@ -843,29 +844,35 @@ export function PDFReadingView({
   );
   const toolbar = (
     <div className="translation-toolbar">
-      {!autoCenterHost && autoCenterButton}
-      <AssistanceControls
-        documentId={doc.id}
-        processing={processing}
-        library={doc.library}
-        chapter={() => {
-          const location = facade.current?.getLocation();
-          if (location?.type !== "pdf") return undefined;
-          return chapterRange(
-            outline.current,
-            location.page,
-            engine?.getPageCount?.() ||
-              Math.max(1, ...blocks.map((b) => b.page)),
-            headingPages(blocks),
-          );
-        }}
-      />
-      <Tabs value={mode} onValueChange={(v) => changeMode(v as Mode)}>
-        <TabsList>
+      <div className="reading-translation-actions">
+        {!autoCenterHost && autoCenterButton}
+        <AssistanceControls
+          documentId={doc.id}
+          processing={processing}
+          library={doc.library}
+          chapter={() => {
+            const location = facade.current?.getLocation();
+            if (location?.type !== "pdf") return undefined;
+            return chapterRange(
+              outline.current,
+              location.page,
+              engine?.getPageCount?.() ||
+                Math.max(1, ...blocks.map((b) => b.page)),
+              headingPages(blocks),
+            );
+          }}
+        />
+      </div>
+      <Tabs
+        className="reading-mode-tabs"
+        value={mode}
+        onValueChange={(v) => changeMode(v as Mode)}
+      >
+        <SlidingTabsList aria-label="阅读模式">
           <TabsTrigger value="source">原页</TabsTrigger>
           <TabsTrigger value="parallel">对照</TabsTrigger>
           <TabsTrigger value="translation">译文</TabsTrigger>
-        </TabsList>
+        </SlidingTabsList>
       </Tabs>
     </div>
   );

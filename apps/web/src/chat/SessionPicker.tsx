@@ -1,7 +1,13 @@
-import { useEffect, useState } from "react";
-import { Plus, PencilSimple, CircleNotch } from "@phosphor-icons/react";
+import { useEffect, useRef, useState } from "react";
+import {
+  PencilSimple,
+  CircleNotch,
+  Chats,
+  Trash,
+  Check,
+} from "@phosphor-icons/react";
 import { api } from "@interleaf/api";
-import type { DocumentChatSession } from "@interleaf/core";
+import type { ChatSessionDeletion, DocumentChatSession } from "@interleaf/core";
 import { Button } from "@interleaf/ui/components/button";
 import {
   Select,
@@ -15,7 +21,18 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
 } from "@interleaf/ui/components/dialog";
+import {
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogCancel,
+  AlertDialogAction,
+} from "@interleaf/ui/components/alert-dialog";
 import { Input } from "@interleaf/ui/components/input";
 import { toast } from "sonner";
 
@@ -26,15 +43,7 @@ const statusLabels = {
   cancelled: "已停止",
   interrupted: "已中断",
 };
-export function SessionPicker({
-  documentId,
-  sessions,
-  current,
-  provider,
-  running = false,
-  onChange,
-  onRefresh,
-}: {
+type SessionPickerProps = {
   documentId: string;
   sessions: DocumentChatSession[];
   current?: DocumentChatSession;
@@ -42,41 +51,116 @@ export function SessionPicker({
   running?: boolean;
   onChange: (id: string) => void;
   onRefresh: () => Promise<void>;
-}) {
+  onDeleted?: (id: string, result: ChatSessionDeletion) => void;
+};
+
+export function SessionPicker(props: SessionPickerProps) {
+  return <DocumentSessionPicker key={props.documentId} {...props} />;
+}
+
+function DocumentSessionPicker({
+  documentId,
+  sessions,
+  current,
+  provider,
+  running = false,
+  onChange,
+  onRefresh,
+  onDeleted,
+}: SessionPickerProps) {
   const status = running ? "running" : current?.latestRun?.status;
-  const [renaming, setRenaming] = useState(false);
+  const [managerOpen, setManagerOpen] = useState(false);
+  const [renameTarget, setRenameTarget] = useState<DocumentChatSession>();
+  const [deleteTarget, setDeleteTarget] = useState<DocumentChatSession>();
+  const [deleteError, setDeleteError] = useState("");
+  const [removed, setRemoved] = useState<Set<string>>(() => new Set());
   const [name, setName] = useState("");
   const [saving, setSaving] = useState(false);
+  const operation = useRef({ alive: true, pending: false });
   useEffect(() => {
-    setRenaming(false);
-    setSaving(false);
-  }, [current?.id]);
-  const create = async () => {
+    const scope = operation.current;
+    scope.alive = true;
+    return () => {
+      scope.alive = false;
+    };
+  }, []);
+  const isRunning = (session: DocumentChatSession) =>
+    (session.id === current?.id && running) ||
+    session.latestRun?.status === "running";
+  const begin = () => {
+    if (!operation.current.alive || operation.current.pending) return false;
+    operation.current.pending = true;
     setSaving(true);
+    return true;
+  };
+  const end = () => {
+    operation.current.pending = false;
+    if (operation.current.alive) setSaving(false);
+  };
+  const rename = (session: DocumentChatSession) => {
+    setName(session.title);
+    setRenameTarget(session);
+  };
+  const create = async () => {
+    if (!begin()) return;
     try {
       const session = await api.createChatSession(
         documentId,
         provider || "api",
       );
+      if (!operation.current.alive) return;
       await onRefresh();
-      onChange(session.id);
+      if (operation.current.alive) onChange(session.id);
     } catch (error) {
-      toast.error((error as Error).message);
+      if (operation.current.alive) toast.error((error as Error).message);
     } finally {
-      setSaving(false);
+      end();
     }
   };
   const update = async (title: string) => {
-    if (!current) return;
-    setSaving(true);
+    if (!renameTarget || !title.trim() || !begin()) return;
     try {
-      await api.updateChatSession(documentId, current.id, { title });
+      await api.updateChatSession(documentId, renameTarget.id, {
+        title: title.trim(),
+      });
+      if (!operation.current.alive) return;
       await onRefresh();
-      setRenaming(false);
+      if (operation.current.alive) setRenameTarget(undefined);
     } catch (error) {
-      toast.error((error as Error).message);
+      if (operation.current.alive) toast.error((error as Error).message);
     } finally {
-      setSaving(false);
+      end();
+    }
+  };
+  const remove = async () => {
+    if (
+      !deleteTarget ||
+      isRunning(
+        sessions.find((s) => s.id === deleteTarget.id) ?? deleteTarget,
+      ) ||
+      !begin()
+    )
+      return;
+    const target = deleteTarget;
+    setDeleteError("");
+    try {
+      const result = await api.deleteChatSession(documentId, target.id);
+      // The old document still needs cache cleanup when its viewer was closed.
+      onDeleted?.(target.id, result);
+      if (!operation.current.alive) return;
+      setRemoved((items) => new Set(items).add(target.id));
+      setDeleteTarget(undefined);
+      toast.success("会话已删除");
+      try {
+        await onRefresh();
+      } catch (error) {
+        if (operation.current.alive)
+          toast.error(`会话已删除，列表刷新失败：${(error as Error).message}`);
+      }
+    } catch (error) {
+      if (operation.current.alive) setDeleteError((error as Error).message);
+    } finally {
+      end();
     }
   };
   return (
@@ -124,29 +208,111 @@ export function SessionPicker({
           variant="ghost"
           size="icon-xs"
           className="session-picker-action"
-          title="重命名会话"
-          aria-label="重命名会话"
-          disabled={!current || saving}
-          onClick={() => {
-            setName(current?.title ?? "");
-            setRenaming(true);
-          }}
-        >
-          <PencilSimple />
-        </Button>
-        <Button
-          variant="ghost"
-          size="icon-xs"
-          className="session-picker-action"
           title="新建会话"
           aria-label="新建会话"
           disabled={saving}
           onClick={() => void create()}
         >
-          <Plus />
+          <PencilSimple />
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          className="session-manager-trigger"
+          title="会话管理"
+          aria-label="会话管理"
+          disabled={saving || !sessions.length}
+          onClick={() => setManagerOpen(true)}
+        >
+          <Chats />
+          会话管理
         </Button>
       </div>
-      <Dialog open={renaming} onOpenChange={setRenaming}>
+      <Dialog
+        open={managerOpen}
+        onOpenChange={(open) => {
+          if (!operation.current.pending) setManagerOpen(open);
+        }}
+      >
+        <DialogContent
+          className="chat-session-manager sm:max-w-md"
+          showCloseButton={!saving}
+        >
+          <DialogHeader>
+            <DialogTitle>会话管理</DialogTitle>
+            <DialogDescription>管理当前文档的对话。</DialogDescription>
+          </DialogHeader>
+          <div className="chat-session-manager-list">
+            {sessions
+              .filter((item) => !removed.has(item.id))
+              .map((item) => (
+                <div key={item.id} className="chat-session-manager-row">
+                  <Button
+                    variant="ghost"
+                    className="h-auto min-w-0 flex-1 justify-start gap-2 px-2 py-2 text-left"
+                    disabled={saving}
+                    onClick={() => {
+                      onChange(item.id);
+                      setManagerOpen(false);
+                    }}
+                  >
+                    <span className="min-w-0 flex-1 truncate">
+                      {item.title}
+                    </span>
+                    {item.id === current?.id && (
+                      <Check
+                        className="size-3.5 shrink-0 text-muted-foreground"
+                        aria-label="当前会话"
+                      />
+                    )}
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="chat-session-manager-action"
+                    aria-label={`重命名会话：${item.title}`}
+                    title="重命名"
+                    disabled={saving}
+                    onClick={() => rename(item)}
+                  >
+                    <PencilSimple />
+                    重命名
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="chat-session-manager-action text-destructive"
+                    aria-label={`删除会话：${item.title}`}
+                    title={
+                      isRunning(item)
+                        ? "请先停止该会话的回答，再删除"
+                        : "删除会话"
+                    }
+                    disabled={saving || isRunning(item)}
+                    onClick={() => {
+                      setDeleteError("");
+                      setDeleteTarget(item);
+                    }}
+                  >
+                    <Trash />
+                    删除
+                  </Button>
+                </div>
+              ))}
+          </div>
+          {sessions.some(isRunning) && (
+            <p className="text-sm text-muted-foreground">
+              正在生成回答的会话，请先停止回答再删除。
+            </p>
+          )}
+        </DialogContent>
+      </Dialog>
+      <Dialog
+        open={!!renameTarget}
+        onOpenChange={(open) => {
+          if (!open && !operation.current.pending) setRenameTarget(undefined);
+        }}
+      >
         <DialogContent className="sm:max-w-sm">
           <DialogHeader>
             <DialogTitle>重命名会话</DialogTitle>
@@ -171,6 +337,45 @@ export function SessionPicker({
           </form>
         </DialogContent>
       </Dialog>
+      <AlertDialog
+        open={!!deleteTarget}
+        onOpenChange={(open) => {
+          if (!open && !operation.current.pending) setDeleteTarget(undefined);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>删除会话？</AlertDialogTitle>
+            <AlertDialogDescription className="break-words">
+              将删除“{deleteTarget?.title}
+              ”的聊天记录和未发送草稿，此操作无法撤销。文档、笔记和批注会保留。
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          {deleteError && (
+            <p role="alert" className="text-sm text-destructive">
+              {deleteError}
+            </p>
+          )}
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={saving}>取消</AlertDialogCancel>
+            <AlertDialogAction
+              variant="destructive"
+              aria-label="确认删除会话"
+              disabled={
+                saving ||
+                (!!deleteTarget &&
+                  isRunning(
+                    sessions.find((s) => s.id === deleteTarget.id) ??
+                      deleteTarget,
+                  ))
+              }
+              onClick={() => void remove()}
+            >
+              {saving ? "删除中…" : "删除"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

@@ -1,0 +1,125 @@
+/* The same compact card fits a selection surface or a standalone popover. */
+.selection-translation-card {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--surface);
+  color: var(--ink);
+  text-align: left;
+  white-space: normal;
+}
+
+.selection-translation-card[data-inline] {
+  margin-top: 6px;
+}
+
+.selection-translation-header {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 38px;
+  padding: 7px 8px 5px 12px;
+}
+
+.selection-translation-title {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 6px;
+  color: var(--ink-muted);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.5;
+}
+
+.selection-translation-title > svg {
+  flex: none;
+  color: var(--ui-accent, var(--ink));
+}
+
+.selection-translation-card .selection-translation-close {
+  width: 26px;
+  height: 26px;
+  flex: none;
+  border-radius: 8px;
+  color: var(--ink-muted);
+}
+
+.selection-translation-body {
+  flex: 1;
+  min-height: 0;
+  max-height: min(20rem, 42vh);
+  padding: 3px 12px 12px;
+  overflow: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: none;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+  user-select: text;
+  font-size: 14px;
+  line-height: 1.8;
+}
+
+.selection-translation-body::-webkit-scrollbar {
+  display: none;
+}
+
+.selection-translation-body[role="alert"] {
+  color: var(--ink-muted);
+  font-size: 13px;
+}
+
+.selection-translation-loading {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--ink-muted);
+  font-size: 13px;
+}
+
+.selection-translation-loading > svg {
+  flex: none;
+  color: var(--ui-accent, var(--ink-muted));
+}
+
+.selection-translation-actions {
+  display: flex;
+  flex: none;
+  justify-content: flex-end;
+  padding: 0 10px 10px;
+}
+
+.selection-translation-actions [data-slot="button"] {
+  min-height: 30px;
+  border-radius: 9px;
+  background: var(--ui-panel, var(--surface));
+  color: var(--ink);
+  font-size: 12px;
+}
+
+.selection-translation-popover[data-slot="popover-content"] {
+  width: 360px;
+  max-width: calc(100vw - 24px);
+  max-height: min(26rem, 75vh);
+  padding: 0;
+  overflow: hidden;
+  border-radius: 14px;
+  background: var(--surface);
+}
+
+.selection-translation-popover > .selection-translation-card {
+  border: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .selection-translation-card [data-slot="button"] {
+    transition: none;
+  }
+}

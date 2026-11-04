@@ -4,6 +4,19 @@ import { ChatSession, type ChatTransport } from "./chat-session";
 import { refreshAIConfig } from "../store";
 
 const sessions = new Map<string, ChatSession>();
+/** Dispose a successfully deleted conversation without touching other stores. */
+export function forgetChatSession(
+  documentId: string,
+  sessionId: string,
+): string[] {
+  const key = `${documentId}:${sessionId}`;
+  const session = sessions.get(key);
+  const messageIds =
+    session?.getSnapshot().messages.map((message) => message.id) ?? [];
+  session?.dispose();
+  sessions.delete(key);
+  return messageIds;
+}
 /** Viewer lifetime is independent of run lifetime. Active stores are never evicted. */
 export function getChatSession(
   documentId: string,

@@ -5919,6 +5919,78 @@
         },
       "/api/documents/{id}/chat-sessions/{session}":
         {
+          "delete":
+            {
+              "summary": "Delete an idle session and its history; preserve annotations and unlink its answers",
+              "parameters":
+                [
+                  {
+                    "in": "path",
+                    "name": "id",
+                    "required": true,
+                    "schema": { "type": "string" },
+                  },
+                  {
+                    "in": "path",
+                    "name": "session",
+                    "required": true,
+                    "schema": { "type": "string" },
+                  },
+                ],
+              "responses":
+                {
+                  "200":
+                    {
+                      "description": "Deleted; includes a new empty default session when the last session was removed",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                {
+                                  "$ref": "#/components/schemas/ChatSessionDeletion",
+                                },
+                            },
+                        },
+                    },
+                  "404":
+                    {
+                      "description": "Document or document-scoped session does not exist",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                { "$ref": "#/components/schemas/Error" },
+                            },
+                        },
+                    },
+                  "409":
+                    {
+                      "description": "Session has an active, reserved or persisted running generation",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                { "$ref": "#/components/schemas/Error" },
+                            },
+                        },
+                    },
+                  "default":
+                    {
+                      "description": "Error; session and history are retained",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                { "$ref": "#/components/schemas/Error" },
+                            },
+                        },
+                    },
+                },
+            },
           "patch":
             {
               "summary": "Rename a session or change its backend while idle",
@@ -8914,6 +8986,19 @@
                   "error": { "type": "string" },
                   "startedAt": { "type": "string" },
                   "finishedAt": { "type": "string" },
+                },
+            },
+          "ChatSessionDeletion":
+            {
+              "type": "object",
+              "required": ["ok", "unlinkedAnnotationIds"],
+              "properties":
+                {
+                  "ok": { "type": "boolean" },
+                  "unlinkedAnnotationIds":
+                    { "type": "array", "items": { "type": "string" } },
+                  "replacement":
+                    { "$ref": "#/components/schemas/DocumentChatSession" },
                 },
             },
           "DocumentChatSession":

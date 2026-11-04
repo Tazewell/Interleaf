@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import {
   Copy,
   ArrowsOut as Expand,
-  Sparkle as Sparkles,
+  Quotes as Quote,
 } from "@phosphor-icons/react";
 import { Button } from "@interleaf/ui/components/button";
 import type { PDFBlock, PDFBlockAction } from "@interleaf/core";
@@ -33,9 +33,9 @@ export function BlockActions({
       {block.image && action("preview", "放大查看原图", <Expand />)}
       {action("copy", block.image ? "复制图片" : "复制此段", <Copy />)}
       {action(
-        "explain",
-        block.image ? "AI 解释此图" : "询问 AI 此段",
-        <Sparkles />,
+        "attach",
+        block.image ? "引用图片到 AI 对话" : "引用此段到 AI 对话",
+        <Quote />,
       )}
     </div>
   );

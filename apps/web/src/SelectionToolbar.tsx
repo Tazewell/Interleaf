@@ -1,5 +1,6 @@
 import {
   useLayoutEffect,
+  useEffect,
   useRef,
   useState,
   type ReactNode,
@@ -34,25 +35,38 @@ export function SelectionToolbar({
   pane,
   children,
   label = "选中文字操作",
+  content,
+  onClose,
 }: {
   anchor: SelectionAnchor;
   pane: RefObject<HTMLDivElement | null>;
   children: ReactNode;
   label?: string;
+  content?: ReactNode;
+  onClose?: () => void;
 }) {
   const bar = useRef<HTMLDivElement>(null);
-  const [position, setPosition] = useState<{ left: number; top: number }>();
+  const [position, setPosition] = useState<{
+    left: number;
+    top: number;
+    maxHeight: number;
+    maxWidth: number;
+  }>();
   useLayoutEffect(() => {
     if (!bar.current || !pane.current) return;
     const update = () => {
-      if (bar.current && pane.current)
-        setPosition(
-          toolbarPosition(
+      if (bar.current && pane.current) {
+        const bounds = pane.current.getBoundingClientRect();
+        setPosition({
+          ...toolbarPosition(
             anchor,
-            pane.current.getBoundingClientRect(),
+            bounds,
             bar.current.getBoundingClientRect(),
           ),
-        );
+          maxHeight: Math.max(0, bounds.height - 16),
+          maxWidth: Math.max(0, bounds.width - 16),
+        });
+      }
     };
     update();
     const observer = new ResizeObserver(update);
@@ -64,16 +78,52 @@ export function SelectionToolbar({
       window.removeEventListener("resize", update);
     };
   }, [anchor, pane]);
+  useEffect(() => {
+    if (!onClose) return;
+    const inside = (target: EventTarget | null) =>
+      target instanceof Element &&
+      (!!bar.current?.contains(target) ||
+        !!target.closest(
+          '[data-selection-preserve], [data-slot="popover-content"], [data-slot="dropdown-menu-content"]',
+        ));
+    const outside = (event: Event) => {
+      if (!inside(event.target)) onClose();
+    };
+    const escape = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && !event.defaultPrevented) onClose();
+    };
+    document.addEventListener("pointerdown", outside, true);
+    window.addEventListener("scroll", outside, true);
+    window.addEventListener("resize", onClose);
+    window.addEventListener("blur", onClose);
+    document.addEventListener("focusin", outside);
+    window.addEventListener("keydown", escape);
+    return () => {
+      document.removeEventListener("pointerdown", outside, true);
+      window.removeEventListener("scroll", outside, true);
+      window.removeEventListener("resize", onClose);
+      window.removeEventListener("blur", onClose);
+      document.removeEventListener("focusin", outside);
+      window.removeEventListener("keydown", escape);
+    };
+  }, [onClose]);
   return (
     <div
       ref={bar}
-      className="selection-bar"
-      role="toolbar"
-      aria-label={label}
+      className="selection-surface"
+      data-selection-surface=""
+      data-expanded={!!content || undefined}
       style={{ ...position, visibility: position ? "visible" : "hidden" }}
-      onMouseDown={(event) => event.preventDefault()}
     >
-      {children}
+      <div
+        className="selection-bar"
+        role="toolbar"
+        aria-label={label}
+        onMouseDown={(event) => event.preventDefault()}
+      >
+        {children}
+      </div>
+      {content}
     </div>
   );
 }

@@ -1,0 +1,550 @@
+/* Reader chrome and conversation share the library's quiet, rounded surfaces.
+   PDF canvas colors and the reader theme remain owned by the reading engines. */
+.workspace {
+  background: var(--app-bg);
+}
+
+.workspace .interleaf-toolbar {
+  min-height: 62px;
+  height: auto;
+  grid-template-columns: minmax(0, 1fr) auto;
+  padding-block: 12px;
+  padding-inline: 18px;
+  gap: 12px;
+  border-bottom: 0;
+  background: transparent;
+}
+.workspace .interleaf-title-group {
+  gap: 9px;
+}
+.workspace .interleaf-title {
+  max-width: none;
+  font-size: 14px;
+  font-weight: 500;
+}
+.workspace .interleaf-title-group [data-slot="badge"] {
+  height: 20px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--ink-muted);
+  font-size: 11px;
+  font-weight: 400;
+  letter-spacing: 0;
+}
+.workspace .interleaf-toolbar [data-slot="button"] {
+  min-width: 32px;
+  height: 32px;
+  border-radius: 10px;
+}
+.workspace .interleaf-panels {
+  padding: 0 12px 12px 0;
+}
+.workspace .reading-pane {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-right: 0;
+  border-radius: 20px 0 0 20px;
+  background: var(--ui-panel);
+  container: interleaf-reading / inline-size;
+}
+.workspace .reading-pane > :is(.pdf-reading, .epub-reading) {
+  height: 0;
+  flex: 1;
+  min-height: 0;
+}
+.workspace .reading-toolbar-host {
+  flex: none;
+  min-width: 0;
+  background: var(--ui-panel);
+}
+.workspace .reading-toolbar-host:empty {
+  display: none;
+}
+.workspace .translation-toolbar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  min-height: 60px;
+  padding: 10px 12px;
+  gap: 8px;
+  overflow: visible;
+  border-bottom: 0;
+  background: var(--ui-panel);
+}
+.workspace .reading-translation-actions {
+  grid-column: 1;
+  grid-row: 1;
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 3px;
+}
+.workspace .reading-mode-tabs {
+  grid-column: 2;
+  grid-row: 1;
+}
+.workspace .reading-mode-tabs .sliding-tabs-list {
+  width: 200px;
+}
+.workspace .translation-toolbar .sliding-tabs-list {
+  height: 40px;
+  padding: 4px;
+  border-radius: 14px;
+}
+.workspace .translation-toolbar [data-slot="tabs-trigger"] {
+  height: 32px;
+  min-width: 0;
+  padding-inline: 8px;
+  font-size: 12px;
+}
+.workspace .translation-toolbar [data-slot="tabs-indicator"] {
+  border-radius: 11px;
+}
+.workspace .translation-toolbar [data-slot="button"] {
+  height: 30px;
+  border-radius: 9px;
+}
+.workspace .assistant-sidebar {
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-left: 0;
+  border-radius: 0 20px 20px 0;
+  background: var(--ui-panel);
+}
+.workspace
+  .interleaf-panels:has(.assistant-sidebar[data-open="false"])
+  .reading-pane {
+  border-radius: 20px;
+  border-right: 1px solid var(--line);
+}
+.workspace .reader-navigation-resizer {
+  background: transparent;
+}
+.workspace .reader-assistant-resizer {
+  background: var(--line);
+}
+.workspace .interleaf-sidebar {
+  min-width: 140px;
+  padding: 8px 10px;
+  background: transparent;
+}
+.workspace .assistant-sidebar {
+  min-width: 280px;
+}
+.workspace .panel-header {
+  min-height: 60px;
+  height: auto;
+  padding: 11px 12px 0;
+  gap: 6px;
+  border-bottom: 0;
+  background: transparent;
+}
+.workspace .assistant-sidebar .panel-header {
+  min-height: 48px;
+}
+.workspace .panel-tabs.sliding-tabs-list {
+  height: 34px;
+  padding: 3px;
+  border-radius: 12px;
+  background: var(--rail-strong);
+}
+.workspace .panel-tabs [data-slot="tabs-trigger"] {
+  height: 28px;
+  padding-inline: 9px;
+  border-radius: 9px;
+  font-size: 12px;
+  transform: none;
+}
+.workspace .panel-tabs [data-slot="tabs-indicator"] {
+  border-radius: 9px;
+  background: var(--surface);
+}
+.workspace .panel-tabs [data-slot="tabs-trigger"] small {
+  font-size: 11px;
+}
+.workspace .panel-header-actions [data-slot="button"] {
+  border-radius: 9px;
+}
+.workspace .reader-navigation-header {
+  min-height: 42px;
+  padding: 0 4px 8px;
+}
+.workspace .reader-navigation-tabs[data-slot="tabs-list"] {
+  width: 100%;
+  height: 34px;
+  justify-content: space-between;
+  padding: 0;
+  background: transparent;
+}
+.workspace .reader-navigation-tabs [data-slot="tabs-indicator"] {
+  display: none;
+}
+.workspace .reader-navigation-tabs .reader-navigation-title {
+  flex: none;
+  padding-inline: 8px;
+  color: var(--ink);
+  font-size: 13px;
+}
+.workspace .reader-navigation-tabs .reader-navigation-search {
+  flex: none;
+  width: 28px;
+  padding: 0;
+  border-radius: 8px;
+}
+.workspace .reader-navigation-search:hover,
+.workspace .reader-navigation-search[data-active] {
+  background: var(--ui-wash);
+}
+.workspace .toc-tree {
+  gap: 1px;
+  padding: 6px 2px;
+}
+.workspace .toc-tree .toc-tree {
+  padding: 1px 0 2px;
+}
+.workspace .toc-children {
+  border-left: 0;
+  margin-left: 5px;
+  padding-left: 6px;
+}
+.workspace .toc-item {
+  min-height: 40px;
+  padding: 10px 8px;
+  border-radius: 10px;
+  font-size: 12px;
+}
+.workspace .toc-item.selected {
+  background: var(--ui-wash);
+  font-weight: 400;
+}
+.workspace .toc-dot {
+  display: none;
+}
+.workspace .toc-item small {
+  font-size: 11px;
+}
+.workspace .toc-item.selected::before {
+  display: none;
+}
+
+/* Session controls stay available without taking space from the thread. */
+.workspace .session-picker {
+  padding: 10px 15px 12px;
+  border-bottom: 0;
+}
+.workspace .session-picker-trigger {
+  height: 30px;
+  border-radius: 9px;
+  font-size: 12px;
+}
+.workspace .session-status {
+  font-size: 11px;
+}
+.workspace .session-picker-action {
+  width: 28px;
+  height: 28px;
+  border-radius: 9px;
+  opacity: 0.7;
+  transform: none;
+}
+.workspace .reading-pane .pdf-reading,
+.workspace .reading-pane .epub-reading,
+.workspace .reading-pane .interleaf-stage[data-theme="light"] {
+  background: var(--ui-panel);
+}
+.workspace .reading-pane .pdfViewer .page {
+  border-radius: 4px;
+}
+.workspace .chat-messages {
+  padding: 12px 17px 20px;
+}
+.workspace .chat-message {
+  padding: 12px 0;
+  font-size: calc(14px * var(--assistant-font-scale, 1));
+  line-height: 1.8;
+}
+.workspace .chat-message.user {
+  max-width: 94%;
+  margin: 6px 0 14px auto;
+  padding: 11px 13px;
+  border-radius: 18px 18px 5px 18px;
+  background: var(--rail-strong);
+  font-size: calc(13px * var(--assistant-font-scale, 1));
+}
+.workspace .chat-message.user .chat-reading-location {
+  gap: 6px;
+  margin-bottom: 7px;
+  font-size: 11px;
+}
+.workspace .chat-message.assistant {
+  padding-top: 5px;
+  padding-bottom: 12px;
+}
+.workspace .message-markdown :is(h1, h2, h3) {
+  font-weight: 600;
+}
+.workspace .message-markdown p:first-child {
+  margin-top: 0;
+}
+.workspace .message-markdown a[href^="#interleaf-"] {
+  color: var(--ui-accent, var(--accent-ink));
+  text-decoration-color: currentColor;
+}
+.workspace .chat-message-actions {
+  margin-top: 8px;
+  gap: 3px;
+  font-size: 11px;
+}
+.workspace .chat-message-actions button {
+  border-radius: 9px;
+}
+.workspace .chat-thinking-toggle {
+  height: 28px;
+  padding-inline: 7px;
+  border-radius: 9px;
+  font-size: 12px;
+}
+.workspace .chat-thinking-content {
+  padding: 8px 0 8px 12px;
+  font-size: calc(12px * var(--assistant-font-scale, 1));
+}
+.workspace .chat-waiting {
+  max-width: 100%;
+  min-height: 30px;
+  margin-bottom: 9px;
+  padding: 5px 9px;
+  border: 0;
+  border-radius: 10px;
+  background: var(--rail-strong);
+  box-shadow: none;
+}
+.workspace .chat-waiting-icon {
+  color: var(--ui-accent, var(--ink));
+}
+.workspace .chat-waiting .chat-status {
+  white-space: normal;
+  font-size: 12px;
+}
+.workspace .chat-status {
+  font-size: 12px;
+}
+.workspace .reference-list {
+  gap: 6px;
+}
+.workspace .reference-card {
+  padding: 8px 10px;
+  gap: 4px;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  background: var(--surface);
+}
+.workspace .reference-card:hover {
+  background: var(--state-hover);
+}
+.workspace .reference-card-heading {
+  font-size: 11px;
+  color: var(--ui-accent, var(--ink-muted));
+}
+.workspace .reference-card-excerpt {
+  font-size: 12px;
+  font-style: normal;
+  line-height: 1.65;
+}
+.workspace .image-attachments {
+  gap: 6px;
+}
+.workspace .image-attachment .attachment-preview {
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  background: var(--surface);
+}
+.workspace .attachment-preview img {
+  border-radius: 7px;
+}
+.workspace .attachment-preview span {
+  max-width: 100%;
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.workspace .attachment-remove {
+  border-radius: 50%;
+}
+
+/* A compact composer grows with actual text, and keeps pending attachments
+   separate from images already sent in the conversation. */
+.workspace .chat-compose {
+  flex: none;
+  min-width: 0;
+  margin: 8px 12px 12px;
+  padding: 9px;
+  border-radius: 20px;
+  background: var(--surface);
+  box-shadow: 0 3px 10px color-mix(in srgb, var(--ink) 5%, transparent);
+}
+.workspace .chat-compose:focus-within {
+  border-color: color-mix(
+    in srgb,
+    var(--ui-accent, var(--ink)) 50%,
+    var(--line)
+  );
+  box-shadow: 0 0 0 3px
+    color-mix(in srgb, var(--ui-accent, var(--ink)) 7%, transparent);
+}
+.workspace .chat-compose textarea {
+  min-height: 56px;
+  max-height: 144px;
+  padding: 5px 5px 7px;
+  font-size: calc(13px * var(--assistant-font-scale, 1));
+  line-height: 1.7;
+  field-sizing: content;
+}
+.workspace .chat-compose textarea::placeholder {
+  color: var(--ink-muted);
+}
+.workspace .compose-footer {
+  min-width: 0;
+  gap: 5px;
+}
+.workspace .compose-footer .model-select-trigger {
+  font-size: 11.5px;
+}
+.workspace :is(.chat-send, .chat-stop) {
+  width: 31px;
+  height: 31px;
+  flex: none;
+  border-radius: 50%;
+  box-shadow: none;
+}
+.workspace .chat-send:not(:disabled) {
+  background: var(--ui-accent, var(--primary));
+  color: var(--ui-accent-foreground, var(--primary-foreground));
+}
+.workspace .quote-chips {
+  max-height: 150px;
+  overflow: auto;
+}
+.workspace .quote-chips > div {
+  padding: 6px 7px;
+  border: 0;
+  border-radius: 10px;
+  background: var(--ui-accent-soft, var(--muted));
+  color: var(--ink);
+  font-size: 12px;
+}
+.workspace .quote-chips > div > svg {
+  color: var(--ui-accent, var(--ink-muted));
+}
+.workspace .chat-compose .image-attachments {
+  max-height: 176px;
+  overflow: auto;
+  padding: 2px 0 5px;
+}
+.workspace .chat-compose .attachment-preview {
+  width: 104px;
+  background: var(--rail);
+}
+.workspace .chat-compose .attachment-preview img {
+  height: 54px;
+}
+.workspace .chat-empty {
+  padding-inline: 0;
+}
+.workspace .chat-empty-icon {
+  width: auto;
+  height: auto;
+  background: none;
+  box-shadow: none;
+  color: var(--ui-accent, var(--ink));
+}
+.workspace .chat-empty-title {
+  font-size: 15px;
+}
+.workspace .chat-empty-hint {
+  font-size: 13px;
+}
+.workspace .chat-empty-actions .suggestion {
+  padding: 10px;
+  border-radius: 13px;
+}
+.workspace .suggestion-icon {
+  width: auto;
+  height: auto;
+  background: none;
+}
+.workspace .suggestion-title {
+  font-size: 13px;
+}
+.workspace .suggestion-hint,
+.workspace .privacy-note {
+  font-size: 11.5px;
+}
+.appearance-panel {
+  border-radius: 18px;
+}
+.appearance-panel :is(.appearance-section-title, .appearance-row) {
+  font-size: 12px;
+  letter-spacing: 0;
+}
+.appearance-panel .sliding-tabs-list {
+  height: 34px;
+  border-radius: 11px;
+}
+.appearance-panel .sliding-tabs-list [data-slot="tabs-trigger"] {
+  height: 28px;
+}
+
+@media (max-width: 900px) {
+  .workspace .interleaf-toolbar {
+    gap: 6px;
+    padding-inline: 10px;
+  }
+  .workspace .interleaf-title {
+    max-width: none;
+  }
+  .workspace .translation-toolbar {
+    gap: 5px;
+    padding-inline: 6px;
+  }
+  .workspace .translation-toolbar [data-slot="tabs-trigger"] {
+    min-width: 0;
+    padding-inline: 8px;
+  }
+  .workspace .chat-messages {
+    padding-inline: 13px;
+  }
+  .workspace .chat-compose {
+    margin-inline: 9px;
+  }
+}
+@container interleaf-reading (max-width: 520px) {
+  .workspace .translation-toolbar {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 4px;
+  }
+  .workspace .reading-mode-tabs {
+    grid-column: 1;
+    grid-row: 1;
+    justify-self: center;
+  }
+  .workspace .reading-translation-actions {
+    grid-column: 1;
+    grid-row: 2;
+    justify-self: center;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .workspace
+    :is(
+      .chat-compose,
+      .session-picker-action,
+      .panel-tabs [data-slot="tabs-trigger"]
+    ) {
+    transition: none;
+  }
+}
