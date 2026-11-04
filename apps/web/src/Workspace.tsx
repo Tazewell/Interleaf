@@ -1428,12 +1428,12 @@ export function Workspace({
             </PopoverContent>
           </Popover>
           <IconButton
-            label="Agent 与批注"
+            label={right ? "收起右侧栏" : "展开右侧栏"}
             active={right}
             expanded={right}
             onClick={() => setRight(!right)}
           >
-            <Sparkles />
+            <PanelLeft className="rotate-180" />
           </IconButton>
           <DropdownMenu>
             <DropdownMenuTrigger
