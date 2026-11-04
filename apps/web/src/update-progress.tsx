@@ -3,42 +3,54 @@ import { toast } from "sonner";
 import { Progress } from "@interleaf/ui/components/progress";
 
 const megabytes = (bytes: number) => Math.round(bytes / 1024 / 1024);
+const updateToast = {
+  id: "interleaf-update",
+  duration: Infinity,
+  className: "update-progress-toast",
+};
 // Shows desktop update downloads in one persistent toast.
 export function useUpdateProgress() {
   useEffect(
     () =>
       window.interleafDesktop?.onUpdateProgress?.((progress) => {
         if (!progress) {
-          toast.dismiss("interleaf-update");
+          toast.dismiss(updateToast.id);
           return;
         }
         if (progress.phase === "prepare") {
           toast.loading(`正在准备安装纸间 ${progress.version}`, {
-            id: "interleaf-update",
-            description: undefined,
-            duration: Infinity,
+            ...updateToast,
+            description: (
+              <span className="update-progress-hint">下载和校验已完成。</span>
+            ),
           });
           return;
         }
         const { received, total } = progress;
+        const percent =
+          total !== undefined && total > 0
+            ? Math.min(100, Math.max(0, (received / total) * 100))
+            : null;
         toast.loading(`正在下载纸间 ${progress.version}`, {
-          id: "interleaf-update",
-          duration: Infinity,
+          ...updateToast,
           description: (
-            <div className="mt-2 grid gap-1.5">
-              {/* An unknown size would render as an empty, 0% track. */}
-              {total && (
-                <Progress
-                  aria-label="更新下载进度"
-                  value={Math.min(100, (received / total) * 100)}
-                />
+            <div className="update-progress-body">
+              <div className="update-progress-metrics">
+                <span>
+                  {total && percent !== null
+                    ? `${megabytes(received)} / ${megabytes(total)} MB`
+                    : `已下载 ${megabytes(received)} MB`}
+                </span>
+                {percent !== null && (
+                  <span className="update-progress-percent" aria-hidden="true">
+                    {Math.floor(percent)}%
+                  </span>
+                )}
+              </div>
+              {percent !== null && (
+                <Progress aria-label="更新下载进度" value={percent} />
               )}
-              <span className="tabular-nums">
-                {total
-                  ? `${megabytes(received)} / ${megabytes(total)} MB`
-                  : `已下载 ${megabytes(received)} MB`}
-              </span>
-              <span className="text-xs opacity-70">
+              <span className="update-progress-hint">
                 速度较慢时可开启代理加速。
               </span>
             </div>
