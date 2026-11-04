@@ -9,25 +9,28 @@
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="website/assets/screenshots/interleaf-pdf-dark.jpg" />
-  <img src="website/assets/screenshots/interleaf-pdf-light.jpg" alt="Current Interleaf PDF reader with document outline and annotation panel" />
+  <img src="website/assets/screenshots/interleaf-pdf-light.jpg" alt="Updated Interleaf PDF reader with outline and chat sidebar, captured on 2026-11-05" />
 </picture>
 
 Interleaf keeps books and papers in separate libraries, with original files, notes, and reading history on your computer. Connect your own OpenAI- or Anthropic-compatible API for questions, translation, and research across your documents.
 
+> `main` includes the updated interface, session management, and optional selection translation. An installer containing these changes has not been released yet.
+
 ## Features
 
+- **Consistent interface:** rounded library, reader, import, and settings views; a sliding reading-mode switch and a chat toolbar embedded in the reading sidebar.
 - **Libraries for books and papers:** import EPUB/PDF, organize documents with categories, tags, reading states, and favorites; manage paper metadata, duplicates, related documents, and batch actions.
 - **Reading and annotations:** contents, text search, bookmarks, highlights, underlines, questions, notes, reading-position restoration, filtering, undo, and exports. Light, dark, and paper appearances are available.
-- **Bilingual reading:** original, side-by-side, and translated PDF views; chapter translation and linked source/translation reading for EPUB. Layout analysis runs locally; translation needs a configured API.
-- **AI reading and research:** quote passages in questions, follow answer sources back to the original, keep document conversations, and synthesize comparisons or research ideas across a category. Online research requires separate authorization.
+- **Bilingual reading:** original, side-by-side, and translated PDF views; chapter translation and linked source/translation reading for EPUB. Optional automatic selection translation displays results below the selection toolbar. Layout analysis runs locally; translation needs a configured API.
+- **AI reading and research:** attach text or images and type your own question, then follow answer sources back to the original. Submitted references clear from the composer. Create, switch, rename, and delete sessions per document, or research documents across a category. Online research requires separate authorization.
 - **Import and citations:** DOI, arXiv, URL, or title import; Zotero migration, a browser connector, and GB/T 7714, APA, BibTeX, and RIS exports.
 - **Desktop and terminal:** Electron desktop app, in-app updates, proxy settings, diagnostic exports, editable shortcuts, and the `interleaf` command for searching, reading, and importing library documents.
 
 The browser extension is not published to a store yet. Build `apps/connector`, enable developer mode in Chrome, and load its generated `dist/` directory.
 
-## Current screenshots
+## Screenshots
 
-Captured from the current app on **2026-10-31**, using the bundled original sample documents in a separate demonstration library. These images contain no personal conversations, API keys, or real provider endpoints. Light/dark variants follow GitHub's appearance.
+Captured from the current `main` on **2026-11-05**, using bundled original sample documents in a separate demonstration library, without personal library data or API configuration. Light/dark variants follow GitHub's appearance.
 
 ### Library
 
@@ -36,9 +39,21 @@ Captured from the current app on **2026-10-31**, using the bundled original samp
   <img src="website/assets/screenshots/interleaf-library-light.jpg" alt="Interleaf library with EPUB/PDF samples, filters, and reading records" />
 </picture>
 
+### Paper import
+
+<img src="website/assets/screenshots/interleaf-import.jpg" alt="Updated paper import dialog with links, local files, library migration, and BibTeX" />
+
 ### AI settings
 
-<img src="website/assets/screenshots/interleaf-ai-settings.jpg" alt="Current API settings with endpoint, protocol, and model roles" />
+<img src="website/assets/screenshots/interleaf-ai-settings.jpg" alt="Updated AI settings with built-in providers and API connection configuration" />
+
+### Reading settings
+
+<img src="website/assets/screenshots/interleaf-reading-settings.jpg" alt="Automatic selection translation in reading settings, off by default" />
+
+### Session management
+
+<img src="website/assets/screenshots/interleaf-sessions.jpg" alt="Session management with switching, renaming, and deleting document conversations" />
 
 ### Keyboard shortcuts
 
@@ -72,6 +87,8 @@ The first build downloads and verifies approximately 67 MB of local layout-model
 ## AI configuration and data
 
 Local reading, search, and annotations work without AI. In **Settings → AI**, enter your API endpoint, key, and protocol, then choose models for chat, translation, images, and research. The built-in Go runtime calls that service directly; no external Codex, Claude Code, or Kimi CLI installation or login is required.
+
+Automatic selection translation is off by default. Enable **自动划词翻译** in **Settings → Reading** or the selected-text **更多文字操作** menu. It uses your configured translation model.
 
 The key is stored by the local backend; the UI only reports whether one is configured. Model requests send the required passages, excerpts, images, and conversation context to your chosen service. Online research also queries public scholarly sources. Billing and data policies depend on the configured provider.
 

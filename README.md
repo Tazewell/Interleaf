@@ -9,25 +9,28 @@
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="website/assets/screenshots/interleaf-pdf-dark.jpg" />
-  <img src="website/assets/screenshots/interleaf-pdf-light.jpg" alt="当前版本纸间：PDF 阅读、章节目录与批注面板" />
+  <img src="website/assets/screenshots/interleaf-pdf-light.jpg" alt="新版纸间 PDF 阅读、章节目录与对话侧栏（2026-11-05 截图）" />
 </picture>
 
 纸间将图书与论文分开管理，让原文、笔记和阅读记录保存在自己的电脑上。需要 AI 时，可配置自己的 OpenAI 或 Anthropic 兼容 API，在阅读过程中提问、翻译或围绕资料开展研究。
 
+> `main` 已合并界面优化、会话管理与可选划词翻译，尚未发布包含这些改动的新安装包。
+
 ## 功能
 
+- **统一界面**：书库、阅读、导入和设置使用圆润的统一样式；阅读模式支持滑块切换，聊天工具栏嵌入阅读侧栏。
 - **图书与论文书库**：导入 EPUB / PDF，按分类、标签、阅读状态与星标整理文档；论文支持元数据补全、重复检测、关联文献和批量操作。
 - **阅读与批注**：目录与全文搜索、书签、高亮、下划线、问题和笔记；保存阅读位置，支持批注筛选、撤销与导出。界面提供浅色、深色和纸张外观。
-- **双语阅读**：PDF 原文、对照与译文视图；EPUB 按章翻译和原译文联动。PDF 版面解析在本地进行，翻译需要可用的 API 连接。
-- **AI 精读与主题研究**：引用原文提问，阅读可定位的回答来源；为文档维护独立会话，围绕分类中的资料生成综述、比较与研究想法。联网研究需单独授权。
+- **双语阅读**：PDF 原文、对照与译文视图；EPUB 按章翻译和原译文联动。可开启自动划词翻译，在选区菜单下方直接查看译文。PDF 版面解析在本地进行，翻译需要可用的 API 连接。
+- **AI 精读与主题研究**：引用文字或图片后自行输入问题，查看可定位的回答来源；输入框中的本次引用发送后自动清除。每篇文档支持新建、切换、重命名和删除会话，也可围绕分类中的资料开展研究。联网研究需单独授权。
 - **收录与引用**：从 DOI、arXiv、链接或标题导入，支持 Zotero 迁移、浏览器收录扩展，以及 GB/T 7714、APA、BibTeX、RIS 引用导出。
 - **桌面与命令行**：Electron 桌面应用、应用内更新、代理设置、诊断导出和自定义快捷键；`interleaf` 命令可检索、阅读和导入本机书库。
 
 浏览器收录扩展尚未上架。当前可构建 `apps/connector`，在 Chrome 扩展管理中开启开发者模式，加载生成的 `dist/` 目录。
 
-## 当前界面
+## 界面截图
 
-以下图片于 **2026-10-31** 从当前版本实际截取，使用独立演示书库中的项目自带示例文档。图片不包含个人聊天记录、API Key 或真实服务地址；浅色与深色图片会跟随 GitHub 外观切换。
+以下图片于 **2026-11-05** 从当前 `main` 实际截取，使用独立演示书库中的项目自带示例文档，未使用个人书库或 API 配置。浅色与深色图片会跟随 GitHub 外观切换。
 
 ### 书库
 
@@ -36,9 +39,21 @@
   <img src="website/assets/screenshots/interleaf-library-light.jpg" alt="纸间图书库：EPUB 与 PDF 示例、筛选与阅读记录" />
 </picture>
 
+### 导入论文
+
+<img src="website/assets/screenshots/interleaf-import.jpg" alt="新版论文导入窗口：链接与标识、本地文件、文献库迁移和 BibTeX" />
+
 ### AI 设置
 
-<img src="website/assets/screenshots/interleaf-ai-settings.jpg" alt="纸间当前 AI 设置：API 地址、协议与模型用途配置" />
+<img src="website/assets/screenshots/interleaf-ai-settings.jpg" alt="新版 AI 设置：内置服务商选项与 API 连接配置" />
+
+### 阅读设置
+
+<img src="website/assets/screenshots/interleaf-reading-settings.jpg" alt="阅读设置中的自动划词翻译开关，默认关闭" />
+
+### 会话管理
+
+<img src="website/assets/screenshots/interleaf-sessions.jpg" alt="会话管理窗口：切换、重命名和删除当前文档的会话" />
 
 ### 快捷键
 
@@ -72,6 +87,8 @@ pnpm desktop
 ## AI 配置与数据
 
 本地阅读、搜索和批注不依赖 AI。启用 AI 时，在 **设置 → AI** 中填写 API 地址、Key 和协议，分别选择问答、翻译、图片及研究模型。内置 Go 运行时直接调用配置的模型服务；不需要安装或登录 Codex、Claude Code、Kimi 等外部 AI CLI。
+
+自动划词翻译默认关闭，可在 **设置 → 阅读** 或选中文字后的 **更多文字操作 → 自动划词翻译** 中开启，使用已配置的翻译模型。
 
 API Key 由本机后端配置保存，界面只显示是否已配置。调用模型时，所需原文、选区、图片和会话上下文会发送给你配置的服务；联网研究还会查询公开学术来源。模型服务的费用与数据政策由对应服务决定。
 

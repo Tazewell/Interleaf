@@ -1,47 +1,71 @@
 {
-  "captured_on": "2026-10-31",
-  "app_version": "0.8.7",
-  "ui_commit": "239e329",
-  "sample_documents_commit": "f9e2d30",
-  "method": "Direct browser viewport screenshots of the running Interleaf app; JPEG, unedited",
+  "captured_on": "2026-11-05",
+  "app_version": "0.8.9",
+  "ui_commit": "695e0a71ba2988297dba618773d58472b5995ba4",
+  "method": "Direct browser viewport screenshots of the running Interleaf main UI; JPEG, unedited",
   "library": "Isolated demonstration library using bundled original EPUB/PDF samples",
   "personal_configuration_included": false,
-  "removed_legacy_assets": [
-    "library-dark.webp",
-    "pdf-light.webp",
-    "library-light.webp",
-    "settings-light.webp",
-    "pdf-bilingual-ai.webp",
-    "pdf-dark.webp"
-  ],
+  "model_requests_made": false,
   "files": [
     {
-      "name": "interleaf-library-light.jpg",
-      "sha256": "abcd5a70d050044d004facc9991e7da716448587cff19883c6a30ea91dad4161"
-    },
-    {
-      "name": "interleaf-library-dark.jpg",
-      "sha256": "6e6dd0adee139956b5ed66c7ac90cd9190240a0b4e4e50bd87f2fe242bc6ddac"
-    },
-    {
-      "name": "interleaf-pdf-light.jpg",
-      "sha256": "4f8d210840607af3ed3042d09e2a9821d6b23f18dd4ef5c310ff8e293bb779cb"
-    },
-    {
-      "name": "interleaf-pdf-dark.jpg",
-      "sha256": "8c2c111807005a60b6f0130cd51fed116fa9b0a6e37aaa1ae2416810eb75d17e"
+      "name": "interleaf-about.jpg",
+      "sha256": "9d3d9151f194a331ba332d69d71072fe6f72be67b439c0ef95df655f8472f735",
+      "width": 1280,
+      "height": 720
     },
     {
       "name": "interleaf-ai-settings.jpg",
-      "sha256": "453b68f6c62163c117be7c1d39924a8bc07b15771805d2a690821f9d4e695487"
+      "sha256": "8b942cd452b882853ae6ec230f59a502372656afbd6ae60fb3cdfba5e5da3535",
+      "width": 1280,
+      "height": 720
+    },
+    {
+      "name": "interleaf-import.jpg",
+      "sha256": "7b314ed68514651610f1b127cf195a2f68efe9b63ed49256d8be55f3fa984d61",
+      "width": 1280,
+      "height": 720
+    },
+    {
+      "name": "interleaf-library-dark.jpg",
+      "sha256": "cd02c5e676fbdbd03e838deb6e701b6ce12ee4afa3c3fc31cadcb6f18da23afd",
+      "width": 1280,
+      "height": 720
+    },
+    {
+      "name": "interleaf-library-light.jpg",
+      "sha256": "c64d0072d2669511b00b7faec492df8d57df8c85e54b77e609c275d3c81aaa0f",
+      "width": 1280,
+      "height": 720
+    },
+    {
+      "name": "interleaf-pdf-dark.jpg",
+      "sha256": "cc9510d5860daa89797bf1fa6f0e95bd14b732f6795a3d9819c02b26dcdcbea0",
+      "width": 1280,
+      "height": 720
+    },
+    {
+      "name": "interleaf-pdf-light.jpg",
+      "sha256": "d51e1f0efe671cf54d92eae39253cdc88c718f227a45ec232922d1fe9c7693a6",
+      "width": 1280,
+      "height": 720
+    },
+    {
+      "name": "interleaf-reading-settings.jpg",
+      "sha256": "e58a1770b8eb7ed26d2a90e1c21d54db3d025b2cb79ea17b0453abd297c99808",
+      "width": 1280,
+      "height": 720
+    },
+    {
+      "name": "interleaf-sessions.jpg",
+      "sha256": "0d422a34af7607d313306e9513a54daeb69b8eb358153ff64bd92aa8f788dc84",
+      "width": 1280,
+      "height": 720
     },
     {
       "name": "interleaf-shortcuts.jpg",
-      "sha256": "4b093b81e4e6ab3f902e1c87df02d57c3cd8b3e4a7daa50e2909a46a07f5da11"
-    },
-    {
-      "name": "interleaf-about.jpg",
-      "sha256": "e6f55d520c09b60509e83ebe7a4ce2f8c1d3e9af8901767a7c3f652f2654e1ed"
+      "sha256": "78c4745e7f9bb8e059380872026dcddc11ba8ddbc524106d08181ec8b6b643d4",
+      "width": 1280,
+      "height": 720
     }
   ]
 }
