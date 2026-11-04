@@ -23,25 +23,33 @@
 
 ### 1. Conversation identity and discoverability
 
-- [ ] Inspect the referenced LobeChat repository via its primary source.
-- [ ] Update assistant identity, management entry and labeled manager actions; keep existing confirmations and lifecycle.
-- [ ] Run conversation suites and commit scoped changes.
+- [x] Inspect the referenced LobeChat repository via its primary source.
+- [x] Update assistant identity, management entry and labeled manager actions; keep existing confirmations and lifecycle.
+- [x] Run conversation suites and commit scoped changes.
 
 ### 2. Cancellable inline translation card
 
-- [ ] Add RED regressions for inline rendering, debouncing, replacement/cancellation and retry.
-- [ ] Extend SelectionTranslation with `inline?: boolean` and `delayMs?: number`, retaining standalone compatibility.
-- [ ] Match rounded/green-neutral reading surfaces and prove focused tests GREEN.
+- [x] Add RED regressions for inline rendering, debouncing, replacement/cancellation and retry.
+- [x] Extend SelectionTranslation with `inline?: boolean` and `delayMs?: number`, retaining standalone compatibility.
+- [x] Match rounded/green-neutral reading surfaces and prove focused tests GREEN.
 
 ### 3. Selection surface and integration
 
-- [ ] Test a toolbar content slot, outside/Escape/scroll dismissal and interaction within its card/portaled menus.
-- [ ] Integrate the card below actions, preserving the active source snapshot and all existing quote/annotation paths.
-- [ ] Add the opt-in preference and menu/settings controls; test automatic/manual/off/replacement and document boundaries.
-- [ ] Commit the coupled selection change after focused checks.
+- [x] Test a toolbar content slot, outside/Escape/scroll dismissal and interaction within its card/portaled menus.
+- [x] Integrate the card below actions, preserving the active source snapshot and all existing quote/annotation paths.
+- [x] Add the opt-in preference and menu/settings controls; test automatic/manual/off/replacement and document boundaries.
+- [x] Commit the coupled selection change after focused checks.
 
 ### 4. Review and preview
 
-- [ ] Review pointer/menu/native-selection lifecycle and stale-request boundaries independently.
-- [ ] Run typecheck, tests and build against the final source tree.
-- [ ] Update the owned preview and verify current assets; report user-facing behavior and dev commits.
+- [x] Review pointer/menu/native-selection lifecycle and stale-request boundaries independently.
+- [x] Run typecheck, tests and build against the final source tree.
+- [x] Update the owned preview and verify current assets; report user-facing behavior and dev commits.
+
+## Verification record
+
+- Conversation management follows the icon-plus-named-actions pattern verified in [LobeHub's topic menu](https://github.com/lobehub/lobehub/blob/canary/src/features/AgentSidebar/Topic/List/Item/useDropdownMenu.tsx). Existing session confirmation and running-session tests passed.
+- Independent review identified EPUB selection/location event ordering and native selection clearing on a nonvisual preference change. Both received RED-to-GREEN regressions; changing only the automatic-selection preference now preserves the PDF/EPUB adapter selection, while actual rendering changes still apply.
+- Final typecheck, full Go/Vitest tests and production build passed in the existing WSL verification environment against the exact 899-file source snapshot: 1,366 tests passed, 5 skipped.
+- Verified source hashes before updating the owned preview. Current assets include the inline card, preference and manager entry; an authenticated empty-input probe confirms the native endpoint returns validation HTTP 400 before generation. No paid model call or real user configuration mutation was performed.
+- Visual acceptance remains manual under AGENTS.md. Automatic translation is opt-in, stored with reading preferences, and does not create chat messages. Dev was preserved without merge, push or release.
