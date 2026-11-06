@@ -8,6 +8,7 @@ import {
   MagnifyingGlass as Search,
   GearSix as Settings2,
   ArrowUpRight,
+  ArrowClockwise,
   FileText,
   CircleNotch as LoaderCircle,
   SidebarSimple as PanelLeft,
@@ -33,7 +34,12 @@ import { Button } from "@interleaf/ui/components/button";
 import { Tabs, TabsTrigger } from "@interleaf/ui/components/tabs";
 import { SlidingTabsList } from "./controls/SlidingTabsList";
 import { Input } from "@interleaf/ui/components/input";
-import { TooltipProvider } from "@interleaf/ui/components/tooltip";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@interleaf/ui/components/tooltip";
 import {
   Dialog,
   DialogContent,
@@ -467,7 +473,7 @@ export function App() {
     }
   };
   return (
-    <TooltipProvider>
+    <TooltipProvider delay={350} timeout={500}>
       <div
         className="app"
         data-platform={window.interleafDesktop?.platform}
@@ -509,16 +515,25 @@ export function App() {
           <>
             <header className="global-nav">
               <div className="gnav-left">
-                <Button
-                  size="icon-sm"
-                  variant="ghost"
-                  className="gnav-icon"
-                  aria-label="切换侧栏"
-                  aria-expanded={nav}
-                  onClick={() => setNav(!nav)}
-                >
-                  <PanelLeft />
-                </Button>
+                <Tooltip>
+                  <TooltipTrigger
+                    render={
+                      <Button
+                        size="icon-sm"
+                        variant="ghost"
+                        className="gnav-icon"
+                        aria-label="切换侧栏"
+                        aria-expanded={nav}
+                        onClick={() => setNav(!nav)}
+                      />
+                    }
+                  >
+                    <PanelLeft />
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom">
+                    {nav ? "收起书库侧栏" : "展开书库侧栏"}
+                  </TooltipContent>
+                </Tooltip>
                 <Tabs
                   className="gnav-modes"
                   value={mode}
@@ -570,6 +585,7 @@ export function App() {
                         variant="ghost"
                         className="gnav-icon"
                         aria-label="界面主题"
+                        title="界面主题"
                       />
                     }
                   >
@@ -613,15 +629,22 @@ export function App() {
                     </DropdownMenuRadioGroup>
                   </DropdownMenuContent>
                 </DropdownMenu>
-                <Button
-                  size="icon-sm"
-                  variant="ghost"
-                  className="gnav-icon"
-                  aria-label="设置"
-                  onClick={() => setSettings(true)}
-                >
-                  <Settings2 />
-                </Button>
+                <Tooltip>
+                  <TooltipTrigger
+                    render={
+                      <Button
+                        size="icon-sm"
+                        variant="ghost"
+                        className="gnav-icon"
+                        aria-label="设置"
+                        onClick={() => setSettings(true)}
+                      />
+                    }
+                  >
+                    <Settings2 />
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom">设置</TooltipContent>
+                </Tooltip>
                 <DropdownMenu>
                   <DropdownMenuTrigger
                     render={
@@ -630,6 +653,7 @@ export function App() {
                         variant="ghost"
                         className="gnav-icon"
                         aria-label="更多"
+                        title="更多操作"
                       />
                     }
                   >
@@ -939,42 +963,55 @@ export function App() {
           hasDocuments={allDocuments.length > 0}
         />
         <Dialog open={about} onOpenChange={setAbout}>
-          <DialogContent className="sm:max-w-sm">
-            <DialogHeader>
+          <DialogContent className="about-dialog">
+            <DialogHeader className="about-dialog-header">
               <img
                 src="/brand/logo.svg?v=green-1"
                 alt=""
                 aria-hidden="true"
-                className="mb-1 size-10 rounded-lg dark:hidden"
+                className="size-11 shrink-0 rounded-xl dark:hidden"
               />
               <img
                 src="/brand/logo-dark.svg?v=green-1"
                 alt=""
                 aria-hidden="true"
-                className="mb-1 hidden size-10 rounded-lg dark:block"
+                className="hidden size-11 shrink-0 rounded-xl dark:block"
               />
-              <DialogTitle>关于纸间 Interleaf</DialogTitle>
-              <DialogDescription>本地 EPUB / PDF 阅读器</DialogDescription>
+              <div className="about-dialog-heading">
+                <DialogTitle>关于纸间 Interleaf</DialogTitle>
+                <DialogDescription>本地 EPUB / PDF 阅读器</DialogDescription>
+              </div>
             </DialogHeader>
-            <dl className="flex items-center justify-between text-sm">
-              <dt className="text-muted-foreground">版本</dt>
-              <dd>{version}</dd>
-            </dl>
-            {window.interleafDesktop?.checkForUpdates && (
-              <Button
-                variant="outline"
-                disabled={checkingUpdates}
-                onClick={() => {
-                  setCheckingUpdates(true);
-                  void window
-                    .interleafDesktop!.checkForUpdates()
-                    .catch((error) => toast.error(String(error)))
-                    .finally(() => setCheckingUpdates(false));
-                }}
-              >
-                {checkingUpdates ? "正在检查或下载…" : "检查更新"}
-              </Button>
-            )}
+            <div className="about-update-row">
+              <dl className="about-version">
+                <dt>当前版本</dt>
+                <dd>{version}</dd>
+              </dl>
+              {window.interleafDesktop?.checkForUpdates && (
+                <Button
+                  className="about-update-action"
+                  aria-busy={checkingUpdates}
+                  disabled={checkingUpdates}
+                  onClick={() => {
+                    setCheckingUpdates(true);
+                    void window
+                      .interleafDesktop!.checkForUpdates()
+                      .catch((error) => toast.error(String(error)))
+                      .finally(() => setCheckingUpdates(false));
+                  }}
+                >
+                  {checkingUpdates ? (
+                    <LoaderCircle
+                      aria-hidden="true"
+                      className="motion-safe:animate-spin"
+                    />
+                  ) : (
+                    <ArrowClockwise aria-hidden="true" />
+                  )}
+                  {checkingUpdates ? "正在检查或下载…" : "检查更新"}
+                </Button>
+              )}
+            </div>
           </DialogContent>
         </Dialog>
         <Dialog open={command} onOpenChange={setCommand}>

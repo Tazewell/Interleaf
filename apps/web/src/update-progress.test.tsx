@@ -41,7 +41,14 @@ it("shows download progress in one toast and dismisses it when cleared", async (
     vi.mocked(toast.loading).mock.lastCall![1]!.description as ReactElement,
   );
   expect(description).toContain("50 / 200 MB");
+  expect(description).toMatch(/>25%<\//);
   expect(description).toContain("开启代理");
+  emit({ version: "0.6.2", phase: "download", received: 50 * mb });
+  const unknownSize = renderToStaticMarkup(
+    vi.mocked(toast.loading).mock.lastCall![1]!.description as ReactElement,
+  );
+  expect(unknownSize).toContain("已下载 50 MB");
+  expect(unknownSize).not.toContain("progressbar");
   emit({ version: "0.6.2", phase: "prepare", received: 0 });
   expect(toast.loading).toHaveBeenLastCalledWith(
     "正在准备安装纸间 0.6.2",
