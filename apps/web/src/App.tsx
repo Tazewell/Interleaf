@@ -34,7 +34,12 @@ import { Button } from "@interleaf/ui/components/button";
 import { Tabs, TabsTrigger } from "@interleaf/ui/components/tabs";
 import { SlidingTabsList } from "./controls/SlidingTabsList";
 import { Input } from "@interleaf/ui/components/input";
-import { TooltipProvider } from "@interleaf/ui/components/tooltip";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@interleaf/ui/components/tooltip";
 import {
   Dialog,
   DialogContent,
@@ -468,7 +473,7 @@ export function App() {
     }
   };
   return (
-    <TooltipProvider>
+    <TooltipProvider delay={350} timeout={500}>
       <div
         className="app"
         data-platform={window.interleafDesktop?.platform}
@@ -510,16 +515,25 @@ export function App() {
           <>
             <header className="global-nav">
               <div className="gnav-left">
-                <Button
-                  size="icon-sm"
-                  variant="ghost"
-                  className="gnav-icon"
-                  aria-label="切换侧栏"
-                  aria-expanded={nav}
-                  onClick={() => setNav(!nav)}
-                >
-                  <PanelLeft />
-                </Button>
+                <Tooltip>
+                  <TooltipTrigger
+                    render={
+                      <Button
+                        size="icon-sm"
+                        variant="ghost"
+                        className="gnav-icon"
+                        aria-label="切换侧栏"
+                        aria-expanded={nav}
+                        onClick={() => setNav(!nav)}
+                      />
+                    }
+                  >
+                    <PanelLeft />
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom">
+                    {nav ? "收起书库侧栏" : "展开书库侧栏"}
+                  </TooltipContent>
+                </Tooltip>
                 <Tabs
                   className="gnav-modes"
                   value={mode}
@@ -571,6 +585,7 @@ export function App() {
                         variant="ghost"
                         className="gnav-icon"
                         aria-label="界面主题"
+                        title="界面主题"
                       />
                     }
                   >
@@ -614,15 +629,22 @@ export function App() {
                     </DropdownMenuRadioGroup>
                   </DropdownMenuContent>
                 </DropdownMenu>
-                <Button
-                  size="icon-sm"
-                  variant="ghost"
-                  className="gnav-icon"
-                  aria-label="设置"
-                  onClick={() => setSettings(true)}
-                >
-                  <Settings2 />
-                </Button>
+                <Tooltip>
+                  <TooltipTrigger
+                    render={
+                      <Button
+                        size="icon-sm"
+                        variant="ghost"
+                        className="gnav-icon"
+                        aria-label="设置"
+                        onClick={() => setSettings(true)}
+                      />
+                    }
+                  >
+                    <Settings2 />
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom">设置</TooltipContent>
+                </Tooltip>
                 <DropdownMenu>
                   <DropdownMenuTrigger
                     render={
@@ -631,6 +653,7 @@ export function App() {
                         variant="ghost"
                         className="gnav-icon"
                         aria-label="更多"
+                        title="更多操作"
                       />
                     }
                   >

@@ -175,6 +175,7 @@ function SidebarRow({
       data-drop-over={over || undefined}
       data-highlighted={highlighted || undefined}
       title={title || label}
+      aria-current={active ? "true" : undefined}
       onClick={onSelect}
       onDragOver={
         onDrop
@@ -520,6 +521,7 @@ export function PaperSidebar({
             variant="ghost"
             className="paper-nav-twisty"
             aria-label={`${expanded ? "折叠" : "展开"}“${node.label}”`}
+            title={`${expanded ? "折叠" : "展开"}“${node.label}”`}
             aria-expanded={expanded}
             onClick={() => toggleCollapsed(name)}
           >
@@ -687,7 +689,12 @@ export function PaperSidebar({
           <DropdownMenu>
             <DropdownMenuTrigger
               render={
-                <Button size="icon-xs" variant="ghost" aria-label="新建分类" />
+                <Button
+                  size="icon-xs"
+                  variant="ghost"
+                  aria-label="新建分类"
+                  title="新建分类"
+                />
               }
             >
               <Plus />

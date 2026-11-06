@@ -14,6 +14,8 @@ import "./selection-surface.css";
 import "./selection-translation.css";
 import "./settings-rounded.css";
 import "./imports-rounded.css";
+import "./library-polish.css";
+import "./interaction-polish.css";
 import { installDiagnostics } from "./diagnostics";
 import { installScrollbars } from "./scrollbars";
 import { migrateLegacyStorage } from "./legacy-storage";

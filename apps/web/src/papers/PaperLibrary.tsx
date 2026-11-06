@@ -1392,6 +1392,7 @@ function PaperRow({
               variant="ghost"
               className="paper-row-more"
               aria-label={`${doc.title} 的更多操作`}
+              title="更多操作"
             />
           }
         >

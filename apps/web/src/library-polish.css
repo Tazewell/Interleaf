@@ -1,0 +1,85 @@
+/* Keep library controls discoverable without changing row or card density. */
+.book-card .book-cover {
+  border-radius: 14px;
+}
+.book-list .book-meta {
+  margin-top: 2px;
+}
+.book-list .book-status {
+  margin-bottom: 0;
+}
+.book-action,
+.paper-row-more {
+  border-radius: 8px;
+  color: var(--ink-muted);
+}
+
+/* Table rows and touch users must also have a visible menu affordance. */
+.paper-row-more {
+  opacity: 1;
+}
+:is(.paper-row, .paper-table-row):is(:hover, :focus-within) .paper-row-more,
+.paper-row-more[data-popup-open] {
+  color: var(--ink);
+  background: var(--ui-wash);
+}
+:is(.book-action, .paper-row-more, .paper-nav-twisty):focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
+.paper-nav-twisty.paper-nav-twisty {
+  top: 7px;
+  left: calc(var(--depth, 0) * 14px - 2px);
+  width: 20px;
+  height: 20px;
+  border-radius: 6px;
+}
+.paper-nav-item .nav-count {
+  font-variant-numeric: tabular-nums;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .book-card .book-cover {
+    transition:
+      box-shadow var(--motion-base) var(--ease-out),
+      translate var(--motion-base) var(--ease-out);
+  }
+  .paper-row,
+  .paper-table-row {
+    transition: background-color var(--motion-fast) ease;
+  }
+  @media (hover: hover) and (pointer: fine) {
+    .book-card .book-cover:hover {
+      translate: 0 -2px;
+    }
+  }
+}
+
+@media (pointer: coarse) {
+  .book-action,
+  .paper-row-more,
+  .paper-nav-heading [data-slot="button"] {
+    min-width: 32px;
+    min-height: 32px;
+  }
+  .paper-nav-heading:has([data-slot="button"]) {
+    height: 32px;
+  }
+  .paper-nav-twisty.paper-nav-twisty {
+    top: 5px;
+    left: calc(var(--depth, 0) * 14px - 4px);
+    width: 24px;
+    height: 24px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .book-card .book-cover,
+  .book-action,
+  .paper-row-more,
+  .paper-nav-twisty,
+  .paper-nav-twisty svg {
+    transition: none;
+  }
+}

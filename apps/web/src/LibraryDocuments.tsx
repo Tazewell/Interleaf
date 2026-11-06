@@ -306,7 +306,10 @@ export function LibraryDocuments({
                   size="icon-xs"
                   variant="ghost"
                   data-document-action
+                  className="book-action"
                   aria-label={doc.favorite ? "取消收藏" : "收藏文档"}
+                  aria-pressed={doc.favorite}
+                  title={doc.favorite ? "取消收藏" : "收藏文档"}
                   onClick={() => void favorite(doc)}
                 >
                   <Star
@@ -321,6 +324,7 @@ export function LibraryDocuments({
                 <Button
                   size="icon-xs"
                   variant="ghost"
+                  className="book-action"
                   aria-label={`查看 ${doc.title} 的用量统计`}
                   title="用量统计"
                   data-document-action
@@ -331,6 +335,7 @@ export function LibraryDocuments({
                 <Button
                   size="icon-xs"
                   variant="ghost"
+                  className="book-action"
                   aria-label={`编辑 ${doc.title} 的信息`}
                   data-document-action
                   title="编辑文档信息"

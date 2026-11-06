@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import {
   PencilSimple,
+  Plus,
   CircleNotch,
   Chats,
   Trash,
@@ -175,6 +176,7 @@ function DocumentSessionPicker({
           <SelectTrigger
             className="session-picker-trigger"
             aria-label="选择会话"
+            title={current?.title}
           >
             <SelectValue className="truncate">
               {current?.title ?? "加载会话…"}
@@ -183,7 +185,9 @@ function DocumentSessionPicker({
           <SelectContent>
             {sessions.map((s) => (
               <SelectItem key={s.id} value={s.id}>
-                <span className="max-w-44 truncate">{s.title}</span>
+                <span className="max-w-44 truncate" title={s.title}>
+                  {s.title}
+                </span>
                 <span className="ml-2 text-xs text-muted-foreground">
                   {s.latestRun ? statusLabels[s.latestRun.status] : ""}
                 </span>
@@ -213,7 +217,7 @@ function DocumentSessionPicker({
           disabled={saving}
           onClick={() => void create()}
         >
-          <PencilSimple />
+          <Plus aria-hidden="true" />
         </Button>
         <Button
           variant="outline"
@@ -224,7 +228,7 @@ function DocumentSessionPicker({
           disabled={saving || !sessions.length}
           onClick={() => setManagerOpen(true)}
         >
-          <Chats />
+          <Chats aria-hidden="true" />
           会话管理
         </Button>
       </div>
@@ -246,10 +250,15 @@ function DocumentSessionPicker({
             {sessions
               .filter((item) => !removed.has(item.id))
               .map((item) => (
-                <div key={item.id} className="chat-session-manager-row">
+                <div
+                  key={item.id}
+                  className="chat-session-manager-row"
+                  data-current={item.id === current?.id ? "" : undefined}
+                >
                   <Button
                     variant="ghost"
                     className="h-auto min-w-0 flex-1 justify-start gap-2 px-2 py-2 text-left"
+                    title={item.title}
                     disabled={saving}
                     onClick={() => {
                       onChange(item.id);
@@ -275,7 +284,7 @@ function DocumentSessionPicker({
                     disabled={saving}
                     onClick={() => rename(item)}
                   >
-                    <PencilSimple />
+                    <PencilSimple aria-hidden="true" />
                     重命名
                   </Button>
                   <Button
@@ -294,7 +303,7 @@ function DocumentSessionPicker({
                       setDeleteTarget(item);
                     }}
                   >
-                    <Trash />
+                    <Trash aria-hidden="true" />
                     删除
                   </Button>
                 </div>
