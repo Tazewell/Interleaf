@@ -21,6 +21,11 @@ export class PDFReadingNavigation {
   private operation = 0;
   private focus: PDFPassage[] = [];
   private linkedRanges: Range[] = [];
+  private blockSource?: PDFBlock[];
+  private blockIndex = new Map<string, PDFBlock>();
+  private orderedBlocks: PDFBlock[] = [];
+  private pageBlocks = new Map<number, PDFBlock[]>();
+  private followedPosition?: { left: number; top: number };
   constructor(
     private host: HTMLElement,
     private viewer: PDFViewer,
@@ -36,10 +41,12 @@ export class PDFReadingNavigation {
   private interrupt = () => {
     this.operation++;
     this.moving = false;
+    this.followedPosition = undefined;
     this.onFocus(null);
   };
   private async moveTo(left: number, top: number, operation: number) {
     this.moving = true;
+    this.followedPosition = undefined;
     try {
       await animatePDFScroll(
         this.host,
@@ -74,6 +81,14 @@ export class PDFReadingNavigation {
   }
   private scrolled = () => {
     cancelAnimationFrame(this.frame);
+    if (this.followedPosition) {
+      if (
+        this.host.scrollLeft === this.followedPosition.left &&
+        this.host.scrollTop === this.followedPosition.top
+      )
+        return;
+      this.followedPosition = undefined;
+    }
     this.frame = requestAnimationFrame(() => {
       if (this.disposed || this.moving) return;
       const anchor = this.anchor();
@@ -81,27 +96,31 @@ export class PDFReadingNavigation {
     });
   };
   anchor(): PDFReadingAnchor | undefined {
+    this.indexBlocks();
     const viewport = this.host.getBoundingClientRect(),
       y = viewport.top + viewport.height * 0.5,
       x = viewport.left + viewport.width / 2;
     let best: PDFBlock | undefined,
       distance = Infinity,
       fraction = 0;
-    for (const b of this.readableBlocks()) {
-      const node = this.pageNode(b.page);
+    for (const [page, blocks] of this.pageBlocks) {
+      const node = this.pageNode(page);
       if (!node) continue;
       const r = node.getBoundingClientRect();
       if (r.bottom < viewport.top || r.top > viewport.bottom) continue;
-      const bx = r.left + b.bounds.x * r.width,
-        by = r.top + b.bounds.y * r.height,
-        bw = b.bounds.width * r.width,
-        bh = b.bounds.height * r.height;
-      const d =
-        Math.max(bx - x, x - bx - bw, 0) * 2 + Math.max(by - y, y - by - bh, 0);
-      if (d < distance) {
-        distance = d;
-        best = b;
-        fraction = Math.max(0, Math.min(1, (y - by) / (bh || 1)));
+      for (const b of blocks) {
+        const bx = r.left + b.bounds.x * r.width,
+          by = r.top + b.bounds.y * r.height,
+          bw = b.bounds.width * r.width,
+          bh = b.bounds.height * r.height;
+        const d =
+          Math.max(bx - x, x - bx - bw, 0) * 2 +
+          Math.max(by - y, y - by - bh, 0);
+        if (d < distance) {
+          distance = d;
+          best = b;
+          fraction = Math.max(0, Math.min(1, (y - by) / (bh || 1)));
+        }
       }
     }
     return best ? { blockId: best.id, fraction } : undefined;
@@ -118,11 +137,27 @@ export class PDFReadingNavigation {
       this.host.scrollTop += after.top - before.top;
     }
   }
-  private readableBlocks() {
+  private indexBlocks() {
+    const blocks = this.blocks();
+    if (blocks === this.blockSource) return;
+    this.blockSource = blocks;
+    this.blockIndex.clear();
+    for (const block of blocks)
+      if (!this.blockIndex.has(block.id)) this.blockIndex.set(block.id, block);
     // The parser supplies reading order within each page, including figures.
-    return this.blocks()
+    this.orderedBlocks = blocks
       .filter((b) => !isPDFPageDecoration(b) && (b.image || b.text.trim()))
       .sort((a, b) => a.page - b.page);
+    this.pageBlocks.clear();
+    for (const block of this.orderedBlocks) {
+      const page = this.pageBlocks.get(block.page) ?? [];
+      page.push(block);
+      this.pageBlocks.set(block.page, page);
+    }
+  }
+  private readableBlocks() {
+    this.indexBlocks();
+    return this.orderedBlocks;
   }
   cancelMotion() {
     this.interrupt();
@@ -230,8 +265,10 @@ export class PDFReadingNavigation {
       }
     }
   }
-  async follow(anchor: PDFReadingAnchor) {
-    const block = this.blocks().find((b) => b.id === anchor.blockId);
+  async follow(anchor: PDFReadingAnchor, options: { smooth?: boolean } = {}) {
+    if (this.disposed) return;
+    this.indexBlocks();
+    const block = this.blockIndex.get(anchor.blockId);
     if (!block || isPDFPageDecoration(block)) return;
     const operation = ++this.operation;
     const node = this.pageNode(block.page);
@@ -242,15 +279,32 @@ export class PDFReadingNavigation {
     const x = r.left + block.bounds.x * r.width;
     if (x > v.right || x + block.bounds.width * r.width < v.left)
       left += x - v.left - 16;
-    await this.moveTo(
-      left,
+    const top =
       this.host.scrollTop +
-        r.top -
-        v.top +
-        (block.bounds.y + anchor.fraction * block.bounds.height) * r.height -
-        this.host.clientHeight * 0.5,
-      operation,
-    );
+      r.top -
+      v.top +
+      (block.bounds.y + anchor.fraction * block.bounds.height) * r.height -
+      this.host.clientHeight * 0.5;
+    if (options.smooth === false) {
+      this.moving = false;
+      cancelAnimationFrame(this.frame);
+      this.host.scrollLeft = Math.max(
+        0,
+        Math.min(left, this.host.scrollWidth - this.host.clientWidth),
+      );
+      this.host.scrollTop = Math.max(
+        0,
+        Math.min(top, this.host.scrollHeight - this.host.clientHeight),
+      );
+      // The browser emits scroll asynchronously. Remember the applied position
+      // so that event cannot turn a follower move into fresh source input.
+      this.followedPosition = {
+        left: this.host.scrollLeft,
+        top: this.host.scrollTop,
+      };
+      return;
+    }
+    await this.moveTo(left, top, operation);
   }
   focusSentences(blockId: string, sources: string[], scroll = false) {
     return this.focusPassages(

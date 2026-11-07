@@ -441,6 +441,11 @@ it("navigates to the matching bibliography block and restores the translated vie
   ]);
   await click("译文");
   const { pane } = translationGeometry();
+  const beforeReference = host.querySelector<HTMLElement>(
+    '[data-translation-block="p9-first"]',
+  )!;
+  beforeReference.getBoundingClientRect = () =>
+    new DOMRect(40, 900 - pane.scrollTop, 520, 200);
   const reference = host.querySelector<HTMLElement>(
     '[data-translation-block="p9-ref"]',
   )!;
@@ -612,10 +617,10 @@ it("can disable automatic original centering while reading the translation", asy
     pane.dispatchEvent(new Event("scroll", { bubbles: true }));
     await new Promise(requestAnimationFrame);
   });
-  expect(adapter.followBlock).toHaveBeenLastCalledWith({
-    blockId: "p1-b1",
-    fraction: 0.55,
-  });
+  expect(adapter.followBlock).toHaveBeenLastCalledWith(
+    { blockId: "p1-b1", fraction: 0.55 },
+    { smooth: false },
+  );
   await act(async () => {
     host
       .querySelector<HTMLButtonElement>('[aria-label="取消同步效果"]')!
@@ -645,6 +650,129 @@ function translationGeometry(height = 200) {
     new DOMRect(40, 600 - pane.scrollTop, 520, height);
   return { pane, block };
 }
+it("follows consecutive manual translation scrolls immediately without restarting smooth motion", async () => {
+  await click("对照");
+  const { pane } = translationGeometry(1000);
+  vi.mocked(adapter.followBlock!).mockClear();
+  for (const top of [500, 550, 600]) {
+    await act(async () => {
+      pane.dispatchEvent(
+        new WheelEvent("wheel", { bubbles: true, deltaY: 50 }),
+      );
+      pane.scrollTop = top;
+      pane.dispatchEvent(new Event("scroll", { bubbles: true }));
+      await new Promise(requestAnimationFrame);
+    });
+    expect(adapter.followBlock).toHaveBeenLastCalledWith(
+      { blockId: "p1-b1", fraction: (top - 300) / 1000 },
+      { smooth: false },
+    );
+  }
+  expect(adapter.followBlock).toHaveBeenCalledTimes(3);
+});
+
+it("locates the reading anchor deep in a long translation without measuring every earlier paragraph", async () => {
+  await renderView(
+    defaultTheme,
+    Array.from({ length: 256 }, (_, index) => ({
+      id: `long-${index}`,
+      page: index + 2,
+      label: "text",
+      text: `Paragraph ${index}`,
+      bounds: { x: 0.1, y: 0.2, width: 0.3, height: 0.3 },
+    })),
+  );
+  await click("对照");
+  const pane = host.querySelector<HTMLElement>(".translation-document")!;
+  pane.getBoundingClientRect = () => new DOMRect(0, 0, 600, 600);
+  const nodes = [
+    ...pane.querySelectorAll<HTMLElement>("[data-translation-block]"),
+  ];
+  let measurements = 0;
+  nodes.forEach((node, index) => {
+    node.getBoundingClientRect = () => {
+      measurements++;
+      return new DOMRect(40, 300 + index * 120 - pane.scrollTop, 520, 120);
+    };
+  });
+  vi.mocked(adapter.followBlock!).mockClear();
+  await act(async () => {
+    pane.dispatchEvent(new WheelEvent("wheel", { bubbles: true, deltaY: 100 }));
+    pane.scrollTop = 128 * 120 + 60;
+    pane.dispatchEvent(new Event("scroll", { bubbles: true }));
+    await new Promise(requestAnimationFrame);
+  });
+  expect(adapter.followBlock).toHaveBeenLastCalledWith(
+    { blockId: nodes[128].dataset.translationBlock, fraction: 0.5 },
+    { smooth: false },
+  );
+  expect(measurements).toBeLessThan(30);
+});
+
+it("keeps synchronization active while dragging the translation scrollbar", async () => {
+  await click("对照");
+  const { pane } = translationGeometry();
+  vi.mocked(adapter.followBlock!).mockClear();
+  await act(async () => {
+    pane.dispatchEvent(
+      new MouseEvent("pointerdown", { bubbles: true, button: 0 }),
+    );
+    pane.scrollTop = 400;
+    pane.dispatchEvent(new Event("scroll", { bubbles: true }));
+    await new Promise(requestAnimationFrame);
+  });
+  expect(adapter.followBlock).toHaveBeenLastCalledWith(
+    { blockId: "p1-b1", fraction: 0.5 },
+    { smooth: false },
+  );
+});
+
+it("follows the paired formula when the original scroll anchor lands on its hidden equation number", async () => {
+  await renderView(defaultTheme, [
+    {
+      id: "formula",
+      page: 1,
+      label: "display_formula",
+      text: "x = y",
+      bounds: { x: 0.2, y: 0.4, width: 0.1, height: 0.1 },
+    },
+    {
+      id: "number",
+      page: 1,
+      label: "formula_number",
+      text: "(1)",
+      bounds: { x: 0.45, y: 0.44, width: 0.02, height: 0.02 },
+    },
+    {
+      id: "unpaired-number",
+      page: 1,
+      label: "formula_number",
+      text: "(2)",
+      bounds: { x: 0.45, y: 0.9, width: 0.02, height: 0.02 },
+    },
+  ]);
+  await click("对照");
+  const { pane } = translationGeometry();
+  const formula = pane.querySelector<HTMLElement>(
+    '[data-translation-block="formula"]',
+  )!;
+  formula.getBoundingClientRect = () =>
+    new DOMRect(40, 1000 - pane.scrollTop, 520, 200);
+  expect(pane.querySelector('[data-translation-block="number"]')).toBeNull();
+  expect(
+    pane.querySelector('[data-translation-block="unpaired-number"]'),
+  ).not.toBeNull();
+  for (const [fraction, top] of [
+    [0, 780],
+    [1, 820],
+  ]) {
+    await act(async () =>
+      fixture.events!.readingAnchor?.({ blockId: "number", fraction }),
+    );
+    expect(pane.scrollTop).toBeCloseTo(top);
+  }
+});
+
 it("smoothly centers clicked translation blocks and follows their original without scroll feedback", async () => {
   await click("对照");
   const { pane, block } = translationGeometry();

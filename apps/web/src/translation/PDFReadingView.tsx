@@ -120,6 +120,8 @@ export function PDFReadingView({
     control = useRef(new ReadingSync()),
     side = useRef<"source" | "translation">("source"),
     reading = useRef<PDFReadingAnchor | undefined>(undefined);
+  const translationNodes = useRef<HTMLElement[]>([]);
+  const translationNodesById = useRef(new Map<string, HTMLElement>());
   const recordReading = (anchor: PDFReadingAnchor) => {
     reading.current = anchor;
   };
@@ -195,9 +197,35 @@ export function PDFReadingView({
       setBlockImages(undefined);
     };
   }, [engine, blocks]);
-  const visibleBlocks = blocks.filter(
-    (b) => !isPDFPageDecoration(b) && !equationNumbers.pairedIds.has(b.id),
+  const visibleBlocks = useMemo(
+    () =>
+      blocks.filter(
+        (b) => !isPDFPageDecoration(b) && !equationNumbers.pairedIds.has(b.id),
+      ),
+    [blocks, equationNumbers],
   );
+  const sourceBlocksById = useMemo(
+    () => new Map(blocks.map((block) => [block.id, block])),
+    [blocks],
+  );
+  const lastPage = useMemo(
+    () => Math.max(1, ...blocks.map((block) => block.page)),
+    [blocks],
+  );
+  useLayoutEffect(() => {
+    const nodes = Array.from(
+      pane.current?.querySelectorAll<HTMLElement>("[data-translation-block]") ??
+        [],
+    );
+    translationNodes.current = nodes;
+    translationNodesById.current = new Map(
+      nodes.map((node) => [node.dataset.translationBlock!, node]),
+    );
+    return () => {
+      translationNodes.current = [];
+      translationNodesById.current.clear();
+    };
+  }, [mode, doc.id, visibleBlocks]);
   const searchBlockIds = useMemo(
     () => [
       ...new Set(
@@ -221,16 +249,31 @@ export function PDFReadingView({
       toast.error((e as Error).message);
     }
   };
-  const targetNode = (id: string) =>
-    Array.from(
-      pane.current?.querySelectorAll<HTMLElement>("[data-translation-block]") ??
-        [],
-    ).find((n) => n.dataset.translationBlock === id);
+  const targetNode = (id: string) => translationNodesById.current.get(id);
   const followTranslation = (
     anchor: PDFReadingAnchor,
     sentenceIndex?: number,
     options: { smooth?: boolean; center?: boolean } = {},
   ) => {
+    const formula = equationNumbers.byNumber.get(anchor.blockId),
+      number = sourceBlocksById.get(anchor.blockId);
+    if (formula && number) {
+      // The translated formula includes its number, while PDF.js can anchor
+      // on the separate number. Preserve the same source-page vertical point.
+      anchor = {
+        blockId: formula.id,
+        fraction: Math.max(
+          0,
+          Math.min(
+            1,
+            (number.bounds.y +
+              anchor.fraction * number.bounds.height -
+              formula.bounds.y) /
+              formula.bounds.height,
+          ),
+        ),
+      };
+    }
     const node = targetNode(anchor.blockId),
       host = pane.current;
     if (!node || !host) return;
@@ -700,8 +743,9 @@ export function PDFReadingView({
     events.selection(value.selection);
   };
   const translatedScroll = () => {
-    cancelAnimationFrame(scrollFrame.current);
+    if (scrollFrame.current) return;
     scrollFrame.current = requestAnimationFrame(() => {
+      scrollFrame.current = 0;
       if (
         selecting.current ||
         explicitFocus.current.moving ||
@@ -712,10 +756,17 @@ export function PDFReadingView({
         return;
       const v = pane.current.getBoundingClientRect(),
         y = v.top + v.height * 0.5;
-      const nodes = Array.from(
-        pane.current.querySelectorAll<HTMLElement>("[data-translation-block]"),
-      );
-      const node = nodes.find((n) => n.getBoundingClientRect().bottom > y);
+      // Sections follow normal document flow. Read only the rectangles needed
+      // to locate the center, even when the paper contains thousands of blocks.
+      const nodes = translationNodes.current;
+      let first = 0,
+        end = nodes.length;
+      while (first < end) {
+        const middle = Math.floor((first + end) / 2);
+        if (nodes[middle].getBoundingClientRect().bottom > y) end = middle;
+        else first = middle + 1;
+      }
+      const node = nodes[first];
       if (!node) return;
       const r = node.getBoundingClientRect(),
         anchor = {
@@ -723,7 +774,7 @@ export function PDFReadingView({
           fraction: Math.max(0, Math.min(1, (y - r.top) / (r.height || 1))),
         };
       recordReading(anchor);
-      const block = blocks.find((b) => b.id === anchor.blockId);
+      const block = sourceBlocksById.get(anchor.blockId);
       if (block)
         events.location(
           {
@@ -732,13 +783,11 @@ export function PDFReadingView({
             x: block.bounds.x,
             y: block.bounds.y + anchor.fraction * block.bounds.height,
           },
-          block.page /
-            (engine?.getPageCount?.() ||
-              Math.max(1, ...blocks.map((b) => b.page))),
+          block.page / (engine?.getPageCount?.() || lastPage),
         );
       if (mode === "parallel" && syncEnabledRef.current) {
         control.current.following("source");
-        void engine?.followBlock?.(anchor);
+        void engine?.followBlock?.(anchor, { smooth: false });
       }
     });
   };
@@ -993,7 +1042,7 @@ export function PDFReadingView({
                     : undefined;
                 input("translation");
                 hover("translation");
-                selecting.current = true;
+                selecting.current = !!section;
                 selection.current = null;
                 events.selection(null);
                 void engine?.focusSentences?.("", []);

@@ -933,8 +933,11 @@ export class PDFReaderAdapter implements ReaderAdapter {
   cancelBlockFocus() {
     this.navigation.cancelMotion();
   }
-  followBlock(anchor: import("@interleaf/core").PDFReadingAnchor) {
-    return this.navigation.follow(anchor);
+  followBlock(
+    anchor: import("@interleaf/core").PDFReadingAnchor,
+    options?: { smooth?: boolean },
+  ) {
+    return this.navigation.follow(anchor, options);
   }
   previewCitation(
     location: import("@interleaf/core").PDFLocation,
