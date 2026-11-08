@@ -7180,6 +7180,11 @@ export interface components {
             /** @enum {unknown} */
             kind?: "selection" | "section";
             image?: string;
+            /** @description Persisted PDF crop pixels, including padding; optional for older layouts. */
+            imageSize?: {
+                width: number;
+                height: number;
+            };
             caption?: string;
         };
         AICapability: {

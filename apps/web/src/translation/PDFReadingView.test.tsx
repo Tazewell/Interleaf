@@ -17,6 +17,8 @@ import {
 const fixture = vi.hoisted(() => ({
   events: undefined as ReaderEvents | undefined,
   ready: undefined as ReaderAdapter | undefined,
+  notifyReady: undefined as
+    ((adapter: ReaderAdapter, toc: []) => void) | undefined,
   translations: [] as TranslationBlock[],
   push: undefined as
     | ((
@@ -48,7 +50,7 @@ vi.mock("@interleaf/api", () => ({
     translate: vi.fn(async () => ({ queued: true })),
     process: vi.fn(async () => ({})),
   },
-  blockImageURL: () => "",
+  blockImageURL: () => "/block-image.png",
 }));
 vi.mock("../chat/MessageMarkdown", () => ({
   MessageMarkdown: ({
@@ -99,6 +101,7 @@ const adapter = {
   followBlock: vi.fn(async () => {}),
   focusSentences: vi.fn(async () => {}),
   hoverBlock: vi.fn(),
+  renderBlockImage: vi.fn(async () => new Blob()),
 } as unknown as ReaderAdapter;
 vi.mock("../InterleafView", () => ({
   InterleafView: ({
@@ -109,6 +112,7 @@ vi.mock("../InterleafView", () => ({
     onReady: (a: ReaderAdapter, t: []) => void;
   }) => {
     fixture.events = events;
+    fixture.notifyReady = onReady;
     useEffect(() => onReady(adapter, []), []);
     return <div>PDF 原文</div>;
   },
@@ -152,13 +156,14 @@ async function renderView(
   extraBlocks: PDFBlock[] = [],
   searchResults: SearchResult[] = [],
   sidebarsOpen = { left: true, right: true },
+  documentId = "doc",
 ) {
   await act(async () =>
     root.render(
       <PDFReadingView
         sidebarsOpen={sidebarsOpen}
         processing={fixture.processing}
-        document={{ id: "doc", type: "pdf" } as Document}
+        document={{ id: documentId, type: "pdf" } as Document}
         theme={theme}
         annotations={[]}
         searchResults={searchResults}
@@ -180,6 +185,79 @@ async function renderView(
     ),
   );
 }
+
+it("keeps a leased sharp crop across unrelated streamed block updates", async () => {
+  const revoke = vi.fn();
+  vi.stubGlobal("URL", {
+    createObjectURL: () => "blob:stable",
+    revokeObjectURL: revoke,
+  });
+  const figure: PDFBlock = {
+    id: "p2-b1",
+    page: 2,
+    label: "image",
+    text: "",
+    bounds: { x: 0.1, y: 0.1, width: 0.5, height: 0.2 },
+    image: "assets/p2-b1.png",
+    imageSize: { width: 400, height: 200 },
+  };
+  await renderView(defaultTheme, [figure]);
+  await click("对照");
+  const image = host.querySelector<HTMLImageElement>(
+    ".translation-document img",
+  )!;
+  Object.defineProperty(image, "naturalWidth", { value: 400 });
+  Object.defineProperty(image, "naturalHeight", { value: 200 });
+  await act(async () => image.dispatchEvent(new Event("load")));
+  expect(image.getAttribute("src")).toBe("blob:stable");
+  await renderView(defaultTheme, [
+    figure,
+    {
+      id: "p3-b1",
+      page: 3,
+      label: "text",
+      text: "New paragraph",
+      bounds: { x: 0, y: 0, width: 1, height: 0.1 },
+    },
+  ]);
+  expect(host.querySelector(".translation-document img")).toBe(image);
+  expect(image.getAttribute("src")).toBe("blob:stable");
+  expect(revoke).not.toHaveBeenCalled();
+  expect(adapter.renderBlockImage).toHaveBeenCalledTimes(1);
+});
+
+it("waits for the new document's adapter before acquiring a same-id crop", async () => {
+  vi.stubGlobal("URL", {
+    createObjectURL: () => "blob:document",
+    revokeObjectURL: vi.fn(),
+  });
+  const figure: PDFBlock = {
+    id: "p2-b1",
+    page: 2,
+    label: "image",
+    text: "",
+    bounds: { x: 0, y: 0, width: 0.5, height: 0.2 },
+    image: "assets/p2-b1.png",
+    imageSize: { width: 400, height: 200 },
+  };
+  await renderView(defaultTheme, [figure]);
+  await click("对照");
+  await renderView(
+    defaultTheme,
+    [figure],
+    [],
+    { left: true, right: true },
+    "second-document",
+  );
+  const image = host.querySelector<HTMLImageElement>(
+    ".translation-document img",
+  )!;
+  Object.defineProperty(image, "naturalWidth", { value: 400 });
+  await act(async () => image.dispatchEvent(new Event("load")));
+  expect(adapter.renderBlockImage).not.toHaveBeenCalled();
+  await act(async () => fixture.notifyReady!(adapter, []));
+  expect(adapter.renderBlockImage).toHaveBeenCalledTimes(1);
+});
 
 it("shows a single failed-job message and retries only after an explicit click", async () => {
   fixture.processing = {

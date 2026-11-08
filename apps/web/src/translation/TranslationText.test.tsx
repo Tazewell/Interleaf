@@ -287,7 +287,12 @@ it("replaces a loaded layout crop with a display-sized render", async () => {
   await act(async () => {
     image.dispatchEvent(new Event("load"));
   });
-  expect(renderImage).toHaveBeenCalledWith("p1-b1", 600);
+  expect(renderImage).toHaveBeenCalledWith(
+    "p1-b1",
+    600,
+    expect.any(AbortSignal),
+    expect.any(String),
+  );
   expect(image.getAttribute("src")).toBe("blob:sharp");
   // Keeps the crop's layout width so small figures are not enlarged.
   expect(image.getAttribute("width")).toBe("480");
@@ -295,6 +300,286 @@ it("replaces a loaded layout crop with a display-sized render", async () => {
     image.dispatchEvent(new Event("load"));
   });
   expect(renderImage).toHaveBeenCalledTimes(1);
+});
+
+it.each(["table", "display_formula"])(
+  "reserves exact %s crop pixels before lazy decode and through sharp replacement",
+  async (label) => {
+    const renderImage = vi.fn(async () => "blob:sharp");
+    await act(async () =>
+      root.render(
+        <TranslationText
+          block={{ ...base, label, imageSize: { width: 180, height: 46 } }}
+          documentId="doc"
+          retry={() => {}}
+          renderImage={renderImage}
+        />,
+      ),
+    );
+    const image = host.querySelector("img")!;
+    expect(image.getAttribute("loading")).toBe("lazy");
+    expect(image.width).toBe(180);
+    expect(image.height).toBe(46);
+    expect(image.style.aspectRatio).toBe("180 / 46");
+    expect(image.style.objectFit).toBe("contain");
+    expect(renderImage).not.toHaveBeenCalled();
+    Object.defineProperty(image, "naturalWidth", { value: 180 });
+    Object.defineProperty(image, "naturalHeight", { value: 46 });
+    await act(async () => image.dispatchEvent(new Event("load")));
+    expect(image.src).toContain("blob:sharp");
+    expect(image.width).toBe(180);
+    expect(image.height).toBe(46);
+    expect(image.style.aspectRatio).toBe("180 / 46");
+  },
+);
+
+it("captures legacy intrinsic dimensions without guessing from normalized bounds", async () => {
+  await render(base);
+  const image = host.querySelector("img")!;
+  expect(image.getAttribute("width")).toBeNull();
+  expect(image.style.aspectRatio).toBe("");
+  Object.defineProperty(image, "naturalWidth", { value: 366 });
+  Object.defineProperty(image, "naturalHeight", { value: 166 });
+  await act(async () => image.dispatchEvent(new Event("load")));
+  expect(image.width).toBe(366);
+  expect(image.height).toBe(166);
+  expect(image.style.aspectRatio).toBe("366 / 166");
+});
+
+it("cancels a sharp lease on document switch and ignores its late result", async () => {
+  let complete!: (url: string) => void;
+  const renderImage = vi.fn(
+    (_id: string, _width: number, _signal?: AbortSignal, _source?: string) =>
+      new Promise<string>((resolve) => {
+        complete = resolve;
+      }),
+  );
+  const draw = (documentId: string) =>
+    act(async () =>
+      root.render(
+        <TranslationText
+          block={base}
+          documentId={documentId}
+          retry={() => {}}
+          renderImage={renderImage}
+        />,
+      ),
+    );
+  await draw("first");
+  const old = host.querySelector("img")!;
+  Object.defineProperty(old, "naturalWidth", { value: 180 });
+  await act(async () => old.dispatchEvent(new Event("load")));
+  const signal = renderImage.mock.calls[0][2] as AbortSignal;
+  await draw("second");
+  expect(signal.aborted).toBe(true);
+  await act(async () => complete("blob:stale"));
+  expect(host.querySelector("img")?.getAttribute("src")).not.toBe("blob:stale");
+  expect(host.querySelector("img")).not.toBe(old);
+});
+
+it("releases sharp rendering outside the viewport margin and reacquires on return", async () => {
+  let intersect!: IntersectionObserverCallback;
+  const disconnect = vi.fn();
+  vi.stubGlobal(
+    "IntersectionObserver",
+    class {
+      constructor(
+        callback: IntersectionObserverCallback,
+        options: IntersectionObserverInit,
+      ) {
+        intersect = callback;
+        expect(options.rootMargin).toBe("1000px");
+      }
+      observe() {}
+      disconnect = disconnect;
+    },
+  );
+  const renderImage = vi.fn(
+    async (
+      _id: string,
+      _width: number,
+      _signal?: AbortSignal,
+      _source?: string,
+    ) => "blob:sharp",
+  );
+  await act(async () =>
+    root.render(
+      <TranslationText
+        block={base}
+        documentId="doc"
+        retry={() => {}}
+        renderImage={renderImage}
+      />,
+    ),
+  );
+  const image = host.querySelector("img")!;
+  Object.defineProperty(image, "naturalWidth", { value: 180 });
+  await act(async () => image.dispatchEvent(new Event("load")));
+  expect(renderImage).not.toHaveBeenCalled();
+  await act(async () =>
+    intersect(
+      [{ isIntersecting: true } as IntersectionObserverEntry],
+      {} as IntersectionObserver,
+    ),
+  );
+  expect(image.src).toContain("blob:sharp");
+  const signal = renderImage.mock.calls[0][2]!;
+  await act(async () =>
+    intersect(
+      [{ isIntersecting: false } as IntersectionObserverEntry],
+      {} as IntersectionObserver,
+    ),
+  );
+  expect(signal.aborted).toBe(true);
+  expect(image.getAttribute("src")).not.toBe("blob:sharp");
+  await act(async () =>
+    intersect(
+      [{ isIntersecting: true } as IntersectionObserverEntry],
+      {} as IntersectionObserver,
+    ),
+  );
+  expect(renderImage).toHaveBeenCalledTimes(2);
+});
+
+it.each(["reader", "popover", "standalone"] as const)(
+  "uses the actual %s scroll root for near-viewport crops",
+  async (placement) => {
+    let options!: IntersectionObserverInit;
+    const observe = vi.fn();
+    const disconnect = vi.fn();
+    vi.stubGlobal(
+      "IntersectionObserver",
+      class {
+        constructor(
+          _callback: IntersectionObserverCallback,
+          init: IntersectionObserverInit,
+        ) {
+          options = init;
+        }
+        observe = observe;
+        disconnect = disconnect;
+      },
+    );
+    const image = (
+      <TranslationText block={base} documentId="doc" retry={() => {}} />
+    );
+    await act(async () =>
+      root.render(
+        <>
+          <div
+            className="translation-document"
+            data-other-pane=""
+            style={{ overflow: "auto" }}
+          />
+          {placement === "standalone" ? (
+            <section>{image}</section>
+          ) : (
+            <div
+              className="translation-document"
+              data-reader-pane=""
+              style={{ overflow: "auto" }}
+            >
+              {placement === "popover" ? (
+                <div
+                  className="translation-popover"
+                  style={{ overflow: "auto" }}
+                >
+                  <section>{image}</section>
+                </div>
+              ) : (
+                <section>{image}</section>
+              )}
+            </div>
+          )}
+        </>,
+      ),
+    );
+    const expectedRoot =
+      placement === "reader"
+        ? host.querySelector("[data-reader-pane]")
+        : placement === "popover"
+          ? host.querySelector(".translation-popover")
+          : null;
+    expect(options.root).toBe(expectedRoot);
+    expect(options.rootMargin).toBe("1000px");
+    expect(observe).toHaveBeenCalledExactlyOnceWith(host.querySelector("img"));
+    expect(options.root).not.toBe(host.querySelector("[data-other-pane]"));
+    await act(async () => root.render(null));
+    expect(disconnect).toHaveBeenCalledOnce();
+  },
+);
+
+it("switches back to the original crop before releasing a replaced renderer's live URL", async () => {
+  let image!: HTMLImageElement;
+  let releasedSource: string | null | undefined;
+  const first = vi.fn(
+    async (_id: string, _width: number, signal?: AbortSignal) => {
+      signal?.addEventListener("abort", () => {
+        releasedSource = image.getAttribute("src");
+      });
+      return "blob:first";
+    },
+  );
+  const second = vi.fn(async () => "blob:second");
+  const draw = (
+    renderImage: (
+      id: string,
+      width: number,
+      signal?: AbortSignal,
+    ) => Promise<string>,
+  ) =>
+    act(async () =>
+      root.render(
+        <TranslationText
+          block={base}
+          documentId="doc"
+          retry={() => {}}
+          renderImage={renderImage}
+        />,
+      ),
+    );
+  await draw(first);
+  image = host.querySelector("img")!;
+  Object.defineProperty(image, "naturalWidth", { value: 180 });
+  await act(async () => image.dispatchEvent(new Event("load")));
+  expect(image.getAttribute("src")).toBe("blob:first");
+  await draw(second);
+  expect(releasedSource).not.toBe("blob:first");
+  expect(image.getAttribute("src")).toBe("blob:second");
+});
+
+it.each([
+  { width: -1, height: 20 },
+  { width: Infinity, height: 2 },
+  { width: 2.5, height: 2 },
+])("ignores invalid crop metadata %j", async (imageSize) => {
+  await render({ ...base, imageSize });
+  const image = host.querySelector("img")!;
+  expect(image.getAttribute("width")).toBeNull();
+  expect(image.getAttribute("height")).toBeNull();
+});
+
+it("preserves the supplied crop ratios for mixed page sizes with identical normalized bounds", async () => {
+  await act(async () =>
+    root.render(
+      <>
+        {[
+          { width: 366, height: 166 },
+          { width: 246, height: 86 },
+        ].map((imageSize, i) => (
+          <TranslationText
+            key={i}
+            block={{ ...base, id: `p${i + 1}-b1`, page: i + 1, imageSize }}
+            documentId="doc"
+            retry={() => {}}
+          />
+        ))}
+      </>,
+    ),
+  );
+  const images = host.querySelectorAll("img");
+  expect(images[0].style.aspectRatio).toBe("366 / 166");
+  expect(images[1].style.aspectRatio).toBe("246 / 86");
 });
 
 it("replaces an old sharp image after a full layout reparse", async () => {

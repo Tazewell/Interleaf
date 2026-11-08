@@ -96,6 +96,7 @@ export function PDFReadingView({
   const { translations, error } = useTranslations(doc.id);
   const [popup, setPopup] = useState<{ block: PDFBlock; rect: DOMRect }>();
   const [engine, setEngine] = useState<ReaderAdapter>();
+  const [engineDocument, setEngineDocument] = useState<string>();
   const [hoveredBlock, setHoveredBlock] = useState<string>();
   const [focusedBlock, setFocusedBlock] = useState<string>();
   const hoverOwner = useRef<"source" | "translation" | undefined>(undefined);
@@ -197,17 +198,24 @@ export function PDFReadingView({
     selection = useRef<ReaderSelection | null>(null),
     scrollFrame = useRef(0);
   const equationNumbers = useMemo(() => formulaNumbers(blocks), [blocks]);
-  const [blockImages, setBlockImages] =
-    useState<ReturnType<typeof blockImageCache>>();
+  const [imageCache, setImageCache] = useState<{
+    engine: ReaderAdapter;
+    documentId: string;
+    cache: ReturnType<typeof blockImageCache>;
+  }>();
+  const blockImages =
+    imageCache?.engine === engine && imageCache?.documentId === doc.id
+      ? imageCache.cache
+      : undefined;
   useEffect(() => {
-    if (!engine?.renderBlockImage) return;
+    if (!engine?.renderBlockImage || engineDocument !== doc.id) return;
     const cache = blockImageCache(engine.renderBlockImage.bind(engine));
-    setBlockImages(cache);
+    setImageCache({ engine, documentId: doc.id, cache });
     return () => {
       cache.dispose();
-      setBlockImages(undefined);
+      setImageCache(undefined);
     };
-  }, [engine, blocks]);
+  }, [engine, engineDocument, doc.id]);
   const visibleBlocks = useMemo(
     () =>
       blocks.filter(
@@ -541,6 +549,7 @@ export function PDFReadingView({
   }, []);
   const ready = (adapter: ReaderAdapter, toc: TOCItem[]) => {
     outline.current = toc;
+    setEngineDocument(doc.id);
     setEngine(adapter);
     facade.current = new Proxy(adapter, {
       get(target, key) {

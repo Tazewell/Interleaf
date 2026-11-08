@@ -1,5 +1,22 @@
 import { createCanvas } from "@napi-rs/canvas";
 import type { PDFPageProxy } from "pdfjs-dist";
+import type { Box } from "./layout";
+
+/** Exact PNG crop pixels, including the layout worker's three-pixel margin. */
+export function blockCropBounds(
+  bounds: Box,
+  pageWidth: number,
+  pageHeight: number,
+) {
+  const x = Math.max(0, Math.floor(bounds.x * pageWidth) - 3);
+  const y = Math.max(0, Math.floor(bounds.y * pageHeight) - 3);
+  return {
+    x,
+    y,
+    width: Math.min(pageWidth - x, Math.ceil(bounds.width * pageWidth) + 6),
+    height: Math.min(pageHeight - y, Math.ceil(bounds.height * pageHeight) + 6),
+  };
+}
 
 /** Shared by layout analysis and visual reading; no layout model is required. */
 export async function renderPage(page: PDFPageProxy) {

@@ -8254,6 +8254,17 @@
                   "text": { "type": "string" },
                   "kind": { "enum": ["selection", "section"] },
                   "image": { "type": "string" },
+                  "imageSize":
+                    {
+                      "type": "object",
+                      "description": "Persisted PDF crop pixels, including padding; optional for older layouts.",
+                      "properties":
+                        {
+                          "width": { "type": "integer", "minimum": 1 },
+                          "height": { "type": "integer", "minimum": 1 },
+                        },
+                      "required": ["width", "height"],
+                    },
                   "caption": { "type": "string" },
                 },
               "required": ["id", "page", "label", "bounds", "text"],

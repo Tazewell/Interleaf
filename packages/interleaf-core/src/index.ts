@@ -612,6 +612,8 @@ export interface PDFBlock {
   bounds: { x: number; y: number; width: number; height: number };
   text: string;
   image?: string;
+  /** Persisted PDF crop pixels, including padding; absent in older layouts. */
+  imageSize?: { width: number; height: number };
   caption?: string;
 }
 export interface EPUBReadingBlock {
