@@ -17,6 +17,7 @@ import { ChatSession, type ChatInput } from "./chat/chat-session";
 import { paper } from "./papers/fixtures";
 import { api } from "@interleaf/api";
 import { useReaderStore } from "./store";
+import { scheduleProgress } from "./progress";
 
 vi.mock("sonner", () => ({
   toast: { error: vi.fn(), info: vi.fn(), success: vi.fn() },
@@ -68,6 +69,7 @@ vi.mock("./translation/PDFReadingView", async () => {
       onReady: (adapter: ReaderAdapter, toc: []) => void;
     }) => {
       readerEvents = events;
+      readerRenders++;
       useEffect(() => onReady(adapter, []), []);
       return (
         <>
@@ -124,6 +126,7 @@ const figure: PDFBlock = {
   image: "figure.png",
 };
 let readerEvents: ReaderEvents;
+let readerRenders = 0;
 const adapter = {
   getLocation: () => ({ type: "pdf", page: 2 }),
   getContext: async () => "Page context",
@@ -170,6 +173,7 @@ async function type(question: string) {
 }
 beforeEach(async () => {
   vi.clearAllMocks();
+  readerRenders = 0;
   useReaderStore.setState({ theme: { ...defaultTheme } });
   vi.mocked(api.translateSelection)
     .mockReset()
@@ -243,6 +247,58 @@ beforeEach(async () => {
   document.body.append(host);
   root = createRoot(host);
   await act(async () => root.render(<Harness />));
+});
+
+it("keeps PDF scrolling out of the reading tree while saving the latest precise position", async () => {
+  await act(async () =>
+    readerEvents.location({ type: "pdf", page: 2, x: 0.1, y: 0.1 }, 0.2),
+  );
+  const renders = readerRenders;
+  vi.mocked(scheduleProgress).mockClear();
+  for (const y of [0.2, 0.3, 0.4, 0.5]) {
+    await act(async () =>
+      readerEvents.location({ type: "pdf", page: 2, x: 0.1, y }, y),
+    );
+  }
+  expect(readerRenders).toBe(renders);
+  expect(scheduleProgress).toHaveBeenCalledTimes(4);
+  expect(scheduleProgress).toHaveBeenLastCalledWith(
+    doc.id,
+    { progress: { type: "pdf", page: 2, x: 0.1, y: 0.5 }, percentage: 0.5 },
+    expect.any(Function),
+  );
+  await click("更多阅读操作");
+  const bookmark = [
+    ...document.querySelectorAll<HTMLElement>('[role="menuitem"]'),
+  ].find((item) => item.textContent?.includes("添加书签"))!;
+  await act(async () => bookmark.click());
+  expect(api.annotate).toHaveBeenLastCalledWith(
+    doc.id,
+    expect.objectContaining({
+      kind: "bookmark",
+      location: { type: "pdf", page: 2, x: 0.1, y: 0.5 },
+    }),
+  );
+});
+
+it("updates the PDF page controls when scrolling crosses pages", async () => {
+  await act(async () =>
+    readerEvents.location({ type: "pdf", page: 2, y: 0.8 }, 0.2),
+  );
+  const renders = readerRenders;
+  await act(async () =>
+    readerEvents.location({ type: "pdf", page: 3, y: 0.1 }, 0.3),
+  );
+  expect(readerRenders).toBeGreaterThan(renders);
+  const afterPage = readerRenders;
+  await act(async () =>
+    readerEvents.location({ type: "pdf", page: 3, y: 0.2 }, 0.31),
+  );
+  expect(readerRenders).toBe(afterPage);
+  await act(async () =>
+    readerEvents.location({ type: "pdf", page: 2, y: 0.9 }, 0.29),
+  );
+  expect(readerRenders).toBeGreaterThan(afterPage);
 });
 afterEach(async () => {
   finishAnswer?.();

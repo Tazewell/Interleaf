@@ -709,6 +709,127 @@ it("locates the reading anchor deep in a long translation without measuring ever
   expect(measurements).toBeLessThan(30);
 });
 
+it("maps small translation scrolls continuously through the space between paragraphs", async () => {
+  await renderView(defaultTheme, [
+    {
+      id: "next-paragraph",
+      page: 1,
+      label: "text",
+      text: "Next paragraph.",
+      bounds: { x: 0.1, y: 0.8, width: 0.3, height: 0.1 },
+    },
+  ]);
+  await click("对照");
+  const { pane, block } = translationGeometry(100);
+  block.getBoundingClientRect = () =>
+    new DOMRect(40, 100 - pane.scrollTop, 520, 100);
+  const next = pane.querySelector<HTMLElement>(
+    '[data-translation-block="next-paragraph"]',
+  )!;
+  next.getBoundingClientRect = () =>
+    new DOMRect(40, 600 - pane.scrollTop, 520, 100);
+  for (const top of [0, 2]) {
+    await act(async () => {
+      pane.dispatchEvent(new WheelEvent("wheel", { bubbles: true, deltaY: 2 }));
+      pane.scrollTop = top;
+      pane.dispatchEvent(new Event("scroll", { bubbles: true }));
+      await new Promise(requestAnimationFrame);
+    });
+    expect(adapter.followBlock).toHaveBeenLastCalledWith(
+      {
+        blockId: "p1-b1",
+        fraction: 1,
+        gap: { nextBlockId: "next-paragraph", fraction: (100 + top) / 400 },
+      },
+      { smooth: false },
+    );
+  }
+});
+
+it("keeps translated following continuous when the original center crosses a paragraph gap", async () => {
+  await renderView(defaultTheme, [
+    {
+      id: "next-paragraph",
+      page: 1,
+      label: "text",
+      text: "Next paragraph.",
+      bounds: { x: 0.1, y: 0.8, width: 0.3, height: 0.1 },
+    },
+  ]);
+  await click("对照");
+  const { pane, block } = translationGeometry(100);
+  block.getBoundingClientRect = () =>
+    new DOMRect(40, 600 - pane.scrollTop, 520, 100);
+  const next = pane.querySelector<HTMLElement>(
+    '[data-translation-block="next-paragraph"]',
+  )!;
+  next.getBoundingClientRect = () =>
+    new DOMRect(40, 1100 - pane.scrollTop, 520, 100);
+  for (const fraction of [0.498, 0.502]) {
+    await act(async () =>
+      fixture.events!.readingAnchor?.({
+        blockId: "p1-b1",
+        fraction: 1,
+        gap: { nextBlockId: "next-paragraph", fraction },
+      }),
+    );
+    expect(pane.scrollTop).toBeCloseTo(400 + 400 * fraction);
+  }
+});
+
+it("normalizes a hidden equation number gap against the full formula height", async () => {
+  await renderView(defaultTheme, [
+    {
+      id: "tall-formula",
+      page: 1,
+      label: "display_formula",
+      text: "x = y",
+      bounds: { x: 0.1, y: 0.4, width: 0.2, height: 0.2 },
+    },
+    {
+      id: "number",
+      page: 1,
+      label: "formula_number",
+      text: "(1)",
+      bounds: { x: 0.45, y: 0.48, width: 0.02, height: 0.02 },
+    },
+    {
+      id: "following",
+      page: 1,
+      label: "text",
+      text: "Following paragraph.",
+      bounds: { x: 0.1, y: 0.8, width: 0.3, height: 0.1 },
+    },
+  ]);
+  await click("对照");
+  const { pane } = translationGeometry();
+  const formula = pane.querySelector<HTMLElement>(
+    '[data-translation-block="tall-formula"]',
+  )!;
+  formula.getBoundingClientRect = () =>
+    new DOMRect(40, 600 - pane.scrollTop, 520, 200);
+  const next = pane.querySelector<HTMLElement>(
+    '[data-translation-block="following"]',
+  )!;
+  next.getBoundingClientRect = () =>
+    new DOMRect(40, 820 - pane.scrollTop, 520, 100);
+  await act(async () =>
+    fixture.events!.readingAnchor?.({
+      blockId: "tall-formula",
+      fraction: 0.995,
+    }),
+  );
+  expect(pane.scrollTop).toBeCloseTo(499);
+  await act(async () =>
+    fixture.events!.readingAnchor?.({
+      blockId: "number",
+      fraction: 1,
+      gap: { nextBlockId: "following", fraction: (0.601 - 0.5) / 0.3 },
+    }),
+  );
+  expect(pane.scrollTop).toBeCloseTo(500.1);
+});
+
 it("keeps synchronization active while dragging the translation scrollbar", async () => {
   await click("对照");
   const { pane } = translationGeometry();

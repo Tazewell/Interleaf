@@ -407,6 +407,8 @@ export type PDFBlockAction =
 export interface PDFReadingAnchor {
   blockId: string;
   fraction: number;
+  /** Position between this block's end and the next block's start. */
+  gap?: { nextBlockId: string; fraction: number };
 }
 export interface PDFPassage {
   blockId: string;
