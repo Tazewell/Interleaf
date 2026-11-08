@@ -307,6 +307,7 @@ export function Workspace({
   const [location, setLocation] = useState<DocumentLocation | undefined>(
     doc.progress,
   );
+  const latestLocation = useRef<DocumentLocation | undefined>(doc.progress);
   const sidebarTOC = useMemo(() => {
     if (doc.type !== "pdf" || !pageOutline(toc)) return toc;
     // Most PDFs ship without an embedded outline; parsed headings still give
@@ -744,10 +745,23 @@ export function Workspace({
         .catch((error) => toast.error(error.message));
   }, [adapter, doc.id, doc.type, researchTarget]);
   const saveLocation = (next: DocumentLocation, percent: number) => {
-    if (JSON.stringify(next) !== JSON.stringify(location)) {
+    const previous = latestLocation.current;
+    if (
+      translationRequest &&
+      JSON.stringify(next) !== JSON.stringify(previous)
+    ) {
       setTranslationRequest(null);
     }
-    setLocation(next);
+    latestLocation.current = next;
+    // PDF chrome needs the page, not every subpixel scroll coordinate. Keep
+    // precise progress in the ref for actions and persistence without
+    // rerendering the reader and chat tree on every animation frame.
+    if (
+      next.type !== "pdf" ||
+      previous?.type !== "pdf" ||
+      next.page !== previous.page
+    )
+      setLocation(next);
     if (navigationRef.current?.settle()) setReturnLocation(undefined);
     if (next.type === "pdf") setPageInput(String(next.page));
     scheduleProgress(doc.id, { progress: next, percentage: percent }, (e) =>
@@ -761,7 +775,8 @@ export function Workspace({
   ) => {
     const written = kind === "note" || kind === "question";
     const source = written ? noteSelection : activeSelection;
-    const target = kind === "bookmark" ? location : source?.location;
+    const target =
+      kind === "bookmark" ? latestLocation.current : source?.location;
     if (!target || annotationSaving.current) return;
     annotationSaving.current = true;
     setNoteSaving(written);

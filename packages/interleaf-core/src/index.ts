@@ -407,6 +407,8 @@ export type PDFBlockAction =
 export interface PDFReadingAnchor {
   blockId: string;
   fraction: number;
+  /** Position between this block's end and the next block's start. */
+  gap?: { nextBlockId: string; fraction: number };
 }
 export interface PDFPassage {
   blockId: string;
@@ -478,7 +480,10 @@ export interface ReaderAdapter {
     signal: AbortSignal,
     width?: number,
   ): Promise<Blob>;
-  followBlock?(anchor: PDFReadingAnchor): Promise<void>;
+  followBlock?(
+    anchor: PDFReadingAnchor,
+    options?: { smooth?: boolean },
+  ): Promise<void>;
   previewCitation?(
     location: PDFLocation,
     anchor: HTMLAnchorElement,
@@ -607,6 +612,8 @@ export interface PDFBlock {
   bounds: { x: number; y: number; width: number; height: number };
   text: string;
   image?: string;
+  /** Persisted PDF crop pixels, including padding; absent in older layouts. */
+  imageSize?: { width: number; height: number };
   caption?: string;
 }
 export interface EPUBReadingBlock {

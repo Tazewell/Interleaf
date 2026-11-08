@@ -27,6 +27,12 @@ it("pairs numbers with the adjacent formula in the same column", () => {
   ]);
   expect([...result.byFormula.keys()]).toEqual(["left", "right"]);
   expect([...result.pairedIds]).toEqual(["ln", "rn"]);
+  expect([...result.byNumber].map(([id, formula]) => [id, formula.id])).toEqual(
+    [
+      ["ln", "left"],
+      ["rn", "right"],
+    ],
+  );
 });
 it("keeps unrelated, different-page, and ambiguous numbers separate", () => {
   const result = formulaNumbers([
@@ -37,6 +43,7 @@ it("keeps unrelated, different-page, and ambiguous numbers separate", () => {
     block("below", "formula_number", 0.45, 0.4),
   ]);
   expect(result.pairedIds.size).toBe(0);
+  expect(result.byNumber.size).toBe(0);
 });
 it("associates a formula only once", () => {
   const result = formulaNumbers([

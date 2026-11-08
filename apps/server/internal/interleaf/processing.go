@@ -94,9 +94,10 @@ type PDFBlock struct {
 		Width  float64 `json:"width"`
 		Height float64 `json:"height"`
 	} `json:"bounds"`
-	Text    string `json:"text"`
-	Image   string `json:"image,omitempty"`
-	Caption string `json:"caption,omitempty"`
+	Text      string             `json:"text"`
+	Image     string             `json:"image,omitempty"`
+	Caption   string             `json:"caption,omitempty"`
+	ImageSize *PDFBlockImageSize `json:"imageSize,omitempty"`
 }
 type layoutManifest struct {
 	// PDF document information (Title, Author, …) as read by PDF.js.
@@ -324,6 +325,7 @@ func (s *Server) documentBlocks(w http.ResponseWriter, r *http.Request) {
 			blocks = append(blocks, b)
 		}
 	}
+	fillBlockImageSizes(s.analysisDir(d.ID), blocks)
 	respond(w, 200, blocks)
 }
 func (s *Server) analysisDir(id string) string {

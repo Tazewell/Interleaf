@@ -118,3 +118,183 @@ it("preserves unrelated internal links and external links", () => {
   expect(focus).not.toHaveBeenCalled();
   links.destroy();
 });
+
+it("keeps link, text and selection identities across unchanged renders and block streams", async () => {
+  const host = document.createElement("div");
+  host.innerHTML =
+    '<div class="page" data-page-number="1"><div class="textLayer"><span>See Figure 3.</span></div></div>';
+  document.body.append(host);
+  let blocks = [image];
+  const focus = vi.fn();
+  const links = new PDFFigureLinks(host, () => blocks, focus);
+  links.repaint();
+  const anchor = host.querySelector("a")!;
+  const text = anchor.firstChild!;
+  const range = document.createRange();
+  range.setStart(text, 0);
+  range.setEnd(text, 6);
+  window.getSelection()!.addRange(range);
+  // Let the observer deliver records from the first wrapping pass too.
+  await Promise.resolve();
+  links.repaint(1);
+  blocks = [{ ...image, caption: "Figure 3. Updated result" }];
+  links.repaint();
+  expect(host.querySelector("a")).toBe(anchor);
+  expect(anchor.firstChild).toBe(text);
+  expect(range.startContainer).toBe(text);
+  expect(window.getSelection()!.toString()).toBe("Figure");
+  window.getSelection()!.removeAllRanges();
+  anchor.click();
+  expect(focus).toHaveBeenCalledExactlyOnceWith(blocks[0]);
+  links.destroy();
+});
+
+it("changes only pages whose figure targets appear, disappear or become ambiguous", () => {
+  const host = document.createElement("div");
+  host.innerHTML =
+    '<div class="page" data-page-number="1"><div class="textLayer"><span>Figure 3</span></div></div><div class="page" data-page-number="2"><div class="textLayer"><span>Figure 4</span></div></div>';
+  document.body.append(host);
+  let blocks = [image];
+  const links = new PDFFigureLinks(host, () => blocks, vi.fn());
+  links.repaint();
+  const first = host.querySelector("a")!;
+  const fourth = { ...image, id: "figure-4", caption: "Figure 4. Result" };
+  blocks = [image, fourth];
+  links.repaint();
+  expect(host.querySelector('.page[data-page-number="1"] a')).toBe(first);
+  const second = host.querySelector('.page[data-page-number="2"] a')!;
+  expect(second).not.toBeNull();
+  blocks = [image, { ...image, id: "duplicate-3" }, fourth];
+  links.repaint();
+  expect(host.querySelector('.page[data-page-number="1"] a')).toBeNull();
+  expect(host.querySelector('.page[data-page-number="2"] a')).toBe(second);
+  blocks = [fourth];
+  links.repaint();
+  expect(host.querySelector('.page[data-page-number="2"] a')).toBe(second);
+  blocks = [image, fourth];
+  links.repaint();
+  expect(host.querySelector('.page[data-page-number="1"] a')).not.toBeNull();
+  expect(host.querySelector('.page[data-page-number="2"] a')).toBe(second);
+  links.destroy();
+});
+
+it("relinks identical-text replacements and real text edits on the affected page", async () => {
+  const host = document.createElement("div");
+  host.innerHTML =
+    '<div class="page" data-page-number="1"><div class="textLayer"><span>Figure 3</span></div></div><div class="page" data-page-number="2"><div class="textLayer"><span>Figure 3</span></div></div>';
+  document.body.append(host);
+  const links = new PDFFigureLinks(host, () => [image], vi.fn());
+  links.repaint();
+  const layers = host.querySelectorAll<HTMLElement>(".textLayer");
+  const stable = layers[1].querySelector("a")!;
+  layers[0].innerHTML = "<span>Figure 3</span>";
+  // Repaint before the mutation callback, as in PDF.js's render event.
+  links.repaint(1);
+  expect(layers[0].querySelector("a")).not.toBeNull();
+  expect(layers[1].querySelector("a")).toBe(stable);
+
+  layers[0].querySelector("a")!.firstChild!.textContent = "Figure 9";
+  await Promise.resolve();
+  links.repaint(1);
+  expect(layers[0].querySelector("a")).toBeNull();
+  expect(layers[0].textContent).toBe("Figure 9");
+  const replacement = document.createElement("div");
+  replacement.className = "textLayer";
+  replacement.innerHTML = "<span>Figure 3</span>";
+  layers[0].replaceWith(replacement);
+  links.repaint(1);
+  expect(replacement.querySelector("a")).not.toBeNull();
+  expect(layers[1].querySelector("a")).toBe(stable);
+  links.destroy();
+});
+
+it("reindexes a reused text layer after PDF.js edits its detached subtree", async () => {
+  const host = document.createElement("div");
+  host.innerHTML =
+    '<div class="page" data-page-number="1"><div class="textLayer"><span>Figure 3</span></div></div>';
+  document.body.append(host);
+  const links = new PDFFigureLinks(host, () => [image], vi.fn());
+  links.repaint();
+  const page = host.querySelector(".page")!;
+  const layer = host.querySelector(".textLayer")!;
+  layer.remove();
+  await Promise.resolve();
+  layer.innerHTML = "<span>Figure 3</span>";
+  page.append(layer);
+  links.repaint(1);
+  expect(layer.querySelector("a[data-figure-reference]")).not.toBeNull();
+  links.destroy();
+});
+
+it.each([false, true])(
+  "preserves figure links and selection through empty PDF.js sentinels (observer delivered: %s)",
+  async (delivered) => {
+    const host = document.createElement("div");
+    host.innerHTML =
+      '<div class="page" data-page-number="1"><div class="textLayer"><span>Figure 3</span><div class="endOfContent"></div></div></div>' +
+      '<div class="page" data-page-number="2"><div class="textLayer"><span>Figure 3</span><div class="endOfContent"></div></div></div>';
+    document.body.append(host);
+    const links = new PDFFigureLinks(host, () => [image], vi.fn());
+    links.repaint();
+    const layers = [...host.querySelectorAll<HTMLElement>(".textLayer")];
+    const anchors = layers.map((layer) => layer.querySelector("a")!);
+    const texts = anchors.map((anchor) => anchor.firstChild!);
+    const range = document.createRange();
+    range.setStart(texts[0], 0);
+    range.setEnd(texts[1], 8);
+    window.getSelection()!.addRange(range);
+    try {
+      const assertStable = async () => {
+        if (delivered) await Promise.resolve();
+        links.repaint();
+        for (let index = 0; index < anchors.length; index++) {
+          expect(anchors[index].firstChild).toBe(texts[index]);
+          expect(layers[index].querySelector("a")).toBe(anchors[index]);
+        }
+        expect(range.startContainer).toBe(texts[0]);
+        expect(range.endContainer).toBe(texts[1]);
+        expect(window.getSelection()!.toString()).toBe("Figure 3Figure 3");
+      };
+      // TextLayerBuilder's global pointerup resets every layer this way,
+      // including layers whose sentinel is already the last child.
+      for (const layer of layers)
+        layer.append(layer.querySelector(".endOfContent")!);
+      await assertStable();
+      for (const layer of layers) {
+        const sentinel = layer.querySelector(".endOfContent")!;
+        layer.querySelector("span")!.append(sentinel);
+      }
+      await assertStable();
+      const sentinels = layers.map((layer) =>
+        layer.querySelector(".endOfContent")!,
+      );
+      sentinels.forEach((sentinel) => sentinel.remove());
+      await assertStable();
+      layers.forEach((layer, index) => layer.append(sentinels[index]));
+      await assertStable();
+    } finally {
+      links.destroy();
+    }
+  },
+);
+
+it("still invalidates text edits delivered alongside PDF.js sentinel movement", () => {
+  const host = document.createElement("div");
+  host.innerHTML =
+    '<div class="page" data-page-number="1"><div class="textLayer"><span>Figure 3</span><div class="endOfContent"></div></div></div>';
+  document.body.append(host);
+  const links = new PDFFigureLinks(host, () => [image], vi.fn());
+  links.repaint();
+  const layer = host.querySelector(".textLayer")!;
+  layer.append(layer.querySelector(".endOfContent")!);
+  layer.querySelector("a")!.firstChild!.textContent = "Figure 9";
+  links.repaint();
+  expect(layer.querySelector("a[data-figure-reference]")).toBeNull();
+  const sentinel = layer.querySelector(".endOfContent")!;
+  sentinel.textContent = "Figure 3";
+  sentinel.remove();
+  layer.append(sentinel);
+  links.repaint();
+  expect(sentinel.querySelector("a[data-figure-reference]")).not.toBeNull();
+  links.destroy();
+});

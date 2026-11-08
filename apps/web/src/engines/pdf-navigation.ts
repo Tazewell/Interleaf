@@ -21,6 +21,13 @@ export class PDFReadingNavigation {
   private operation = 0;
   private focus: PDFPassage[] = [];
   private linkedRanges: Range[] = [];
+  private blockSource?: PDFBlock[];
+  private blockIndex = new Map<string, PDFBlock>();
+  private orderedBlocks: PDFBlock[] = [];
+  private blockOrder = new Map<string, number>();
+  private pageBlocks = new Map<number, PDFBlock[]>();
+  private followedPosition?: { left: number; top: number };
+  private readingColumn?: { page: number; x: number; width: number };
   constructor(
     private host: HTMLElement,
     private viewer: PDFViewer,
@@ -33,13 +40,28 @@ export class PDFReadingNavigation {
     host.addEventListener("scroll", this.scrolled, { passive: true });
     host.addEventListener("wheel", this.interrupt, { passive: true });
   }
-  private interrupt = () => {
+  private interrupt = (event?: Event) => {
     this.operation++;
     this.moving = false;
+    this.followedPosition = undefined;
+    if (event?.type === "pointerdown") {
+      const page =
+        event.target instanceof Element
+          ? event.target.closest<HTMLElement>(".page[data-page-number]")
+          : undefined;
+      const rect = page?.getBoundingClientRect();
+      if (page && rect?.width && this.host.contains(page))
+        this.readingColumn = {
+          page: Number(page.dataset.pageNumber),
+          x: ((event as PointerEvent).clientX - rect.left) / rect.width,
+          width: 0,
+        };
+    }
     this.onFocus(null);
   };
   private async moveTo(left: number, top: number, operation: number) {
     this.moving = true;
+    this.followedPosition = undefined;
     try {
       await animatePDFScroll(
         this.host,
@@ -57,6 +79,7 @@ export class PDFReadingNavigation {
   }
   async goTo(page: number, point?: { x: number; y: number }) {
     const operation = ++this.operation;
+    this.readingColumn = point ? { page, x: point.x, width: 0 } : undefined;
     const node = this.pageNode(page);
     if (!node || this.disposed || operation !== this.operation) return false;
     this.onFocus(null);
@@ -74,6 +97,14 @@ export class PDFReadingNavigation {
   }
   private scrolled = () => {
     cancelAnimationFrame(this.frame);
+    if (this.followedPosition) {
+      if (
+        this.host.scrollLeft === this.followedPosition.left &&
+        this.host.scrollTop === this.followedPosition.top
+      )
+        return;
+      this.followedPosition = undefined;
+    }
     this.frame = requestAnimationFrame(() => {
       if (this.disposed || this.moving) return;
       const anchor = this.anchor();
@@ -81,33 +112,141 @@ export class PDFReadingNavigation {
     });
   };
   anchor(): PDFReadingAnchor | undefined {
+    this.indexBlocks();
     const viewport = this.host.getBoundingClientRect(),
       y = viewport.top + viewport.height * 0.5,
       x = viewport.left + viewport.width / 2;
-    let best: PDFBlock | undefined,
-      distance = Infinity,
-      fraction = 0;
-    for (const b of this.readableBlocks()) {
-      const node = this.pageNode(b.page);
-      if (!node) continue;
-      const r = node.getBoundingClientRect();
-      if (r.bottom < viewport.top || r.top > viewport.bottom) continue;
-      const bx = r.left + b.bounds.x * r.width,
-        by = r.top + b.bounds.y * r.height,
-        bw = b.bounds.width * r.width,
-        bh = b.bounds.height * r.height;
+    const pages = new Map<number, DOMRect | undefined>();
+    const pageRect = (page: number) => {
+      if (!pages.has(page))
+        pages.set(page, this.pageNode(page)?.getBoundingClientRect());
+      return pages.get(page);
+    };
+    const visible: Array<{ page: number; blocks: PDFBlock[]; rect: DOMRect }> =
+      [];
+    for (const [page, blocks] of this.pageBlocks) {
+      const rect = pageRect(page);
+      if (rect && rect.bottom >= viewport.top && rect.top <= viewport.bottom)
+        visible.push({ page, blocks, rect });
+    }
+    const column = this.readingColumn;
+    const columnPage = column && pageRect(column.page);
+    const columnX =
+      column && columnPage
+        ? columnPage.left + column.x * columnPage.width
+        : undefined;
+    const columnHalfWidth =
+      column && columnPage ? (column.width * columnPage.width) / 2 : 0;
+    // A follow owns one column on one page. A new page or a horizontal pan
+    // outside that column releases it; ordinary vertical wheel input does not.
+    if (
+      column &&
+      (!columnPage ||
+        columnX! + columnHalfWidth < viewport.left ||
+        columnX! - columnHalfWidth > viewport.right ||
+        !visible.some(({ page }) => page === column.page) ||
+        visible.some(
+          ({ page, rect }) =>
+            page !== column.page && rect.top <= y && rect.bottom >= y,
+        ))
+    )
+      this.readingColumn = undefined;
+    const readingX = (page: number) =>
+      this.readingColumn?.page === page
+        ? Math.max(viewport.left, Math.min(columnX!, viewport.right))
+        : x;
+    const box = (block: PDFBlock) => {
+      const rect = pageRect(block.page);
+      if (!rect) return;
+      return {
+        left: rect.left + block.bounds.x * rect.width,
+        right: rect.left + (block.bounds.x + block.bounds.width) * rect.width,
+        top: rect.top + block.bounds.y * rect.height,
+        bottom: rect.top + (block.bounds.y + block.bounds.height) * rect.height,
+        height: block.bounds.height * rect.height,
+      };
+    };
+    let best: PDFReadingAnchor | undefined,
+      distance = Infinity;
+    const gap = (
+      previous: PDFBlock | undefined,
+      next: PDFBlock | undefined,
+    ) => {
+      if (!previous || !next || !this.canSpanGap(previous, next)) return;
+      const before = box(previous),
+        after = box(next);
+      if (
+        !before ||
+        !after ||
+        y <= before.bottom + 0.001 ||
+        y >= after.top - 0.001
+      )
+        return;
+      const horizontal = (block: PDFBlock, rect: NonNullable<typeof before>) =>
+        Math.max(
+          rect.left - readingX(block.page),
+          readingX(block.page) - rect.right,
+          0,
+        );
       const d =
-        Math.max(bx - x, x - bx - bw, 0) * 2 + Math.max(by - y, y - by - bh, 0);
+        Math.min(horizontal(previous, before), horizontal(next, after)) * 2;
       if (d < distance) {
         distance = d;
-        best = b;
-        fraction = Math.max(0, Math.min(1, (y - by) / (bh || 1)));
+        best = {
+          blockId: previous.id,
+          fraction: 1,
+          gap: {
+            nextBlockId: next.id,
+            fraction: (y - before.bottom) / (after.top - before.bottom),
+          },
+        };
+      }
+    };
+    for (const { page, blocks } of visible) {
+      for (const b of blocks) {
+        const rect = box(b)!;
+        const d =
+          Math.max(rect.left - readingX(page), readingX(page) - rect.right, 0) *
+            2 +
+          Math.max(rect.top - y, y - rect.bottom, 0);
+        if (d < distance) {
+          distance = d;
+          best = {
+            blockId: b.id,
+            fraction: Math.max(
+              0,
+              Math.min(1, (y - rect.top) / (rect.height || 1)),
+            ),
+          };
+        }
+        const order = this.blockOrder.get(b.id)!;
+        gap(this.orderedBlocks[order - 1], b);
+        gap(b, this.orderedBlocks[order + 1]);
       }
     }
-    return best ? { blockId: best.id, fraction } : undefined;
+    return best;
+  }
+  private canSpanGap(previous: PDFBlock, next: PDFBlock) {
+    return (
+      next.page > previous.page ||
+      (next.page === previous.page &&
+        next.bounds.y > previous.bounds.y + previous.bounds.height &&
+        Math.min(
+          previous.bounds.x + previous.bounds.width,
+          next.bounds.x + next.bounds.width,
+        ) > Math.max(previous.bounds.x, next.bounds.x))
+    );
+  }
+  private preferColumn(block: PDFBlock) {
+    this.readingColumn = {
+      page: block.page,
+      x: block.bounds.x + block.bounds.width / 2,
+      width: block.bounds.width,
+    };
   }
   stop() {
     this.interrupt();
+    this.readingColumn = undefined;
     if (!this.host.classList.contains("pdf-block-reading")) return;
     const page = this.pageNode(this.viewer.currentPageNumber);
     const before = page?.getBoundingClientRect();
@@ -118,11 +257,30 @@ export class PDFReadingNavigation {
       this.host.scrollTop += after.top - before.top;
     }
   }
-  private readableBlocks() {
+  private indexBlocks() {
+    const blocks = this.blocks();
+    if (blocks === this.blockSource) return;
+    this.blockSource = blocks;
+    this.blockIndex.clear();
+    for (const block of blocks)
+      if (!this.blockIndex.has(block.id)) this.blockIndex.set(block.id, block);
     // The parser supplies reading order within each page, including figures.
-    return this.blocks()
+    this.orderedBlocks = blocks
       .filter((b) => !isPDFPageDecoration(b) && (b.image || b.text.trim()))
       .sort((a, b) => a.page - b.page);
+    this.blockOrder = new Map(
+      this.orderedBlocks.map((block, index) => [block.id, index]),
+    );
+    this.pageBlocks.clear();
+    for (const block of this.orderedBlocks) {
+      const page = this.pageBlocks.get(block.page) ?? [];
+      page.push(block);
+      this.pageBlocks.set(block.page, page);
+    }
+  }
+  private readableBlocks() {
+    this.indexBlocks();
+    return this.orderedBlocks;
   }
   cancelMotion() {
     this.interrupt();
@@ -150,6 +308,7 @@ export class PDFReadingNavigation {
       const node = this.pageNode(block.page);
       if (!node || !this.host.clientWidth || !this.host.clientHeight)
         return false;
+      this.preferColumn(block);
       // PDF viewport dimensions are points; PDF.js displays them at 96 / 72 CSS pixels.
       // Read the current panel width after any asynchronous page load, on every click.
       const scale = page
@@ -230,27 +389,59 @@ export class PDFReadingNavigation {
       }
     }
   }
-  async follow(anchor: PDFReadingAnchor) {
-    const block = this.blocks().find((b) => b.id === anchor.blockId);
+  async follow(anchor: PDFReadingAnchor, options: { smooth?: boolean } = {}) {
+    if (this.disposed) return;
+    this.indexBlocks();
+    const block = this.blockIndex.get(anchor.blockId);
     if (!block || isPDFPageDecoration(block)) return;
     const operation = ++this.operation;
     const node = this.pageNode(block.page);
     if (!node) return;
+    this.preferColumn(block);
     const r = node.getBoundingClientRect(),
       v = this.host.getBoundingClientRect();
     let left = this.host.scrollLeft;
     const x = r.left + block.bounds.x * r.width;
     if (x > v.right || x + block.bounds.width * r.width < v.left)
       left += x - v.left - 16;
-    await this.moveTo(
-      left,
-      this.host.scrollTop +
-        r.top -
-        v.top +
-        (block.bounds.y + anchor.fraction * block.bounds.height) * r.height -
-        this.host.clientHeight * 0.5,
-      operation,
-    );
+    let point =
+      r.top +
+      (block.bounds.y + anchor.fraction * block.bounds.height) * r.height;
+    const next = anchor.gap && this.blockIndex.get(anchor.gap.nextBlockId);
+    if (next && this.canSpanGap(block, next)) {
+      const nextRect =
+        next.page === block.page
+          ? r
+          : this.pageNode(next.page)?.getBoundingClientRect();
+      const start = r.top + (block.bounds.y + block.bounds.height) * r.height;
+      const end = nextRect && nextRect.top + next.bounds.y * nextRect.height;
+      if (end !== undefined && end > start)
+        point =
+          start +
+          Math.max(0, Math.min(1, anchor.gap!.fraction)) * (end - start);
+    }
+    const top =
+      this.host.scrollTop + point - v.top - this.host.clientHeight * 0.5;
+    if (options.smooth === false) {
+      this.moving = false;
+      cancelAnimationFrame(this.frame);
+      this.host.scrollLeft = Math.max(
+        0,
+        Math.min(left, this.host.scrollWidth - this.host.clientWidth),
+      );
+      this.host.scrollTop = Math.max(
+        0,
+        Math.min(top, this.host.scrollHeight - this.host.clientHeight),
+      );
+      // The browser emits scroll asynchronously. Remember the applied position
+      // so that event cannot turn a follower move into fresh source input.
+      this.followedPosition = {
+        left: this.host.scrollLeft,
+        top: this.host.scrollTop,
+      };
+      return;
+    }
+    await this.moveTo(left, top, operation);
   }
   focusSentences(blockId: string, sources: string[], scroll = false) {
     return this.focusPassages(

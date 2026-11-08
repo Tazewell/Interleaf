@@ -125,7 +125,7 @@ it("composites overlapping rectangles once per annotation, including on hover an
     pointer("pointermove");
     assertSingleComposite("0.48");
     layer.paint();
-    assertSingleComposite("0.32");
+    assertSingleComposite("0.48");
     expect(host.querySelectorAll(".interleaf-annotation")).toHaveLength(1);
     layer.setAnnotations([]);
     expect(host.querySelector(".interleaf-annotation")).toBeNull();
@@ -181,7 +181,9 @@ it("keeps block and annotation hover active together, with independent hit regio
       host.querySelectorAll(".interleaf-highlight[data-hovered]"),
     ).toHaveLength(6);
     expect(
-      host.querySelector(".interleaf-block-hover")?.getAttribute("data-block-id"),
+      host
+        .querySelector(".interleaf-block-hover")
+        ?.getAttribute("data-block-id"),
     ).toBe(block.id);
     expect(hover).toHaveBeenLastCalledWith(block);
 
@@ -236,6 +238,111 @@ it("does not open an annotation deleted during a click", () => {
   layer.setAnnotations([]);
   expect(pointer("click").defaultPrevented).toBe(false);
   expect(activate).not.toHaveBeenCalled();
+});
+
+function onPage(id: string, page: number): Annotation {
+  const mark = annotation(id);
+  if (mark.location.type !== "pdf") throw new Error("Expected PDF location");
+  mark.location.page = page;
+  return mark;
+}
+
+it("preserves markers and hover when React supplies equivalent annotations", () => {
+  const mark = annotation("stable");
+  layer.setAnnotations([mark]);
+  pointer("pointermove");
+  const group = host.querySelector(".interleaf-annotation")!;
+  const rectangle = group.firstElementChild;
+  layer.setAnnotations([{ ...mark, note: "Edited note, same visible mark" }]);
+  if (mark.location.type !== "pdf") throw new Error("Expected PDF location");
+  layer.setAnnotations([
+    {
+      ...mark,
+      location: {
+        ...mark.location,
+        rects: mark.location.rects?.map((rect) => ({
+          height: rect.height,
+          width: rect.width,
+          y: rect.y,
+          x: rect.x,
+        })),
+      },
+    },
+  ]);
+  expect(host.querySelector(".interleaf-annotation")).toBe(group);
+  expect(group.firstElementChild).toBe(rectangle);
+  expect(host.querySelectorAll("[data-hovered]")).toHaveLength(2);
+});
+
+it("keeps a pressed annotation active while its page markers are refreshed", () => {
+  layer.setAnnotations([annotation("edited")]);
+  pointer("pointerdown");
+  layer.setAnnotations([{ ...annotation("edited"), color: "#123456" }]);
+  expect(pointer("click").defaultPrevented).toBe(true);
+  expect(activate).toHaveBeenCalledExactlyOnceWith({
+    ids: ["edited"],
+    anchor: { x: 100, top: 120, bottom: 160 },
+  });
+});
+
+it("updates annotation edits, moves and deletions without replacing other pages", () => {
+  host.insertAdjacentHTML(
+    "beforeend",
+    '<div class="page" data-page-number="2"></div><div class="page" data-page-number="3"></div>',
+  );
+  const first = onPage("first", 1);
+  const second = onPage("second", 2);
+  const third = onPage("third", 3);
+  layer.setAnnotations([first, second, third]);
+  const stable = host.querySelector('[data-annotation-id="third"]')!;
+  const secondNode = host.querySelector('[data-annotation-id="second"]')!;
+
+  layer.setAnnotations([{ ...first, color: "#123456" }, second, third]);
+  expect(host.querySelector('[data-annotation-id="second"]')).toBe(secondNode);
+  expect(host.querySelector('[data-annotation-id="third"]')).toBe(stable);
+  expect(
+    host
+      .querySelector<HTMLElement>('[data-annotation-id="first"]')!
+      .parentElement!.style.getPropertyValue("--annotation-color"),
+  ).toBe("#123456");
+
+  layer.setAnnotations([onPage("first", 2), second, third]);
+  expect(
+    host.querySelector('.page[data-page-number="1"] .interleaf-annotation'),
+  ).toBeNull();
+  expect(
+    host.querySelectorAll('.page[data-page-number="2"] .interleaf-annotation'),
+  ).toHaveLength(2);
+  expect(host.querySelector('[data-annotation-id="third"]')).toBe(stable);
+
+  layer.setAnnotations([second, third]);
+  expect(host.querySelector('[data-annotation-id="first"]')).toBeNull();
+  expect(host.querySelector('[data-annotation-id="third"]')).toBe(stable);
+});
+
+it("rebuilds cleared or replaced page DOM without touching another page", () => {
+  host.insertAdjacentHTML(
+    "beforeend",
+    '<div class="page" data-page-number="2"></div>',
+  );
+  layer.setAnnotations([annotation("first"), onPage("second", 2)]);
+  const stable = host.querySelector('[data-annotation-id="second"]')!;
+  const page = host.querySelector('.page[data-page-number="1"]')!;
+  page.replaceChildren(document.createElement("span"));
+  layer.paint(1);
+  expect(page.querySelectorAll(".interleaf-highlight")).toHaveLength(2);
+  expect(host.querySelector('[data-annotation-id="second"]')).toBe(stable);
+
+  const replacement = document.createElement("div");
+  replacement.className = "page";
+  replacement.dataset.pageNumber = "1";
+  page.replaceWith(replacement);
+  layer.paint(1);
+  expect(replacement.querySelectorAll(".interleaf-highlight")).toHaveLength(2);
+  expect(host.querySelector('[data-annotation-id="second"]')).toBe(stable);
+  layer.setAnnotations([]);
+  layer.paint(1);
+  expect(host.querySelector(".interleaf-annotation")).toBeNull();
 });
 
 it("gives annotation clicks priority over block focus, including after repaint", async () => {

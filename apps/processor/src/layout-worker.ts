@@ -9,7 +9,7 @@ import { detectRegions } from "./detect";
 import { assignText, readingRegions, isAsset, type Region } from "./layout";
 import { extractTextSpans } from "./text";
 import { digest, model, resolveModel } from "./model";
-import { renderPage } from "./render-page";
+import { blockCropBounds, renderPage } from "./render-page";
 
 Object.assign(globalThis, { DOMMatrix, ImageData, Path2D });
 stage("pdfjs_load");
@@ -82,6 +82,7 @@ interface Block extends Region {
   page: number;
   text: string;
   image?: string;
+  imageSize?: { width: number; height: number };
   caption?: string;
 }
 const blocks: Block[] = [];
@@ -123,22 +124,17 @@ try {
     stage("page_output", number);
     for (const block of pageBlocks) {
       if (!isAsset(block.label)) continue;
-      const b = block.bounds;
-      const x = Math.max(0, Math.floor(b.x * canvas.width) - 3),
-        y = Math.max(0, Math.floor(b.y * canvas.height) - 3);
-      const width = Math.min(
-        canvas.width - x,
-        Math.ceil(b.width * canvas.width) + 6,
-      );
-      const height = Math.min(
-        canvas.height - y,
-        Math.ceil(b.height * canvas.height) + 6,
+      const { x, y, width, height } = blockCropBounds(
+        block.bounds,
+        canvas.width,
+        canvas.height,
       );
       const crop = createCanvas(width, height);
       crop
         .getContext("2d")
         .drawImage(canvas, x, y, width, height, 0, 0, width, height);
       block.image = `assets/${block.id}.png`;
+      block.imageSize = { width: crop.width, height: crop.height };
       await writeFile(join(output, block.image), crop.toBuffer("image/png"), {
         mode: 0o600,
       });

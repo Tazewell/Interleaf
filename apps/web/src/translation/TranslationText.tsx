@@ -5,6 +5,7 @@ import { Button } from "@interleaf/ui/components/button";
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { ReadingLinkNavigation } from "../reading-links";
 import { ErrorBoundary } from "../ErrorBoundary";
+import type { BlockImageRender } from "./block-images";
 const FormulaFragment = lazy(() => import("./FormulaFragment"));
 const Markdown = lazy(() =>
   import("../chat/MessageMarkdown").then((module) => ({
@@ -38,39 +39,115 @@ function MessageMarkdown({
  * displayed device-pixel width replaces it without changing the layout.
  */
 function BlockImage({
+  blockId,
   src,
   alt,
+  imageSize,
+  sourceKey,
   render,
 }: {
+  blockId: string;
   src: string;
   alt: string;
-  render?: (width: number) => Promise<string>;
+  imageSize?: PDFBlock["imageSize"];
+  sourceKey: string;
+  render?: BlockImageRender;
 }) {
-  const [sharp, setSharp] = useState<{ url: string; width: number }>();
-  const mounted = useRef(false);
+  const image = useRef<HTMLImageElement>(null);
+  const [sharp, setSharp] = useState<{
+    url: string;
+    render: BlockImageRender;
+    sourceKey: string;
+    width: number;
+  }>();
+  const [loaded, setLoaded] = useState(false);
+  const [intrinsic, setIntrinsic] = useState<{
+    width: number;
+    height?: number;
+  }>();
+  const [near, setNear] = useState(
+    () => typeof IntersectionObserver === "undefined",
+  );
+  const size =
+    imageSize &&
+    Number.isInteger(imageSize.width) &&
+    Number.isInteger(imageSize.height) &&
+    imageSize.width > 0 &&
+    imageSize.height > 0 &&
+    imageSize.width * imageSize.height <= 32_000_000
+      ? imageSize
+      : intrinsic;
   useEffect(() => {
-    mounted.current = true;
-    return () => {
-      mounted.current = false;
-    };
+    if (typeof IntersectionObserver === "undefined") return;
+    const target = image.current!;
+    // Expand the reader's scrollport, rather than the outer viewport whose
+    // margin would still be clipped by the overflowing translation pane.
+    const root = target.closest(".translation-document, .translation-popover");
+    const observer = new IntersectionObserver(
+      ([entry]) => setNear(entry.isIntersecting),
+      { root, rootMargin: "1000px" },
+    );
+    observer.observe(target);
+    return () => observer.disconnect();
   }, []);
+  useEffect(() => {
+    setSharp(undefined);
+    if (!loaded || !near || !render || !size?.width) return;
+    const controller = new AbortController();
+    const pixels = Math.min(
+      size.width,
+      image.current?.clientWidth || size.width,
+    );
+    void (async () => {
+      try {
+        const url = await render(
+          blockId,
+          Math.ceil(pixels * (window.devicePixelRatio || 1)),
+          controller.signal,
+          sourceKey,
+        );
+        if (!controller.signal.aborted)
+          setSharp({ url, render, sourceKey, width: size.width });
+      } catch {
+        /* The original crop remains available if a sharp render fails. */
+      }
+    })();
+    return () => controller.abort();
+  }, [loaded, near, render, blockId, sourceKey, size?.width]);
   return (
     <img
+      ref={image}
       className="translation-image"
-      src={sharp?.url ?? src}
-      width={sharp?.width}
+      src={
+        near &&
+        sharp?.render === render &&
+        sharp?.sourceKey === sourceKey &&
+        sharp?.width === size?.width
+          ? sharp.url
+          : src
+      }
+      width={size?.width}
+      height={size?.height}
+      style={
+        size?.height
+          ? {
+              aspectRatio: `${size.width} / ${size.height}`,
+              objectFit: "contain",
+            }
+          : undefined
+      }
       alt={alt}
       loading="lazy"
       onLoad={(event) => {
-        if (sharp || !render) return;
         const image = event.currentTarget;
-        const width = image.naturalWidth;
-        const pixels = Math.min(width, image.clientWidth || width);
-        render(Math.ceil(pixels * (window.devicePixelRatio || 1)))
-          .then((url) => {
-            if (mounted.current) setSharp({ url, width });
-          })
-          .catch(() => {});
+        if (image.getAttribute("src") !== src) return;
+        if (image.naturalWidth > 0) {
+          setIntrinsic({
+            width: image.naturalWidth,
+            height: image.naturalHeight || undefined,
+          });
+          setLoaded(true);
+        }
       }}
     />
   );
@@ -115,7 +192,7 @@ function TranslationContent({
   /** EPUB images come from the publication rather than the PDF asset store. */
   imageURL?: string;
   /** Replaces the low-resolution layout crop with a render sized for display. */
-  renderImage?: (blockId: string, width: number) => Promise<string>;
+  renderImage?: BlockImageRender;
 }) {
   const formula = ["display_formula", "inline_formula"].includes(block.label);
   const idle = translation?.status === "idle";
@@ -139,14 +216,13 @@ function TranslationContent({
     ["algorithm", "table", "chart", "image"].includes(block.label);
   const image = block.image ? (
     <BlockImage
-      key={`${block.id}:${block.image}`}
+      key={`${documentId}:${block.id}:${imageURL ?? block.image}:${block.page}:${JSON.stringify(block.bounds)}`}
+      blockId={block.id}
       src={imageURL ?? blockImageURL(documentId, block.id, block.image)}
       alt={block.caption || block.text || block.label}
-      render={
-        imageURL || !renderImage
-          ? undefined
-          : (width) => renderImage(block.id, width)
-      }
+      imageSize={block.imageSize}
+      sourceKey={`${documentId}:${block.image}:${block.page}:${JSON.stringify(block.bounds)}`}
+      render={imageURL ? undefined : renderImage}
     />
   ) : null;
   const formulaFallback = image || <MessageMarkdown content={block.text} />;

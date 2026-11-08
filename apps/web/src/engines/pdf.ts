@@ -76,6 +76,7 @@ export class PDFReaderAdapter implements ReaderAdapter {
   private navigationRequest = 0;
   private blocks: PDFBlockOverlay;
   private blockData: PDFBlock[] = [];
+  private blockImageAbort = new AbortController();
   private selecting = false;
   private navigation: PDFReadingNavigation;
   private pointer?: { x: number; y: number };
@@ -191,17 +192,20 @@ export class PDFReaderAdapter implements ReaderAdapter {
         );
       },
     );
-    this.bus.on("pagerendered", () => {
-      this.paintHighlights();
+    this.bus.on("pagerendered", ({ pageNumber }: { pageNumber: number }) => {
+      this.paintHighlights(pageNumber);
       this.locationHighlight.paint();
       this.navigation.repaint();
       this.blocks.repaint();
     });
-    this.bus.on("textlayerrendered", () => {
-      this.navigation.repaint();
-      this.figureLinks.repaint();
-      this.locationHighlight.paint();
-    });
+    this.bus.on(
+      "textlayerrendered",
+      ({ pageNumber }: { pageNumber: number }) => {
+        this.navigation.repaint();
+        this.figureLinks.repaint(pageNumber);
+        this.locationHighlight.paint();
+      },
+    );
     document.addEventListener("mouseup", this.onMouseUp);
     document.addEventListener("pointerdown", this.onPointerDown);
     document.addEventListener("selectionchange", this.onSelectionChange);
@@ -611,8 +615,8 @@ export class PDFReaderAdapter implements ReaderAdapter {
   async highlight(annotations: Annotation[]) {
     this.annotationLayer.setAnnotations(annotations);
   }
-  private paintHighlights() {
-    this.annotationLayer.paint();
+  private paintHighlights(pageNumber?: number) {
+    this.annotationLayer.paint(pageNumber);
   }
   private figureRegions(pageNumber: number): PDFDarkRegion[] {
     return this.blockData
@@ -933,8 +937,11 @@ export class PDFReaderAdapter implements ReaderAdapter {
   cancelBlockFocus() {
     this.navigation.cancelMotion();
   }
-  followBlock(anchor: import("@interleaf/core").PDFReadingAnchor) {
-    return this.navigation.follow(anchor);
+  followBlock(
+    anchor: import("@interleaf/core").PDFReadingAnchor,
+    options?: { smooth?: boolean },
+  ) {
+    return this.navigation.follow(anchor, options);
   }
   previewCitation(
     location: import("@interleaf/core").PDFLocation,
@@ -975,6 +982,7 @@ export class PDFReaderAdapter implements ReaderAdapter {
   ): Promise<Blob> {
     const block = this.blockData.find((item) => item.id === blockId);
     if (!block || !this.pdf || this.disposed) throw new Error("图片位置不可用");
+    signal = AbortSignal.any([signal, this.blockImageAbort.signal]);
     signal.throwIfAborted();
     const page = await this.pdf.getPage(block.page);
     signal.throwIfAborted();
@@ -990,40 +998,45 @@ export class PDFReaderAdapter implements ReaderAdapter {
     const canvas = document.createElement("canvas");
     canvas.width = Math.max(1, Math.ceil(viewport.width * bounds.width));
     canvas.height = Math.max(1, Math.ceil(viewport.height * bounds.height));
-    const task = page.render({
-      canvas,
-      canvasContext: canvas.getContext("2d")!,
-      viewport,
-      transform: [
-        1,
-        0,
-        0,
-        1,
-        -viewport.width * bounds.x,
-        -viewport.height * bounds.y,
-      ],
-      annotationMode: pdfjs.AnnotationMode.DISABLE,
-      background: "white",
-    });
-    const cancel = () => task.cancel();
-    signal.addEventListener("abort", cancel, { once: true });
+    let cancel: (() => void) | undefined;
     try {
+      const task = page.render({
+        canvas,
+        canvasContext: canvas.getContext("2d")!,
+        viewport,
+        transform: [
+          1,
+          0,
+          0,
+          1,
+          -viewport.width * bounds.x,
+          -viewport.height * bounds.y,
+        ],
+        annotationMode: pdfjs.AnnotationMode.DISABLE,
+        background: "white",
+      });
+      cancel = () => task.cancel();
+      signal.addEventListener("abort", cancel, { once: true });
+      if (signal.aborted) cancel();
       await task.promise;
       signal.throwIfAborted();
-      return await new Promise<Blob>((resolve, reject) =>
+      const blob = await new Promise<Blob>((resolve, reject) =>
         canvas.toBlob(
           (blob) =>
             blob ? resolve(blob) : reject(new Error("无法生成原图预览")),
           "image/png",
         ),
       );
+      signal.throwIfAborted();
+      return blob;
     } finally {
-      signal.removeEventListener("abort", cancel);
+      if (cancel) signal.removeEventListener("abort", cancel);
       canvas.width = canvas.height = 0;
     }
   }
   async destroy() {
     if (this.disposed) return;
+    this.blockImageAbort.abort();
     this.navigation.destroy();
     this.blocks.destroy();
     this.annotationLayer.destroy();
