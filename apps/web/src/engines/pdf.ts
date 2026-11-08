@@ -192,17 +192,20 @@ export class PDFReaderAdapter implements ReaderAdapter {
         );
       },
     );
-    this.bus.on("pagerendered", () => {
-      this.paintHighlights();
+    this.bus.on("pagerendered", ({ pageNumber }: { pageNumber: number }) => {
+      this.paintHighlights(pageNumber);
       this.locationHighlight.paint();
       this.navigation.repaint();
       this.blocks.repaint();
     });
-    this.bus.on("textlayerrendered", () => {
-      this.navigation.repaint();
-      this.figureLinks.repaint();
-      this.locationHighlight.paint();
-    });
+    this.bus.on(
+      "textlayerrendered",
+      ({ pageNumber }: { pageNumber: number }) => {
+        this.navigation.repaint();
+        this.figureLinks.repaint(pageNumber);
+        this.locationHighlight.paint();
+      },
+    );
     document.addEventListener("mouseup", this.onMouseUp);
     document.addEventListener("pointerdown", this.onPointerDown);
     document.addEventListener("selectionchange", this.onSelectionChange);
@@ -612,8 +615,8 @@ export class PDFReaderAdapter implements ReaderAdapter {
   async highlight(annotations: Annotation[]) {
     this.annotationLayer.setAnnotations(annotations);
   }
-  private paintHighlights() {
-    this.annotationLayer.paint();
+  private paintHighlights(pageNumber?: number) {
+    this.annotationLayer.paint(pageNumber);
   }
   private figureRegions(pageNumber: number): PDFDarkRegion[] {
     return this.blockData
