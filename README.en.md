@@ -1,77 +1,68 @@
 <p align="center">
-  <img src="assets/logo/interleaf-logo.svg" width="96" alt="Interleaf green page mark" />
+  <img src="assets/logo/interleaf-logo.svg" width="88" alt="Interleaf page mark" />
 </p>
 
 <h1 align="center">Interleaf · 纸间</h1>
 
-<p align="center">A local-first EPUB/PDF reader for papers and books, with bilingual translation, annotations, notes, and AI-assisted reading.</p>
-<p align="center"><a href="README.md">简体中文</a> · <b>English</b> · <a href="https://github.com/Tazewell/Interleaf/releases">Releases</a></p>
+<p align="center">A local-first EPUB/PDF reader for managing papers, bilingual reading, annotations, and AI assistance grounded in the source.</p>
+<p align="center"><a href="README.md">简体中文</a> · <b>English</b> · <a href="https://github.com/Tazewell/Interleaf/releases">Download</a> · <a href="https://github.com/Tazewell/Interleaf/issues">Report an issue</a></p>
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="website/assets/screenshots/interleaf-pdf-dark.jpg" />
-  <img src="website/assets/screenshots/interleaf-pdf-light.jpg" alt="Updated Interleaf PDF reader with outline and chat sidebar, captured on 2026-11-05" />
+  <img src="website/assets/screenshots/interleaf-pdf-light.jpg" alt="Interleaf PDF reader showing a bundled sample document, outline, and chat sidebar" />
 </picture>
 
-Interleaf keeps books and papers in separate libraries, with original files, notes, and reading history on your computer. Connect your own OpenAI- or Anthropic-compatible API for questions, translation, and research across your documents.
+Keep books and papers on your computer, organize references, mark passages, and record questions. Connect your own model service when you need assistance. Reading positions, annotations, notes, and conversations are saved with each document so you can pick up where you left off.
 
-> `main` includes the updated interface, session management, and optional selection translation. An installer containing these changes has not been released yet.
+## What you can do
 
-## Features
+| Reading task | Interleaf features |
+| --- | --- |
+| Organize books and papers | Separate book and paper libraries; categories, tags, favorites, and reading states; paper metadata, duplicate detection, related documents, and customizable table columns. |
+| Collect references | Import local EPUB/PDF files; find papers by DOI, arXiv ID, URL, or full title; migrate material from Zotero, EndNote, or BibTeX. |
+| Read with questions in mind | Outlines, full-text search, bookmarks, highlights, underlines, and notes; saved reading positions and links from annotations or valid answer sources back to the original. |
+| Read across languages | Original, side-by-side, and translated PDF views; chapter translation for EPUB; synchronized scrolling, selection translation, and custom translation instructions. Translation requires a configured model service. |
+| Ask about your sources | Attach text or images and keep multiple conversations per document. Models with tool support can search and read the source as needed; image-capable models can inspect PDF pages. Research can also span documents in a category. |
+| Export your work | Markdown, ZIP bundles with images, and annotated copies of original PDFs; the desktop app also exports bilingual PDFs. Citations in GB/T 7714, APA, BibTeX, BibLaTeX, RIS, and CSL-JSON. |
 
-- **Consistent interface:** rounded library, reader, import, and settings views; a sliding reading-mode switch and a chat toolbar embedded in the reading sidebar.
-- **Libraries for books and papers:** import EPUB/PDF, organize documents with categories, tags, reading states, and favorites; manage paper metadata, duplicates, related documents, and batch actions.
-- **Reading and annotations:** contents, text search, bookmarks, highlights, underlines, questions, notes, reading-position restoration, filtering, undo, and exports. Light, dark, and paper appearances are available.
-- **Bilingual reading:** original, side-by-side, and translated PDF views; chapter translation and linked source/translation reading for EPUB. Optional automatic selection translation displays results below the selection toolbar. Layout analysis runs locally; translation needs a configured API.
-- **AI reading and research:** attach text or images and type your own question, then follow answer sources back to the original. Submitted references clear from the composer. Create, switch, rename, and delete sessions per document, or research documents across a category. Online research requires separate authorization.
-- **Import and citations:** DOI, arXiv, URL, or title import; Zotero migration, a browser connector, and GB/T 7714, APA, BibTeX, and RIS exports.
-- **Desktop and terminal:** Electron desktop app, in-app updates, proxy settings, diagnostic exports, editable shortcuts, and the `interleaf` command for searching, reading, and importing library documents.
+The desktop app also provides shortcuts, proxy settings, diagnostic exports, a movable library, and in-app updates. The `interleaf` command can search, read, and import local documents while the app is running.
 
-The browser extension is not published to a store yet. Build `apps/connector`, enable developer mode in Chrome, and load its generated `dist/` directory.
+## Start with a paper
 
-## Screenshots
+The following workflow uses the deep learning paper [Attention Is All You Need (Vaswani et al., 2017)](https://arxiv.org/abs/1706.03762) to demonstrate importing, organizing, and reading a paper.
 
-Captured from the current `main` on **2026-11-05**, using bundled original sample documents in a separate demonstration library, without personal library data or API configuration. Light/dark variants follow GitHub's appearance.
+The interface images are existing repository screenshots captured on **2026-11-05**. They show bundled sample documents, rather than the paper above, in a separate demonstration library without personal API configuration or model answers. The main reader and library images follow GitHub's light or dark appearance.
 
-### Library
+### 1. Import your sources
+
+Choose import in the paper library and paste `1706.03762`, a DOI, or a paper URL, or select a local PDF. You can choose a category before importing. Existing Zotero and EndNote libraries can be scanned for a migration preview first.
+
+<img src="website/assets/screenshots/interleaf-import.jpg" alt="Interleaf paper import dialog, with identifiers and links, local files, library migration, and BibTeX" />
+
+### 2. Organize and find
+
+Group papers by category and tag, filter by reading state, and choose the table columns you need. PDF text indexing runs separately from detailed layout analysis: you can open the original first and search once its text index is ready.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="website/assets/screenshots/interleaf-library-dark.jpg" />
-  <img src="website/assets/screenshots/interleaf-library-light.jpg" alt="Interleaf library with EPUB/PDF samples, filters, and reading records" />
+  <img src="website/assets/screenshots/interleaf-library-light.jpg" alt="Bundled PDF and EPUB samples in the book library, with format, reading-state, and tag filters" />
 </picture>
 
-### Paper import
+### 3. Read, annotate, and ask
 
-<img src="website/assets/screenshots/interleaf-import.jpg" alt="Updated paper import dialog with links, local files, library migration, and BibTeX" />
+Use the outline or search to find a passage, then select text to highlight, underline, or annotate. For AI assistance, attach text or an image, write your question, and send it. Each document can keep several independent conversations. Configure a translation model to translate a document, chapter, or selection as needed.
 
-### AI settings
+<img src="website/assets/screenshots/interleaf-sessions.jpg" alt="Conversation management in the reader, with switching, renaming, and deletion for document conversations" />
 
-<img src="website/assets/screenshots/interleaf-ai-settings.jpg" alt="Updated AI settings with built-in providers and API connection configuration" />
+## Install and run
 
-### Reading settings
+Download an installer from [GitHub Releases](https://github.com/Tazewell/Interleaf/releases). The current release target is **Windows x64**, with files named `Interleaf-VERSION-win-x64.exe`. Packaged builds include the local server and PDF processor; no separate Node.js, Go, Python, or PaddlePaddle installation is needed.
 
-<img src="website/assets/screenshots/interleaf-reading-settings.jpg" alt="Automatic selection translation in reading settings, off by default" />
+Windows installers currently have no trusted developer signature. You can verify downloads against the release's `SHA256SUMS.txt`.
 
-### Session management
+### Run the desktop app from source
 
-<img src="website/assets/screenshots/interleaf-sessions.jpg" alt="Session management with switching, renaming, and deleting document conversations" />
-
-### Keyboard shortcuts
-
-<img src="website/assets/screenshots/interleaf-shortcuts.jpg" alt="Current shortcut settings with search, editing, and reset controls" />
-
-### Interleaf identity
-
-<img src="website/assets/screenshots/interleaf-about.jpg" alt="About Interleaf with the new green page mark and app version" />
-
-## Install or run from source
-
-Installers are distributed through [GitHub Releases](https://github.com/Tazewell/Interleaf/releases). Currently only **Windows x64 EXE** installers are published. Download `Interleaf-VERSION-win-x64.exe` and follow the setup wizard. If no installer is available yet, run from source.
-
-Windows installers currently have no trusted developer signature. Check the download source and `SHA256SUMS.txt`; Windows may show a first-run security prompt.
-
-### Run from source
-
-Requires **Node.js 22+, pnpm 10.30.3, and Go 1.26.5+**:
+Prepare **Node.js 22+, pnpm 10.30.3, and Go 1.26.5+**. Install dependencies and run the app in the same operating-system environment:
 
 ```sh
 git clone https://github.com/Tazewell/Interleaf.git
@@ -80,61 +71,70 @@ pnpm install --frozen-lockfile
 pnpm desktop
 ```
 
-Use `pnpm dev` for the browser development preview. Open the complete local URL printed in the terminal; it includes a temporary authentication token and must not be published. An empty book library offers bundled sample documents.
+The first build downloads and verifies approximately **67 MB** of local PDF layout-model weights and needs network access. An empty book library offers bundled sample documents.
 
-The first build downloads and verifies approximately 67 MB of local layout-model weights. End users of packaged builds do not need Node.js, Go, Python, or PaddlePaddle.
+### Browser preview and WSL
 
-## AI configuration and data
+`pnpm dev` builds the processor and server, then starts the local backend and Vite. You can use this workflow in WSL: prepare the toolchain, install dependencies, and start development inside WSL, then open the complete printed URL in a Windows browser.
 
-Local reading, search, and annotations work without AI. In **Settings → AI**, enter your API endpoint, key, and protocol, then choose models for chat, translation, images, and research. The built-in Go runtime calls that service directly; no external Codex, Claude Code, or Kimi CLI installation or login is required.
+```sh
+cd /path/to/Interleaf
+pnpm install --frozen-lockfile
+pnpm dev
+```
 
-Automatic selection translation is off by default. Enable **自动划词翻译** in **Settings → Reading** or the selected-text **更多文字操作** menu. It uses your configured translation model.
+The default preview URL looks like `http://127.0.0.1:5173/#token=…`. Keep the `#token=…` fragment: it authenticates local API access. Do not publish a URL containing the token. Browser previews do not require Electron. WSL cannot build Windows installers; packaging requires native Windows x64.
 
-The key is stored by the local backend; the UI only reports whether one is configured. Model requests send the required passages, excerpts, images, and conversation context to your chosen service. Online research also queries public scholarly sources. Billing and data policies depend on the configured provider.
+## AI configuration and local data
 
-- Packaged libraries default to `Interleaf/library/` under the application user-data directory. Development desktop data uses `Interleaf Dev`; browser development uses the project's ignored `.interleaf/` directory.
-- Original files, SQLite data, reading history, annotations, and conversations stay local. No built-in cloud sync is provided.
-- Quit the app before backing up a library. A complete library may contain API configuration; remove private information before sharing it.
+Local reading, search, and annotations work without AI. In **Settings → AI**, choose a provider or custom endpoint, enter the key and protocol, and select models for chat, translation, images, and research. OpenAI-compatible and Anthropic protocols are supported, with endpoint presets for DeepSeek, Alibaba Bailian, Kimi, Zhipu, and MiniMax. The built-in Go runtime calls the model service directly; no external AI command-line tools are required.
 
+Image and tool support depend on the model and endpoint and can be checked in model settings. Once a usable model service is configured, newly imported PDF papers of **50 pages or fewer** are translated automatically by default. Change the page threshold in **Settings → Paper library → Import settings**, or set it to **0** to disable automatic translation for new imports. Automatic selection translation is off by default and can be enabled in **Settings → Reading**. Online research requires separate permission.
+
+- **Local storage:** original files, SQLite data, reading history, annotations, translations, notes, and conversations are stored in the library directory. There is no built-in cloud sync.
+- **Model requests:** AI features send the required source text, selections, images, and conversation context to your configured model service. Online research also queries public scholarly sources. Billing and data handling follow the service's policies.
+- **Paper metadata:** PDF imports look up metadata online by default, sending only DOI or arXiv identifiers found in the document. Disable this in **Settings → Paper library → Import settings**.
+- **Configuration and backups:** API keys are saved in the library's `ai-connections.json`; saved keys are not returned to the UI. Quit the app before backing up, and remove keys and other private configuration before sharing a library.
+- **Library location:** Windows packaged builds default to `%APPDATA%\Interleaf\library\`, and development desktop builds use `%APPDATA%\Interleaf Dev\library\`. Browser development uses the project's `.interleaf/`. Desktop users can move the entire library in **Settings → Paper library → Library location**; the original directory is retained.
 
 ## Development
 
 ```sh
 pnpm typecheck     # TypeScript checks
 pnpm test          # Go and frontend tests
-pnpm build         # Server, processor, web, desktop main process, and connector
-pnpm package       # Native Windows x64 EXE installer build
+pnpm build         # Processor, server, web, desktop, and browser connector
+pnpm package       # Build installers on native Windows x64
 ```
 
 ```text
 apps/
-├── web/                 React UI and EPUB/PDF engines
+├── web/                 React UI, Readium EPUB, and PDF.js reading engines
 ├── desktop/             Electron main process and native features
-├── server/              Go local service, SQLite, and AI runtime
-├── processor/           Local PDF layout analysis and model
+├── server/              Go local service, SQLite, AI, and interleaf CLI
+├── processor/           Local PDF layout analysis, model, and PDF export
 └── connector/           Browser connector
 packages/
 ├── interleaf-core/      Shared document, position, and annotation types
-├── api-client/          API client and generated types
+├── api-client/          OpenAPI types and client
 └── ui/                  shadcn/ui and Base UI components
-website/                 Static website and current screenshots
-assets/                  Interleaf identity and platform icons
+docs/                    API definition and release notes
+website/                 Static website and interface screenshots
 ```
 
-Scanned-page OCR is not available. Fixed-layout EPUB, vertical text, RTL, and complex PDF layouts need more validation. macOS and Linux installers are not currently published. Native installation and cross-version upgrades still require manual verification.
+The browser connector currently requires manual loading: run `pnpm --filter @interleaf/connector build`, enable developer mode in Chrome's extension manager, and load `apps/connector/dist/`. Connector access is disabled in development by default; set `INTERLEAF_DEV_CONNECTOR=1` before starting development to enable it.
 
-## Publishing and updates
+For releases, maintainers must synchronize the root and desktop package versions and update the [in-app release notes](docs/release-notes.json). See the [release workflow](.github/workflows/release.yml) and [Windows build workflow](.github/workflows/build.yml) for validation and artifact generation.
 
-Keep the root and `apps/desktop/package.json` versions in sync and add notes for that version to `docs/release-notes.json`. Run checks, then execute `pnpm package` on native Windows x64. Installers are written to `release/`.
+## Current limitations
 
-The automated release workflow runs when a GitHub Release is **published**; pushing code or a tag alone does not publish installers. In **Releases → Draft a new release**, create a tag matching the app version (for example, `v0.8.7`), target the updated `main` commit, enter release notes, and click **Publish release**.
-
-The pipeline builds Windows x64 only and needs no Mac signing secrets. Follow **Actions → Release installers**; after checks, packaging, and runtime verification pass, it attaches the EXE and `SHA256SUMS.txt` to a mutable Release. You can also run the workflow manually to download and verify build artifacts first. For immutable releases, build manually and attach the installer and checksums to the draft before publishing; the published event skips building and uploading so locked assets stay intact.
-
-Before the first release, verify installation, imports, reading, note persistence, and reopening. Use two actual installed versions to check that updates preserve data. A stable Release must include installers and `SHA256SUMS.txt`; installed apps check `Tazewell/Interleaf` for updates.
+- No local OCR for scanned pages. Search and translation that depend on a text layer cannot fully process image-only PDFs.
+- EPUB bilingual processing does not support fixed layouts, vertical text, or right-to-left books.
+- Text extraction, reading order, and translated layouts in complex PDFs may need manual review.
+- Imports are limited to **512 MB per file**. PDFs exceeding **100 pages or 100 MB** require extra confirmation when added to the paper library.
+- macOS and Linux installers are outside the current release workflow. Native installation and cross-version upgrades still require platform verification.
 
 ## Feedback and acknowledgements
 
-Report problems or suggest features through [GitHub Issues](https://github.com/Tazewell/Interleaf/issues).
+Report bugs and suggestions through [GitHub Issues](https://github.com/Tazewell/Interleaf/issues). For parsing or connection problems, include exported diagnostics where useful, along with your OS version, file type, and reproduction steps.
 
-Thanks to Readium, PDF.js, shadcn/ui, Base UI, and the other projects used by Interleaf. Their license, font, and model notices remain in the source tree.
+Thanks to Readium, PDF.js, shadcn/ui, Base UI, and the other dependencies used by Interleaf. See the [layout-model notice](apps/processor/model-license/NOTICE.md) and [bundled-font documentation](apps/processor/fonts/README.md) for their sources and licenses. UI components retain their [upstream license](packages/ui/LICENSE.md).
