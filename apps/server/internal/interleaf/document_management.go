@@ -112,6 +112,7 @@ func (s *Server) purgeDocument(ctx context.Context, id string) (int, string) {
 			return 408, "等待后台任务停止超时，请重试"
 		}
 	}
+	s.evictNativeReadingJobs(id)
 	d, err := s.Store.Document(id)
 	if errors.Is(err, sql.ErrNoRows) {
 		return 204, ""

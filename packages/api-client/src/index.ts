@@ -338,6 +338,28 @@ export const api = {
     request<import("@interleaf/core").TranslationBlock[]>(
       `/api/documents/${id}/translations`,
     ),
+  createNativePDFReading: (id: string, signal?: AbortSignal) =>
+    request<import("@interleaf/core").NativePDFReadingJob>(
+      `/api/documents/${encodeURIComponent(id)}/native-pdf-reading`,
+      { method: "POST", body: "{}", signal },
+    ),
+  nativePDFReading: (id: string, job: string, signal?: AbortSignal) =>
+    request<import("@interleaf/core").NativePDFReadingJob>(
+      `/api/documents/${encodeURIComponent(id)}/native-pdf-reading/${encodeURIComponent(job)}`,
+      { signal },
+    ),
+  cancelNativePDFReading: (id: string, job: string) =>
+    request<void>(
+      `/api/documents/${encodeURIComponent(id)}/native-pdf-reading/${encodeURIComponent(job)}`,
+      { method: "DELETE" },
+    ),
+  nativePDFReadingFileURL: (id: string, key: string) =>
+    publicationURL(id, `native-pdf-reading/${encodeURIComponent(key)}/file`),
+  nativePDFReadingMetadata: (id: string, key: string, signal?: AbortSignal) =>
+    request<import("@interleaf/core").NativePDFReadingManifest>(
+      `/api/documents/${encodeURIComponent(id)}/native-pdf-reading/cache/${encodeURIComponent(key)}/metadata`,
+      { signal },
+    ),
   createBilingualPDF: (
     id: string,
     options: Pick<

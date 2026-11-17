@@ -6897,6 +6897,200 @@
                 },
             },
         },
+      "/api/documents/{id}/native-pdf-reading":
+        {
+          "post":
+            {
+              "parameters":
+                [
+                  {
+                    "name": "id",
+                    "in": "path",
+                    "required": true,
+                    "schema": { "type": "string" },
+                  },
+                ],
+              "requestBody":
+                {
+                  "required": true,
+                  "content":
+                    {
+                      "application/json":
+                        {
+                          "schema":
+                            { "type": "object", "additionalProperties": false },
+                        },
+                    },
+                },
+              "responses":
+                {
+                  "200":
+                    {
+                      "description": "Success",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                {
+                                  "$ref": "#/components/schemas/NativePDFReadingJob",
+                                },
+                            },
+                        },
+                    },
+                  "202":
+                    {
+                      "description": "Success",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                {
+                                  "$ref": "#/components/schemas/NativePDFReadingJob",
+                                },
+                            },
+                        },
+                    },
+                  "409": { "description": "Document/layout unavailable" },
+                },
+            },
+        },
+      "/api/documents/{id}/native-pdf-reading/{job}":
+        {
+          "get":
+            {
+              "parameters":
+                [
+                  {
+                    "name": "id",
+                    "in": "path",
+                    "required": true,
+                    "schema": { "type": "string" },
+                  },
+                  {
+                    "name": "job",
+                    "in": "path",
+                    "required": true,
+                    "schema": { "type": "string" },
+                  },
+                ],
+              "responses":
+                {
+                  "200":
+                    {
+                      "description": "Success",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                {
+                                  "$ref": "#/components/schemas/NativePDFReadingJob",
+                                },
+                            },
+                        },
+                    },
+                  "404": { "description": "Job unavailable" },
+                  "409": { "description": "Stale revision or corrupt cache" },
+                },
+            },
+          "delete":
+            {
+              "parameters":
+                [
+                  {
+                    "name": "id",
+                    "in": "path",
+                    "required": true,
+                    "schema": { "type": "string" },
+                  },
+                  {
+                    "name": "job",
+                    "in": "path",
+                    "required": true,
+                    "schema": { "type": "string" },
+                  },
+                ],
+              "responses": { "204": { "description": "Cancelled and joined" } },
+            },
+        },
+      "/api/documents/{id}/native-pdf-reading/cache/{key}/metadata":
+        {
+          "get":
+            {
+              "parameters":
+                [
+                  {
+                    "name": "id",
+                    "in": "path",
+                    "required": true,
+                    "schema": { "type": "string" },
+                  },
+                  {
+                    "name": "key",
+                    "in": "path",
+                    "required": true,
+                    "schema": { "type": "string" },
+                  },
+                ],
+              "responses":
+                {
+                  "200":
+                    {
+                      "description": "Success",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                {
+                                  "$ref": "#/components/schemas/NativePDFReadingManifest",
+                                },
+                            },
+                        },
+                    },
+                  "409": { "description": "Stale revision or corrupt cache" },
+                },
+            },
+        },
+      "/api/documents/{id}/native-pdf-reading/cache/{key}/file":
+        {
+          "get":
+            {
+              "parameters":
+                [
+                  {
+                    "name": "id",
+                    "in": "path",
+                    "required": true,
+                    "schema": { "type": "string" },
+                  },
+                  {
+                    "name": "key",
+                    "in": "path",
+                    "required": true,
+                    "schema": { "type": "string" },
+                  },
+                ],
+              "responses":
+                {
+                  "200":
+                    {
+                      "description": "Verified reading PDF",
+                      "content":
+                        {
+                          "application/pdf":
+                            {
+                              "schema":
+                                { "type": "string", "format": "binary" },
+                            },
+                        },
+                    },
+                  "409": { "description": "Stale revision or corrupt cache" },
+                },
+            },
+        },
     },
   "components":
     {
@@ -10060,6 +10254,129 @@
                     { "type": "string", "minLength": 1, "maxLength": 300 },
                 },
               "required": ["title"],
+            },
+          "NativePDFReadingParagraph":
+            {
+              "type": "object",
+              "properties":
+                {
+                  "id": { "type": "string" },
+                  "blockId": { "type": "string" },
+                  "sourceHash": { "type": "string" },
+                  "bounds":
+                    {
+                      "type": "object",
+                      "properties":
+                        {
+                          "x": { "type": "number" },
+                          "y": { "type": "number" },
+                          "width": { "type": "number" },
+                          "height": { "type": "number" },
+                        },
+                      "required": ["x", "y", "width", "height"],
+                    },
+                  "translated": { "type": "boolean" },
+                  "target": { "type": "string" },
+                },
+              "required":
+                ["id", "blockId", "sourceHash", "bounds", "translated"],
+            },
+          "NativePDFReadingPage":
+            {
+              "type": "object",
+              "properties":
+                {
+                  "page": { "type": "integer" },
+                  "width": { "type": "number" },
+                  "height": { "type": "number" },
+                  "outputWidth": { "type": "number" },
+                  "translationOffsetX": { "type": "number" },
+                  "paragraphs":
+                    {
+                      "type": "array",
+                      "items":
+                        {
+                          "$ref": "#/components/schemas/NativePDFReadingParagraph",
+                        },
+                    },
+                },
+              "required":
+                [
+                  "page",
+                  "width",
+                  "height",
+                  "outputWidth",
+                  "translationOffsetX",
+                  "paragraphs",
+                ],
+            },
+          "NativePDFReadingManifest":
+            {
+              "type": "object",
+              "properties":
+                {
+                  "version": { "type": "integer", "const": 1 },
+                  "documentId": { "type": "string" },
+                  "cacheKey": { "type": "string" },
+                  "originalSha256": { "type": "string" },
+                  "layoutRevision": { "type": "string" },
+                  "translationRevision": { "type": "string" },
+                  "rendererVersion": { "type": "string" },
+                  "pdfSha256": { "type": "string" },
+                  "pdfBytes": { "type": "integer" },
+                  "pages":
+                    {
+                      "type": "array",
+                      "items":
+                        { "$ref": "#/components/schemas/NativePDFReadingPage" },
+                    },
+                  "translatedParagraphs": { "type": "integer" },
+                  "originalParagraphs": { "type": "integer" },
+                  "warnings":
+                    { "type": "array", "items": { "type": "string" } },
+                },
+              "required":
+                [
+                  "version",
+                  "documentId",
+                  "cacheKey",
+                  "originalSha256",
+                  "layoutRevision",
+                  "translationRevision",
+                  "rendererVersion",
+                  "pdfSha256",
+                  "pdfBytes",
+                  "pages",
+                  "translatedParagraphs",
+                  "originalParagraphs",
+                  "warnings",
+                ],
+            },
+          "NativePDFReadingJob":
+            {
+              "type": "object",
+              "properties":
+                {
+                  "id": { "type": "string" },
+                  "cacheKey": { "type": "string" },
+                  "status":
+                    {
+                      "type": "string",
+                      "enum": ["preparing", "running", "ready", "failed"],
+                    },
+                  "stage":
+                    {
+                      "type": "string",
+                      "enum": ["prepare", "layout", "composing", "ready"],
+                    },
+                  "done": { "type": "integer" },
+                  "total": { "type": "integer" },
+                  "error": { "type": "string" },
+                  "metadata":
+                    { "$ref": "#/components/schemas/NativePDFReadingManifest" },
+                },
+              "required":
+                ["id", "cacheKey", "status", "stage", "done", "total"],
             },
         },
     },

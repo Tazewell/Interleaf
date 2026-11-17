@@ -44,6 +44,8 @@ type Server struct {
 	aiTasks                map[*documentTask]struct{}
 	paperTasks             map[string]map[*documentTask]struct{}
 	deletingPapers         map[string]bool
+	nativeReadingMu        sync.Mutex
+	nativeReadingJobs      map[string]*nativeReadingJob
 	bilingualMu            sync.Mutex
 	bilingualJobs          map[string]*bilingualJob
 	bilingualRoot          string
@@ -129,6 +131,7 @@ func (s *Server) Handler() http.Handler {
 	s.registerPaperRoutes(mux)
 	s.registerResearchRoutes(mux)
 	s.registerBilingualPDFRoutes(mux)
+	s.registerNativePDFReadingRoutes(mux)
 	s.registerPaperBibliographyRoutes(mux)
 	s.registerBibliographyExportRoutes(mux)
 	mux.HandleFunc("POST /api/diagnostics/events", s.recordDiagnostic)

@@ -120,4 +120,5 @@ func (s *Server) Close() {
 	for _, task := range tasks {
 		<-task.done
 	}
+	s.evictNativeReadingJobs("")
 }

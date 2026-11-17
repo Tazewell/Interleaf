@@ -6661,6 +6661,225 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/documents/{id}/native-pdf-reading": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+            responses: {
+                /** @description Success */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["NativePDFReadingJob"];
+                    };
+                };
+                /** @description Success */
+                202: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["NativePDFReadingJob"];
+                    };
+                };
+                /** @description Document/layout unavailable */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/documents/{id}/native-pdf-reading/{job}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                    job: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Success */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["NativePDFReadingJob"];
+                    };
+                };
+                /** @description Job unavailable */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Stale revision or corrupt cache */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                    job: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Cancelled and joined */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/documents/{id}/native-pdf-reading/cache/{key}/metadata": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                    key: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Success */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["NativePDFReadingManifest"];
+                    };
+                };
+                /** @description Stale revision or corrupt cache */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/documents/{id}/native-pdf-reading/cache/{key}/file": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                    key: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Verified reading PDF */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/pdf": string;
+                    };
+                };
+                /** @description Stale revision or corrupt cache */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -7885,6 +8104,55 @@ export interface components {
         };
         ResearchSessionInput: {
             title: string;
+        };
+        NativePDFReadingParagraph: {
+            id: string;
+            blockId: string;
+            sourceHash: string;
+            bounds: {
+                x: number;
+                y: number;
+                width: number;
+                height: number;
+            };
+            translated: boolean;
+            target?: string;
+        };
+        NativePDFReadingPage: {
+            page: number;
+            width: number;
+            height: number;
+            outputWidth: number;
+            translationOffsetX: number;
+            paragraphs: components["schemas"]["NativePDFReadingParagraph"][];
+        };
+        NativePDFReadingManifest: {
+            /** @constant */
+            version: 1;
+            documentId: string;
+            cacheKey: string;
+            originalSha256: string;
+            layoutRevision: string;
+            translationRevision: string;
+            rendererVersion: string;
+            pdfSha256: string;
+            pdfBytes: number;
+            pages: components["schemas"]["NativePDFReadingPage"][];
+            translatedParagraphs: number;
+            originalParagraphs: number;
+            warnings: string[];
+        };
+        NativePDFReadingJob: {
+            id: string;
+            cacheKey: string;
+            /** @enum {string} */
+            status: "preparing" | "running" | "ready" | "failed";
+            /** @enum {string} */
+            stage: "prepare" | "layout" | "composing" | "ready";
+            done: number;
+            total: number;
+            error?: string;
+            metadata?: components["schemas"]["NativePDFReadingManifest"];
         };
     };
     responses: never;
