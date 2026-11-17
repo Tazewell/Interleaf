@@ -374,3 +374,17 @@ it("gives annotation clicks priority over block focus, including after repaint",
     await act(async () => blocks.destroy());
   }
 });
+
+it("clears only tracked hover markers and leaves idle scroll free of DOM scans", () => {
+  const query = vi.spyOn(host, "querySelectorAll");
+  host.dispatchEvent(new Event("scroll"));
+  expect(query).not.toHaveBeenCalled();
+  query.mockRestore();
+  pointer("pointermove");
+  expect(host.querySelectorAll("[data-hovered]")).toHaveLength(6);
+  const hoverQuery = vi.spyOn(host, "querySelectorAll");
+  host.dispatchEvent(new Event("scroll"));
+  expect(hoverQuery).not.toHaveBeenCalled();
+  hoverQuery.mockRestore();
+  expect(host.querySelectorAll("[data-hovered]")).toHaveLength(0);
+});

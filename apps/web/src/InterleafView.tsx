@@ -59,6 +59,11 @@ export function InterleafView({
           : { EPUBReaderAdapter: undefined };
       if (disposed) return;
       const Engine = PDFReaderAdapter || EPUBReaderAdapter!;
+      const readingAnchor: NonNullable<ReaderEvents["readingAnchor"]> = (
+        anchor,
+      ) => {
+        if (!disposed) latest.current.events.readingAnchor?.(anchor);
+      };
       engine = new Engine(
         container,
         {
@@ -68,8 +73,10 @@ export function InterleafView({
           epubReadingAnchor: (id) => {
             if (!disposed) latest.current.events.epubReadingAnchor?.(id);
           },
-          readingAnchor: (anchor) => {
-            if (!disposed) latest.current.events.readingAnchor?.(anchor);
+          get readingAnchor() {
+            return !disposed && latest.current.events.readingAnchor
+              ? readingAnchor
+              : undefined;
           },
           blockFocus: (block) => {
             if (!disposed) latest.current.events.blockFocus?.(block);

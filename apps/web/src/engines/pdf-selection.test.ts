@@ -48,6 +48,7 @@ import { PDFReaderAdapter } from "./pdf";
 import { paper } from "../papers/fixtures";
 let adapter: PDFReaderAdapter;
 let host: HTMLDivElement;
+const annotationChanged = vi.fn();
 let changed: Mock<
   (selection: import("@interleaf/core").ReaderSelection | null) => void
 >;
@@ -62,9 +63,11 @@ beforeEach(() => {
   host = document.createElement("div");
   document.body.append(host);
   changed = vi.fn();
+  annotationChanged.mockClear();
   adapter = new PDFReaderAdapter(host, {
     location: vi.fn(),
     selection: changed,
+    annotation: annotationChanged,
   });
   host.querySelector(".pdfViewer")!.innerHTML =
     '<div class="page" data-page-number="1"><span>Selected passage</span></div>';
@@ -88,6 +91,7 @@ afterEach(async () => {
   await adapter.destroy();
   host.remove();
   window.getSelection()?.removeAllRanges();
+  vi.restoreAllMocks();
   vi.unstubAllGlobals();
 });
 it("clears the displayed selection after clicking blank PDF space", () => {
@@ -138,4 +142,110 @@ it("preserves the selection for toolbar actions but clears it when clicking anot
   expect(adapter.getSelection()).toBeNull();
   expect(window.getSelection()!.rangeCount).toBe(0);
   toolbar.remove();
+});
+
+it("does not read global Selection or scan highlights during idle scroll", () => {
+  adapter.clearSelection();
+  const selection = vi.spyOn(window, "getSelection");
+  const query = vi.spyOn(host, "querySelectorAll");
+  for (let i = 0; i < 5; i++) host.dispatchEvent(new Event("scroll"));
+  expect(selection).not.toHaveBeenCalled();
+  expect(
+    query.mock.calls.filter(([selector]) => selector.includes("highlight")),
+  ).toHaveLength(0);
+});
+it("clears an unrecognized cross-page native selection on scroll", () => {
+  adapter.clearSelection();
+  const viewer = host.querySelector(".pdfViewer")!;
+  viewer.insertAdjacentHTML(
+    "beforeend",
+    '<div class="page" data-page-number="2"><span>Other page</span></div>',
+  );
+  const spans = viewer.querySelectorAll("span");
+  const range = document.createRange();
+  range.setStart(spans[0].firstChild!, 0);
+  range.setEnd(spans[1].firstChild!, 5);
+  window.getSelection()!.addRange(range);
+  document.dispatchEvent(new Event("selectionchange"));
+  expect(adapter.getSelection()).toBeNull();
+  host.dispatchEvent(new Event("scroll"));
+  expect(window.getSelection()!.rangeCount).toBe(0);
+});
+it.each([false, true])(
+  "clears a native drag before mouseup (selectionchange delivered: %s)",
+  (delivered) => {
+    adapter.clearSelection();
+    const text = host.querySelector("span")!;
+    text.dispatchEvent(new MouseEvent("pointerdown", { bubbles: true }));
+    const range = document.createRange();
+    range.selectNodeContents(text);
+    window.getSelection()!.addRange(range);
+    if (delivered) document.dispatchEvent(new Event("selectionchange"));
+    expect(adapter.getSelection()).toBeNull();
+    host.dispatchEvent(new Event("scroll"));
+    expect(window.getSelection()!.rangeCount).toBe(0);
+    text.dispatchEvent(new MouseEvent("mouseup", { bubbles: true }));
+    expect(adapter.getSelection()).toBeNull();
+  },
+);
+it("preserves another reader's native selection while scrolling and explicitly clearing", () => {
+  const other = document.createElement("div");
+  other.textContent = "Other reader";
+  document.body.append(other);
+  const range = document.createRange();
+  range.selectNodeContents(other);
+  window.getSelection()!.removeAllRanges();
+  window.getSelection()!.addRange(range);
+  document.dispatchEvent(new Event("selectionchange"));
+  host.dispatchEvent(new Event("scroll"));
+  adapter.clearSelection();
+  expect(window.getSelection()!.toString()).toBe("Other reader");
+  other.remove();
+});
+it("clears native selection with Escape", () => {
+  document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
+  expect(window.getSelection()!.rangeCount).toBe(0);
+  expect(adapter.getSelection()).toBeNull();
+});
+
+it("preserves an external input selection on reader scroll", () => {
+  adapter.clearSelection();
+  const input = document.createElement("input");
+  input.value = "External input";
+  document.body.append(input);
+  input.focus();
+  input.setSelectionRange(0, 8);
+  host.dispatchEvent(new Event("scroll"));
+  expect(input.selectionStart).toBe(0);
+  expect(input.selectionEnd).toBe(8);
+  input.remove();
+});
+
+it("dismisses an active annotation on scroll once and remains idle afterward", async () => {
+  adapter.clearSelection();
+  await adapter.highlight([
+    {
+      id: "a",
+      documentId: "p",
+      kind: "highlight",
+      color: "#facc15",
+      quote: "Selected",
+      note: "",
+      createdAt: "",
+      location: {
+        type: "pdf",
+        page: 1,
+        rects: [{ x: 0.1, y: 0.1, width: 0.3, height: 0.1 }],
+      },
+    },
+  ]);
+  const text = host.querySelector("span")!;
+  for (const type of ["pointerdown", "mouseup", "click"])
+    text.dispatchEvent(
+      new MouseEvent(type, { bubbles: true, clientX: 100, clientY: 130 }),
+    );
+  expect(annotationChanged.mock.lastCall?.[0]?.ids).toEqual(["a"]);
+  annotationChanged.mockClear();
+  for (let i = 0; i < 5; i++) host.dispatchEvent(new Event("scroll"));
+  expect(annotationChanged).toHaveBeenCalledExactlyOnceWith(null);
 });

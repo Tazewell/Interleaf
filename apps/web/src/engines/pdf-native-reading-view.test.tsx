@@ -38,7 +38,10 @@ vi.mock("sonner", () => ({ toast: { error: vi.fn() } }));
 let host: HTMLDivElement, root: Root;
 const ready = vi.fn(),
   location = vi.fn();
-async function render(key: string) {
+async function render(
+  key: string,
+  readingAnchor?: import("@interleaf/core").ReaderEvents["readingAnchor"],
+) {
   await act(async () =>
     root.render(
       <InterleafView
@@ -46,7 +49,7 @@ async function render(key: string) {
         theme={defaultTheme}
         annotations={[]}
         onReady={ready}
-        events={{ location, selection: vi.fn() }}
+        events={{ location, selection: vi.fn(), readingAnchor }}
         nativeReading={{
           fileURL: `/${key}`,
           translations: [],
@@ -99,4 +102,26 @@ it("destroys an obsolete pending cache adapter immediately and ignores its ready
   await act(async () => release());
   expect(location).not.toHaveBeenCalled();
   expect(ready).toHaveBeenCalledOnce();
+});
+
+it("exposes only the current readingAnchor consumer across renders and disposal", async () => {
+  await render("same");
+  const bridge = state.instances[0].events;
+  expect(bridge.readingAnchor).toBeUndefined();
+  const first = vi.fn();
+  await render("same", first);
+  const stale = bridge.readingAnchor;
+  stale({ blockId: "b", fraction: 0.5 });
+  expect(first).toHaveBeenCalledOnce();
+  const second = vi.fn();
+  await render("same", second);
+  stale({ blockId: "b", fraction: 0.6 });
+  expect(first).toHaveBeenCalledOnce();
+  expect(second).toHaveBeenCalledOnce();
+  await render("same");
+  expect(bridge.readingAnchor).toBeUndefined();
+  await render("replacement", second);
+  expect(bridge.readingAnchor).toBeUndefined();
+  stale({ blockId: "b", fraction: 0.7 });
+  expect(second).toHaveBeenCalledOnce();
 });

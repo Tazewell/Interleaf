@@ -109,6 +109,8 @@ export class PDFReaderAdapter implements ReaderAdapter {
   private blockData: PDFBlock[] = [];
   private blockImageAbort = new AbortController();
   private selecting = false;
+  private nativeSelection = false;
+  private annotationActive = false;
   private navigation: PDFReadingNavigation;
   private pointer?: { x: number; y: number };
   private theme: ReaderTheme = defaultTheme;
@@ -142,9 +144,10 @@ export class PDFReaderAdapter implements ReaderAdapter {
       },
     );
     this.locationHighlight = new PDFLocationHighlight(container);
-    this.annotationLayer = new PDFAnnotationLayer(container, (target) =>
-      this.events.annotation?.(target),
-    );
+    this.annotationLayer = new PDFAnnotationLayer(container, (target) => {
+      this.annotationActive = true;
+      this.events.annotation?.(target);
+    });
     this.linkPreview = new PDFLinkPreview(
       container,
       () => this.sourcePDF,
@@ -557,20 +560,31 @@ export class PDFReaderAdapter implements ReaderAdapter {
     this.events.selection(null);
   };
   clearSelection = () => {
+    this.annotationActive = false;
     this.events.annotation?.(null);
     this.annotationLayer.clear();
     const sel = window.getSelection();
     if (sel?.anchorNode && this.container.contains(sel.anchorNode))
       sel.removeAllRanges();
+    this.nativeSelection = false;
     this.clearState();
   };
   private onScroll = () => {
-    this.clearSelection();
+    // ReaderSelection may be absent during a drag or for unsupported native
+    // ranges. Track ownership separately; idle scrolling must not query the
+    // browser Selection, which can flush styles on the PDF text layer.
+    if (this.selection || this.nativeSelection || this.selecting)
+      this.clearSelection();
+    else if (this.annotationActive) {
+      this.annotationActive = false;
+      this.events.annotation?.(null);
+    }
     this.processNextDarkPage();
   };
   private onPointerDown = (event: PointerEvent) => {
     if (isSelectionToolbar(event.target)) return;
     this.locationHighlight.clear();
+    this.annotationActive = false;
     this.events.annotation?.(null);
     this.pointer = undefined;
     this.selecting =
@@ -686,9 +700,18 @@ export class PDFReaderAdapter implements ReaderAdapter {
   };
   private onSelectionChange = () => {
     if (!this.selecting) this.onSelection();
+    else this.trackNativeSelection(window.getSelection());
   };
+  private trackNativeSelection(sel: Selection | null) {
+    this.nativeSelection = !!(
+      sel?.anchorNode &&
+      !sel.isCollapsed &&
+      this.container.contains(sel.anchorNode)
+    );
+  }
   private onSelection = () => {
     const sel = window.getSelection();
+    this.trackNativeSelection(sel);
     const text = sel?.toString().trim();
     if (!sel?.rangeCount || sel.isCollapsed || !text) return this.clearState();
     const range = sel.getRangeAt(0);

@@ -138,3 +138,71 @@ it("cancels an in-flight page move on pointer input without reporting the destin
     nav.destroy();
   }
 });
+
+it("only schedules scroll anchor scans while a current consumer exists", () => {
+  const host = document.createElement("div");
+  const events: import("@interleaf/core").ReaderEvents = {
+    location: vi.fn(),
+    selection: vi.fn(),
+  };
+  const page = document.createElement("div");
+  host.getBoundingClientRect = () => new DOMRect(0, 0, 600, 600);
+  page.getBoundingClientRect = () => new DOMRect(0, 0, 600, 1000);
+  const nav = new PDFReadingNavigation(
+    host,
+    { getPageView: () => ({ div: page }) } as unknown as PDFViewer,
+    vi.fn(),
+    () => [
+      {
+        id: "p",
+        page: 1,
+        label: "text",
+        text: "Paragraph",
+        bounds: { x: 0.1, y: 0.2, width: 0.8, height: 0.2 },
+      },
+    ],
+    events,
+  );
+  const frames = new Map<number, FrameRequestCallback>();
+  let next = 0;
+  const schedule = vi
+    .spyOn(window, "requestAnimationFrame")
+    .mockImplementation((callback) => {
+      frames.set(++next, callback);
+      return next;
+    });
+  const cancel = vi
+    .spyOn(window, "cancelAnimationFrame")
+    .mockImplementation((id) => {
+      frames.delete(id);
+    });
+  const scan = vi.spyOn(host, "getBoundingClientRect");
+  try {
+    host.dispatchEvent(new Event("scroll"));
+    expect(schedule).not.toHaveBeenCalled();
+    const receive = vi.fn();
+    events.readingAnchor = receive;
+    host.dispatchEvent(new Event("scroll"));
+    expect(frames.size).toBe(1);
+    delete events.readingAnchor;
+    for (const callback of frames.values()) callback(0);
+    frames.clear();
+    expect(scan).not.toHaveBeenCalled();
+    events.readingAnchor = receive;
+    host.dispatchEvent(new Event("scroll"));
+    expect(frames.size).toBe(1);
+    for (const callback of frames.values()) callback(0);
+    frames.clear();
+    expect(receive).toHaveBeenCalledExactlyOnceWith({
+      blockId: "p",
+      fraction: 0.5,
+    });
+    host.dispatchEvent(new Event("scroll"));
+    nav.destroy();
+    expect(frames.size).toBe(0);
+  } finally {
+    nav.destroy();
+    schedule.mockRestore();
+    cancel.mockRestore();
+  }
+});

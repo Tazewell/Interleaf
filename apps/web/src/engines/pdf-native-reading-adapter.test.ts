@@ -317,7 +317,13 @@ it("maps source navigation to the wide page while reporting source locations", a
     adapter as unknown as { navigation: { goTo: ReturnType<typeof vi.fn> } }
   ).navigation;
   const go = vi.spyOn(navigation, "goTo").mockResolvedValue(true);
+  host.querySelector(".pdfViewer")!.innerHTML =
+    '<div class="page" data-page-number="1"><span>Source passage</span></div>';
+  const range = document.createRange();
+  range.selectNodeContents(host.querySelector("span")!);
+  window.getSelection()!.addRange(range);
   await adapter.goTo({ type: "pdf", page: 1, x: 0.5, y: 0.2 });
+  expect(window.getSelection()!.rangeCount).toBe(0);
   expect(go).toHaveBeenCalledWith(1, {
     x: 300 / 1212,
     y: 0.2,

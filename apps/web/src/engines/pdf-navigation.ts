@@ -105,10 +105,12 @@ export class PDFReadingNavigation {
         return;
       this.followedPosition = undefined;
     }
+    if (this.disposed || this.moving || !this.events.readingAnchor) return;
     this.frame = requestAnimationFrame(() => {
-      if (this.disposed || this.moving) return;
+      const receive = this.events.readingAnchor;
+      if (this.disposed || this.moving || !receive) return;
       const anchor = this.anchor();
-      if (anchor) this.events.readingAnchor?.(anchor);
+      if (anchor) receive(anchor);
     });
   };
   anchor(): PDFReadingAnchor | undefined {

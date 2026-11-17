@@ -14,6 +14,7 @@ export class PDFAnnotationLayer {
       groups: HTMLElement[];
     }
   >();
+  private hovered = new Set<HTMLElement>();
   private pressed?: { x: number; y: number };
   constructor(
     private host: HTMLElement,
@@ -131,9 +132,8 @@ export class PDFAnnotationLayer {
   };
   clear = () => {
     this.pressed = undefined;
-    this.host
-      .querySelectorAll(".interleaf-highlight[data-hovered]")
-      .forEach((el) => el.removeAttribute("data-hovered"));
+    for (const el of this.hovered) el.removeAttribute("data-hovered");
+    this.hovered.clear();
   };
   private find(event: MouseEvent) {
     const target = event.target instanceof Element ? event.target : null;
@@ -179,14 +179,14 @@ export class PDFAnnotationLayer {
       !event.buttons && !window.getSelection()?.toString().trim()
         ? this.find(event)
         : undefined;
+    this.hovered.clear();
     this.host
       .querySelectorAll<HTMLElement>(".interleaf-highlight")
-      .forEach((el) =>
-        el.toggleAttribute(
-          "data-hovered",
-          !!hit?.ids.includes(el.dataset.annotationId!),
-        ),
-      );
+      .forEach((el) => {
+        const hovered = !!hit?.ids.includes(el.dataset.annotationId!);
+        el.toggleAttribute("data-hovered", hovered);
+        if (hovered) this.hovered.add(el);
+      });
   };
   private press = (event: PointerEvent) => {
     this.clear();
