@@ -23,6 +23,7 @@ import {
 import { checkBounds, overlap } from "./prepare";
 import { fitParagraph } from "./layout";
 import { validateFormulaTokens } from "./formula";
+import type { NativePDFReadingReport } from "../../../../packages/interleaf-core/src/native-pdf-reading";
 
 export interface NativePDFProgress {
   stage: "layout" | "composing";
@@ -36,6 +37,8 @@ interface RenderOptions {
   output: string;
   layout: BilingualPDFOptions["layout"];
   keepOriginalPages?: number[];
+  /** Reuse supplied reading targets, retaining original ink when they cannot fit. */
+  reading?: boolean;
 }
 function drawOriginal(
   destination: PDFPage,
@@ -62,7 +65,7 @@ function drawOriginal(
     rotate: degrees(-p.rotation),
   });
 }
-function validatePrepared(p: NativePDFPrepared) {
+function validatePrepared(p: NativePDFPrepared, reading = false) {
   if (
     !p ||
     p.version !== 1 ||
@@ -109,15 +112,31 @@ function validatePrepared(p: NativePDFPrepared) {
         paragraph.formulas.length > 10000
       )
         throw new Error("准备段落无效");
+      if (paragraph.preserveOriginalReason !== undefined) {
+        if (!reading)
+          throw new Error("阅读准备段落需保留原文，不能用于严格导出");
+        if (
+          typeof paragraph.preserveOriginalReason !== "string" ||
+          !paragraph.preserveOriginalReason.trim() ||
+          paragraph.preserveOriginalReason.length > 1000 ||
+          paragraph.formulas.length
+        )
+          throw new Error("准备段落保留原文信息无效");
+      }
       ids.add(paragraph.id);
       checkBounds(paragraph.bounds, page.width, page.height);
       const expectedHash = sha256(
         JSON.stringify([
-          "interleaf-native-pdf-v1",
+          paragraph.preserveOriginalReason === undefined
+            ? "interleaf-native-pdf-v1"
+            : "interleaf-native-pdf-reading-retained-v1",
           paragraph.id,
           paragraph.source,
           paragraph.bounds,
           paragraph.formulas,
+          ...(paragraph.preserveOriginalReason === undefined
+            ? []
+            : [paragraph.preserveOriginalReason]),
         ]),
       );
       if (paragraph.sourceHash !== expectedHash)
@@ -141,14 +160,15 @@ function validatePrepared(p: NativePDFPrepared) {
 export async function renderNativePDF(
   options: RenderOptions,
   progress?: (event: NativePDFProgress) => void,
-): Promise<void> {
+): Promise<NativePDFReadingReport> {
   const { input, prepared, targets, output, layout } = options;
   if (
     !["side-by-side", "alternating"].includes(layout) ||
-    resolve(input) === resolve(output)
+    resolve(input) === resolve(output) ||
+    (options.reading && layout !== "side-by-side")
   )
     throw new Error("输出模式或路径无效");
-  validatePrepared(prepared);
+  validatePrepared(prepared, options.reading);
   if (!targets || typeof targets !== "object" || Array.isArray(targets))
     throw new Error("译文格式无效");
   const bytes = await readLimited(input, 512 * 1024 * 1024);
@@ -166,13 +186,17 @@ export async function renderNativePDF(
   );
   if (Object.keys(targets).some((id) => !paragraphIds.has(id)))
     throw new Error("译文段落不属于当前任务");
+  if (options.reading)
+    for (const target of Object.values(targets))
+      if (typeof target !== "string") throw new Error("译文格式无效");
   for (const p of prepared.pages) {
     if (
       !keep.has(p.page) &&
       (!p.paragraphs.length || prepared.noTextPages.includes(p.page))
     )
-      throw new Error(`第 ${p.page} 页需明确保留原文`);
-    if (!keep.has(p.page))
+      if (options.reading) keep.add(p.page);
+      else throw new Error(`第 ${p.page} 页需明确保留原文`);
+    if (!options.reading && !keep.has(p.page))
       for (const paragraph of p.paragraphs)
         if (typeof targets[paragraph.id] !== "string")
           throw new Error(`第 ${p.page} 页段落 ${paragraph.id} 缺少译文`);
@@ -202,14 +226,62 @@ export async function renderNativePDF(
     const result = await PDFDocument.create();
     const { font } = await loadFont(result);
     const fits = new Map<string, ReturnType<typeof fitParagraph>>();
+    const report: NativePDFReadingReport = {
+      pages: [],
+      translatedParagraphs: 0,
+      originalParagraphs: 0,
+      warnings: options.reading ? [...prepared.warnings] : [],
+    };
     for (let i = 0; i < prepared.pages.length; i++) {
       const p = prepared.pages[i];
       if (!keep.has(p.page))
-        for (const paragraph of p.paragraphs)
-          fits.set(
-            paragraph.id,
-            fitParagraph(paragraph, targets[paragraph.id], font),
-          );
+        for (const paragraph of p.paragraphs) {
+          if (paragraph.preserveOriginalReason !== undefined) {
+            report.warnings.push(`${paragraph.preserveOriginalReason}，段落 ${paragraph.id} 保留原文`);
+            continue;
+          }
+          const target = targets[paragraph.id];
+          if (options.reading && target === undefined) {
+            report.warnings.push(
+              `第 ${p.page} 页段落 ${paragraph.id} 缺少译文，保留原文`,
+            );
+            continue;
+          }
+          try {
+            fits.set(paragraph.id, fitParagraph(paragraph, target, font));
+          } catch (error) {
+            if (!options.reading) throw error;
+            report.warnings.push(
+              `${error instanceof Error ? error.message : "段落排版失败"}，保留原文`,
+            );
+          }
+        }
+      report.pages.push({
+        page: p.page,
+        width: p.width,
+        height: p.height,
+        outputWidth: layout === "side-by-side" ? 2 * p.width + 12 : p.width,
+        translationOffsetX: layout === "side-by-side" ? p.width + 12 : 0,
+        paragraphs: p.paragraphs.map((paragraph) => {
+          const translated = fits.has(paragraph.id);
+          if (translated) report.translatedParagraphs++;
+          else {
+            report.originalParagraphs++;
+            if (keep.has(p.page))
+              report.warnings.push(
+                `第 ${p.page} 页段落 ${paragraph.id} 保留原文`,
+              );
+          }
+          return {
+            id: paragraph.id,
+            blockId: paragraph.blockId,
+            sourceHash: sha256("zh-CN:v1:" + paragraph.originalSource),
+            bounds: paragraph.bounds,
+            translated,
+            ...(translated ? { target: targets[paragraph.id] } : {}),
+          };
+        }),
+      });
       progress?.({
         stage: "layout",
         done: i + 1,
@@ -244,7 +316,10 @@ export async function renderNativePDF(
       drawOriginal(original, embedded, p, actual.userUnit);
       const translated = wide ? original : result.addPage([p.width, p.height]),
         offset = wide ? p.width + 12 : 0;
-      if (keep.has(p.page))
+      if (
+        keep.has(p.page) ||
+        (options.reading && !p.paragraphs.some((v) => fits.has(v.id)))
+      )
         drawOriginal(translated, embedded, p, actual.userUnit, offset);
       else {
         const { canvas, scale } = await printRaster(actual),
@@ -255,32 +330,34 @@ export async function renderNativePDF(
             { bytes: Buffer; width: number; height: number }
           >();
           for (const paragraph of p.paragraphs)
-            for (const f of paragraph.formulas) {
-              const w = Math.ceil(f.bounds.width * scale),
-                h = Math.ceil(f.bounds.height * scale);
-              const crop = createCanvas(w, h);
-              crop
-                .getContext("2d")
-                .drawImage(
-                  canvas,
-                  f.bounds.x * scale,
-                  f.bounds.y * scale,
-                  f.bounds.width * scale,
-                  f.bounds.height * scale,
-                  0,
-                  0,
-                  w,
-                  h,
-                );
-              formulas.set(`${paragraph.id}:${f.token}`, {
-                bytes: crop.toBuffer("image/png"),
-                width: f.bounds.width,
-                height: f.bounds.height,
-              });
-              crop.width = crop.height = 1;
-            }
+            if (fits.has(paragraph.id))
+              for (const f of paragraph.formulas) {
+                const w = Math.ceil(f.bounds.width * scale),
+                  h = Math.ceil(f.bounds.height * scale);
+                const crop = createCanvas(w, h);
+                crop
+                  .getContext("2d")
+                  .drawImage(
+                    canvas,
+                    f.bounds.x * scale,
+                    f.bounds.y * scale,
+                    f.bounds.width * scale,
+                    f.bounds.height * scale,
+                    0,
+                    0,
+                    w,
+                    h,
+                  );
+                formulas.set(`${paragraph.id}:${f.token}`, {
+                  bytes: crop.toBuffer("image/png"),
+                  width: f.bounds.width,
+                  height: f.bounds.height,
+                });
+                crop.width = crop.height = 1;
+              }
           context.fillStyle = "white";
           for (const paragraph of p.paragraphs) {
+            if (!fits.has(paragraph.id)) continue;
             const b = paragraph.bounds;
             context.fillRect(
               Math.floor(b.x * scale),
@@ -303,7 +380,8 @@ export async function renderNativePDF(
             height: canvas.height / scale,
           });
           for (const paragraph of p.paragraphs) {
-            const fit = fits.get(paragraph.id)!;
+            const fit = fits.get(paragraph.id);
+            if (!fit) continue;
             for (const run of fit.runs) {
               if (run.kind === "text")
                 translated.drawText(run.text, {
@@ -337,6 +415,7 @@ export async function renderNativePDF(
       });
     }
     await atomicWrite(output, await result.save());
+    return report;
   } finally {
     await task.destroy();
   }

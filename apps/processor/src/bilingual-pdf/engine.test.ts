@@ -1,6 +1,6 @@
 import { afterEach, expect, it, vi } from "vitest";
 import type { SKRSContext2D } from "@napi-rs/canvas";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { link, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createHash } from "node:crypto";
@@ -21,6 +21,588 @@ import { fitParagraph } from "./layout";
 import { openPDF, loadFont } from "./runtime";
 
 const dirs: string[] = [];
+async function ambiguousFormulaFixture() {
+  const f = await fixture(),
+    doc = await PDFDocument.create(),
+    font = await doc.embedFont(StandardFonts.Helvetica),
+    first = doc.addPage([360, 220]);
+  // Two actual PDF showText occurrences have the same text and coordinates.
+  // Neither occurrence can prove the formula's unique glyph ownership.
+  for (let i = 0; i < 2; i++)
+    first.drawText("We set a = b in this case.", {
+      x: 24,
+      y: 164,
+      size: 12,
+      font,
+    });
+  doc.addPage([360, 220]).drawText("Safe source paragraph.", {
+    x: 24,
+    y: 164,
+    size: 12,
+    font,
+  });
+  const bytes = await doc.save();
+  await writeFile(f.input, bytes);
+  const manifest = {
+    schemaVersion: 1,
+    inputSHA256: createHash("sha256").update(bytes).digest("hex"),
+    pages: 2,
+    blocks: [1, 2].map((page) => ({
+      id: `body-${page}`,
+      page,
+      label: "text",
+      bounds: { x: 0.05, y: 0.15, width: 0.9, height: 0.4 },
+    })),
+  };
+  await writeFile(f.layout, JSON.stringify(manifest));
+  return { ...f, manifest };
+}
+it("reading prepare retains an ambiguous formula page and translates safe pages without changing ink or claiming a target", async () => {
+  const f = await ambiguousFormulaFixture();
+  await expect(prepareNativePDF(f)).rejects.toThrow(
+    /公式逐字形定位无法唯一证明/,
+  );
+  const prepared = await prepareNativePDF({ ...f, reading: true }),
+    retained = prepared.pages[0].paragraphs[0],
+    safe = prepared.pages[1].paragraphs[0],
+    output = join(f.dir, "formula-reading.pdf"),
+    targets = { [retained.id]: "不应出现的译文", [safe.id]: "安全译文" };
+  expect(retained.preserveOriginalReason).toMatch(/公式逐字形定位无法唯一证明/);
+  expect(retained.formulas).toEqual([]);
+  expect(prepared.warnings.join(" ")).toMatch(/第 1 页.*保留原文/);
+  const report = await renderNativePDF({
+    ...f,
+    prepared,
+    targets,
+    output,
+    layout: "side-by-side",
+    reading: true,
+  });
+  expect(report).toMatchObject({
+    translatedParagraphs: 1,
+    originalParagraphs: 1,
+  });
+  expect(report.pages[0].paragraphs[0]).toMatchObject({ translated: false });
+  expect(report.pages[0].paragraphs[0]).not.toHaveProperty("target");
+  expect(report.pages[1].paragraphs[0]).toMatchObject({
+    translated: true,
+    target: "安全译文",
+  });
+  expect(report.warnings.join(" ")).toMatch(/公式逐字形定位无法唯一证明/);
+  const tasks = [await openPDF(f.input), await openPDF(output)];
+  try {
+    const { createCanvas } = await import("@napi-rs/canvas"),
+      images: SKRSContext2D[] = [];
+    for (const task of tasks) {
+      const page = await (await task.promise).getPage(1),
+        viewport = page.getViewport({ scale: 1 }),
+        canvas = createCanvas(viewport.width, viewport.height);
+      await page.render({
+        canvas: canvas as unknown as HTMLCanvasElement,
+        viewport,
+        background: "white",
+      }).promise;
+      images.push(canvas.getContext("2d"));
+    }
+    expect(images[1].getImageData(372, 0, 360, 220).data).toEqual(
+      images[0].getImageData(0, 0, 360, 220).data,
+    );
+    const text = (
+      await (await (await tasks[1].promise).getPage(2)).getTextContent()
+    ).items
+      .map((i) => ("str" in i ? i.str : ""))
+      .join("");
+    expect(text).toContain("安全译文");
+    expect(text).not.toContain("不应出现的译文");
+  } finally {
+    for (const task of tasks) await task.destroy();
+  }
+  await expect(
+    renderNativePDF({
+      ...f,
+      prepared,
+      targets,
+      output: join(f.dir, "strict.pdf"),
+      layout: "side-by-side",
+    }),
+  ).rejects.toThrow(/阅读.*保留原文/);
+  const invalid = structuredClone(prepared);
+  invalid.pages[0].paragraphs[0].sourceHash = "a".repeat(64);
+  await expect(
+    renderNativePDF({
+      ...f,
+      prepared: invalid,
+      targets,
+      output,
+      layout: "side-by-side",
+      reading: true,
+    }),
+  ).rejects.toThrow(/身份校验/);
+  const stripped = structuredClone(prepared);
+  delete stripped.pages[0].paragraphs[0].preserveOriginalReason;
+  await expect(
+    renderNativePDF({
+      ...f,
+      prepared: stripped,
+      targets,
+      output,
+      layout: "side-by-side",
+    }),
+  ).rejects.toThrow(/身份校验/);
+}, 30000);
+it("reading prepare omits ambiguous source identities without inventing original paragraph counts", async () => {
+  const f = await ambiguousFormulaFixture();
+  f.manifest.blocks.push({ ...f.manifest.blocks[0], id: "duplicate-owner" });
+  await writeFile(f.layout, JSON.stringify(f.manifest));
+  const prepared = await prepareNativePDF({ ...f, reading: true });
+  expect(prepared.pages[0].paragraphs).toEqual([]);
+  expect(prepared.noTextPages).toEqual([1]);
+  expect(prepared.warnings.join(" ")).toMatch(/未计入段落数/);
+  const safe = prepared.pages[1].paragraphs[0],
+    report = await renderNativePDF({
+      ...f,
+      prepared,
+      targets: { [safe.id]: "安全译文" },
+      output: join(f.dir, "unknown-source.pdf"),
+      layout: "side-by-side",
+      reading: true,
+    });
+  expect(report).toMatchObject({
+    originalParagraphs: 0,
+    translatedParagraphs: 1,
+  });
+  expect(report.pages[0].paragraphs).toEqual([]);
+  expect(report.warnings.join(" ")).toMatch(/未计入段落数/);
+}, 30000);
+it("reading prepare retains unsafe erasure overlap without whitening source ink while strict export still fails", async () => {
+  const f = await fixture(),
+    manifest = JSON.parse(await readFile(f.layout, "utf8"));
+  manifest.blocks.push({
+    id: "overlapping-image",
+    page: 1,
+    label: "image",
+    bounds: { x: 0.08, y: 0.19, width: 0.74, height: 0.1 },
+  });
+  await writeFile(f.layout, JSON.stringify(manifest));
+  await expect(prepareNativePDF(f)).rejects.toThrow(/重叠，无法安全擦除/);
+  const prepared = await prepareNativePDF({ ...f, reading: true }),
+    retained = prepared.pages[0].paragraphs[0],
+    safe = prepared.pages[1].paragraphs[0],
+    output = join(f.dir, "overlap-reading.pdf"),
+    targets = { [retained.id]: "不应覆盖原文", [safe.id]: "安全译文" };
+  expect(retained.preserveOriginalReason).toMatch(/无法安全擦除/);
+  const report = await renderNativePDF({
+    ...f,
+    prepared,
+    targets,
+    output,
+    layout: "side-by-side",
+    reading: true,
+  });
+  expect(report).toMatchObject({
+    originalParagraphs: 1,
+    translatedParagraphs: 1,
+  });
+  expect(report.pages[0].paragraphs[0]).toMatchObject({ translated: false });
+  const tasks = [await openPDF(f.input), await openPDF(output)];
+  try {
+    const { createCanvas } = await import("@napi-rs/canvas"),
+      images: SKRSContext2D[] = [];
+    for (const task of tasks) {
+      const page = await (await task.promise).getPage(1),
+        viewport = page.getViewport({ scale: 1 }),
+        canvas = createCanvas(viewport.width, viewport.height);
+      await page.render({
+        canvas: canvas as unknown as HTMLCanvasElement,
+        viewport,
+        background: "white",
+      }).promise;
+      images.push(canvas.getContext("2d"));
+    }
+    expect(images[1].getImageData(212, 0, 200, 260).data).toEqual(
+      images[0].getImageData(0, 0, 200, 260).data,
+    );
+  } finally {
+    for (const task of tasks) await task.destroy();
+  }
+  await expect(
+    renderNativePDF({
+      ...f,
+      prepared,
+      targets,
+      output: join(f.dir, "strict-overlap.pdf"),
+      layout: "side-by-side",
+    }),
+  ).rejects.toThrow(/阅读.*保留原文/);
+}, 30000);
+it("reading prepare still rejects invalid manifest identities, pages and bounds", async () => {
+  const f = await ambiguousFormulaFixture();
+  for (const alter of [
+    (m: typeof f.manifest) => {
+      m.inputSHA256 = "a".repeat(64);
+    },
+    (m: typeof f.manifest) => {
+      m.blocks[0].page = 3;
+    },
+    (m: typeof f.manifest) => {
+      m.blocks[0].bounds.width = -1;
+    },
+    (m: typeof f.manifest) => {
+      m.blocks[1].id = m.blocks[0].id;
+    },
+    (m: typeof f.manifest) => {
+      m.blocks.push({
+        id: "invalid-asset",
+        page: 1,
+        label: "image",
+        bounds: { x: 0.5, y: 0.7, width: 0.3, height: 0.1 },
+        caption: "",
+      } as (typeof m.blocks)[number]);
+    },
+  ]) {
+    const manifest = structuredClone(f.manifest);
+    alter(manifest);
+    await writeFile(f.layout, JSON.stringify(manifest));
+    await expect(prepareNativePDF({ ...f, reading: true })).rejects.toThrow(
+      /清单|页码|几何|图题数据/,
+    );
+  }
+});
+it("strict page-range preparation ignores malformed captions outside the selected pages", async () => {
+  const f = await fixture();
+  const manifest = JSON.parse(await readFile(f.layout, "utf8"));
+  manifest.blocks.push({
+    id: "outside-caption", page: 2, label: "image", caption: "",
+    bounds: { x: 0.1, y: 0.7, width: 0.2, height: 0.1 },
+  });
+  await writeFile(f.layout, JSON.stringify(manifest));
+  const prepared = await prepareNativePDF({ ...f, fromPage: 1, toPage: 1 });
+  expect(prepared.pages.map((page) => page.page)).toEqual([1]);
+  await expect(prepareNativePDF({ ...f, fromPage: 2, toPage: 2 }))
+    .rejects.toThrow(/第 2 页图题数据无效/);
+});
+it("CLI accepts reading prepare but still rejects reading metadata during prepare", async () => {
+  const f = await ambiguousFormulaFixture(),
+    built = join(
+      process.cwd(),
+      "apps/processor/.bilingual-cli-reading-prepare-test.mjs",
+    ),
+    preparedFile = join(f.dir, "prepared.json");
+  await build({
+    entryPoints: ["apps/processor/src/bilingual-pdf-cli.ts"],
+    outfile: built,
+    bundle: true,
+    platform: "node",
+    format: "esm",
+    packages: "external",
+  });
+  const run = (extra: string[]) =>
+    spawnSync(
+      process.execPath,
+      [
+        built,
+        "--stage",
+        "prepare",
+        "--input",
+        f.input,
+        "--layout",
+        f.layout,
+        "--prepared",
+        preparedFile,
+        ...extra,
+      ],
+      { encoding: "utf8", timeout: 30000, cwd: process.cwd() },
+    );
+  try {
+    const strict = run([]);
+    expect(strict.status, strict.stderr).toBe(1);
+    expect(strict.stderr).toMatch(/公式逐字形定位无法唯一证明/);
+    const reading = run(["--reading", "true"]);
+    expect(reading.status, reading.stderr).toBe(0);
+    expect(
+      JSON.parse(await readFile(preparedFile, "utf8")).pages[0].paragraphs[0],
+    ).toHaveProperty("preserveOriginalReason");
+    const before = await readFile(preparedFile);
+    for (const extra of [
+      ["--reading", "false"],
+      ["--reading", "true", "--reading-metadata", join(f.dir, "report.json")],
+    ]) {
+      expect(run(extra).status).toBe(1);
+      expect(await readFile(preparedFile)).toEqual(before);
+    }
+  } finally {
+    await rm(built, { force: true });
+  }
+}, 30000);
+async function metadataCollisionFixture() {
+  const f = await fixture(),
+    prepared = await prepareNativePDF(f),
+    preparedFile = join(f.dir, "prepared.json"),
+    targetsFile = join(f.dir, "targets.json"),
+    output = join(f.dir, "reading.pdf"),
+    targets = Object.fromEntries(
+      prepared.pages.flatMap((p) =>
+        p.paragraphs.map((v) => [v.id, "现有译文"]),
+      ),
+    );
+  await writeFile(preparedFile, JSON.stringify(prepared));
+  await writeFile(targetsFile, JSON.stringify(targets));
+  await renderNativePDF({
+    input: f.input,
+    prepared,
+    targets,
+    output,
+    layout: "side-by-side",
+    reading: true,
+  });
+  const built = join(
+    process.cwd(),
+    "apps/processor/.bilingual-cli-alias-test.mjs",
+  );
+  await build({
+    entryPoints: ["apps/processor/src/bilingual-pdf-cli.ts"],
+    outfile: built,
+    bundle: true,
+    platform: "node",
+    format: "esm",
+    packages: "external",
+  });
+  const beforeInput = await readFile(f.input),
+    beforeOutput = await readFile(output);
+  return {
+    ...f,
+    output,
+    built,
+    beforeInput,
+    beforeOutput,
+    run: (metadata: string) =>
+      spawnSync(
+        process.execPath,
+        [
+          built,
+          "--stage",
+          "render",
+          "--input",
+          f.input,
+          "--prepared",
+          preparedFile,
+          "--targets",
+          targetsFile,
+          "--output",
+          output,
+          "--mode",
+          "side-by-side",
+          "--reading",
+          "true",
+          "--reading-metadata",
+          metadata,
+        ],
+        { encoding: "utf8", timeout: 30000, cwd: process.cwd() },
+      ),
+  };
+}
+it.skipIf(process.platform !== "win32")(
+  "rejects Windows case aliases of input and output metadata paths without changing PDF bytes",
+  async () => {
+    const f = await metadataCollisionFixture();
+    try {
+      for (const alias of [
+        join(f.dir, "ORIGINAL.PDF"),
+        join(f.dir, "READING.PDF"),
+      ]) {
+        const result = f.run(alias);
+        expect(result.status, result.stderr).toBe(1);
+        expect(await readFile(f.input)).toEqual(f.beforeInput);
+        expect(await readFile(f.output)).toEqual(f.beforeOutput);
+      }
+      // The future PDF and metadata must be distinct even before either exists.
+      await rm(f.output);
+      const missingOutputAlias = f.run(join(f.dir, "READING.PDF"));
+      expect(missingOutputAlias.status, missingOutputAlias.stderr).toBe(1);
+      expect(await readFile(f.input)).toEqual(f.beforeInput);
+      await expect(readFile(f.output)).rejects.toMatchObject({ code: "ENOENT" });
+    } finally {
+      await rm(f.built, { force: true });
+    }
+  },
+  30000,
+);
+it("rejects hardlink aliases of input and output metadata paths without changing PDF bytes", async () => {
+  const f = await metadataCollisionFixture();
+  try {
+    for (const [i, source] of [f.input, f.output].entries()) {
+      const alias = join(f.dir, `alias-${i}.json`);
+      await link(source, alias);
+      const result = f.run(alias);
+      expect(result.status, result.stderr).toBe(1);
+      expect(await readFile(f.input)).toEqual(f.beforeInput);
+      expect(await readFile(f.output)).toEqual(f.beforeOutput);
+    }
+  } finally {
+    await rm(f.built, { force: true });
+  }
+}, 30000);
+it("reading mode preserves missing, overflowing and unsupported paragraphs and reports only actual translated targets", async () => {
+  const f = await fixture(),
+    doc = await PDFDocument.create(),
+    font = await doc.embedFont(StandardFonts.Helvetica),
+    page = doc.addPage([360, 300]);
+  for (let i = 0; i < 4; i++)
+    page.drawText(`Original paragraph ${i + 1}`, {
+      x: 24,
+      y: 250 - 60 * i,
+      size: 12,
+      font,
+    });
+  const bytes = await doc.save();
+  await writeFile(f.input, bytes);
+  await writeFile(
+    f.layout,
+    JSON.stringify({
+      schemaVersion: 1,
+      inputSHA256: createHash("sha256").update(bytes).digest("hex"),
+      pages: 1,
+      blocks: [0, 1, 2, 3].map((i) => ({
+        id: `body-${i}`,
+        page: 1,
+        label: "text",
+        bounds: {
+          x: 20 / 360,
+          y: (35 + 60 * i) / 300,
+          width: 300 / 360,
+          height: 35 / 300,
+        },
+      })),
+    }),
+  );
+  const prepared = await prepareNativePDF(f),
+    paras = prepared.pages[0].paragraphs,
+    targets = {
+      [paras[0].id]: "真实译文",
+      [paras[2].id]: "溢出".repeat(1000),
+      [paras[3].id]: "\u{10ffff}",
+    },
+    output = join(f.dir, "reading.pdf");
+  await expect(
+    renderNativePDF({
+      ...f,
+      prepared,
+      targets,
+      output,
+      layout: "side-by-side",
+    }),
+  ).rejects.toThrow(/缺少译文/);
+  const report = await renderNativePDF({
+    ...f,
+    prepared,
+    targets,
+    output,
+    layout: "side-by-side",
+    reading: true,
+  });
+  expect(report).toMatchObject({
+    translatedParagraphs: 1,
+    originalParagraphs: 3,
+    pages: [
+      {
+        page: 1,
+        width: 360,
+        height: 300,
+        outputWidth: 732,
+        translationOffsetX: 372,
+      },
+    ],
+  });
+  expect(report.pages[0].paragraphs).toEqual(
+    paras.map((p, i) => ({
+      id: p.id,
+      blockId: p.blockId,
+      sourceHash: createHash("sha256")
+        .update("zh-CN:v1:" + p.originalSource)
+        .digest("hex"),
+      bounds: p.bounds,
+      translated: i === 0,
+      ...(i === 0 ? { target: "真实译文" } : {}),
+    })),
+  );
+  expect(report.warnings).toHaveLength(3);
+  expect(report.warnings.join(" ")).toMatch(/缺少译文/);
+  expect(report.warnings.join(" ")).toMatch(/溢出/);
+  expect(report.warnings.join(" ")).toMatch(/缺字/);
+  const tasks = [await openPDF(f.input), await openPDF(output)];
+  try {
+    const { createCanvas } = await import("@napi-rs/canvas"),
+      images: SKRSContext2D[] = [],
+      scale = 300 / 72;
+    for (const task of tasks) {
+      const pdf = await task.promise;
+      expect(pdf.numPages).toBe(1);
+      const p = await pdf.getPage(1),
+        viewport = p.getViewport({ scale }),
+        canvas = createCanvas(
+          Math.ceil(viewport.width),
+          Math.ceil(viewport.height),
+        );
+      await p.render({
+        canvas: canvas as unknown as HTMLCanvasElement,
+        viewport,
+        background: "white",
+      }).promise;
+      images.push(canvas.getContext("2d"));
+    }
+    const text = (
+      await (await (await tasks[1].promise).getPage(1)).getTextContent()
+    ).items
+      .map((i) => ("str" in i ? i.str : ""))
+      .join("");
+    expect(text).toContain("真实译文");
+    for (let i = 1; i < 4; i++) {
+      const b = paras[i].bounds,
+        ink = (image: SKRSContext2D, offset: number) =>
+          image
+            .getImageData(
+              Math.ceil((b.x + offset) * scale),
+              Math.ceil(b.y * scale),
+              Math.floor(b.width * scale),
+              Math.floor(b.height * scale),
+            )
+            .data.reduce(
+              (sum, v, n) => sum + (n % 4 === 0 ? (255 - v) / 255 : 0),
+              0,
+            ),
+        original = ink(images[0], 0),
+        retained = ink(images[1], 372);
+      expect(original).toBeGreaterThan(100);
+      expect(retained / original).toBeGreaterThan(0.95);
+      expect(retained / original).toBeLessThan(1.05);
+    }
+  } finally {
+    for (const task of tasks) await task.destroy();
+  }
+  const allTargets = Object.fromEntries(paras.map((p) => [p.id, "译文"]));
+  allTargets[paras[2].id] = targets[paras[2].id];
+  await expect(
+    renderNativePDF({
+      ...f,
+      prepared,
+      targets: allTargets,
+      output: join(f.dir, "strict.pdf"),
+      layout: "side-by-side",
+    }),
+  ).rejects.toThrow(/溢出/);
+  const invalid = structuredClone(prepared);
+  invalid.pages[0].paragraphs[0].sourceHash = "a".repeat(64);
+  await expect(
+    renderNativePDF({
+      ...f,
+      prepared: invalid,
+      targets,
+      output,
+      layout: "side-by-side",
+      reading: true,
+    }),
+  ).rejects.toThrow(/身份校验/);
+}, 30000);
 it("prepares and renders literal prose braces with real embedded font in both layouts", async () => {
   const f = await fixture(),
     doc = await PDFDocument.create(),
@@ -79,11 +661,18 @@ it("prepares and renders literal prose braces with real embedded font in both la
     }
   }
   const collision = await PDFDocument.create();
-  collision.addPage([600, 250]).drawText("Use {v0} literally.", { x: 20, y: 180, size: 12, font: await collision.embedFont(StandardFonts.Helvetica) });
+  collision.addPage([600, 250]).drawText("Use {v0} literally.", {
+    x: 20,
+    y: 180,
+    size: 12,
+    font: await collision.embedFont(StandardFonts.Helvetica),
+  });
   const collisionBytes = await collision.save();
   await writeFile(f.input, collisionBytes);
   const manifest = JSON.parse(await readFile(f.layout, "utf8"));
-  manifest.inputSHA256 = createHash("sha256").update(collisionBytes).digest("hex");
+  manifest.inputSHA256 = createHash("sha256")
+    .update(collisionBytes)
+    .digest("hex");
   await writeFile(f.layout, JSON.stringify(manifest));
   await expect(prepareNativePDF(f)).rejects.toThrow(/原文.*公式协议/);
 }, 30000);
@@ -992,6 +1581,69 @@ it("built CLI writes atomic job artifacts, emits progress and rejects invalid to
     expect((await readFile(output)).subarray(0, 5).toString()).toBe("%PDF-");
     await writeFile(
       targets,
+      JSON.stringify({ [data.pages[0].paragraphs[0].id]: "现有译文" }),
+    );
+    const metadata = join(f.dir, "reading.json"),
+      readingOutput = join(f.dir, "reading.pdf"),
+      readingArgs = [
+        "--stage",
+        "render",
+        "--input",
+        f.input,
+        "--prepared",
+        prepared,
+        "--targets",
+        targets,
+        "--output",
+        readingOutput,
+        "--mode",
+        "side-by-side",
+        "--reading",
+        "true",
+      ];
+    const reading = run([...readingArgs, "--reading-metadata", metadata]);
+    expect(reading.status, reading.stderr).toBe(0);
+    const report = JSON.parse(await readFile(metadata, "utf8"));
+    expect(report).toMatchObject({
+      translatedParagraphs: 1,
+      originalParagraphs: 1,
+      pages: [
+        {
+          page: 1,
+          width: 200,
+          height: 260,
+          outputWidth: 412,
+          translationOffsetX: 212,
+        },
+        {
+          page: 2,
+          width: 300,
+          height: 200,
+          outputWidth: 612,
+          translationOffsetX: 312,
+        },
+      ],
+    });
+    expect(report.pages[0].paragraphs[0]).toMatchObject({
+      sourceHash: createHash("sha256")
+        .update("zh-CN:v1:" + data.pages[0].paragraphs[0].originalSource)
+        .digest("hex"),
+      target: "现有译文",
+    });
+    expect(
+      run([
+        ...readingArgs,
+        "--reading-metadata",
+        join(tmpdir(), "foreign-reading.json"),
+      ]).status,
+    ).toBe(1);
+    for (const collision of [f.input, prepared, targets, readingOutput])
+      expect(
+        run([...readingArgs, "--reading-metadata", collision]).status,
+      ).toBe(1);
+    expect(run(readingArgs).status).toBe(1);
+    await writeFile(
+      targets,
       JSON.stringify({ [data.pages[0].paragraphs[0].id]: "未知公式 {v9}" }),
     );
     const bad = run([
@@ -1434,14 +2086,12 @@ it("renders every repeated Latin and Chinese glyph across pages against the orig
     doc = await PDFDocument.create(),
     sourceFont = await doc.embedFont(StandardFonts.Helvetica);
   for (let i = 0; i < 2; i++)
-    doc
-      .addPage([360, 180])
-      .drawText("Source paragraph", {
-        x: 20,
-        y: 130,
-        size: 18,
-        font: sourceFont,
-      });
+    doc.addPage([360, 180]).drawText("Source paragraph", {
+      x: 20,
+      y: 130,
+      size: 18,
+      font: sourceFont,
+    });
   const bytes = await doc.save();
   await writeFile(f.input, bytes);
   await writeFile(

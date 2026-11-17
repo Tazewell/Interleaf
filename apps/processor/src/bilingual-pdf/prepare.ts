@@ -13,6 +13,7 @@ import {
 } from "./formula";
 import { locateCaption } from "./caption";
 import { createGlyphLocator } from "./glyph-geometry";
+import type { PDFPageProxy } from "pdfjs-dist";
 
 interface Block {
   id: string;
@@ -59,16 +60,139 @@ export function checkBounds(b: NativePDFBounds, width: number, height: number) {
   )
     throw new Error("页面区域几何无效");
 }
+/** Recover only known source-geometry proof failures, never malformed input or an unknown parser error. */
+function sourceGeometryFailure(error: unknown): error is Error {
+  return (
+    error instanceof Error &&
+    /^第 \d+ 页(?:公式逐字形定位无法唯一证明|公式边缘跨越不可拆分字形|公式字形方向无法证明|公式字形归属不唯一|公式 [\w.-]+ 扩展与未拥有字形重叠|公式区域重叠，归属不明确|公式 [\w.-]+ 与段落 [\w.-]+ 重叠且未完整归属|公式 [\w.-]+ 未完整归属段落|公式跨文字项的操作数关联无法唯一证明|跨行公式的操作数关联无法唯一证明|区域 [\w.-]+ 与 [\w.-]+ 重叠，无法安全擦除)$/u.test(
+      error.message,
+    )
+  );
+}
+async function retainUnprovenPage(
+  page: PDFPageProxy,
+  result: NativePDFPage,
+  blocks: Block[],
+  reason: string,
+  warnings: string[],
+) {
+  const { Util } = await import("pdfjs-dist/legacy/build/pdf.mjs"),
+    viewport = page.getViewport({ scale: 1 }),
+    content = await page.getTextContent(),
+    candidates = blocks.filter((b) => translatable.has(b.label)),
+    spans: SourceSpan[] = [];
+  let unknown = blocks.some((b) => b.caption !== undefined);
+  for (const item of content.items) {
+    if (!("str" in item) || !item.str.trim()) continue;
+    const t = Util.transform(viewport.transform, item.transform),
+      size = Math.hypot(t[2], t[3]);
+    if (
+      Math.abs(t[1]) > Math.abs(t[0]) * 0.02 ||
+      t[0] <= 0 ||
+      item.dir === "ttb"
+    ) {
+      unknown = true;
+      continue;
+    }
+    const style = content.styles[item.fontName],
+      ascent = pdfFontAscent(style),
+      descent =
+        typeof style?.descent === "number" &&
+        Number.isFinite(style.descent) &&
+        style.descent < 0
+          ? -style.descent
+          : Math.max(0, 1 - ascent),
+      bounds = {
+        x: t[4],
+        y: t[5] - size * ascent,
+        width: Math.abs(item.width * page.userUnit),
+        height: size * (ascent + descent),
+      };
+    if (bounds.width <= 0 || bounds.height <= 0) {
+      unknown = true;
+      continue;
+    }
+    spans.push({ text: item.str, bounds, fontSize: size, math: false });
+  }
+  if (
+    spans.some(
+      (s) =>
+        !blocks.some(
+          (b) =>
+            overlap(s.bounds, b.bounds) >=
+            s.bounds.width * s.bounds.height - 0.01,
+        ),
+    )
+  )
+    unknown = true;
+  result.paragraphs = [];
+  for (const block of candidates) {
+    // These bounds describe retained source text only. They are never usable as
+    // erasure/formula rectangles. Skip an identity unless whole TextItems have
+    // unique, complete manifest ownership; do not reconstruct missing glyphs.
+    const touching = spans.filter(
+      (s) => overlap(s.bounds, block.bounds) > 0.01,
+    );
+    if (!touching.length) continue;
+    if (
+      candidates.some(
+        (other) => other !== block && overlap(other.bounds, block.bounds) > 0.5,
+      ) ||
+      touching.some(
+        (s) =>
+          overlap(s.bounds, block.bounds) <
+            s.bounds.width * s.bounds.height - 0.01 ||
+          candidates.some(
+            (other) =>
+              other !== block && overlap(s.bounds, other.bounds) > 0.01,
+          ),
+      )
+    ) {
+      unknown = true;
+      continue;
+    }
+    const owned = readingSpans(touching),
+      text = protectFormulas(owned),
+      id = `p${result.page}.${block.id}`,
+      sourceHash = sha256(
+        JSON.stringify([
+          "interleaf-native-pdf-reading-retained-v1",
+          id,
+          text.source,
+          block.bounds,
+          [],
+          reason,
+        ]),
+      );
+    result.paragraphs.push({
+      id,
+      blockId: block.id,
+      page: result.page,
+      ...text,
+      sourceHash,
+      bounds: block.bounds,
+      fontSize: Math.max(9, ...owned.map((s) => s.fontSize)),
+      preserveOriginalReason: reason,
+    });
+  }
+  warnings.push(`${reason}，整页保留原文`);
+  if (unknown)
+    warnings.push(
+      `第 ${result.page} 页部分原文段落归属无法确认，未计入段落数，原图保留`,
+    );
+}
 export async function prepareNativePDF({
   input,
   layout,
   fromPage,
   toPage,
+  reading,
 }: {
   input: string;
   layout: string;
   fromPage?: number;
   toPage?: number;
+  reading?: boolean;
 }): Promise<NativePDFPrepared> {
   const [bytes, manifestBytes] = await Promise.all([
     readLimited(input, 512 * 1024 * 1024),
@@ -98,6 +222,9 @@ export async function prepareNativePDF({
       throw new Error("版面区域标识或页码无效");
     ids.add(block.id);
     checkBounds(block.bounds, 1, 1);
+    if (reading && ["image", "chart", "table"].includes(block.label) && block.caption !== undefined &&
+      (typeof block.caption !== "string" || !block.caption.trim() || block.caption.length > 200_000))
+      throw new Error(`第 ${block.page} 页图题数据无效`);
   }
   const task = await openPDF(bytes);
   try {
@@ -152,6 +279,8 @@ export async function prepareNativePDF({
             height: b.bounds.height * result.height,
           },
         }));
+      const originalBlocks = blocks.map((b) => ({ ...b, bounds: { ...b.bounds } }));
+      try {
       const content = await page.getTextContent();
       const operators = await page.getOperatorList({ annotationMode: 0 });
       const { OPS } = await import("pdfjs-dist/legacy/build/pdf.mjs");
@@ -719,6 +848,12 @@ export async function prepareNativePDF({
       )
         prepared.warnings.push(`第 ${number} 页未归属版面的文字按原图保留`);
       prepared.pages.push(result);
+      } catch (error) {
+        if (!reading || !sourceGeometryFailure(error)) throw error;
+        await retainUnprovenPage(page, result, originalBlocks, error.message, prepared.warnings);
+        if (!result.paragraphs.length) prepared.noTextPages.push(number);
+        prepared.pages.push(result);
+      }
       page.cleanup();
     }
     return prepared;

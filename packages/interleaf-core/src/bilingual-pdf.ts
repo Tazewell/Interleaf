@@ -26,6 +26,8 @@ export interface NativePDFParagraph {
   bounds: NativePDFBounds;
   fontSize: number;
   formulas: NativePDFFormula[];
+  /** Reading-only: glyph ownership was not proven, so this paragraph must retain its original ink. */
+  preserveOriginalReason?: string;
 }
 export interface NativePDFPage {
   page: number;

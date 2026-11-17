@@ -855,3 +855,4 @@ export interface ChatSessionDeletion {
 
 export * from "./native-ai";
 export type * from "./research";
+export * from "./native-pdf-reading";
