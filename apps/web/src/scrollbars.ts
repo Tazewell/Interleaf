@@ -5,30 +5,45 @@ export function installScrollbars(doc: Document) {
   const style = doc.createElement("style");
   style.textContent = styles;
   doc.head.append(style);
-  const timers = new Map<Element, ReturnType<typeof setTimeout>>();
+  const active = new Map<
+    Element,
+    { deadline: number; timer: ReturnType<typeof setTimeout> }
+  >();
   const onScroll = (event: Event) => {
     const target = event.target === doc ? doc.scrollingElement : event.target;
     // Avoid instanceof: EPUB elements belong to a different Window.
     if (!target || !("nodeType" in target) || target.nodeType !== 1) return;
     const element = target as Element;
-    clearTimeout(timers.get(element));
+    // This host hides native scrollbars in style.css. Toggling their inherited
+    // color would still invalidate the PDF text layer despite being invisible.
+    if (element.matches(".interleaf-engine.pdf-container")) return;
+    const deadline = performance.now() + 1000;
+    const current = active.get(element);
+    if (current) {
+      current.deadline = deadline;
+      return;
+    }
     element.setAttribute("data-interleaf-scrolling", "");
-    timers.set(
-      element,
-      setTimeout(() => {
-        element.removeAttribute("data-interleaf-scrolling");
-        timers.delete(element);
-      }, 1000),
-    );
+    const state = { deadline, timer: setTimeout(onIdle, 1000) };
+    active.set(element, state);
+    function onIdle() {
+      const remaining = state.deadline - performance.now();
+      if (remaining > 0) {
+        state.timer = setTimeout(onIdle, remaining);
+        return;
+      }
+      element.removeAttribute("data-interleaf-scrolling");
+      active.delete(element);
+    }
   };
   doc.addEventListener("scroll", onScroll, { capture: true, passive: true });
   return () => {
     doc.removeEventListener("scroll", onScroll, true);
-    for (const [element, timer] of timers) {
-      clearTimeout(timer);
+    for (const [element, state] of active) {
+      clearTimeout(state.timer);
       element.removeAttribute("data-interleaf-scrolling");
     }
-    timers.clear();
+    active.clear();
     style.remove();
   };
 }
