@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { act, type ReactNode } from "react";
+import { act, type ComponentProps, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import {
@@ -12,6 +12,11 @@ import { api } from "@interleaf/api";
 import { Workspace } from "./Workspace";
 import { paper } from "./papers/fixtures";
 import { toast } from "sonner";
+import type { ResizablePanelGroup } from "@interleaf/ui/components/resizable";
+
+let layoutChanged: NonNullable<
+  ComponentProps<typeof ResizablePanelGroup>["onLayoutChanged"]
+>;
 
 vi.mock("sonner", () => ({ toast: { error: vi.fn(), success: vi.fn() } }));
 
@@ -82,7 +87,14 @@ vi.mock("@interleaf/ui/components/resizable", async () => {
   );
   return {
     ResizablePanel: Panel,
-    ResizablePanelGroup: Panel,
+    ResizablePanelGroup: ({
+      children,
+      className,
+      onLayoutChanged,
+    }: ComponentProps<typeof ResizablePanelGroup>) => {
+      layoutChanged = onLayoutChanged!;
+      return <div className={className}>{children}</div>;
+    },
     ResizableHandle: () => null,
     usePanelRef: () => useRef(null),
   };
@@ -141,6 +153,65 @@ afterEach(async () => {
   document.body.innerHTML = "";
   vi.unstubAllGlobals();
   vi.useRealTimers();
+});
+
+it("keeps the reading pane border state in sync with assistant toolbar toggles", async () => {
+  await act(async () => render(0));
+  const pane = host.querySelector(".reading-pane")!;
+  const sidebar = host.querySelector(".assistant-sidebar")!;
+  expect(pane.getAttribute("data-assistant-open")).toBe("true");
+  await act(async () =>
+    host.querySelector<HTMLButtonElement>('[aria-label="收起右侧栏"]')!.click(),
+  );
+  expect(pane.getAttribute("data-assistant-open")).toBe("false");
+  expect(sidebar.getAttribute("data-open")).toBe("false");
+  await act(async () =>
+    host.querySelector<HTMLButtonElement>('[aria-label="展开右侧栏"]')!.click(),
+  );
+  expect(pane.getAttribute("data-assistant-open")).toBe("true");
+  expect(sidebar.getAttribute("data-open")).toBe("true");
+});
+
+it("updates the reading pane border state when dragging collapses and restores the assistant", async () => {
+  await act(async () => render(0));
+  const pane = host.querySelector(".reading-pane")!;
+  const sidebar = host.querySelector(".assistant-sidebar")!;
+  await act(async () =>
+    layoutChanged(
+      { navigation: 20, reading: 80, assistant: 0 },
+      { isUserInteraction: true },
+    ),
+  );
+  expect(pane.getAttribute("data-assistant-open")).toBe("false");
+  expect(sidebar.getAttribute("data-open")).toBe("false");
+  await act(async () =>
+    layoutChanged(
+      { navigation: 20, reading: 50, assistant: 30 },
+      { isUserInteraction: true },
+    ),
+  );
+  expect(pane.getAttribute("data-assistant-open")).toBe("true");
+  expect(sidebar.getAttribute("data-open")).toBe("true");
+});
+
+it("keeps the reading pane border state in sync with the assistant shortcut", async () => {
+  await act(async () => render(0));
+  const pane = host.querySelector(".reading-pane")!;
+  for (const expected of ["false", "true"]) {
+    await act(async () =>
+      window.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: "j",
+          ctrlKey: true,
+          cancelable: true,
+        }),
+      ),
+    );
+    expect(pane.getAttribute("data-assistant-open")).toBe(expected);
+    expect(
+      host.querySelector(".assistant-sidebar")!.getAttribute("data-open"),
+    ).toBe(expected);
+  }
 });
 
 it.each(["取消", "Close"])(

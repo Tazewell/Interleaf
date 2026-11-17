@@ -1658,7 +1658,11 @@ export function Workspace({
           className={`reader-navigation-resizer${left ? "" : " sidebar-handle-closed"}`}
         />
         <ResizablePanel id="reading" minSize="30%">
-          <div className="reading-pane" ref={readingPane}>
+          <div
+            className="reading-pane"
+            data-assistant-open={right}
+            ref={readingPane}
+          >
             <div className="reading-toolbar-host" ref={setReadingToolbar} />
             {(() => {
               const ReadingView =
