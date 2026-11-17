@@ -146,3 +146,13 @@ it("opens with the latest theme and disposes the adapter after a delayed setup",
   await act(async () => root.unmount());
   expect(engine.destroy).toHaveBeenCalledOnce();
 });
+
+it("destroys PDF loading tasks immediately when unmounted during open", async () => {
+  fixture.deferOpen = true;
+  await render(defaultTheme);
+  const engine = fixture.instances[0];
+  await act(async () => root.unmount());
+  expect(engine.destroy).toHaveBeenCalledOnce();
+  await act(async () => fixture.releaseOpen!());
+  expect(ready).not.toHaveBeenCalled();
+});

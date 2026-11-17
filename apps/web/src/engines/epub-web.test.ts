@@ -621,6 +621,42 @@ it("does not install a late chapter response after destruction", async () => {
   expect(host.children.length).toBe(0);
   expect(registry.size).toBe(0);
 });
+it("does not create chapters or observers when the opening listing arrives after destruction", async () => {
+  let finish!: (data: Awaited<ReturnType<typeof api.epubChapters>>) => void;
+  vi.mocked(api.epubChapters).mockReturnValueOnce(
+    new Promise((resolve) => {
+      finish = resolve;
+    }),
+  );
+  interleaf = new EPUBReaderAdapter(host, events);
+  const pending = interleaf.open({ id: "book", type: "epub" } as Document);
+  await interleaf.destroy();
+  finish({ chapters, toc: [] });
+  await pending;
+  expect(host.childElementCount).toBe(0);
+  expect(observers).toHaveLength(0);
+  expect(registry.size).toBe(0);
+  expect(api.epubChapter).not.toHaveBeenCalled();
+  expect(events.location).not.toHaveBeenCalled();
+});
+it("does not install opening chapter content or observers after destruction", async () => {
+  let finish!: (data: { html: string }) => void;
+  vi.mocked(api.epubChapter).mockReturnValueOnce(
+    new Promise((resolve) => {
+      finish = resolve;
+    }),
+  );
+  interleaf = new EPUBReaderAdapter(host, events);
+  const pending = interleaf.open({ id: "book", type: "epub" } as Document);
+  await vi.waitFor(() => expect(api.epubChapter).toHaveBeenCalledOnce());
+  await interleaf.destroy();
+  finish({ html: html([a, b]) });
+  await pending;
+  expect(host.childElementCount).toBe(0);
+  expect(observers).toHaveLength(0);
+  expect(registry.size).toBe(0);
+  expect(events.location).not.toHaveBeenCalled();
+});
 it("retains the newest navigation when chapter responses finish out of order", async () => {
   await open();
   let finish!: (data: { html: string }) => void;

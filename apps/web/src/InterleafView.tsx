@@ -1,3 +1,4 @@
+import type { NativePDFReadingDescriptor } from "./engines/pdf-native-reading";
 import { useEffect, useRef, useState } from "react";
 import type {
   Annotation,
@@ -15,6 +16,7 @@ export function InterleafView({
   theme,
   annotations,
   blocks = [],
+  nativeReading,
   onReady,
   events,
 }: {
@@ -22,6 +24,7 @@ export function InterleafView({
   theme: ReaderTheme;
   annotations: Annotation[];
   blocks?: PDFBlock[];
+  nativeReading?: NativePDFReadingDescriptor;
   onReady: (adapter: ReaderAdapter, toc: TOCItem[]) => void;
   events: ReaderEvents;
 }) {
@@ -39,6 +42,8 @@ export function InterleafView({
   const [error, setError] = useState("");
   useEffect(() => {
     let disposed = false;
+    setLoading(true);
+    setError("");
     const container = document.createElement("div");
     container.className = "interleaf-engine";
     host.current!.append(container);
@@ -54,47 +59,51 @@ export function InterleafView({
           : { EPUBReaderAdapter: undefined };
       if (disposed) return;
       const Engine = PDFReaderAdapter || EPUBReaderAdapter!;
-      engine = new Engine(container, {
-        epubInteraction: () => {
-          if (!disposed) latest.current.events.epubInteraction?.();
+      engine = new Engine(
+        container,
+        {
+          epubInteraction: () => {
+            if (!disposed) latest.current.events.epubInteraction?.();
+          },
+          epubReadingAnchor: (id) => {
+            if (!disposed) latest.current.events.epubReadingAnchor?.(id);
+          },
+          readingAnchor: (anchor) => {
+            if (!disposed) latest.current.events.readingAnchor?.(anchor);
+          },
+          blockFocus: (block) => {
+            if (!disposed) latest.current.events.blockFocus?.(block);
+          },
+          annotationHover: (target) => {
+            if (!disposed) latest.current.events.annotationHover?.(target);
+          },
+          annotation: (target) => {
+            if (!disposed) latest.current.events.annotation?.(target);
+          },
+          zoom: (zoom) => {
+            if (!disposed) latest.current.events.zoom?.(zoom);
+          },
+          blockHover: (block) => {
+            if (!disposed) latest.current.events.blockHover?.(block);
+          },
+          blockAction: (block, action) => {
+            if (!disposed) latest.current.events.blockAction?.(block, action);
+          },
+          location: (...args) => {
+            if (!disposed) latest.current.events.location(...args);
+          },
+          selection: (selection) => {
+            if (!disposed) latest.current.events.selection(selection);
+          },
+          linkPreview: (preview) => {
+            if (!disposed) latest.current.events.linkPreview?.(preview);
+          },
+          internalLink: (origin) => {
+            if (!disposed) latest.current.events.internalLink?.(origin);
+          },
         },
-        epubReadingAnchor: (id) => {
-          if (!disposed) latest.current.events.epubReadingAnchor?.(id);
-        },
-        readingAnchor: (anchor) => {
-          if (!disposed) latest.current.events.readingAnchor?.(anchor);
-        },
-        blockFocus: (block) => {
-          if (!disposed) latest.current.events.blockFocus?.(block);
-        },
-        annotationHover: (target) => {
-          if (!disposed) latest.current.events.annotationHover?.(target);
-        },
-        annotation: (target) => {
-          if (!disposed) latest.current.events.annotation?.(target);
-        },
-        zoom: (zoom) => {
-          if (!disposed) latest.current.events.zoom?.(zoom);
-        },
-        blockHover: (block) => {
-          if (!disposed) latest.current.events.blockHover?.(block);
-        },
-        blockAction: (block, action) => {
-          if (!disposed) latest.current.events.blockAction?.(block, action);
-        },
-        location: (...args) => {
-          if (!disposed) latest.current.events.location(...args);
-        },
-        selection: (selection) => {
-          if (!disposed) latest.current.events.selection(selection);
-        },
-        linkPreview: (preview) => {
-          if (!disposed) latest.current.events.linkPreview?.(preview);
-        },
-        internalLink: (origin) => {
-          if (!disposed) latest.current.events.internalLink?.(origin);
-        },
-      });
+        doc.type === "pdf" ? nativeReading : undefined,
+      );
       engine.preferTheme?.(latest.current.theme);
       await engine.open(doc);
       if (disposed) return;
@@ -118,14 +127,11 @@ export function InterleafView({
     return () => {
       disposed = true;
       adapter.current = null;
-      void pending
-        .finally(async () => {
-          await engine?.destroy();
-          container.remove();
-        })
-        .catch(() => {});
+      void engine?.destroy().catch(() => {});
+      container.remove();
+      void pending.catch(() => {});
     };
-  }, [doc.id]);
+  }, [doc.id, nativeReading?.metadata.cacheKey]);
   useEffect(() => {
     void adapter.current
       ?.setTheme(latest.current.theme)
