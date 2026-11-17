@@ -56,10 +56,11 @@ import { numberedReference } from "../engines/pdf-citations";
 import "./translation.css";
 
 import { AssistanceControls } from "./AssistanceControls";
+import { NativePDFReadingView } from "./NativePDFReadingView";
 import { chapterRange, headingPages } from "./chapters";
 import { searchPDFBlocks } from "./pdf-search";
 
-type Mode = "source" | "parallel" | "translation";
+type Mode = "source" | "parallel" | "native" | "translation";
 const emptySearchResults: SearchResult[] = [];
 export function PDFReadingView({
   document: doc,
@@ -123,6 +124,19 @@ export function PDFReadingView({
     control = useRef(new ReadingSync()),
     side = useRef<"source" | "translation">("source"),
     reading = useRef<PDFReadingAnchor | undefined>(undefined);
+  const nativeLocation = useRef<{
+    documentId: string;
+    location?: DocumentLocation;
+    restoreSource?: boolean;
+  }>({ documentId: doc.id, location: doc.progress });
+  const nativeAdapter = useRef<{
+    documentId: string;
+    adapter: ReaderAdapter;
+  } | undefined>(undefined);
+  if (nativeLocation.current.documentId !== doc.id) {
+    nativeLocation.current = { documentId: doc.id, location: doc.progress };
+    nativeAdapter.current = undefined;
+  }
   const translationNodes = useRef<HTMLElement[]>([]);
   const translationNodesById = useRef(new Map<string, HTMLElement>());
   const recordReading = (anchor: PDFReadingAnchor) => {
@@ -171,7 +185,7 @@ export function PDFReadingView({
   state.current = { mode, blocks, translations, events, theme };
   useSentenceMarks(
     root,
-    engine,
+    mode === "native" ? undefined : engine,
     blocks,
     translations,
     annotations,
@@ -368,6 +382,12 @@ export function PDFReadingView({
     });
   };
   const focusBlock = (block: PDFBlock, origin: "source" | "translation") => {
+    if (mode === "native") {
+      void engine
+        ?.focusBlock?.(block.id, "source")
+        .catch((e) => toast.error(e.message));
+      return Promise.resolve();
+    }
     input(origin);
     const motion = explicitFocus.current;
     const operation = motion.operation;
@@ -655,6 +675,23 @@ export function PDFReadingView({
       },
     });
     onReady(facade.current, toc);
+    if (
+      nativeLocation.current.restoreSource &&
+      nativeLocation.current.location
+    ) {
+      nativeLocation.current.restoreSource = false;
+      void adapter
+        .goTo(nativeLocation.current.location)
+        .catch((e) => toast.error(e.message));
+    }
+  };
+  const nativeReady = (adapter: ReaderAdapter, toc: TOCItem[]) => {
+    nativeAdapter.current = { documentId: doc.id, adapter };
+    outline.current = toc;
+    facade.current = adapter;
+    setEngineDocument(doc.id);
+    setEngine(adapter);
+    onReady(adapter, toc);
   };
   useEffect(() => {
     if (!engine) return;
@@ -663,6 +700,12 @@ export function PDFReadingView({
     engine.hoverBlock?.(null);
     const previous = previousMode.current;
     previousMode.current = mode;
+    if (mode === "native") return;
+    if (previous === "native") {
+      if (mode === "translation" && reading.current)
+        followTranslation(reading.current);
+      return;
+    }
     let cancelled = false;
     selection.current = null;
     events.selection(null);
@@ -727,6 +770,7 @@ export function PDFReadingView({
     previousSidebars.current = { left: leftOpen, right: rightOpen };
     if (
       !engine ||
+      mode === "native" ||
       !((previous.left && !leftOpen) || (previous.right && !rightOpen))
     )
       return;
@@ -928,6 +972,46 @@ export function PDFReadingView({
     return nearest;
   };
   const changeMode = (value: Mode) => {
+    if (mode === "native" || value === "native") {
+      if (value === "native") {
+        nativeLocation.current.location =
+          facade.current?.getLocation() ?? nativeLocation.current.location;
+        nativeAdapter.current = undefined;
+      } else if (
+        nativeAdapter.current?.documentId === doc.id &&
+        facade.current === nativeAdapter.current.adapter
+      ) {
+        // Page events omit movement within the same page. Read the ready native
+        // viewport before unmounting; a loading view has no live adapter yet.
+        try {
+          nativeLocation.current.location = nativeAdapter.current.adapter.getLocation();
+        } catch {
+          // A revision reload may already have disposed it; keep the last event.
+        }
+        nativeAdapter.current = undefined;
+      }
+      nativeLocation.current.restoreSource =
+        mode === "native" && value !== "native";
+      if (
+        mode === "native" &&
+        nativeLocation.current.location?.type === "pdf"
+      ) {
+        const location = nativeLocation.current.location;
+        const block = locationBlock(location);
+        if (block)
+          recordReading({
+            blockId: block.id,
+            fraction: Math.max(
+              0,
+              Math.min(
+                1,
+                ((location.y ?? block.bounds.y) - block.bounds.y) /
+                  (block.bounds.height || 1),
+              ),
+            ),
+          });
+      }
+    }
     if (value === "parallel" && mode !== "parallel") {
       enteringParallel.current =
         centerBlock(mode === "translation" ? "translation" : "source") ??
@@ -983,6 +1067,7 @@ export function PDFReadingView({
   const translatedBlocks = useMemo(
     () =>
       mode !== "source" &&
+      mode !== "native" &&
       visibleBlocks.map((block) => {
         const translated = byId.get(block.id),
           noteIndexes = annotations.flatMap((a) => {
@@ -1089,7 +1174,7 @@ export function PDFReadingView({
   const toolbar = (
     <div className="translation-toolbar">
       <div className="reading-translation-actions">
-        {!autoCenterHost && autoCenterButton}
+        {!autoCenterHost && mode !== "native" && autoCenterButton}
         <AssistanceControls
           documentId={doc.id}
           processing={processing}
@@ -1114,7 +1199,8 @@ export function PDFReadingView({
       >
         <SlidingTabsList aria-label="阅读模式">
           <TabsTrigger value="source">原页</TabsTrigger>
-          <TabsTrigger value="parallel">对照</TabsTrigger>
+          <TabsTrigger value="native">对照</TabsTrigger>
+          <TabsTrigger value="parallel">流式对照</TabsTrigger>
           <TabsTrigger value="translation">译文</TabsTrigger>
         </SlidingTabsList>
       </Tabs>
@@ -1127,169 +1213,195 @@ export function PDFReadingView({
       data-theme={theme.mode}
       data-dark-contrast={theme.pdfDarkContrast ?? "soft"}
     >
-      {autoCenterHost && createPortal(autoCenterButton, autoCenterHost)}
+      {autoCenterHost &&
+        mode !== "native" &&
+        createPortal(autoCenterButton, autoCenterHost)}
       {toolbarHost ? createPortal(toolbar, toolbarHost) : toolbar}
       {mode === "translation" && (
         <div className="pdf-reading-controls">
           <div className="pdf-page-navigation">{pageNavigation}</div>
         </div>
       )}
-      <TranslationPanes
-        mode={mode}
-        swapped={swapped}
-        onSwap={() => setSwapped((value) => !value)}
-        sourceLabel="原页"
-        translationLabel="译文"
-        source={
-          <div
-            className="translation-source"
-            inert={mode === "translation"}
-            onWheelCapture={() => input("source")}
-            onPointerDownCapture={() => input("source")}
-            onKeyDownCapture={() => input("source")}
-          >
-            <InterleafView
-              document={doc}
-              theme={theme}
-              annotations={sourceAnnotations}
-              blocks={blocks}
-              onReady={ready}
-              events={{
-                ...events,
-                selection: sourceSelection,
-                blockFocus: (block) => {
-                  void focusBlock(block, "source");
-                },
-                location: (location, percentage) => {
-                  if (
-                    state.current.mode !== "translation" &&
-                    side.current === "source"
-                  )
-                    events.location(location, percentage);
-                },
-                readingAnchor: (anchor) => {
-                  if (
-                    explicitFocus.current.moving ||
-                    !control.current.canFollow("source") ||
-                    selecting.current
-                  )
-                    return;
-                  recordReading(anchor);
-                  if (
-                    state.current.mode === "parallel" &&
-                    syncEnabledRef.current
-                  )
-                    followTranslation(anchor);
-                },
-                blockHover: (block) => {
-                  if (mode === "parallel") hover("source", block?.id);
-                },
-                blockAction: (block, action) => {
-                  if (action !== "translate") {
-                    events.blockAction?.(block, action);
-                    return;
-                  }
-                  const button = root.current?.querySelector<HTMLElement>(
-                    `[data-block-id="${block.id}"] [data-block-action="translate"]`,
-                  );
-                  setPopup({
-                    block,
-                    rect:
-                      button?.getBoundingClientRect() ??
-                      root.current!.getBoundingClientRect(),
-                  });
-                },
-              }}
-            />
-            {mode !== "translation" && (
-              <div className="pdf-reading-controls">
-                <div className="pdf-page-navigation">{pageNavigation}</div>
-              </div>
-            )}
-          </div>
-        }
-        translation={
-          mode !== "source" && (
+      {mode === "native" ? (
+        <NativePDFReadingView
+          key={doc.id}
+          document={doc}
+          theme={theme}
+          annotations={annotations}
+          blocks={blocks}
+          translations={translations}
+          pageNavigation={pageNavigation}
+          initialLocation={nativeLocation.current.location}
+          onReady={nativeReady}
+          events={{
+            ...events,
+            location: (location, percentage) => {
+              nativeLocation.current.location = location;
+              events.location(location, percentage);
+            },
+          }}
+          onUseFlow={() => changeMode("parallel")}
+        />
+      ) : (
+        <TranslationPanes
+          mode={mode}
+          swapped={swapped}
+          onSwap={() => setSwapped((value) => !value)}
+          sourceLabel="原页"
+          translationLabel="译文"
+          source={
             <div
-              className="translation-document"
-              ref={pane}
-              tabIndex={0}
-              aria-label="论文译文"
-              onScroll={() => {
-                hover("translation");
-                translatedScroll();
-              }}
-              onPointerLeave={() => hover("translation")}
-              onWheelCapture={() => input("translation")}
-              onPointerDownCapture={(event) => {
-                const section = (event.target as Element).closest<HTMLElement>(
-                  "[data-translation-block]",
-                );
-                pressedBlock.current =
-                  section && event.button === 0
-                    ? {
-                        id: section.dataset.translationBlock!,
-                        x: event.clientX,
-                        y: event.clientY,
-                      }
-                    : undefined;
-                input("translation");
-                hover("translation");
-                selecting.current = !!section;
-                selection.current = null;
-                events.selection(null);
-                void engine?.focusSentences?.("", []);
-              }}
-              onPointerUp={translatedSelection}
-              onDoubleClick={(event) => {
-                // Select the translated sentence; untranslated text falls
-                // back to the sentence around the word.
-                const target = event.target as Element;
-                const sentence = target.closest(".translation-sentence");
-                const selected = window.getSelection();
-                if (sentence && selected) {
-                  const range = document.createRange();
-                  range.selectNodeContents(sentence);
-                  selected.removeAllRanges();
-                  selected.addRange(range);
-                } else {
-                  const section = target.closest("section");
-                  if (section) selectSentence(selected, section);
-                }
-                translatedSelection();
-              }}
-              onKeyDownCapture={() => input("translation")}
-              onKeyUp={translatedSelection}
-              style={{
-                fontSize: `${theme.translationFontSize ?? 1}rem`,
-                fontFamily: translationFont(theme.translationFontFamily),
-                fontWeight:
-                  (theme.translationFontWeight ??
-                    defaultTheme.translationFontWeight) === "bold"
-                    ? 600
-                    : undefined,
-                lineHeight: theme.lineHeight,
-              }}
+              className="translation-source"
+              inert={mode === "translation"}
+              onWheelCapture={() => input("source")}
+              onPointerDownCapture={() => input("source")}
+              onKeyDownCapture={() => input("source")}
             >
-              <TranslationJobStatus
-                processing={processing}
-                error={error}
-                retry={() =>
-                  void api.process(doc.id).catch((e) => toast.error(e.message))
-                }
+              <InterleafView
+                document={doc}
+                theme={theme}
+                annotations={sourceAnnotations}
+                blocks={blocks}
+                onReady={ready}
+                events={{
+                  ...events,
+                  selection: sourceSelection,
+                  blockFocus: (block) => {
+                    void focusBlock(block, "source");
+                  },
+                  location: (location, percentage) => {
+                    if (
+                      state.current.mode !== "translation" &&
+                      side.current === "source"
+                    )
+                      events.location(location, percentage);
+                  },
+                  readingAnchor: (anchor) => {
+                    if (
+                      explicitFocus.current.moving ||
+                      !control.current.canFollow("source") ||
+                      selecting.current
+                    )
+                      return;
+                    recordReading(anchor);
+                    if (
+                      state.current.mode === "parallel" &&
+                      syncEnabledRef.current
+                    )
+                      followTranslation(anchor);
+                  },
+                  blockHover: (block) => {
+                    if (mode === "parallel") hover("source", block?.id);
+                  },
+                  blockAction: (block, action) => {
+                    if (action !== "translate") {
+                      events.blockAction?.(block, action);
+                      return;
+                    }
+                    const button = root.current?.querySelector<HTMLElement>(
+                      `[data-block-id="${block.id}"] [data-block-action="translate"]`,
+                    );
+                    setPopup({
+                      block,
+                      rect:
+                        button?.getBoundingClientRect() ??
+                        root.current!.getBoundingClientRect(),
+                    });
+                  },
+                }}
               />
-              {!visibleBlocks.length && (
-                <p role="status">
-                  {doc.library === "books"
-                    ? "尚未翻译任何章节，可在工具栏翻译本章。"
-                    : "正文仍在解析中，完成的段落会在这里显示。"}
-                </p>
+              {mode !== "translation" && (
+                <div className="pdf-reading-controls">
+                  <div className="pdf-page-navigation">{pageNavigation}</div>
+                </div>
               )}
-              {translatedBlocks}
             </div>
-          )
-        }
-      />
+          }
+          translation={
+            mode !== "source" && (
+              <div
+                className="translation-document"
+                ref={pane}
+                tabIndex={0}
+                aria-label="论文译文"
+                onScroll={() => {
+                  hover("translation");
+                  translatedScroll();
+                }}
+                onPointerLeave={() => hover("translation")}
+                onWheelCapture={() => input("translation")}
+                onPointerDownCapture={(event) => {
+                  const section = (
+                    event.target as Element
+                  ).closest<HTMLElement>("[data-translation-block]");
+                  pressedBlock.current =
+                    section && event.button === 0
+                      ? {
+                          id: section.dataset.translationBlock!,
+                          x: event.clientX,
+                          y: event.clientY,
+                        }
+                      : undefined;
+                  input("translation");
+                  hover("translation");
+                  selecting.current = !!section;
+                  selection.current = null;
+                  events.selection(null);
+                  void engine?.focusSentences?.("", []);
+                }}
+                onPointerUp={translatedSelection}
+                onDoubleClick={(event) => {
+                  // Select the translated sentence; untranslated text falls
+                  // back to the sentence around the word.
+                  const target = event.target as Element;
+                  const sentence = target.closest(".translation-sentence");
+                  const selected = window.getSelection();
+                  if (sentence && selected) {
+                    const range = document.createRange();
+                    range.selectNodeContents(sentence);
+                    selected.removeAllRanges();
+                    selected.addRange(range);
+                  } else {
+                    const section = target.closest("section");
+                    if (section) selectSentence(selected, section);
+                  }
+                  translatedSelection();
+                }}
+                onKeyDownCapture={() => input("translation")}
+                onKeyUp={translatedSelection}
+                style={{
+                  fontSize: `${theme.translationFontSize ?? 1}rem`,
+                  fontFamily: translationFont(theme.translationFontFamily),
+                  fontWeight:
+                    (theme.translationFontWeight ??
+                      defaultTheme.translationFontWeight) === "bold"
+                      ? 600
+                      : undefined,
+                  lineHeight: theme.lineHeight,
+                }}
+              >
+                <TranslationJobStatus
+                  processing={processing}
+                  error={error}
+                  retry={() =>
+                    void api
+                      .process(doc.id)
+                      .catch((e) => toast.error(e.message))
+                  }
+                />
+                {!visibleBlocks.length && (
+                  <p role="status">
+                    {doc.library === "books"
+                      ? "尚未翻译任何章节，可在工具栏翻译本章。"
+                      : "正文仍在解析中，完成的段落会在这里显示。"}
+                  </p>
+                )}
+                {translatedBlocks}
+              </div>
+            )
+          }
+        />
+      )}
       <Popover
         open={!!popup}
         onOpenChange={(open) => {

@@ -202,7 +202,7 @@ it("keeps a leased sharp crop across unrelated streamed block updates", async ()
     imageSize: { width: 400, height: 200 },
   };
   await renderView(defaultTheme, [figure]);
-  await click("对照");
+  await click("流式对照");
   const image = host.querySelector<HTMLImageElement>(
     ".translation-document img",
   )!;
@@ -241,7 +241,7 @@ it("waits for the new document's adapter before acquiring a same-id crop", async
     imageSize: { width: 400, height: 200 },
   };
   await renderView(defaultTheme, [figure]);
-  await click("对照");
+  await click("流式对照");
   await renderView(
     defaultTheme,
     [figure],
@@ -274,7 +274,7 @@ it("shows a single failed-job message and retries only after an explicit click",
   await act(async () =>
     fixture.push!({ event: "snapshot", data: fixture.translations }),
   );
-  await click("对照");
+  await click("流式对照");
   const { api } = await import("@interleaf/api");
   expect(api.process).not.toHaveBeenCalled();
   expect(host.textContent).not.toContain("正在翻译中");
@@ -292,7 +292,7 @@ it("uses repaired text for search and focuses the matching block", async () => {
   expect(results).toHaveLength(1);
   expect(results[0]).toMatchObject({ blockId: "p1-b1", side: "translation" });
   await renderView(defaultTheme, [], results);
-  await click("对照");
+  await click("流式对照");
   expect(
     host
       .querySelector('[data-translation-block="p1-b1"]')
@@ -329,7 +329,7 @@ async function click(label: string) {
   )!;
   expect(button).toBeTruthy();
   await act(async () => button.click());
-  if (label === "对照" && !vi.isFakeTimers()) {
+  if (label === "流式对照" && !vi.isFakeTimers()) {
     await act(async () => {
       await new Promise<void>((resolve) =>
         requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
@@ -338,7 +338,7 @@ async function click(label: string) {
   }
 }
 it("switches modes without recreating the PDF or marking the opposite selection", async () => {
-  await click("对照");
+  await click("流式对照");
   expect(adapter.focusBlock).not.toHaveBeenCalled();
   await act(async () =>
     fixture.events!.selection({
@@ -364,7 +364,7 @@ it("switches modes without recreating the PDF or marking the opposite selection"
   expect(adapter.destroy).not.toHaveBeenCalled();
 });
 it("restores the page zoom when returning from the parallel view", async () => {
-  await click("对照");
+  await click("流式对照");
   expect(adapter.exitBlockFocus).not.toHaveBeenCalled();
   await click("原页");
   expect(adapter.exitBlockFocus).toHaveBeenCalledOnce();
@@ -380,7 +380,7 @@ it("keeps the translated selection and navigation metadata without marking the o
       }
     },
   );
-  await click("对照");
+  await click("流式对照");
   const sentence = host.querySelector('[data-sentence="1"] p')!;
   await act(async () =>
     sentence.dispatchEvent(new MouseEvent("pointerdown", { bubbles: true })),
@@ -451,7 +451,7 @@ it("focuses the visible middle translation once when entering parallel mode", as
     await new Promise((resolve) => requestAnimationFrame(resolve));
   });
   expect(adapter.followBlock).not.toHaveBeenCalled();
-  await click("对照");
+  await click("流式对照");
   expect(adapter.focusBlock).toHaveBeenCalledExactlyOnceWith(
     "p1-b1",
     "parallel",
@@ -460,7 +460,7 @@ it("focuses the visible middle translation once when entering parallel mode", as
   await renderView({ ...defaultTheme, translationFontSize: 1.2 });
   expect(adapter.focusBlock).toHaveBeenCalledTimes(1);
   await click("译文");
-  await click("对照");
+  await click("流式对照");
   expect(adapter.focusBlock).toHaveBeenCalledTimes(2);
 });
 
@@ -487,7 +487,7 @@ it("chooses the source viewport's middle block before resizing, even with a stal
   page.getBoundingClientRect = () => new DOMRect(0, -300, 1000, 1000);
   source.append(page);
   host.querySelector(".translation-source")!.append(source);
-  await click("对照");
+  await click("流式对照");
   expect(adapter.focusBlock).toHaveBeenCalledExactlyOnceWith(
     "p1-b2",
     "parallel",
@@ -495,7 +495,7 @@ it("chooses the source viewport's middle block before resizing, even with a stal
   await click("交换原文和译文");
   expect(adapter.focusBlock).toHaveBeenCalledTimes(1);
   await click("原页");
-  await click("对照");
+  await click("流式对照");
   expect(adapter.focusBlock).toHaveBeenCalledTimes(2);
   expect(adapter.focusBlock).toHaveBeenLastCalledWith("p1-b2", "parallel");
 });
@@ -548,7 +548,7 @@ it("navigates to the matching bibliography block and restores the translated vie
 });
 
 it("renders an incoming paragraph while the subscription remains open", async () => {
-  await click("对照");
+  await click("流式对照");
   const block = fixture.translations[0];
   await act(async () =>
     fixture.push!({
@@ -564,7 +564,7 @@ it("renders an incoming paragraph while the subscription remains open", async ()
 });
 
 it("links block hover in both directions and clears it without changing sentence selections", async () => {
-  await click("对照");
+  await click("流式对照");
   vi.mocked(adapter.focusSentences!).mockClear();
   await act(async () =>
     fixture.events!.blockHover?.({
@@ -608,7 +608,7 @@ it("supports explicit block focus in source and parallel modes", async () => {
     } as PDFBlock),
   );
   expect(adapter.focusBlock).toHaveBeenLastCalledWith("p1-b1", "source");
-  await click("对照");
+  await click("流式对照");
   await act(async () =>
     fixture.events!.blockFocus?.({
       id: "p1-b1",
@@ -639,7 +639,7 @@ it("focuses the paragraph containing a saved annotation like clicking it", async
     }),
   );
   expect(adapter.focusBlock).toHaveBeenLastCalledWith("p1-b2", "source");
-  await click("对照");
+  await click("流式对照");
   await act(async () =>
     fixture.ready!.focusLocation?.({
       type: "pdf",
@@ -658,7 +658,7 @@ it("focuses the paragraph containing a saved annotation like clicking it", async
 });
 
 it("can disable automatic original centering while reading the translation", async () => {
-  await click("对照");
+  await click("流式对照");
   vi.mocked(adapter.focusBlock!).mockClear();
   const centerButton = host.querySelector<HTMLButtonElement>(
     '[aria-label="取消同步效果"]',
@@ -729,7 +729,7 @@ function translationGeometry(height = 200) {
   return { pane, block };
 }
 it("follows consecutive manual translation scrolls immediately without restarting smooth motion", async () => {
-  await click("对照");
+  await click("流式对照");
   const { pane } = translationGeometry(1000);
   vi.mocked(adapter.followBlock!).mockClear();
   for (const top of [500, 550, 600]) {
@@ -760,7 +760,7 @@ it("locates the reading anchor deep in a long translation without measuring ever
       bounds: { x: 0.1, y: 0.2, width: 0.3, height: 0.3 },
     })),
   );
-  await click("对照");
+  await click("流式对照");
   const pane = host.querySelector<HTMLElement>(".translation-document")!;
   pane.getBoundingClientRect = () => new DOMRect(0, 0, 600, 600);
   const nodes = [
@@ -797,7 +797,7 @@ it("maps small translation scrolls continuously through the space between paragr
       bounds: { x: 0.1, y: 0.8, width: 0.3, height: 0.1 },
     },
   ]);
-  await click("对照");
+  await click("流式对照");
   const { pane, block } = translationGeometry(100);
   block.getBoundingClientRect = () =>
     new DOMRect(40, 100 - pane.scrollTop, 520, 100);
@@ -834,7 +834,7 @@ it("keeps translated following continuous when the original center crosses a par
       bounds: { x: 0.1, y: 0.8, width: 0.3, height: 0.1 },
     },
   ]);
-  await click("对照");
+  await click("流式对照");
   const { pane, block } = translationGeometry(100);
   block.getBoundingClientRect = () =>
     new DOMRect(40, 600 - pane.scrollTop, 520, 100);
@@ -879,7 +879,7 @@ it("normalizes a hidden equation number gap against the full formula height", as
       bounds: { x: 0.1, y: 0.8, width: 0.3, height: 0.1 },
     },
   ]);
-  await click("对照");
+  await click("流式对照");
   const { pane } = translationGeometry();
   const formula = pane.querySelector<HTMLElement>(
     '[data-translation-block="tall-formula"]',
@@ -909,7 +909,7 @@ it("normalizes a hidden equation number gap against the full formula height", as
 });
 
 it("keeps synchronization active while dragging the translation scrollbar", async () => {
-  await click("对照");
+  await click("流式对照");
   const { pane } = translationGeometry();
   vi.mocked(adapter.followBlock!).mockClear();
   await act(async () => {
@@ -950,7 +950,7 @@ it("follows the paired formula when the original scroll anchor lands on its hidd
       bounds: { x: 0.45, y: 0.9, width: 0.02, height: 0.02 },
     },
   ]);
-  await click("对照");
+  await click("流式对照");
   const { pane } = translationGeometry();
   const formula = pane.querySelector<HTMLElement>(
     '[data-translation-block="formula"]',
@@ -973,7 +973,7 @@ it("follows the paired formula when the original scroll anchor lands on its hidd
 });
 
 it("smoothly centers clicked translation blocks and follows their original without scroll feedback", async () => {
-  await click("对照");
+  await click("流式对照");
   const { pane, block } = translationGeometry();
   vi.useFakeTimers();
   try {
@@ -1030,7 +1030,7 @@ it("top-aligns tall translation blocks and cancels their motion when the user sc
   }
 });
 it("does not treat drags, native selections or interactive controls as block navigation", async () => {
-  await click("对照");
+  await click("流式对照");
   const { pane, block } = translationGeometry();
   await act(async () => {
     block.dispatchEvent(
@@ -1074,7 +1074,7 @@ it("replaces an unfinished click with an image focus and does not re-highlight o
       bounds: { x: 0.55, y: 0.4, width: 0.3, height: 0.2 },
     },
   ]);
-  await click("对照");
+  await click("流式对照");
   const { pane, block } = translationGeometry();
   const image = pane.querySelector<HTMLElement>(
     '[data-translation-block="p1-image"]',
@@ -1144,7 +1144,7 @@ it("does not focus during manual scrolling and cancels keyboard focus when the p
 });
 
 it("centers both panels from a source click and recalculates a focused translation after resizing", async () => {
-  await click("对照");
+  await click("流式对照");
   const { pane, block } = translationGeometry(800);
   let width = 600,
     height = 600,
@@ -1249,7 +1249,7 @@ it.each([false, true])(
       });
     vi.useFakeTimers();
     try {
-      await click("对照");
+      await click("流式对照");
       expanded = true;
       await act(async () =>
         fixture.events!.readingAnchor?.({ blockId: "p1-b1", fraction: 0 }),
@@ -1276,7 +1276,7 @@ it.each(["mode", "wheel"])(
     );
     vi.useFakeTimers();
     try {
-      await click("对照");
+      await click("流式对照");
       expect(adapter.focusBlock).not.toHaveBeenCalled();
       if (action === "mode") await click("原页");
       else
@@ -1298,7 +1298,7 @@ it.each(["mode", "wheel"])(
 );
 
 it("disables source following and smoothly resynchronizes from the source when enabled", async () => {
-  await click("对照");
+  await click("流式对照");
   const { pane } = translationGeometry();
   await click("取消同步效果");
   await act(async () =>
@@ -1324,7 +1324,7 @@ it("disables source following and smoothly resynchronizes from the source when e
 });
 
 it("disables translation following and resynchronizes from the last manually scrolled translation", async () => {
-  await click("对照");
+  await click("流式对照");
   const { pane } = translationGeometry();
   await click("取消同步效果");
   vi.mocked(adapter.followBlock!).mockClear();
@@ -1350,10 +1350,10 @@ it("disables translation following and resynchronizes from the last manually scr
   }
 });
 
-it.each(["原页", "对照"])(
+it.each(["原页", "流式对照"])(
   "keeps annotation and search focus available with sync disabled in %s",
   async (mode) => {
-    if (mode === "对照") await click(mode);
+    if (mode === "流式对照") await click(mode);
     await click("取消同步效果");
     vi.mocked(adapter.focusBlock!).mockClear();
     await act(async () => {
@@ -1389,7 +1389,7 @@ it("focuses the image from a translated figure reference even with sync disabled
       bounds: { x: 0.1, y: 0.1, width: 0.5, height: 0.3 },
     },
   ]);
-  await click("对照");
+  await click("流式对照");
   await click("取消同步效果");
   vi.mocked(adapter.focusBlock!).mockClear();
   await act(async () =>
@@ -1433,7 +1433,7 @@ it("paints a jump target on an unparsed page after page navigation", async () =>
 it.each(["left", "right"] as const)(
   "refocuses the viewport center once after the %s sidebar closes",
   async (closed) => {
-    await click("对照");
+    await click("流式对照");
     vi.mocked(adapter.focusBlock!).mockClear();
     const extra: PDFBlock[] = [
       {
@@ -1584,7 +1584,7 @@ it("strips legacy cross-side links when preparing a mark without losing its posi
     page: 1,
     rects: location.rects,
   });
-  await click("对照");
+  await click("流式对照");
   await click("取消同步效果");
   vi.mocked(adapter.focusBlock!).mockClear();
   await act(async () => fixture.ready!.focusLocation!(prepared.location));

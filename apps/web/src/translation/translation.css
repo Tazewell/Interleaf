@@ -18,6 +18,62 @@
   flex: none;
   overflow-x: auto;
 }
+.native-pdf-reading {
+  position: relative;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+.native-pdf-reading > .interleaf-stage {
+  position: relative;
+  inset: auto;
+  flex: 1;
+  min-height: 0;
+}
+.native-pdf-state {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 28px;
+  text-align: center;
+  font-size: 14px;
+}
+.native-pdf-progress {
+  color: var(--muted-foreground);
+  font-size: 13px;
+}
+.native-pdf-state-actions,
+.native-pdf-notice {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.native-pdf-notice {
+  flex: none;
+  padding: 5px 12px;
+  border-bottom: 1px solid var(--border);
+  color: var(--muted-foreground);
+  font-size: 13px;
+}
+.native-pdf-notice details {
+  min-width: 0;
+}
+.native-pdf-notice summary {
+  cursor: pointer;
+}
+.native-pdf-notice ul {
+  max-height: 120px;
+  overflow: auto;
+  padding-left: 18px;
+  overflow-wrap: anywhere;
+}
 .translation-panes {
   display: flex;
   position: relative;
