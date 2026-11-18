@@ -1,5 +1,10 @@
 import type { DocumentLocation, ReaderAdapter } from "@interleaf/core";
 
+type NavigationReader = Pick<
+  ReaderAdapter,
+  "getLocation" | "goTo" | "isNear" | "focusReference" | "flashReference"
+>;
+
 // Keep the original reading position while visiting several references.
 // A jump that stays on the same screen, or a reader who scrolls back, needs
 // no return point.
@@ -7,20 +12,24 @@ export class ReferenceNavigation {
   origin?: DocumentLocation;
   busy = false;
   private departing = false;
-  constructor(
-    private interleaf: Pick<ReaderAdapter, "getLocation" | "goTo" | "isNear">,
-  ) {}
-  async visit(
-    target: DocumentLocation,
-    navigate: (target: DocumentLocation) => Promise<void> = (location) =>
-      this.interleaf.goTo(location),
-  ) {
-    if (this.busy) return;
+  constructor(private reader?: NavigationReader) {}
+  setReader(reader?: NavigationReader) {
+    this.reader = reader;
+  }
+  async visit(target: DocumentLocation, text?: string) {
+    if (this.busy || !this.reader) return;
+    const origin = this.origin ?? structuredClone(this.reader.getLocation());
     this.busy = true;
-    const origin = this.origin || structuredClone(this.interleaf.getLocation());
     try {
-      await navigate(target);
+      // A source citation may mount the original PDF while focus is pending.
+      if (
+        text === undefined ||
+        !(await this.reader.focusReference?.(target, text))
+      )
+        await this.reader?.goTo(target);
+      if (!this.reader) return;
       this.origin = origin;
+      if (text !== undefined) this.reader.flashReference?.(target, text);
     } finally {
       this.busy = false;
     }
@@ -36,7 +45,7 @@ export class ReferenceNavigation {
   /** Forget the return point once it is on screen again; true if forgotten. */
   settle() {
     if (this.busy || !this.origin) return false;
-    const near = this.interleaf.isNear?.(this.origin);
+    const near = this.reader?.isNear?.(this.origin);
     // PDF.js may emit pagechanging before its viewport has left the origin.
     if (this.departing) {
       if (!near) this.departing = false;
@@ -47,10 +56,10 @@ export class ReferenceNavigation {
     return true;
   }
   async back() {
-    if (this.busy || !this.origin) return;
+    if (this.busy || !this.origin || !this.reader) return;
     this.busy = true;
     try {
-      await this.interleaf.goTo(this.origin);
+      await this.reader.goTo(this.origin);
       this.origin = undefined;
       this.departing = false;
     } finally {

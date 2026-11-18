@@ -4,12 +4,14 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import {
   defaultTheme,
+  type DocumentLocation,
   type Message,
   type Annotation,
   type NativeAIConfig,
   type PDFBlock,
   type ReaderAdapter,
   type ReaderEvents,
+  type SearchResult,
 } from "@interleaf/core";
 import { TooltipProvider } from "@interleaf/ui/components/tooltip";
 import { Workspace } from "./Workspace";
@@ -51,8 +53,18 @@ vi.mock("./progress", () => ({
 vi.mock("./chat/session-registry", () => ({ getChatSession: () => session }));
 vi.mock("./ModelSelector", () => ({ ModelSelector: () => null }));
 vi.mock("./chat/AssistantPanel", () => ({
-  AssistantPanel: ({ empty }: { empty: ReactNode }) =>
-    showChatEmpty ? empty : null,
+  AssistantPanel: ({
+    empty,
+    references,
+  }: {
+    empty: ReactNode;
+    references: (message: Message) => ReactNode;
+  }) =>
+    showChatEmpty
+      ? empty
+      : history.map((message) => (
+          <div key={message.id}>{references(message)}</div>
+        )),
 }));
 vi.mock("./NotesPanel", () => ({ NotesPanel: () => <p>批注列表</p> }));
 vi.mock("./DocumentOverview", () => ({ DocumentOverviewDialog: () => null }));
@@ -64,11 +76,15 @@ vi.mock("./translation/PDFReadingView", async () => {
     PDFReadingView: ({
       events,
       onReady,
+      onAdapterDetached,
     }: {
       events: ReaderEvents;
       onReady: (adapter: ReaderAdapter, toc: []) => void;
+      onAdapterDetached?: () => void;
     }) => {
       readerEvents = events;
+      readerReady = onReady;
+      readerDetached = () => onAdapterDetached?.();
       readerRenders++;
       useEffect(() => onReady(adapter, []), []);
       return (
@@ -126,6 +142,8 @@ const figure: PDFBlock = {
   image: "figure.png",
 };
 let readerEvents: ReaderEvents;
+let readerReady: (reader: ReaderAdapter, toc: []) => void;
+let readerDetached: () => void;
 let readerRenders = 0;
 const adapter = {
   getLocation: () => ({ type: "pdf", page: 2 }),
@@ -300,6 +318,169 @@ it("updates the PDF page controls when scrolling crosses pages", async () => {
   );
   expect(readerRenders).toBeGreaterThan(afterPage);
 });
+
+const citedPage = { type: "pdf" as const, page: 2 };
+async function visitPageReference(reader: ReaderAdapter) {
+  history = [
+    {
+      id: "citation",
+      documentId: doc.id,
+      role: "user",
+      content: "Please explain this passage",
+      references: [{ text: "Original passage", location: citedPage }],
+      createdAt: "",
+    },
+  ];
+  await act(async () => readerReady(reader, []));
+  await act(async () =>
+    host.querySelector<HTMLButtonElement>(".reference-card")!.click(),
+  );
+}
+const returnButton = () =>
+  [...host.querySelectorAll("button")].find((el) =>
+    el.textContent?.includes("返回阅读位置"),
+  );
+
+it.each([true, false])(
+  "returns to the single translation's exact reading position after opening the original (block found: %s)",
+  async (focused) => {
+    const origin = { type: "pdf" as const, page: 7, x: 0.13, y: 0.67 };
+    let position: DocumentLocation = origin;
+    const original = {
+      ...adapter,
+      getLocation: () => position,
+      goTo: async (location: DocumentLocation) => {
+        position = location;
+      },
+      flashReference: vi.fn(),
+    };
+    let finishSwitch!: () => void;
+    await visitPageReference({
+      ...adapter,
+      getLocation: () => origin,
+      goTo: async () => {},
+      focusReference: (target) =>
+        new Promise<boolean>((resolve) => {
+          readerDetached();
+          finishSwitch = () => {
+            readerReady(original, []);
+            if (focused) position = target;
+            resolve(focused);
+          };
+        }),
+    });
+    await act(async () => finishSwitch());
+    expect(position).toEqual(citedPage);
+    expect(original.flashReference).toHaveBeenCalledExactlyOnceWith(
+      citedPage,
+      "Original passage",
+    );
+    expect(returnButton()).toBeDefined();
+    await act(async () => returnButton()!.click());
+    expect(position).toEqual(origin);
+    expect(returnButton()).toBeUndefined();
+  },
+);
+
+it("ignores a citation from the previous document when focusing finishes late", async () => {
+  let finish!: (found: boolean) => void;
+  const staleGo = vi.fn(async () => {});
+  await visitPageReference({
+    ...adapter,
+    goTo: staleGo,
+    focusReference: () =>
+      new Promise<boolean>((resolve) => {
+        finish = resolve;
+      }),
+  });
+  const nextGo = vi.fn(async () => {});
+  await act(async () =>
+    root.render(<Harness document={paper({ id: "next-document" })} />),
+  );
+  await act(async () => readerReady({ ...adapter, goTo: nextGo }, []));
+  await act(async () => finish(false));
+  expect(staleGo).not.toHaveBeenCalled();
+  expect(nextGo).not.toHaveBeenCalled();
+  expect(returnButton()).toBeUndefined();
+});
+
+it.each([false, true])(
+  "drops existing and pending source search hits when the displayed reader changes (loading: %s)",
+  async (loading) => {
+    const source: SearchResult = {
+      id: "source",
+      side: "source",
+      excerpt: "Shared original passage",
+      location: {
+        ...citedPage,
+        x: 0.6,
+        y: 0.3,
+        quote: "Shared",
+        quoteContext: { text: "Shared original passage", start: 0 },
+      },
+    };
+    let finish!: (hits: SearchResult[]) => void;
+    const searchSource = vi
+      .fn<ReaderAdapter["search"]>()
+      .mockResolvedValueOnce([source])
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            finish = resolve;
+          }),
+      );
+    await act(async () =>
+      readerReady({ ...adapter, search: searchSource }, []),
+    );
+    await click("搜索文档内容");
+    const searchInput = host.querySelector<HTMLInputElement>(
+      'input[aria-label="搜索文档"]',
+    )!;
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(
+        HTMLInputElement.prototype,
+        "value",
+      )!.set!.call(searchInput, "Shared");
+      searchInput.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await act(async () => searchInput.form!.requestSubmit());
+    expect(host.querySelector(".search-result")?.textContent).toContain(
+      source.excerpt,
+    );
+    await act(async () => searchInput.form!.requestSubmit());
+    const displayed: SearchResult = {
+      id: "display",
+      excerpt: "Shared 译文",
+      location: { type: "pdf", page: 7, quote: "Shared" },
+    };
+    const go = vi.fn(async () => {});
+    const showTranslation = () =>
+      act(async () =>
+        readerReady(
+          {
+            ...adapter,
+            search: async (text) => (text === "Shared" ? [displayed] : []),
+            goTo: go,
+          },
+          [],
+        ),
+      );
+    if (loading) {
+      await act(async () => readerDetached());
+      expect(button("搜索").disabled).toBe(true);
+    } else await showTranslation();
+    expect(host.textContent).not.toContain(source.excerpt);
+    await act(async () => finish([source]));
+    expect(host.textContent).not.toContain(source.excerpt);
+    if (loading) await showTranslation();
+    expect(searchInput.value).toBe("Shared");
+    await click("搜索");
+    const hit = host.querySelector<HTMLButtonElement>(".search-result")!;
+    expect(hit.textContent).toContain(displayed.excerpt);
+    await act(async () => hit.click());
+    expect(go).toHaveBeenCalledExactlyOnceWith(displayed.location);
+  },
+);
 afterEach(async () => {
   finishAnswer?.();
   await act(async () => root.unmount());

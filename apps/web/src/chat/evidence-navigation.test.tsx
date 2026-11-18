@@ -123,3 +123,45 @@ it("allows a fresh navigation after the reader changes during validation", async
   await act(async () => finish({ valid: true }));
   expect(navigate).toHaveBeenCalledTimes(1);
 });
+
+it.each(["source PDF", "EPUB"])(
+  "resolves a legacy context excerpt against the %s",
+  async (format) => {
+    const context =
+      "An original passage long enough to require a shorter excerpt when the final words differ.";
+    const sourceLocation =
+      format === "source PDF" ? { type: "pdf" as const, page: 2 } : location;
+    const original = async (excerpt: string) =>
+      excerpt === context.slice(0, 40)
+        ? [{ id: "original", excerpt, location: sourceLocation }]
+        : [];
+    const reader =
+      format === "source PDF"
+        ? {
+            searchSource: original,
+            search: async () => [
+              {
+                id: "display",
+                excerpt: "译文",
+                location: { type: "pdf", page: 7 },
+              },
+            ],
+          }
+        : { search: original };
+    const onNavigate = vi.fn(async () => {});
+    await act(async () =>
+      root.render(
+        <SourceReferences
+          message={{ ...message, context, references: undefined }}
+          toc={[]}
+          adapter={reader as ReaderAdapter}
+          onNavigate={onNavigate}
+        />,
+      ),
+    );
+    await act(async () =>
+      host.querySelector<HTMLButtonElement>("button")!.click(),
+    );
+    expect(onNavigate).toHaveBeenCalledExactlyOnceWith(sourceLocation, context);
+  },
+);

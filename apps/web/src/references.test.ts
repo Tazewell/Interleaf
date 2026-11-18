@@ -65,11 +65,14 @@ it("uses block-focused navigation for a source reference and keeps its return po
   const reader = {
     getLocation: () => original,
     goTo: vi.fn(async () => {}),
+    focusReference: vi.fn(async () => true),
   };
-  const focus = vi.fn(async () => {});
   const navigation = new ReferenceNavigation(reader);
-  await navigation.visit(target, focus);
-  expect(focus).toHaveBeenCalledWith(target);
+  await navigation.visit(target, "original passage");
+  expect(reader.focusReference).toHaveBeenCalledWith(
+    target,
+    "original passage",
+  );
   expect(reader.goTo).not.toHaveBeenCalled();
   expect(navigation.origin).toEqual(original);
 });

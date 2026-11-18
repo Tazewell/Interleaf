@@ -259,7 +259,12 @@ export function Workspace({
   const researchTarget = usePaperUI((s) => s.researchTarget);
   const [annotationsLoaded, setAnnotationsLoaded] = useState(false);
   const [blocks, setBlocks] = useState<PDFBlock[]>([]);
-  const [adapter, setAdapter] = useState<ReaderAdapter>();
+  const [readyReader, setReadyReader] = useState<{
+    documentId: string;
+    adapter: ReaderAdapter;
+  }>();
+  const adapter =
+    readyReader?.documentId === doc.id ? readyReader.adapter : undefined;
   const [readingToolbar, setReadingToolbar] = useState<HTMLDivElement | null>(
     null,
   );
@@ -270,37 +275,48 @@ export function Workspace({
     [adapter],
   );
   const referenceNavigation = useMemo(
-    () => (adapter ? new ReferenceNavigation(adapter) : undefined),
-    [adapter],
+    () => new ReferenceNavigation(),
+    [doc.id],
   );
   const [returnLocation, setReturnLocation] = useState<DocumentLocation>();
   const [linkPreview, setLinkPreview] = useState<LinkPreview | null>(null);
-  const navigationRef = useRef(referenceNavigation);
-  navigationRef.current = referenceNavigation;
+  const navigationRef = useRef<ReferenceNavigation | undefined>(
+    referenceNavigation,
+  );
   const [referenceBusy, setReferenceBusy] = useState(false);
+  useLayoutEffect(() => {
+    navigationRef.current = referenceNavigation;
+    setReturnLocation(undefined);
+    setReferenceBusy(false);
+    return () => {
+      referenceNavigation.setReader(undefined);
+      navigationRef.current = undefined;
+    };
+  }, [referenceNavigation]);
+  const finishReference = () => {
+    if (navigationRef.current !== referenceNavigation) return;
+    setReturnLocation(referenceNavigation.origin);
+    setReferenceBusy(false);
+  };
   const visitReference = async (target: DocumentLocation, text: string) => {
-    if (!adapter || !referenceNavigation || referenceNavigation.busy) return;
+    if (!adapter || referenceNavigation.busy) return;
     setReferenceBusy(true);
     try {
-      await referenceNavigation.visit(target, async (location) => {
-        if (!(await adapter.focusReference?.(location, text)))
-          await adapter.goTo(location);
-      });
-      setReturnLocation(referenceNavigation.origin);
+      await referenceNavigation.visit(target, text);
     } finally {
-      setReferenceBusy(false);
+      finishReference();
     }
   };
   const returnFromReference = async () => {
-    if (!referenceNavigation) return;
+    if (referenceNavigation.busy) return;
     setReferenceBusy(true);
     try {
       await referenceNavigation.back();
-      setReturnLocation(referenceNavigation.origin);
     } catch (e) {
-      toast.error((e as Error).message);
+      if (navigationRef.current === referenceNavigation)
+        toast.error((e as Error).message);
     } finally {
-      setReferenceBusy(false);
+      finishReference();
     }
   };
   const [toc, setTOC] = useState<TOCItem[]>([]);
@@ -626,13 +642,26 @@ export function Workspace({
   const [pageInput, setPageInput] = useState("");
   const abort = useRef<AbortController | null>(null);
   const searchSerial = useRef(0);
-  useEffect(() => {
+  const clearSearchResults = () => {
     searchSerial.current++;
-    setQuery("");
     setResults([]);
     setSearchedQuery("");
     setSearching(false);
+  };
+  useLayoutEffect(() => {
+    setQuery("");
+    clearSearchResults();
+    return () => {
+      searchSerial.current++;
+    };
   }, [doc.id]);
+  const updateReader = (engine?: ReaderAdapter, items?: TOCItem[]) => {
+    if (navigationRef.current !== referenceNavigation) return;
+    clearSearchResults();
+    referenceNavigation.setReader(engine);
+    setReadyReader(engine && { documentId: doc.id, adapter: engine });
+    if (items) setTOC(items);
+  };
   useShortcut("interleafLeft", () => setLeft((value) => !value));
   useShortcut("interleafRight", () => setRight((value) => !value));
   useShortcut("search", () => {
@@ -762,7 +791,11 @@ export function Workspace({
       next.page !== previous.page
     )
       setLocation(next);
-    if (navigationRef.current?.settle()) setReturnLocation(undefined);
+    if (
+      navigationRef.current === referenceNavigation &&
+      referenceNavigation.settle()
+    )
+      setReturnLocation(undefined);
     if (next.type === "pdf") setPageInput(String(next.page));
     scheduleProgress(doc.id, { progress: next, percentage: percent }, (e) =>
       toast.error(e.message),
@@ -981,7 +1014,7 @@ export function Workspace({
         setSearchedQuery(query.trim());
       }
     } catch (e) {
-      toast.error((e as Error).message);
+      if (serial === searchSerial.current) toast.error((e as Error).message);
     } finally {
       if (serial === searchSerial.current) setSearching(false);
     }
@@ -1227,7 +1260,7 @@ export function Workspace({
             <Button
               variant="outline"
               size="sm"
-              disabled={referenceBusy}
+              disabled={!adapter || referenceBusy}
               onClick={() => void returnFromReference()}
             >
               <ArrowLeft className="size-3" />
@@ -1610,17 +1643,15 @@ export function Workspace({
                     placeholder="搜索文档内容…"
                     value={query}
                     onChange={(e) => {
-                      searchSerial.current++;
+                      clearSearchResults();
                       setQuery(e.target.value);
-                      setResults([]);
-                      setSearchedQuery("");
-                      setSearching(false);
                     }}
                   />
                   <Button
                     size="icon"
+                    type="submit"
                     variant="secondary"
-                    disabled={searching}
+                    disabled={!adapter || searching}
                     aria-label="搜索"
                   >
                     <Search />
@@ -1680,10 +1711,8 @@ export function Workspace({
                   pageNavigation={pageNavigation}
                   searchResults={results}
                   searchQuery={searchedQuery}
-                  onReady={(engine, items) => {
-                    setAdapter(engine);
-                    setTOC(items);
-                  }}
+                  onReady={updateReader}
+                  onAdapterDetached={updateReader}
                   events={{
                     zoom: (zoom) => setTheme({ zoom }),
                     location: saveLocation,
@@ -1699,8 +1728,9 @@ export function Workspace({
                       ),
                     linkPreview: setLinkPreview,
                     internalLink: (origin) => {
-                      navigationRef.current?.remember(origin);
-                      setReturnLocation(navigationRef.current?.origin);
+                      if (navigationRef.current !== referenceNavigation) return;
+                      referenceNavigation.remember(origin);
+                      setReturnLocation(referenceNavigation.origin);
                     },
                     blockAction,
                   }}

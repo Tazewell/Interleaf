@@ -63,8 +63,10 @@ export function SourceReferences({
       if (!target) {
         // Search the original excerpt, not a model-generated paraphrase.
         const text = card.text.replace(/\s+/g, " ").trim();
-        let matches = await adapter.search(text.slice(0, 80));
-        if (!matches.length) matches = await adapter.search(text.slice(0, 40));
+        const search = (adapter.searchSource ?? adapter.search).bind(adapter);
+        let matches = await search(text.slice(0, 80));
+        if (serial !== request.current) return;
+        if (!matches.length) matches = await search(text.slice(0, 40));
         if (serial !== request.current) return;
         if (!matches.length)
           throw new Error("未找到对应原文，可在书内搜索中查找。");
@@ -82,10 +84,7 @@ export function SourceReferences({
         target = matches[0].location;
       }
       await onNavigate(target, card.text);
-      if (serial === request.current) {
-        adapter.flashReference?.(target, card.text);
-        setCandidates(undefined);
-      }
+      if (serial === request.current) setCandidates(undefined);
     } catch (e) {
       if (serial === request.current) setError((e as Error).message);
     } finally {
