@@ -13,6 +13,7 @@ import {
 } from "@interleaf/core";
 import { ReadingLinkNavigation } from "../reading-links";
 import { PDFReadingView } from "./PDFReadingView";
+import { choosePDFFormat, clickPDFContent } from "./pdf-reading-test-helpers";
 import katex from "katex";
 import { api } from "@interleaf/api";
 
@@ -154,6 +155,7 @@ async function render(
   );
 }
 async function showTranslation() {
+  await choosePDFFormat(host, "流式");
   await act(async () => {
     [...host.querySelectorAll<HTMLButtonElement>("button")]
       .find((button) => button.textContent === "译文")!
@@ -322,11 +324,8 @@ it("keeps translated text renders out of position updates while preserving live 
 });
 
 it("updates hover and focus markers without rebuilding content or validating formulas", async () => {
-  await act(async () =>
-    [...host.querySelectorAll<HTMLButtonElement>("button")]
-      .find((button) => button.textContent === "流式对照")!
-      .click(),
-  );
+  await choosePDFFormat(host, "流式");
+  await clickPDFContent(host, "对照");
   await act(async () => {
     await new Promise(requestAnimationFrame);
     await new Promise(requestAnimationFrame);

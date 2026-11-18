@@ -1,4 +1,11 @@
-import { useMemo, useRef, useEffect, useState, type ReactNode } from "react";
+import {
+  useMemo,
+  useRef,
+  useEffect,
+  useLayoutEffect,
+  useState,
+  type ReactNode,
+} from "react";
 import type {
   Annotation,
   Document,
@@ -9,6 +16,7 @@ import type {
   ReaderTheme,
   TOCItem,
   TranslationBlock,
+  NativePDFReadingLayout,
 } from "@interleaf/core";
 import { api } from "@interleaf/api";
 import { Button } from "@interleaf/ui/components/button";
@@ -25,9 +33,11 @@ export function NativePDFReadingView({
   translations,
   initialLocation,
   onReady,
+  onRegenerate,
   events,
   onUseFlow,
   pageNavigation,
+  layout = "side-by-side",
 }: {
   document: Document;
   theme: ReaderTheme;
@@ -36,26 +46,63 @@ export function NativePDFReadingView({
   translations: TranslationBlock[];
   initialLocation?: DocumentLocation;
   onReady: (adapter: ReaderAdapter, toc: TOCItem[]) => void;
+  onRegenerate?: (location: DocumentLocation) => void;
   events: ReaderEvents;
   onUseFlow: () => void;
   pageNavigation?: ReactNode;
+  layout?: NativePDFReadingLayout;
 }) {
-  // This is only a local invalidation signature. No text is logged or sent to a model.
-  const revision = useMemo(() => JSON.stringify(translations), [translations]);
+  // Only completed text affects the derived PDF; queue updates should leave the viewport alone.
+  const revision = useMemo(
+    () =>
+      JSON.stringify(
+        translations
+          .filter((block) => block.status === "complete")
+          .sort((a, b) => a.blockId.localeCompare(b.blockId))
+          .map((block) => [
+            block.blockId,
+            block.sourceHash,
+            block.sentences,
+            block.formulaMarkdown,
+          ]),
+      ),
+    [translations],
+  );
   const { job, busy, error, retry, cancel, cancelling } = useNativePDFReading(
     doc.id,
     revision,
+    layout,
   );
-  const metadata = job?.status === "ready" ? job.metadata : undefined;
+  const metadata =
+    job?.status === "ready" &&
+    job.metadata?.documentId === doc.id &&
+    (job.metadata.layout ?? "side-by-side") === layout
+      ? job.metadata
+      : undefined;
+  const single = layout === "translation-only";
+  const label = single ? "原版式译文" : "原版式对照";
+  const flowLabel = single ? "流式译文" : "流式对照";
   const identity = `${doc.id}:${metadata?.cacheKey ?? "loading"}`;
   const currentIdentity = useRef(identity);
   currentIdentity.current = identity;
   const initialized = useRef<string | undefined>(undefined);
+  const liveAdapter = useRef<ReaderAdapter | undefined>(undefined);
   const location = useRef(initialLocation);
   const mounted = useRef(true);
   const [readyIdentity, setReadyIdentity] = useState<string>();
-  const latest = useRef({ events, onReady });
-  latest.current = { events, onReady };
+  const latest = useRef({ events, onReady, onRegenerate });
+  latest.current = { events, onReady, onRegenerate };
+  useLayoutEffect(() => {
+    // Page events alone cannot capture a scroll within a page. The job hook
+    // detaches in a passive effect, so the old viewport can still be measured here.
+    if (!liveAdapter.current) return;
+    const snapshot = liveAdapter.current.getLocation();
+    liveAdapter.current = undefined;
+    initialized.current = undefined;
+    setReadyIdentity(undefined);
+    location.current = snapshot;
+    latest.current.onRegenerate?.(snapshot);
+  }, [revision]);
   useEffect(() => {
     mounted.current = true;
     return () => {
@@ -66,21 +113,18 @@ export function NativePDFReadingView({
     const expected = identity;
     try {
       if (location.current) await adapter.goTo(location.current);
-      if (!mounted.current || currentIdentity.current !== expected) return;
-      initialized.current = expected;
-      setReadyIdentity(expected);
-      latest.current.onReady(adapter, toc);
     } catch {
-      if (mounted.current && currentIdentity.current === expected) {
+      if (mounted.current && currentIdentity.current === expected)
         toast.error("无法恢复此前阅读位置");
-        initialized.current = expected;
-        setReadyIdentity(expected);
-        latest.current.onReady(adapter, toc);
-      }
     }
+    if (!mounted.current || currentIdentity.current !== expected) return;
+    liveAdapter.current = adapter;
+    initialized.current = expected;
+    setReadyIdentity(expected);
+    latest.current.onReady(adapter, toc);
   };
   return (
-    <div className="native-pdf-reading" aria-label="原版式对照">
+    <div className="native-pdf-reading" aria-label={label}>
       {metadata ? (
         <>
           {(metadata.originalParagraphs > 0 ||
@@ -88,11 +132,11 @@ export function NativePDFReadingView({
             <div className="native-pdf-notice" role="status">
               <span>
                 {metadata.originalParagraphs > 0
-                  ? `${metadata.originalParagraphs} 段保留原文${metadata.translatedParagraphs === 0 ? "，当前译文暂不能安全用于原版式排版" : "，可在流式对照中查看译文"}`
+                  ? `${metadata.originalParagraphs} 段保留原文${metadata.translatedParagraphs === 0 ? "，当前译文暂不能安全用于原版式排版" : `，可在${flowLabel}中查看译文`}`
                   : "部分内容有排版提示"}
               </span>
               <Button variant="ghost" size="sm" onClick={onUseFlow}>
-                使用流式对照
+                使用{flowLabel}
               </Button>
               {metadata.warnings.length > 0 && (
                 <details>
@@ -146,7 +190,7 @@ export function NativePDFReadingView({
               aria-hidden="true"
             />
           )}
-          <p>{error || (busy ? "正在生成原版式对照" : "原版式对照暂不可用")}</p>
+          <p>{error || (busy ? `正在生成${label}` : `${label}暂不可用`)}</p>
           {busy && (
             <p className="native-pdf-progress">
               {job?.total
@@ -171,7 +215,7 @@ export function NativePDFReadingView({
               </Button>
             )}
             <Button variant="ghost" size="sm" onClick={onUseFlow}>
-              使用流式对照
+              使用{flowLabel}
             </Button>
           </div>
         </div>

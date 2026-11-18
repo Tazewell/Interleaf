@@ -1,9 +1,30 @@
-import type { PDFLocation } from "@interleaf/core";
+import type { PDFBlock, PDFLocation, PDFReadingAnchor } from "@interleaf/core";
 
 export type Box = NonNullable<PDFLocation["rects"]>[number];
 export const overlap = (a: Box, b: Box) =>
   Math.max(0, Math.min(a.x + a.width, b.x + b.width) - Math.max(a.x, b.x)) *
   Math.max(0, Math.min(a.y + a.height, b.y + b.height) - Math.max(a.y, b.y));
+
+export function locationAtReadingAnchor(
+  blocks: ReadonlyMap<string, PDFBlock>,
+  anchor?: PDFReadingAnchor,
+): PDFLocation | undefined {
+  if (!anchor) return;
+  const block = blocks.get(anchor.blockId);
+  if (!block) return;
+  const { x, y, width, height } = block.bounds;
+  let sourceY = y + anchor.fraction * height;
+  const next = anchor.gap && blocks.get(anchor.gap.nextBlockId);
+  if (
+    anchor.gap &&
+    next?.page === block.page &&
+    next.bounds.y > sourceY &&
+    Math.min(x + width, next.bounds.x + next.bounds.width) >
+      Math.max(x, next.bounds.x)
+  )
+    sourceY += (next.bounds.y - sourceY) * anchor.gap.fraction;
+  return { type: "pdf", page: block.page, x, y: sourceY };
+}
 
 export class ReadingSync {
   private owner: "source" | "translation" = "source";

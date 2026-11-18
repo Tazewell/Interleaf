@@ -12,6 +12,10 @@ import {
 } from "@interleaf/core";
 const fixture = vi.hoisted(() => ({
   nativeProps: undefined as Record<string, unknown> | undefined,
+  holdSource: false,
+  sourceFailed: undefined as (() => void) | undefined,
+  sourceEvents: undefined as ReaderEvents | undefined,
+  holdNative: false,
   source: {
     getLocation: () => ({ type: "pdf", page: 5 }),
     goTo: vi.fn(async () => {}),
@@ -20,6 +24,7 @@ const fixture = vi.hoisted(() => ({
     focusSentences: vi.fn(),
     hoverBlock: vi.fn(),
     getTOC: async () => [],
+    focusReference: vi.fn(async () => true),
   },
   native: {
     getLocation: vi.fn<() => PDFLocation>(() => ({ type: "pdf", page: 5 })),
@@ -43,13 +48,19 @@ vi.mock("./useTranslations", () => ({
 vi.mock("../InterleafView", () => ({
   InterleafView: ({
     onReady,
+    onOpenError,
+    events,
   }: {
     onReady: (adapter: ReaderAdapter, toc: []) => void;
+    onOpenError?: () => void;
+    events: ReaderEvents;
   }) => {
-    useEffect(
-      () => onReady(fixture.source as unknown as ReaderAdapter, []),
-      [],
-    );
+    fixture.sourceEvents = events;
+    fixture.sourceFailed = onOpenError;
+    useEffect(() => {
+      if (!fixture.holdSource)
+        onReady(fixture.source as unknown as ReaderAdapter, []);
+    }, []);
     return <div data-source-reader>原文阅读器</div>;
   },
 }));
@@ -57,6 +68,7 @@ vi.mock("./NativePDFReadingView", () => ({
   NativePDFReadingView: (props: Record<string, unknown>) => {
     fixture.nativeProps = props;
     useEffect(() => {
+      if (fixture.holdNative) return;
       (props.onReady as (adapter: ReaderAdapter, toc: []) => void)(
         fixture.native as unknown as ReaderAdapter,
         [],
@@ -66,6 +78,7 @@ vi.mock("./NativePDFReadingView", () => ({
   },
 }));
 import { PDFReadingView } from "./PDFReadingView";
+import { choosePDFFormat } from "./pdf-reading-test-helpers";
 let root: Root, host: HTMLDivElement;
 let facade: ReaderAdapter;
 async function render(id = "doc", blocks: PDFBlock[] = []) {
@@ -85,6 +98,11 @@ async function render(id = "doc", blocks: PDFBlock[] = []) {
   );
 }
 async function click(label: string) {
+  if (label === "流式对照") {
+    await choosePDFFormat(host, "流式");
+    label = "对照";
+  } else if (label === "对照") await choosePDFFormat(host, "原版式");
+  if (label === "原页") label = "原文";
   await act(async () =>
     [...host.querySelectorAll("button")]
       .find((button) => button.textContent === label)!
@@ -108,6 +126,9 @@ beforeEach(async () => {
   vi.clearAllMocks();
   fixture.native.getLocation.mockReturnValue({ type: "pdf", page: 5 });
   fixture.nativeProps = undefined;
+  fixture.holdSource = false;
+  fixture.sourceFailed = undefined;
+  fixture.holdNative = false;
   host = document.createElement("div");
   document.body.append(host);
   root = createRoot(host);
@@ -131,12 +152,208 @@ it("uses one derived PDF reader for 对照 and delegates native search and annot
   expect(fixture.native.search).toHaveBeenCalledWith("中文");
   expect(facade.prepareAnnotation).toBe(fixture.native.prepareAnnotation);
 });
+it("separates three reading contents from the layout choice", async () => {
+  expect(
+    [...host.querySelectorAll('[role="tab"]')].map((tab) => tab.textContent),
+  ).toEqual(["原文", "对照", "译文"]);
+  expect(host.querySelector('[aria-label="排版方式"]')?.textContent).toContain(
+    "原版式",
+  );
+});
+it.each(["原版式", "流式"] as const)(
+  "opens paragraph comparison in the reader's chosen %s format",
+  async (format) => {
+    const block: PDFBlock = {
+      id: "p3",
+      page: 3,
+      label: "text",
+      text: "Selected paragraph.",
+      bounds: { x: 0.15, y: 0.55, width: 0.7, height: 0.2 },
+    };
+    await render("doc", [block]);
+    await choosePDFFormat(host, format);
+    await act(async () =>
+      fixture.sourceEvents!.blockAction!(block, "translate"),
+    );
+    const enter = Array.from(document.querySelectorAll("button")).find(
+      (button) => button.textContent === "进入双栏对照",
+    );
+    expect(enter).toBeDefined();
+    await act(async () => enter!.click());
+    expect(
+      host.querySelector('[aria-label="排版方式"]')?.textContent,
+    ).toContain(format);
+    expect(
+      host.querySelector('[role="tab"][aria-selected="true"]')?.textContent,
+    ).toBe("对照");
+    if (format === "原版式")
+      expect(fixture.nativeProps?.initialLocation).toEqual({
+        type: "pdf",
+        page: 3,
+        x: 0.15,
+        y: 0.55,
+      });
+    else expect(host.querySelector(".translation-document")).not.toBeNull();
+  },
+);
+it("offers one native translated page and preserves the logical position across native layouts", async () => {
+  await click("对照");
+  fixture.native.getLocation.mockReturnValue({ type: "pdf", page: 8, y: 0.65 });
+  await click("译文");
+  expect(host.querySelector("[data-native-reader]")).not.toBeNull();
+  expect(host.querySelector(".translation-document")).toBeNull();
+  expect(fixture.nativeProps?.layout).toBe("translation-only");
+  expect(fixture.nativeProps?.initialLocation).toMatchObject({
+    type: "pdf",
+    page: 8,
+    y: 0.65,
+  });
+});
+it("keeps the chosen content when switching between native and flowing layouts", async () => {
+  await click("译文");
+  expect(fixture.nativeProps?.layout).toBe("translation-only");
+  await choosePDFFormat(host, "流式");
+  expect(host.querySelector(".translation-document")).not.toBeNull();
+  expect(
+    host.querySelector('[role="tab"][aria-selected="true"]')?.textContent,
+  ).toBe("译文");
+  await choosePDFFormat(host, "原版式");
+  expect(fixture.nativeProps?.layout).toBe("translation-only");
+  await click("对照");
+  expect(fixture.nativeProps?.layout).toBe("side-by-side");
+});
+it("returns to the original for an explicit source reference from a native single translation", async () => {
+  await click("译文");
+  let pending: Promise<boolean> | undefined;
+  const location = {
+    type: "pdf" as const,
+    page: 3,
+    rects: [{ x: 0.1, y: 0.2, width: 0.5, height: 0.1 }],
+  };
+  await act(async () => {
+    pending = facade.focusReference?.(location, "Original passage");
+  });
+  expect(await pending).toBe(true);
+  expect(host.querySelector("[data-source-reader]")).not.toBeNull();
+  expect(fixture.source.focusReference).toHaveBeenCalledWith(
+    location,
+    "Original passage",
+  );
+  expect(
+    host.querySelector('[role="tab"][aria-selected="true"]')?.textContent,
+  ).toBe("原文");
+});
+it("keeps a page jump in the translated PDF and opens source rectangles in the original", async () => {
+  await click("译文");
+  await facade.goTo({ type: "pdf", page: 2 });
+  expect(fixture.native.goTo).toHaveBeenCalledWith({ type: "pdf", page: 2 });
+  const mark: PDFLocation = {
+    type: "pdf",
+    page: 4,
+    rects: [{ x: 0.2, y: 0.5, width: 0.1, height: 0.05 }],
+  };
+  let jump: Promise<void> | undefined;
+  await act(async () => {
+    jump = facade.focusLocation?.(mark);
+  });
+  await jump;
+  expect(fixture.source.goTo).toHaveBeenCalledWith(mark);
+  expect(
+    host.querySelector('[role="tab"][aria-selected="true"]')?.textContent,
+  ).toBe("原文");
+});
+it("settles pending source navigation when the original fails to open or the document changes", async () => {
+  await click("译文");
+  fixture.holdSource = true;
+  let pending: Promise<boolean> | undefined;
+  const page: PDFLocation = { type: "pdf", page: 3 };
+  await act(async () => {
+    pending = facade.focusReference?.(page, "original");
+  });
+  await act(async () => fixture.sourceFailed?.());
+  expect(await pending).toBe(false);
+  await click("译文");
+  const old = facade;
+  await act(async () => {
+    pending = old.focusReference?.(page, "original");
+  });
+  await render("other");
+  expect(await pending).toBe(false);
+  expect(await old.focusReference?.(page, "stale")).toBe(false);
+  expect(fixture.source.focusReference).not.toHaveBeenCalled();
+});
+it("preserves the last live page when switching through a native layout that is still generating", async () => {
+  await click("对照");
+  fixture.native.getLocation.mockReturnValue({ type: "pdf", page: 8, y: 0.6 });
+  fixture.holdNative = true;
+  await click("译文");
+  fixture.native.getLocation.mockImplementation(() => {
+    throw Error("disposed");
+  });
+  await click("对照");
+  expect(fixture.nativeProps?.initialLocation).toMatchObject({
+    type: "pdf",
+    page: 8,
+    y: 0.6,
+  });
+});
 it("keeps the existing two-pane flow and standalone HTML translation available", async () => {
   await click("流式对照");
   expect(host.querySelector("[data-source-reader]")).not.toBeNull();
   expect(host.querySelector(".translation-document")).not.toBeNull();
   await click("译文");
   expect(host.querySelector(".translation-document")).not.toBeNull();
+});
+it("opens the native layout at the independent flow pane the reader last scrolled", async () => {
+  await render("doc", [
+    {
+      id: "right7",
+      page: 7,
+      label: "text",
+      text: "Right pane paragraph",
+      bounds: { x: 0.1, y: 0.2, width: 0.8, height: 0.4 },
+    },
+  ]);
+  await click("流式对照");
+  await act(async () =>
+    host
+      .querySelector<HTMLButtonElement>('[aria-label="取消同步效果"]')!
+      .click(),
+  );
+  const pane = host.querySelector<HTMLElement>(".translation-document")!;
+  vi.spyOn(pane, "getBoundingClientRect").mockReturnValue(
+    new DOMRect(0, 0, 400, 400),
+  );
+  const paragraph = pane.querySelector<HTMLElement>(
+    '[data-translation-block="right7"]',
+  )!;
+  vi.spyOn(paragraph, "getBoundingClientRect").mockReturnValue(
+    new DOMRect(0, 100, 350, 200),
+  );
+  await act(async () => {
+    pane.dispatchEvent(new WheelEvent("wheel", { bubbles: true }));
+    pane.dispatchEvent(new Event("scroll"));
+    await new Promise(requestAnimationFrame);
+  });
+  await choosePDFFormat(host, "原版式");
+  expect(fixture.nativeProps?.initialLocation).toMatchObject({
+    type: "pdf",
+    page: 7,
+    y: 0.4,
+  });
+});
+it("can change native layouts while the current one is regenerating without reading a disposed viewport", async () => {
+  await click("译文");
+  const snapshot: PDFLocation = { type: "pdf", page: 8, y: 0.65 };
+  await act(async () =>
+    (
+      fixture.nativeProps?.onRegenerate as
+        ((location: PDFLocation) => void) | undefined
+    )?.(snapshot),
+  );
+  fixture.native.getLocation.mockReturnValue({ type: "pdf", page: 1 });
+  await click("对照");
+  expect(fixture.nativeProps?.initialLocation).toEqual(snapshot);
 });
 it("returns from the derived reader at the original logical page", async () => {
   await click("对照");
@@ -165,13 +382,19 @@ it("returns to the HTML translation at the current native paragraph", async () =
     },
   ]);
   await click("对照");
-  fixture.native.getLocation.mockReturnValue({ type: "pdf", page: 7, x: 0.2, y: 0.4 });
+  fixture.native.getLocation.mockReturnValue({
+    type: "pdf",
+    page: 7,
+    x: 0.2,
+    y: 0.4,
+  });
   await act(async () =>
     (fixture.nativeProps?.events as ReaderEvents).location(
       { type: "pdf", page: 7, x: 0.2, y: 0.4 },
       0.5,
     ),
   );
+  await choosePDFFormat(host, "流式");
   await click("译文");
   expect(facade.getLocation()).toMatchObject({ type: "pdf", page: 7 });
 });
@@ -179,11 +402,22 @@ it("snapshots the live native viewport on exit after scrolling within the same p
   await click("对照");
   await act(async () =>
     (fixture.nativeProps?.events as ReaderEvents).location(
-      { type: "pdf", page: 7 }, 0.5,
+      { type: "pdf", page: 7 },
+      0.5,
     ),
   );
   // PDF.js pagechanging does not emit again while scrolling within page 7.
-  fixture.native.getLocation.mockReturnValue({ type: "pdf", page: 7, x: 0.2, y: 0.65 });
+  fixture.native.getLocation.mockReturnValue({
+    type: "pdf",
+    page: 7,
+    x: 0.2,
+    y: 0.65,
+  });
   await click("原页");
-  expect(fixture.source.goTo).toHaveBeenCalledWith({ type: "pdf", page: 7, x: 0.2, y: 0.65 });
+  expect(fixture.source.goTo).toHaveBeenCalledWith({
+    type: "pdf",
+    page: 7,
+    x: 0.2,
+    y: 0.65,
+  });
 });

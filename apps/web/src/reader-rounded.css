@@ -90,6 +90,14 @@
 .workspace .reading-mode-tabs .sliding-tabs-list {
   width: 200px;
 }
+.workspace .pdf-reading-mode-controls {
+  grid-column: 2;
+  grid-row: 1;
+  justify-self: center;
+}
+.workspace .pdf-reading-mode-controls .sliding-tabs-list {
+  width: 174px;
+}
 .workspace .translation-toolbar .sliding-tabs-list {
   height: 40px;
   padding: 4px;
@@ -103,6 +111,9 @@
 }
 .workspace .translation-toolbar [data-slot="tabs-indicator"] {
   border-radius: 11px;
+}
+.workspace .pdf-reading-mode-controls [data-slot="tabs-trigger"] {
+  font-size: 13px;
 }
 .workspace .translation-toolbar [data-slot="button"] {
   height: 30px;
@@ -578,6 +589,10 @@
     grid-column: 1;
     grid-row: 1;
     justify-self: center;
+  }
+  .workspace .pdf-reading-mode-controls {
+    grid-column: 1;
+    grid-row: 1;
   }
   .workspace .reading-translation-actions {
     grid-column: 1;

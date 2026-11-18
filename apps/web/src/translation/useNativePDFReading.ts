@@ -1,5 +1,8 @@
 import { useEffect, useReducer, useRef, useState } from "react";
-import type { NativePDFReadingJob } from "@interleaf/core";
+import type {
+  NativePDFReadingJob,
+  NativePDFReadingLayout,
+} from "@interleaf/core";
 import { api } from "@interleaf/api";
 
 type Session = {
@@ -10,10 +13,14 @@ type Session = {
   job?: NativePDFReadingJob;
 };
 const message = (error: unknown) =>
-  error instanceof Error ? error.message : "原版式对照生成失败，请重试";
+  error instanceof Error ? error.message : "原版式生成失败，请重试";
 
 /** Leaving the view detaches; only the explicit cancel action cancels accepted work. */
-export function useNativePDFReading(documentId: string, revision: string) {
+export function useNativePDFReading(
+  documentId: string,
+  revision: string,
+  layout: NativePDFReadingLayout = "side-by-side",
+) {
   const [attempt, retry] = useReducer((value: number) => value + 1, 0);
   const [job, setJob] = useState<NativePDFReadingJob>();
   const [error, setError] = useState("");
@@ -39,7 +46,7 @@ export function useNativePDFReading(documentId: string, revision: string) {
       if (value.status === "ready" || value.status === "failed") {
         setBusy(false);
         if (value.status === "failed")
-          setError(value.error || "原版式对照生成失败，请重试");
+          setError(value.error || "原版式生成失败，请重试");
         return;
       }
       current.timer = setTimeout(() => void poll(), 750);
@@ -64,14 +71,14 @@ export function useNativePDFReading(documentId: string, revision: string) {
       }
     };
     void api
-      .createNativePDFReading(documentId, current.controller.signal)
+      .createNativePDFReading(documentId, current.controller.signal, layout)
       .then(accept, failed);
     return () => {
       current.active = false;
       current.controller.abort();
       clearTimeout(current.timer);
     };
-  }, [documentId, revision, attempt]);
+  }, [documentId, revision, layout, attempt]);
   const cancel = async () => {
     const current = session.current;
     if (!current?.active || !current.job || cancelling) return;

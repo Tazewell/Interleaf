@@ -29,8 +29,6 @@ import type {
 import { defaultTheme, isPDFPageDecoration } from "@interleaf/core";
 import { api } from "@interleaf/api";
 import { Button } from "@interleaf/ui/components/button";
-import { Tabs, TabsTrigger } from "@interleaf/ui/components/tabs";
-import { SlidingTabsList } from "../controls/SlidingTabsList";
 import {
   Tooltip,
   TooltipContent,
@@ -39,7 +37,11 @@ import {
 import { Popover, PopoverContent } from "@interleaf/ui/components/popover";
 import { toast } from "sonner";
 import { InterleafView } from "../InterleafView";
-import { overlap, ReadingSync } from "../engines/pdf-reading";
+import {
+  locationAtReadingAnchor,
+  overlap,
+  ReadingSync,
+} from "../engines/pdf-reading";
 import { animatePDFScroll } from "../engines/pdf-scroll";
 import { TranslationPanes } from "./TranslationPanes";
 import { formulaNumbers } from "./formulaNumbers";
@@ -60,7 +62,34 @@ import { NativePDFReadingView } from "./NativePDFReadingView";
 import { chapterRange, headingPages } from "./chapters";
 import { searchPDFBlocks } from "./pdf-search";
 
-type Mode = "source" | "parallel" | "native" | "translation";
+import {
+  PDFReadingControls,
+  type PDFReadingContent,
+  type PDFReadingFormat,
+} from "./PDFReadingControls";
+
+type Mode =
+  "source" | "parallel" | "native" | "translation" | "native-translation";
+const isNativeMode = (value: Mode): value is "native" | "native-translation" =>
+  value === "native" || value === "native-translation";
+function readingMode(
+  content: PDFReadingContent,
+  format: PDFReadingFormat,
+): Mode {
+  if (content === "source" || format === "flow") return content;
+  return content === "parallel" ? "native" : "native-translation";
+}
+function needsOriginalPage(location: DocumentLocation) {
+  return (
+    location.type === "pdf" &&
+    !location.translation &&
+    Boolean(
+      location.rects?.length ||
+      location.sourceAnchors?.length ||
+      location.sentenceLink?.origin === "source",
+    )
+  );
+}
 const emptySearchResults: SearchResult[] = [];
 export function PDFReadingView({
   document: doc,
@@ -75,6 +104,7 @@ export function PDFReadingView({
   searchResults = emptySearchResults,
   searchQuery = "",
   onReady,
+  onAdapterDetached,
   events,
 }: {
   document: ReaderDocument;
@@ -89,11 +119,14 @@ export function PDFReadingView({
   searchResults?: SearchResult[];
   searchQuery?: string;
   onReady: (adapter: ReaderAdapter, toc: TOCItem[]) => void;
+  onAdapterDetached?: () => void;
   events: ReaderEvents;
 }) {
-  const [mode, setMode] = useState<Mode>("source"),
+  const [content, setContent] = useState<PDFReadingContent>("source"),
+    [format, setFormat] = useState<PDFReadingFormat>("native"),
     [swapped, setSwapped] = useState(false),
     [syncEnabled, setSyncEnabled] = useState(true);
+  const mode = readingMode(content, format);
   const { translations, error } = useTranslations(doc.id);
   const [popup, setPopup] = useState<{ block: PDFBlock; rect: DOMRect }>();
   const [engine, setEngine] = useState<ReaderAdapter>();
@@ -206,7 +239,12 @@ export function PDFReadingView({
       cancelTranslationMotion();
     };
   }, [mode, doc.id]);
+  const sourceBlocksById = useMemo(
+    () => new Map(blocks.map((block) => [block.id, block])),
+    [blocks],
+  );
   const state = useRef({
+    sourceBlocksById,
     mode,
     blocks,
     translations,
@@ -215,6 +253,7 @@ export function PDFReadingView({
     documentId: doc.id,
   });
   state.current = {
+    sourceBlocksById,
     mode,
     blocks,
     translations,
@@ -224,7 +263,7 @@ export function PDFReadingView({
   };
   useSentenceMarks(
     root,
-    mode === "native" ? undefined : engine,
+    isNativeMode(mode) ? undefined : engine,
     blocks,
     translations,
     annotations,
@@ -275,10 +314,6 @@ export function PDFReadingView({
         (b) => !isPDFPageDecoration(b) && !equationNumbers.pairedIds.has(b.id),
       ),
     [blocks, equationNumbers],
-  );
-  const sourceBlocksById = useMemo(
-    () => new Map(blocks.map((block) => [block.id, block])),
-    [blocks],
   );
   const lastPage = useMemo(
     () => Math.max(1, ...blocks.map((block) => block.page)),
@@ -446,7 +481,7 @@ export function PDFReadingView({
     });
   };
   const focusBlock = (block: PDFBlock, origin: "source" | "translation") => {
-    if (mode === "native") {
+    if (isNativeMode(mode)) {
       void engine
         ?.focusBlock?.(block.id, "source")
         .catch((e) => toast.error(e.message));
@@ -527,9 +562,9 @@ export function PDFReadingView({
       })[0]
     );
   };
-  const go = async (location: DocumentLocation) => {
+  const go = async (location: DocumentLocation, target = engine) => {
     input(mode === "translation" ? "translation" : "source");
-    await engine?.goTo(location);
+    await target?.goTo(location);
     if (location.type !== "pdf") return;
     const block = locationBlock(location);
     if (block) {
@@ -567,6 +602,24 @@ export function PDFReadingView({
   };
   // Keep the public adapter usable by TOC, notes and page navigation in all modes.
   const facade = useRef<ReaderAdapter | undefined>(undefined);
+  const detachAdapter = () => {
+    facade.current = undefined;
+    nativeAdapter.current = undefined;
+    setEngine(undefined);
+    onAdapterDetached?.();
+  };
+  const originalNavigation = useRef<
+    | {
+        owner: ReaderAdapter;
+        finish: (original?: ReaderAdapter) => void;
+      }
+    | undefined
+  >(undefined);
+  const endOriginalNavigation = useCallback(() => {
+    originalNavigation.current?.finish();
+    originalNavigation.current = undefined;
+  }, []);
+  useEffect(() => endOriginalNavigation, [doc.id, endOriginalNavigation]);
   const outline = useRef<TOCItem[]>([]);
   const actions = useRef({ go, focus });
   actions.current = { go, focus };
@@ -645,7 +698,7 @@ export function PDFReadingView({
             return { ...value, location };
           };
         if (key === "goTo")
-          return (l: DocumentLocation) => actions.current.go(l);
+          return (l: DocumentLocation) => actions.current.go(l, target);
         if (key === "search")
           return async (query: string) => {
             const current = state.current;
@@ -684,23 +737,16 @@ export function PDFReadingView({
               page: Math.max(1, current + (key === "next" ? 1 : -1)),
             });
           };
-        if (key === "getLocation" && state.current.mode === "translation")
-          return () => {
-            const block = state.current.blocks.find(
-              (b) => b.id === reading.current?.blockId,
-            );
-            return block
-              ? {
-                  type: "pdf",
-                  page: block.page,
-                  x: block.bounds.x,
-                  y:
-                    block.bounds.y +
-                    (reading.current?.fraction ?? 0) * block.bounds.height,
-                }
-              : target.getLocation();
-          };
-        if (key === "isNear" && state.current.mode === "translation")
+        const readingTranslation =
+          state.current.mode === "translation" ||
+          (state.current.mode === "parallel" && side.current === "translation");
+        if (key === "getLocation" && readingTranslation)
+          return () =>
+            locationAtReadingAnchor(
+              state.current.sourceBlocksById,
+              reading.current,
+            ) ?? target.getLocation();
+        if (key === "isNear" && readingTranslation)
           return (location: DocumentLocation) => {
             const block = locationBlock(location),
               host = pane.current;
@@ -739,6 +785,11 @@ export function PDFReadingView({
       },
     });
     onReady(facade.current, toc);
+    if (originalNavigation.current && mode === "source") {
+      nativeLocation.current.restoreSource = false;
+      originalNavigation.current.finish(adapter);
+      return;
+    }
     if (
       nativeLocation.current.restoreSource &&
       nativeLocation.current.location
@@ -750,12 +801,58 @@ export function PDFReadingView({
     }
   };
   const nativeReady = (adapter: ReaderAdapter, toc: TOCItem[]) => {
-    nativeAdapter.current = { documentId: doc.id, adapter };
+    let exposed = adapter;
+    if (mode === "native-translation") {
+      let original: Promise<ReaderAdapter | undefined> | undefined;
+      const navigationTarget = (source: boolean) => {
+        if (!root.current || state.current.documentId !== doc.id) return;
+        if (originalNavigation.current?.owner === exposed) return original;
+        if (nativeAdapter.current?.adapter !== exposed) return;
+        if (!source) return adapter;
+        original = new Promise((finish) => {
+          originalNavigation.current = { owner: exposed, finish };
+        });
+        changeMode("source");
+        return original;
+      };
+      const navigation: Pick<
+        ReaderAdapter,
+        "focusReference" | "flashReference" | "goTo" | "focusLocation"
+      > = {
+        async focusReference(location, text) {
+          const target = await navigationTarget(true);
+          return (await target?.focusReference?.(location, text)) ?? false;
+        },
+        flashReference(location, text) {
+          void Promise.resolve(navigationTarget(true))
+            .then((target) => target?.flashReference?.(location, text))
+            .catch((error) => toast.error(error.message));
+        },
+        async goTo(location) {
+          const target = await navigationTarget(needsOriginalPage(location));
+          await target?.goTo(location);
+        },
+        async focusLocation(location) {
+          const target = await navigationTarget(needsOriginalPage(location));
+          if (target?.focusLocation) await target.focusLocation(location);
+          else await target?.goTo(location);
+        },
+      };
+      exposed = new Proxy(adapter, {
+        get(target, key) {
+          if (Object.hasOwn(navigation, key))
+            return Reflect.get(navigation, key);
+          const value = Reflect.get(target, key);
+          return typeof value === "function" ? value.bind(target) : value;
+        },
+      });
+    }
+    nativeAdapter.current = { documentId: doc.id, adapter: exposed };
     outline.current = toc;
-    facade.current = adapter;
+    facade.current = exposed;
     setEngineDocument(doc.id);
     setEngine(adapter);
-    onReady(adapter, toc);
+    onReady(exposed, toc);
   };
   useEffect(() => {
     if (!engine) return;
@@ -764,8 +861,8 @@ export function PDFReadingView({
     engine.hoverBlock?.(null);
     const previous = previousMode.current;
     previousMode.current = mode;
-    if (mode === "native") return;
-    if (previous === "native") {
+    if (isNativeMode(mode)) return;
+    if (isNativeMode(previous)) {
       if (mode === "translation" && reading.current)
         followTranslation(reading.current);
       return;
@@ -834,7 +931,7 @@ export function PDFReadingView({
     previousSidebars.current = { left: leftOpen, right: rightOpen };
     if (
       !engine ||
-      mode === "native" ||
+      isNativeMode(mode) ||
       !((previous.left && !leftOpen) || (previous.right && !rightOpen))
     )
       return;
@@ -952,32 +1049,11 @@ export function PDFReadingView({
           };
       }
       recordReading(anchor);
-      const block = sourceBlocksById.get(anchor.blockId);
-      const nextBlock =
-        anchor.gap && sourceBlocksById.get(anchor.gap.nextBlockId);
-      let sourceY =
-        block && block.bounds.y + anchor.fraction * block.bounds.height;
-      if (
-        sourceY !== undefined &&
-        anchor.gap &&
-        nextBlock &&
-        block?.page === nextBlock.page &&
-        nextBlock.bounds.y > sourceY &&
-        Math.min(
-          block.bounds.x + block.bounds.width,
-          nextBlock.bounds.x + nextBlock.bounds.width,
-        ) > Math.max(block.bounds.x, nextBlock.bounds.x)
-      )
-        sourceY += (nextBlock.bounds.y - sourceY) * anchor.gap.fraction;
-      if (block)
+      const location = locationAtReadingAnchor(sourceBlocksById, anchor);
+      if (location)
         events.location(
-          {
-            type: "pdf",
-            page: block.page,
-            x: block.bounds.x,
-            y: sourceY!,
-          },
-          block.page / (engine?.getPageCount?.() || lastPage),
+          location,
+          location.page / (engine?.getPageCount?.() || lastPage),
         );
       if (mode === "parallel" && syncEnabledRef.current) {
         control.current.following("source");
@@ -1034,12 +1110,33 @@ export function PDFReadingView({
     }
     return nearest;
   };
-  const changeMode = (value: Mode) => {
-    if (mode === "native" || value === "native") {
-      if (value === "native") {
+  const changeMode = (
+    nextContent: PDFReadingContent,
+    nextFormat = format,
+    fromBlock?: PDFBlock,
+  ) => {
+    const value = readingMode(nextContent, nextFormat);
+    setFormat(nextFormat);
+    if (mode === value) {
+      if (fromBlock) {
+        setPopup(undefined);
+        void focusBlock(fromBlock, "source");
+      }
+      return;
+    }
+    if (fromBlock) recordReading({ blockId: fromBlock.id, fraction: 0 });
+    if (value !== "source") endOriginalNavigation();
+    if (isNativeMode(mode) || isNativeMode(value)) {
+      if (fromBlock) {
+        nativeLocation.current.location = {
+          type: "pdf",
+          page: fromBlock.page,
+          x: fromBlock.bounds.x,
+          y: fromBlock.bounds.y,
+        };
+      } else if (!isNativeMode(mode) && engineDocument === doc.id) {
         nativeLocation.current.location =
           facade.current?.getLocation() ?? nativeLocation.current.location;
-        nativeAdapter.current = undefined;
       } else if (
         nativeAdapter.current?.documentId === doc.id &&
         facade.current === nativeAdapter.current.adapter
@@ -1052,12 +1149,12 @@ export function PDFReadingView({
         } catch {
           // A revision reload may already have disposed it; keep the last event.
         }
-        nativeAdapter.current = undefined;
       }
+      detachAdapter();
       nativeLocation.current.restoreSource =
-        mode === "native" && value !== "native";
+        isNativeMode(mode) && !isNativeMode(value);
       if (
-        mode === "native" &&
+        isNativeMode(mode) &&
         nativeLocation.current.location?.type === "pdf"
       ) {
         const location = nativeLocation.current.location;
@@ -1078,12 +1175,13 @@ export function PDFReadingView({
     }
     if (value === "parallel" && mode !== "parallel") {
       enteringParallel.current =
+        fromBlock?.id ??
         centerBlock(mode === "translation" ? "translation" : "source") ??
         reading.current?.blockId;
     }
     input(value === "translation" ? "translation" : "source");
     setPopup(undefined);
-    setMode(value);
+    setContent(nextContent);
     // A half-width source pane needs fit-width; a 100% page would be clipped.
     if (value === "parallel") events.zoom?.("width");
   };
@@ -1131,7 +1229,7 @@ export function PDFReadingView({
   const translatedBlocks = useMemo(
     () =>
       mode !== "source" &&
-      mode !== "native" &&
+      !isNativeMode(mode) &&
       visibleBlocks.map((block) => {
         const translated = byId.get(block.id),
           noteIndexes = annotations.flatMap((a) => {
@@ -1233,7 +1331,7 @@ export function PDFReadingView({
   const toolbar = (
     <div className="translation-toolbar">
       <div className="reading-translation-actions">
-        {!autoCenterHost && mode !== "native" && autoCenterButton}
+        {!autoCenterHost && !isNativeMode(mode) && autoCenterButton}
         <AssistanceControls
           documentId={doc.id}
           processing={processing}
@@ -1251,18 +1349,12 @@ export function PDFReadingView({
           }}
         />
       </div>
-      <Tabs
-        className="reading-mode-tabs"
-        value={mode}
-        onValueChange={(v) => changeMode(v as Mode)}
-      >
-        <SlidingTabsList aria-label="阅读模式">
-          <TabsTrigger value="source">原页</TabsTrigger>
-          <TabsTrigger value="native">对照</TabsTrigger>
-          <TabsTrigger value="parallel">流式对照</TabsTrigger>
-          <TabsTrigger value="translation">译文</TabsTrigger>
-        </SlidingTabsList>
-      </Tabs>
+      <PDFReadingControls
+        content={content}
+        format={format}
+        onContentChange={changeMode}
+        onFormatChange={(next) => changeMode(content, next)}
+      />
     </div>
   );
   return (
@@ -1273,7 +1365,7 @@ export function PDFReadingView({
       data-dark-contrast={theme.pdfDarkContrast ?? "soft"}
     >
       {autoCenterHost &&
-        mode !== "native" &&
+        !isNativeMode(mode) &&
         createPortal(autoCenterButton, autoCenterHost)}
       {toolbarHost ? createPortal(toolbar, toolbarHost) : toolbar}
       {mode === "translation" && (
@@ -1281,9 +1373,12 @@ export function PDFReadingView({
           <div className="pdf-page-navigation">{pageNavigation}</div>
         </div>
       )}
-      {mode === "native" ? (
+      {isNativeMode(mode) ? (
         <NativePDFReadingView
-          key={doc.id}
+          key={`${doc.id}:${mode}`}
+          layout={
+            mode === "native-translation" ? "translation-only" : "side-by-side"
+          }
           document={doc}
           theme={theme}
           annotations={annotations}
@@ -1292,6 +1387,10 @@ export function PDFReadingView({
           pageNavigation={pageNavigation}
           initialLocation={nativeLocation.current.location}
           onReady={nativeReady}
+          onRegenerate={(location) => {
+            nativeLocation.current.location = location;
+            detachAdapter();
+          }}
           events={{
             ...events,
             location: (location, percentage) => {
@@ -1299,7 +1398,7 @@ export function PDFReadingView({
               events.location(location, percentage);
             },
           }}
-          onUseFlow={() => changeMode("parallel")}
+          onUseFlow={() => changeMode(content, "flow")}
         />
       ) : (
         <TranslationPanes
@@ -1322,6 +1421,7 @@ export function PDFReadingView({
                 annotations={sourceAnnotations}
                 blocks={blocks}
                 onReady={ready}
+                onOpenError={endOriginalNavigation}
                 events={{
                   ...events,
                   selection: sourceSelection,
@@ -1341,7 +1441,7 @@ export function PDFReadingView({
                         !sourceActive.current ||
                         state.current.documentId !== doc.id ||
                         state.current.mode === "translation" ||
-                        state.current.mode === "native" ||
+                        isNativeMode(state.current.mode) ||
                         explicitFocus.current.moving ||
                         !control.current.canFollow("source") ||
                         selecting.current
@@ -1499,10 +1599,7 @@ export function PDFReadingView({
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={() => {
-                  recordReading({ blockId: popup.block.id, fraction: 0 });
-                  changeMode("parallel");
-                }}
+                onClick={() => changeMode("parallel", format, popup.block)}
               >
                 进入双栏对照
               </Button>

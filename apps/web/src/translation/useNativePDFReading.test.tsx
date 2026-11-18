@@ -2,7 +2,10 @@
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import type { NativePDFReadingJob } from "@interleaf/core";
+import type {
+  NativePDFReadingJob,
+  NativePDFReadingLayout,
+} from "@interleaf/core";
 const apiMock = vi.hoisted(() => ({
   createNativePDFReading: vi.fn(),
   nativePDFReading: vi.fn(),
@@ -17,11 +20,13 @@ let current: ReturnType<typeof useNativePDFReading>;
 function Probe({
   id = "doc",
   revision = "r1",
+  layout = "side-by-side",
 }: {
   id?: string;
   revision?: string;
+  layout?: NativePDFReadingLayout;
 }) {
-  current = useNativePDFReading(id, revision);
+  current = useNativePDFReading(id, revision, layout);
   return <span>{current.job?.cacheKey ?? current.error}</span>;
 }
 const job = (key: string, status: NativePDFReadingJob["status"] = "ready") =>
@@ -40,6 +45,29 @@ beforeEach(() => {
   host = document.createElement("div");
   document.body.append(host);
   root = createRoot(host);
+});
+it("isolates layout requests and ignores a late result from the previous layout", async () => {
+  let finishDual!: (value: NativePDFReadingJob) => void;
+  apiMock.createNativePDFReading.mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        finishDual = resolve;
+      }),
+  );
+  apiMock.createNativePDFReading.mockResolvedValueOnce(job("single"));
+  await act(async () => root.render(<Probe />));
+  const previous = apiMock.createNativePDFReading.mock
+    .calls[0][1] as AbortSignal;
+  await act(async () => root.render(<Probe layout="translation-only" />));
+  await act(async () => finishDual(job("dual")));
+  expect(previous.aborted).toBe(true);
+  expect(current.job?.cacheKey).toBe("single");
+  expect(apiMock.createNativePDFReading).toHaveBeenLastCalledWith(
+    "doc",
+    expect.any(AbortSignal),
+    "translation-only",
+  );
+  expect(apiMock.cancelNativePDFReading).not.toHaveBeenCalled();
 });
 afterEach(async () => {
   await act(async () => root.unmount());

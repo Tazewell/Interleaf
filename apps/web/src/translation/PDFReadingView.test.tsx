@@ -118,6 +118,7 @@ vi.mock("../InterleafView", () => ({
   },
 }));
 import { PDFReadingView } from "./PDFReadingView";
+import { choosePDFFormat } from "./pdf-reading-test-helpers";
 let root: Root, host: HTMLDivElement;
 const events = { location: vi.fn(), selection: vi.fn() };
 beforeEach(async () => {
@@ -322,6 +323,10 @@ afterEach(async () => {
   vi.unstubAllGlobals();
 });
 async function click(label: string) {
+  const flow = label === "流式对照";
+  if (flow || label === "译文") await choosePDFFormat(host, "流式");
+  if (flow) label = "对照";
+  if (label === "原页") label = "原文";
   const button = Array.from(
     host.querySelectorAll<HTMLButtonElement>("button"),
   ).find(
@@ -329,7 +334,7 @@ async function click(label: string) {
   )!;
   expect(button).toBeTruthy();
   await act(async () => button.click());
-  if (label === "流式对照" && !vi.isFakeTimers()) {
+  if (flow && !vi.isFakeTimers()) {
     await act(async () => {
       await new Promise<void>((resolve) =>
         requestAnimationFrame(() => requestAnimationFrame(() => resolve())),

@@ -18,6 +18,7 @@ export function InterleafView({
   blocks = [],
   nativeReading,
   onReady,
+  onOpenError,
   events,
 }: {
   document: Document;
@@ -26,12 +27,20 @@ export function InterleafView({
   blocks?: PDFBlock[];
   nativeReading?: NativePDFReadingDescriptor;
   onReady: (adapter: ReaderAdapter, toc: TOCItem[]) => void;
+  onOpenError?: () => void;
   events: ReaderEvents;
 }) {
   const host = useRef<HTMLDivElement>(null);
   const adapter = useRef<ReaderAdapter | null>(null);
-  const latest = useRef({ theme, annotations, blocks, events, onReady });
-  latest.current = { theme, annotations, blocks, events, onReady };
+  const latest = useRef({
+    theme,
+    annotations,
+    blocks,
+    events,
+    onReady,
+    onOpenError,
+  });
+  latest.current = { theme, annotations, blocks, events, onReady, onOpenError };
   // This interaction preference does not change page rendering. Reapplying a
   // PDF theme would clear the native selection used by the translation menu.
   const renderingThemeKey = JSON.stringify({
@@ -129,6 +138,7 @@ export function InterleafView({
       if (!disposed) {
         setError(e.message);
         setLoading(false);
+        latest.current.onOpenError?.();
       }
     });
     return () => {

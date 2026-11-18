@@ -18,6 +18,27 @@
   flex: none;
   overflow-x: auto;
 }
+.pdf-reading-mode-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-width: 0;
+  max-width: 100%;
+}
+.pdf-reading-format {
+  min-width: 102px;
+  height: 36px;
+  border-radius: 12px;
+  border-color: transparent;
+  background: var(--muted);
+  color: var(--foreground);
+  font-size: 13px;
+}
+.pdf-reading-format:hover {
+  background: var(--state-hover);
+}
 .native-pdf-reading {
   position: relative;
   display: flex;
