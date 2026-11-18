@@ -35,7 +35,7 @@ interface RenderOptions {
   prepared: NativePDFPrepared;
   targets: Record<string, string>;
   output: string;
-  layout: BilingualPDFOptions["layout"];
+  layout: BilingualPDFOptions["layout"] | "translation-only";
   keepOriginalPages?: number[];
   /** Reuse supplied reading targets, retaining original ink when they cannot fit. */
   reading?: boolean;
@@ -163,9 +163,10 @@ export async function renderNativePDF(
 ): Promise<NativePDFReadingReport> {
   const { input, prepared, targets, output, layout } = options;
   if (
-    !["side-by-side", "alternating"].includes(layout) ||
+    !["side-by-side", "alternating", "translation-only"].includes(layout) ||
     resolve(input) === resolve(output) ||
-    (options.reading && layout !== "side-by-side")
+    (layout === "translation-only" && options.reading !== true) ||
+    (options.reading && layout === "alternating")
   )
     throw new Error("输出模式或路径无效");
   validatePrepared(prepared, options.reading);
@@ -237,7 +238,9 @@ export async function renderNativePDF(
       if (!keep.has(p.page))
         for (const paragraph of p.paragraphs) {
           if (paragraph.preserveOriginalReason !== undefined) {
-            report.warnings.push(`${paragraph.preserveOriginalReason}，段落 ${paragraph.id} 保留原文`);
+            report.warnings.push(
+              `${paragraph.preserveOriginalReason}，段落 ${paragraph.id} 保留原文`,
+            );
             continue;
           }
           const target = targets[paragraph.id];
@@ -299,29 +302,33 @@ export async function renderNativePDF(
         actual.view.some((v, j) => Math.abs(v - p.cropBox[j]) > 0.001)
       )
         throw new Error(`第 ${p.page} 页几何与原文不符`);
-      const raw = source.getPage(p.page - 1);
-      // Empty source pages still need an empty content stream for PDF-LIB embedding.
-      if (!raw.node.Contents()) raw.drawText("");
-      const embedded = await result.embedPage(raw, {
-        left: p.cropBox[0],
-        bottom: p.cropBox[1],
-        right: p.cropBox[2],
-        top: p.cropBox[3],
-      });
       const wide = layout === "side-by-side";
-      const original = result.addPage([
+      const page = result.addPage([
         wide ? 2 * p.width + 12 : p.width,
         p.height,
       ]);
-      drawOriginal(original, embedded, p, actual.userUnit);
-      const translated = wide ? original : result.addPage([p.width, p.height]),
-        offset = wide ? p.width + 12 : 0;
-      if (
+      const translated =
+        layout === "alternating" ? result.addPage([p.width, p.height]) : page;
+      const offset = wide ? p.width + 12 : 0;
+      const retainPage =
         keep.has(p.page) ||
-        (options.reading && !p.paragraphs.some((v) => fits.has(v.id)))
-      )
-        drawOriginal(translated, embedded, p, actual.userUnit, offset);
-      else {
+        (options.reading && !p.paragraphs.some((v) => fits.has(v.id)));
+      if (layout !== "translation-only" || retainPage) {
+        const raw = source.getPage(p.page - 1);
+        // PDF-lib needs a content stream even when the original page is blank.
+        if (!raw.node.Contents()) raw.drawText("");
+        const embedded = await result.embedPage(raw, {
+          left: p.cropBox[0],
+          bottom: p.cropBox[1],
+          right: p.cropBox[2],
+          top: p.cropBox[3],
+        });
+        if (layout !== "translation-only")
+          drawOriginal(page, embedded, p, actual.userUnit);
+        if (retainPage)
+          drawOriginal(translated, embedded, p, actual.userUnit, offset);
+      }
+      if (!retainPage) {
         const { canvas, scale } = await printRaster(actual),
           context = canvas.getContext("2d");
         try {

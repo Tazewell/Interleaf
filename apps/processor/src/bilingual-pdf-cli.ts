@@ -33,9 +33,7 @@ try {
     prepared = resolve(required("prepared"));
   if (values.reading !== undefined && values.reading !== "true")
     throw new Error("阅读模式参数无效");
-  if (
-    values.stage !== "render" && values["reading-metadata"]
-  )
+  if (values.stage !== "render" && values["reading-metadata"])
     throw new Error("阅读元数据仅用于生成阶段");
   const page = (value: string | undefined) => {
     if (value === undefined) return undefined;
@@ -103,12 +101,16 @@ try {
       throw new Error("准备数据、译文及输出必须位于同一任务目录");
     await safeOutput(output, [input, prepared, targets]);
     const mode = required("mode");
-    if (mode !== "side-by-side" && mode !== "alternating")
-      throw new Error("输出模式无效");
     const reading = values.reading === "true";
+    if (
+      mode !== "side-by-side" &&
+      mode !== "alternating" &&
+      !(reading && mode === "translation-only")
+    )
+      throw new Error("输出模式无效");
     let metadata: string | undefined;
     if (reading) {
-      if (mode !== "side-by-side") throw new Error("阅读模式必须使用左右对照");
+      if (mode === "alternating") throw new Error("阅读模式不支持交替页面");
       metadata = resolve(required("reading-metadata"));
       if (pathKey(dirname(metadata)) !== pathKey(dirname(output)))
         throw new Error("阅读元数据及输出必须位于同一任务目录");

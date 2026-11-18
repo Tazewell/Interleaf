@@ -10,6 +10,7 @@ import {
   PDFDocument,
   PDFName,
   PDFNumber,
+  PDFStream,
   StandardFonts,
   degrees,
   rgb,
@@ -21,6 +22,218 @@ import { fitParagraph } from "./layout";
 import { openPDF, loadFont } from "./runtime";
 
 const dirs: string[] = [];
+it("translation-only reading emits one source-sized searchable translation per source page without modifying inputs", async () => {
+  const f = await fixture(),
+    prepared = await prepareNativePDF(f),
+    targets = Object.fromEntries(
+      prepared.pages.flatMap((p) =>
+        p.paragraphs.map((v) => [v.id, "中文译文"]),
+      ),
+    ),
+    before = [
+      await readFile(f.input),
+      await readFile(f.layout),
+      structuredClone(prepared),
+      structuredClone(targets),
+    ],
+    output = join(f.dir, "translation-only.pdf");
+  const report = await renderNativePDF({
+    ...f,
+    prepared,
+    targets,
+    output,
+    layout: "translation-only",
+    reading: true,
+  });
+  expect(report).toMatchObject({
+    translatedParagraphs: 2,
+    originalParagraphs: 0,
+    pages: [
+      {
+        page: 1,
+        width: 200,
+        height: 260,
+        outputWidth: 200,
+        translationOffsetX: 0,
+      },
+      {
+        page: 2,
+        width: 300,
+        height: 200,
+        outputWidth: 300,
+        translationOffsetX: 0,
+      },
+    ],
+  });
+  const task = await openPDF(output);
+  const single = await PDFDocument.load(await readFile(output));
+  const hasSourceForm = single.context
+    .enumerateIndirectObjects()
+    .some(
+      ([, object]) =>
+        object instanceof PDFStream &&
+        object.dict.get(PDFName.of("Subtype")) === PDFName.of("Form"),
+    );
+  expect(hasSourceForm).toBe(false);
+  try {
+    const pdf = await task.promise;
+    expect(pdf.numPages).toBe(2);
+    for (const [index, size] of [
+      [1, [200, 260]],
+      [2, [300, 200]],
+    ] as const) {
+      const page = await pdf.getPage(index),
+        viewport = page.getViewport({ scale: 1 });
+      expect([viewport.width, viewport.height]).toEqual(size);
+      const text = (await page.getTextContent()).items
+        .map((i) => ("str" in i ? i.str : ""))
+        .join("");
+      expect(text).toContain("中文译文");
+      expect(text).not.toMatch(/Original body|Second body/);
+      expect(report.pages[index - 1].paragraphs[0]).toMatchObject({
+        id: prepared.pages[index - 1].paragraphs[0].id,
+        translated: true,
+        target: "中文译文",
+      });
+    }
+  } finally {
+    await task.destroy();
+  }
+  expect([
+    await readFile(f.input),
+    await readFile(f.layout),
+    prepared,
+    targets,
+  ]).toEqual(before);
+  await expect(
+    renderNativePDF({
+      ...f,
+      prepared,
+      targets,
+      output,
+      layout: "translation-only",
+    }),
+  ).rejects.toThrow(/输出模式/);
+}, 30000);
+
+it("translation-only reading preserves unsafe formula pages pixel-for-pixel", async () => {
+  const f = await ambiguousFormulaFixture(),
+    prepared = await prepareNativePDF({ ...f, reading: true }),
+    output = join(f.dir, "retained-single.pdf"),
+    targets = Object.fromEntries(
+      prepared.pages.flatMap((p) =>
+        p.paragraphs.map((v) => [v.id, "安全译文"]),
+      ),
+    );
+  const report = await renderNativePDF({
+    ...f,
+    prepared,
+    targets,
+    output,
+    layout: "translation-only",
+    reading: true,
+  });
+  expect(report).toMatchObject({
+    translatedParagraphs: 1,
+    originalParagraphs: 1,
+  });
+  expect(report.pages[0].paragraphs[0]).toMatchObject({ translated: false });
+  expect(report.pages[0].paragraphs[0]).not.toHaveProperty("target");
+  expect(report.warnings.join(" ")).toMatch(/公式逐字形定位无法唯一证明/);
+  const tasks = [await openPDF(f.input), await openPDF(output)];
+  try {
+    const { createCanvas } = await import("@napi-rs/canvas"),
+      images = [];
+    for (const task of tasks) {
+      const page = await (await task.promise).getPage(1),
+        viewport = page.getViewport({ scale: 1 }),
+        canvas = createCanvas(viewport.width, viewport.height);
+      await page.render({
+        canvas: canvas as unknown as HTMLCanvasElement,
+        viewport,
+        background: "white",
+      }).promise;
+      images.push(canvas.getContext("2d").getImageData(0, 0, 360, 220).data);
+    }
+    expect(images[1]).toEqual(images[0]);
+  } finally {
+    for (const task of tasks) await task.destroy();
+  }
+}, 30000);
+
+it("CLI accepts translation-only only with reading and preserves its task input files", async () => {
+  const f = await fixture(),
+    prepared = await prepareNativePDF(f),
+    preparedFile = join(f.dir, "prepared.json"),
+    targetsFile = join(f.dir, "targets.json"),
+    output = join(f.dir, "single.pdf"),
+    metadata = join(f.dir, "single.json"),
+    built = join(
+      process.cwd(),
+      "apps/processor/.bilingual-cli-single-test.mjs",
+    );
+  await writeFile(preparedFile, JSON.stringify(prepared));
+  await writeFile(
+    targetsFile,
+    JSON.stringify(
+      Object.fromEntries(
+        prepared.pages.flatMap((p) =>
+          p.paragraphs.map((v) => [v.id, "已有译文"]),
+        ),
+      ),
+    ),
+  );
+  const inputs = [f.input, f.layout, preparedFile, targetsFile],
+    before = await Promise.all(inputs.map((p) => readFile(p)));
+  await build({
+    entryPoints: ["apps/processor/src/bilingual-pdf-cli.ts"],
+    outfile: built,
+    bundle: true,
+    platform: "node",
+    format: "esm",
+    packages: "external",
+  });
+  const run = (extra: string[]) =>
+    spawnSync(
+      process.execPath,
+      [
+        built,
+        "--stage",
+        "render",
+        "--input",
+        f.input,
+        "--prepared",
+        preparedFile,
+        "--targets",
+        targetsFile,
+        "--output",
+        output,
+        "--mode",
+        "translation-only",
+        ...extra,
+      ],
+      { encoding: "utf8", timeout: 30000, cwd: process.cwd() },
+    );
+  try {
+    const strict = run([]);
+    expect(strict.status, strict.stderr).toBe(1);
+    const reading = run(["--reading", "true", "--reading-metadata", metadata]);
+    expect(reading.status, reading.stderr).toBe(0);
+    expect(JSON.parse(await readFile(metadata, "utf8")).pages[0]).toMatchObject(
+      { outputWidth: 200, translationOffsetX: 0 },
+    );
+    const task = await openPDF(output);
+    try {
+      expect((await task.promise).numPages).toBe(2);
+    } finally {
+      await task.destroy();
+    }
+    expect(await Promise.all(inputs.map((p) => readFile(p)))).toEqual(before);
+  } finally {
+    await rm(built, { force: true });
+  }
+}, 30000);
+
 async function ambiguousFormulaFixture() {
   const f = await fixture(),
     doc = await PDFDocument.create(),
@@ -1417,105 +1630,135 @@ it("rejects wrong input identity, invalid ranges and missing translations withou
   ).rejects.toThrow(/原文/);
   await expect(readFile(output)).rejects.toMatchObject({ code: "ENOENT" });
 });
-it("preserves two columns, a figure and its separate caption while moving protected formula pixels inline", async () => {
-  const f = await fixture();
-  const doc = await PDFDocument.create(),
-    font = await doc.embedFont(StandardFonts.Helvetica);
-  const p = doc.addPage([420, 420]);
-  p.drawText("We use", { x: 20, y: 340, font, size: 12 });
-  p.drawText("a=b", { x: 65, y: 340, font, size: 12 });
-  p.drawText("in practice.", { x: 90, y: 340, font, size: 12 });
-  p.drawText("Right column", { x: 230, y: 340, font, size: 12 });
-  p.drawRectangle({
-    x: 20,
-    y: 150,
-    width: 160,
-    height: 80,
-    color: rgb(1, 0, 0),
-  });
-  p.drawText("Figure 1. Result", { x: 20, y: 125, font, size: 10 });
-  const bytes = await doc.save();
-  await writeFile(f.input, bytes);
-  const bounds = (x: number, y: number, width: number, height: number) => ({
-    x: x / 420,
-    y: y / 420,
-    width: width / 420,
-    height: height / 420,
-  });
-  const manifest = {
-    schemaVersion: 1,
-    inputSHA256: createHash("sha256").update(bytes).digest("hex"),
-    pages: 1,
-    blocks: [
-      { id: "left", page: 1, label: "text", bounds: bounds(15, 60, 175, 80) },
-      { id: "right", page: 1, label: "text", bounds: bounds(225, 60, 175, 80) },
-      {
-        id: "figure",
-        page: 1,
-        label: "image",
-        bounds: bounds(20, 190, 160, 80),
+it.each(["alternating", "translation-only"] as const)(
+  "%s preserves two columns, a figure and its separate caption while moving protected formula pixels inline",
+  async (layout) => {
+    const f = await fixture();
+    const doc = await PDFDocument.create(),
+      font = await doc.embedFont(StandardFonts.Helvetica);
+    const p = doc.addPage([420, 420]);
+    p.drawText("We use", { x: 20, y: 340, font, size: 12 });
+    p.drawText("a=b", { x: 65, y: 340, font, size: 12 });
+    p.drawText("in practice.", { x: 90, y: 340, font, size: 12 });
+    p.drawText("Right column", { x: 230, y: 340, font, size: 12 });
+    p.drawRectangle({
+      x: 20,
+      y: 150,
+      width: 160,
+      height: 80,
+      color: rgb(1, 0, 0),
+    });
+    p.drawText("Figure 1. Result", { x: 20, y: 125, font, size: 10 });
+    const bytes = await doc.save();
+    await writeFile(f.input, bytes);
+    const bounds = (x: number, y: number, width: number, height: number) => ({
+      x: x / 420,
+      y: y / 420,
+      width: width / 420,
+      height: height / 420,
+    });
+    const manifest = {
+      schemaVersion: 1,
+      inputSHA256: createHash("sha256").update(bytes).digest("hex"),
+      pages: 1,
+      blocks: [
+        { id: "left", page: 1, label: "text", bounds: bounds(15, 60, 175, 80) },
+        {
+          id: "right",
+          page: 1,
+          label: "text",
+          bounds: bounds(225, 60, 175, 80),
+        },
+        {
+          id: "figure",
+          page: 1,
+          label: "image",
+          bounds: bounds(20, 190, 160, 80),
+        },
+        {
+          id: "caption",
+          page: 1,
+          label: "figure_title",
+          bounds: bounds(15, 280, 175, 35),
+        },
+      ],
+    };
+    await writeFile(f.layout, JSON.stringify(manifest));
+    const prepared = await prepareNativePDF(f),
+      para = prepared.pages[0].paragraphs[0];
+    expect(prepared.pages[0].paragraphs).toHaveLength(3);
+    expect(para.source).toContain("{v0}");
+    expect(para.formulas).toHaveLength(1);
+    const output = join(f.dir, "columns.pdf");
+    await renderNativePDF({
+      ...f,
+      prepared,
+      output,
+      layout,
+      reading: layout === "translation-only",
+      targets: {
+        "p1.left": "公式移到此处：{v0}，继续说明。",
+        "p1.right": "右栏正文保持独立，不跨越图形区域。",
+        "p1.caption": "图一：结果说明。",
       },
-      {
-        id: "caption",
-        page: 1,
-        label: "figure_title",
-        bounds: bounds(15, 280, 175, 35),
-      },
-    ],
-  };
-  await writeFile(f.layout, JSON.stringify(manifest));
-  const prepared = await prepareNativePDF(f),
-    para = prepared.pages[0].paragraphs[0];
-  expect(prepared.pages[0].paragraphs).toHaveLength(3);
-  expect(para.source).toContain("{v0}");
-  expect(para.formulas).toHaveLength(1);
-  const output = join(f.dir, "columns.pdf");
-  await renderNativePDF({
-    ...f,
-    prepared,
-    output,
-    layout: "alternating",
-    targets: {
-      "p1.left": "公式移到此处：{v0}，继续说明。",
-      "p1.right": "右栏正文保持独立，不跨越图形区域。",
-      "p1.caption": "图一：结果说明。",
-    },
-  });
-  const task = await openPDF(output);
-  try {
-    const pdf = await task.promise,
-      page = await pdf.getPage(2);
-    const text = (await page.getTextContent()).items
-      .filter((i) => "str" in i)
-      .map((i) => i.str)
-      .join("");
-    expect(text).toContain("公式移到此处");
-    expect(text).not.toContain("a=b");
-    expect(text).not.toContain("We use");
-    const { createCanvas } = await import("@napi-rs/canvas");
-    const canvas = createCanvas(420, 420);
-    await page.render({
-      canvas: canvas as unknown as HTMLCanvasElement,
-      viewport: page.getViewport({ scale: 1 }),
-    }).promise;
-    const image = canvas.getContext("2d").getImageData(50, 220, 1, 1).data;
-    expect([...image]).toEqual([255, 0, 0, 255]);
-    const pixels = canvas.getContext("2d").getImageData(15, 60, 175, 80).data;
-    expect(
-      Array.from(pixels).filter((v, i) => i % 4 !== 3 && v < 100).length,
-    ).toBeGreaterThan(200);
-  } finally {
-    await task.destroy();
-  }
-  manifest.blocks.push({
-    id: "table",
-    page: 1,
-    label: "table",
-    bounds: bounds(50, 60, 100, 80),
-  });
-  await writeFile(f.layout, JSON.stringify(manifest));
-  await expect(prepareNativePDF(f)).rejects.toThrow(/重叠/);
-}, 30000);
+    });
+    const task = await openPDF(output);
+    try {
+      const pdf = await task.promise,
+        page = await pdf.getPage(layout === "translation-only" ? 1 : 2);
+      const text = (await page.getTextContent()).items
+        .filter((i) => "str" in i)
+        .map((i) => i.str)
+        .join("");
+      expect(text).toContain("公式移到此处");
+      expect(text).not.toContain("a=b");
+      expect(text).not.toContain("We use");
+      const { createCanvas } = await import("@napi-rs/canvas");
+      const canvas = createCanvas(420, 420);
+      await page.render({
+        canvas: canvas as unknown as HTMLCanvasElement,
+        viewport: page.getViewport({ scale: 1 }),
+      }).promise;
+      const image = canvas.getContext("2d").getImageData(50, 220, 1, 1).data;
+      expect([...image]).toEqual([255, 0, 0, 255]);
+      const { font: targetFont } = await loadFont(await PDFDocument.create()),
+        formulaRun = fitParagraph(
+          para,
+          "公式移到此处：{v0}，继续说明。",
+          targetFont,
+        ).runs.find((run) => run.kind === "formula")!;
+      // The formula's own rectangle must contain ink, independently of prose.
+      const formulaPixels = canvas
+        .getContext("2d")
+        .getImageData(
+          Math.floor(formulaRun.x),
+          Math.floor(formulaRun.y),
+          Math.ceil(formulaRun.width),
+          Math.ceil(formulaRun.height),
+        ).data;
+      expect(
+        Array.from(formulaPixels).filter(
+          (value, index) => index % 4 !== 3 && value < 100,
+        ).length,
+      ).toBeGreaterThan(15);
+      const pixels = canvas.getContext("2d").getImageData(15, 60, 175, 80).data;
+      expect(
+        Array.from(pixels).filter((v, i) => i % 4 !== 3 && v < 100).length,
+      ).toBeGreaterThan(200);
+    } finally {
+      await task.destroy();
+    }
+    manifest.blocks.push({
+      id: "table",
+      page: 1,
+      label: "table",
+      bounds: bounds(50, 60, 100, 80),
+    });
+    await writeFile(f.layout, JSON.stringify(manifest));
+    await expect(prepareNativePDF(f)).rejects.toThrow(/重叠/);
+  },
+  30000,
+);
 it("built CLI writes atomic job artifacts, emits progress and rejects invalid tokens and foreign output paths", async () => {
   const f = await fixture(),
     cli = join(f.dir, "bilingual-pdf-cli.mjs");
