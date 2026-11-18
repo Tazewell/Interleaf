@@ -23,6 +23,8 @@ import { Button } from "@interleaf/ui/components/button";
 import { CircleNotch } from "@phosphor-icons/react";
 import { toast } from "sonner";
 import { InterleafView } from "../InterleafView";
+import { NativePDFPanes } from "./NativePDFPanes";
+import type { TranslationSplit } from "./TranslationPanes";
 import { useNativePDFReading } from "./useNativePDFReading";
 
 export function NativePDFReadingView({
@@ -37,6 +39,7 @@ export function NativePDFReadingView({
   events,
   onUseFlow,
   pageNavigation,
+  split,
   layout = "side-by-side",
 }: {
   document: Document;
@@ -50,6 +53,7 @@ export function NativePDFReadingView({
   events: ReaderEvents;
   onUseFlow: () => void;
   pageNavigation?: ReactNode;
+  split: TranslationSplit;
   layout?: NativePDFReadingLayout;
 }) {
   // Only completed text affects the derived PDF; queue updates should leave the viewport alone.
@@ -68,18 +72,20 @@ export function NativePDFReadingView({
       ),
     [translations],
   );
+  // Both views read the same translated pages. Comparison opens the original in its own pane.
   const { job, busy, error, retry, cancel, cancelling } = useNativePDFReading(
     doc.id,
     revision,
-    layout,
+    "translation-only",
   );
   const metadata =
     job?.status === "ready" &&
     job.metadata?.documentId === doc.id &&
-    (job.metadata.layout ?? "side-by-side") === layout
+    job.metadata.layout === "translation-only"
       ? job.metadata
       : undefined;
   const single = layout === "translation-only";
+  const View = single ? InterleafView : NativePDFPanes;
   const label = single ? "原版式译文" : "原版式对照";
   const flowLabel = single ? "流式译文" : "流式对照";
   const identity = `${doc.id}:${metadata?.cacheKey ?? "loading"}`;
@@ -153,7 +159,9 @@ export function NativePDFReadingView({
               )}
             </div>
           )}
-          <InterleafView
+          <View
+            key={metadata.cacheKey}
+            split={split}
             document={doc}
             theme={theme}
             annotations={annotations}
@@ -162,6 +170,7 @@ export function NativePDFReadingView({
               metadata,
               fileURL: api.nativePDFReadingFileURL(doc.id, metadata.cacheKey),
               translations,
+              alongsideOriginal: !single,
             }}
             onReady={(adapter, toc) => {
               void ready(adapter, toc);

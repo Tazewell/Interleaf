@@ -23,7 +23,7 @@ import { Button } from "@interleaf/ui/components/button";
 import { toast } from "sonner";
 import { InterleafView } from "../InterleafView";
 import { AssistanceControls } from "./AssistanceControls";
-import { TranslationPanes } from "./TranslationPanes";
+import { TranslationPanes, useTranslationSplit } from "./TranslationPanes";
 import { TranslationText } from "./TranslationText";
 import { TranslationJobStatus } from "./TranslationJobStatus";
 import { translatedSelection } from "./selection";
@@ -54,7 +54,7 @@ export function EPUBReadingView({
   pageNavigation?: ReactNode;
 }) {
   const [mode, setMode] = useState<Mode>("source");
-  const [swapped, setSwapped] = useState(false);
+  const split = useTranslationSplit();
   const [blocks, setBlocks] = useState<EPUBReadingBlock[]>([]);
   const { translations, error: streamError } = useTranslations(doc.id);
   const [chapter, setChapter] = useState(
@@ -354,8 +354,7 @@ export function EPUBReadingView({
       {toolbarHost ? createPortal(toolbar, toolbarHost) : toolbar}
       <TranslationPanes
         mode={mode}
-        swapped={swapped}
-        onSwap={() => setSwapped((v) => !v)}
+        split={split}
         sourceLabel="原文"
         translationLabel="译文"
         source={

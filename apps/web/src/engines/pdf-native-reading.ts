@@ -12,6 +12,8 @@ export interface NativePDFReadingDescriptor {
   metadata: NativePDFReadingManifest;
   fileURL: string;
   translations: TranslationBlock[];
+  /** The paired original viewer already owns the source PDF and its navigation. */
+  alongsideOriginal?: boolean;
 }
 export function nativeReadingLayout(
   metadata: Pick<NativePDFReadingManifest, "layout">,

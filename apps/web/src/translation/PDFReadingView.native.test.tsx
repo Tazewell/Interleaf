@@ -139,7 +139,7 @@ afterEach(async () => {
   host.remove();
   vi.unstubAllGlobals();
 });
-it("uses one derived PDF reader for 对照 and delegates native search and annotation preparation", async () => {
+it("opens native 对照 and delegates its search and annotation preparation", async () => {
   await click("对照");
   expect(host.querySelector("[data-native-reader]")).not.toBeNull();
   expect(host.querySelector("[data-source-reader]")).toBeNull();

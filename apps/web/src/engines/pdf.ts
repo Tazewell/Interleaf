@@ -345,7 +345,7 @@ export class PDFReaderAdapter implements ReaderAdapter {
       standardFontDataUrl: "/pdf-assets/standard_fonts/",
       wasmUrl: "/pdf-assets/wasm/",
     });
-    if (this.nativeReading) {
+    if (this.nativeReading && !this.nativeReading.alongsideOriginal) {
       this.originalTask = pdfjs.getDocument({
         url: publicationURL(doc.id, "original.pdf"),
         cMapUrl: "/pdf-assets/cmaps/",
@@ -364,7 +364,14 @@ export class PDFReaderAdapter implements ReaderAdapter {
         wide.numPages !== this.nativeReading.metadata.pages.length
       )
         throw new Error("对照文件页数与原文不一致，请重新生成");
-    } else this.pdf = await this.task.promise;
+    } else {
+      this.pdf = await this.task.promise;
+      if (
+        this.nativeReading &&
+        this.pdf.numPages !== this.nativeReading.metadata.pages.length
+      )
+        throw new Error("译文页数与原文不一致，请重新生成");
+    }
     if (this.disposed) return;
     const initialized = new Promise<void>((resolve) => {
       const ready = () => {
@@ -1192,10 +1199,9 @@ export class PDFReaderAdapter implements ReaderAdapter {
     }
     this.clearSelection();
   }
-  async getContext() {
-    return this.sourcePDF
-      ? this.pageText(this.sourcePDF, this.location.page)
-      : "";
+  async getContext(at?: DocumentLocation) {
+    const page = at?.type === "pdf" ? at.page : this.location.page;
+    return this.sourcePDF ? this.pageText(this.sourcePDF, page) : "";
   }
   setBlocks(blocks: PDFBlock[]) {
     const figuresChanged =

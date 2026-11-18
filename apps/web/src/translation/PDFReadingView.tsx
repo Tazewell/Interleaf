@@ -43,7 +43,7 @@ import {
   ReadingSync,
 } from "../engines/pdf-reading";
 import { animatePDFScroll } from "../engines/pdf-scroll";
-import { TranslationPanes } from "./TranslationPanes";
+import { TranslationPanes, useTranslationSplit } from "./TranslationPanes";
 import { formulaNumbers } from "./formulaNumbers";
 import { TranslationText } from "./TranslationText";
 import { TranslationJobStatus } from "./TranslationJobStatus";
@@ -124,8 +124,8 @@ export function PDFReadingView({
 }) {
   const [content, setContent] = useState<PDFReadingContent>("source"),
     [format, setFormat] = useState<PDFReadingFormat>("native"),
-    [swapped, setSwapped] = useState(false),
     [syncEnabled, setSyncEnabled] = useState(true);
+  const split = useTranslationSplit();
   const mode = readingMode(content, format);
   const { translations, error } = useTranslations(doc.id);
   const [popup, setPopup] = useState<{ block: PDFBlock; rect: DOMRect }>();
@@ -1183,7 +1183,7 @@ export function PDFReadingView({
     setPopup(undefined);
     setContent(nextContent);
     // A half-width source pane needs fit-width; a 100% page would be clipped.
-    if (value === "parallel") events.zoom?.("width");
+    if (value === "parallel" || value === "native") events.zoom?.("width");
   };
   const activePopup = popup && byId.get(popup.block.id);
   const toggleSync = () => {
@@ -1376,6 +1376,7 @@ export function PDFReadingView({
       {isNativeMode(mode) ? (
         <NativePDFReadingView
           key={`${doc.id}:${mode}`}
+          split={split}
           layout={
             mode === "native-translation" ? "translation-only" : "side-by-side"
           }
@@ -1403,8 +1404,7 @@ export function PDFReadingView({
       ) : (
         <TranslationPanes
           mode={mode}
-          swapped={swapped}
-          onSwap={() => setSwapped((value) => !value)}
+          split={split}
           sourceLabel="原页"
           translationLabel="译文"
           source={

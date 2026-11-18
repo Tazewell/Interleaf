@@ -1021,7 +1021,7 @@ export function Workspace({
   };
   const openSearchResult = (result: SearchResult) => {
     const go = adapter?.focusLocation
-      ? adapter.focusLocation(result.location)
+      ? adapter.focusLocation(result.location, result.side)
       : adapter?.goTo(result.location);
     void go?.catch((error) => toast.error(error.message));
   };

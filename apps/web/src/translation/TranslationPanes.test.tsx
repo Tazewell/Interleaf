@@ -2,7 +2,7 @@
 import { act, useEffect, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import { TranslationPanes } from "./TranslationPanes";
+import { TranslationPanes, useTranslationSplit } from "./TranslationPanes";
 
 let host: HTMLDivElement, root: Root;
 const mount = vi.fn(),
@@ -14,11 +14,11 @@ function Source() {
   }, []);
   return <div data-source>PDF</div>;
 }
-function Harness() {
+function Harness({ deferResize = false } = {}) {
   const [mode, setMode] = useState<"source" | "parallel" | "translation">(
     "source",
   );
-  const [swapped, setSwapped] = useState(false);
+  const split = useTranslationSplit();
   return (
     <>
       {(["source", "parallel", "translation"] as const).map((value) => (
@@ -28,8 +28,8 @@ function Harness() {
       ))}
       <TranslationPanes
         mode={mode}
-        swapped={swapped}
-        onSwap={() => setSwapped((v) => !v)}
+        deferResize={deferResize}
+        split={split}
         source={<Source />}
         translation={<div>译文</div>}
       />
@@ -119,7 +119,7 @@ function sourceSize() {
       .style.flexGrow,
   );
 }
-async function drag(delta: number) {
+async function drag(delta: number, whileDragging?: () => void) {
   const divider = host.querySelector<HTMLElement>('[role="separator"]')!;
   const x = divider.getBoundingClientRect().left;
   await act(async () =>
@@ -142,6 +142,7 @@ async function drag(delta: number) {
       }),
     ),
   );
+  whileDragging?.();
   await act(async () =>
     document.dispatchEvent(
       new MouseEvent("pointerup", {
@@ -152,6 +153,15 @@ async function drag(delta: number) {
     ),
   );
 }
+it("previews a native PDF divider drag, then commits both page widths on release", async () => {
+  await act(async () => root.render(<Harness deferResize />));
+  await click("parallel");
+  await drag(100, () => {
+    expect(sourceSize()).toBe(50);
+    expect(document.querySelector("[data-resize-preview]")).not.toBeNull();
+  });
+  expect(sourceSize()).toBeCloseTo(60);
+});
 it("resizes by pointer in both orders and retains the PDF instance and chosen width across modes", async () => {
   expect(sourceSize()).toBe(100);
   await click("parallel");

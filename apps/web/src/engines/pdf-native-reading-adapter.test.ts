@@ -183,7 +183,7 @@ beforeEach(() => {
     descriptor,
   );
 });
-async function singleAdapter() {
+async function singleAdapter(alongsideOriginal = false) {
   await adapter.destroy();
   host.innerHTML = "";
   state.single = true;
@@ -192,6 +192,7 @@ async function singleAdapter() {
     { location: vi.fn(), selection: vi.fn() },
     {
       ...descriptor,
+      alongsideOriginal,
       metadata: {
         ...descriptor.metadata,
         layout: "translation-only",
@@ -204,6 +205,12 @@ async function singleAdapter() {
     },
   );
 }
+it("loads only the translated file when the other pane already displays the original", async () => {
+  await singleAdapter(true);
+  await adapter.open(paper());
+  expect(state.urls).toEqual(["/native-file"]);
+  expect(await adapter.search("译文")).toHaveLength(1);
+});
 it("single search navigation resolves shared English/digits against displayed ink before the original", async () => {
   await singleAdapter();
   await adapter.open(paper());

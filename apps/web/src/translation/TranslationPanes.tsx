@@ -14,18 +14,25 @@ import {
   usePanelRef,
 } from "@interleaf/ui/components/resizable";
 
+export function useTranslationSplit() {
+  const [swapped, setSwapped] = useState(false);
+  const sourceWidth = useRef(50);
+  return { swapped, sourceWidth, onSwap: () => setSwapped((value) => !value) };
+}
+export type TranslationSplit = ReturnType<typeof useTranslationSplit>;
+
 export function TranslationPanes({
   mode,
-  swapped,
-  onSwap,
+  split: { swapped, sourceWidth, onSwap },
+  deferResize = false,
   source,
   translation,
   sourceLabel,
   translationLabel,
 }: {
   mode: "source" | "parallel" | "translation";
-  swapped: boolean;
-  onSwap: () => void;
+  split: TranslationSplit;
+  deferResize?: boolean;
   source: ReactNode;
   translation: ReactNode;
   sourceLabel?: string;
@@ -33,7 +40,6 @@ export function TranslationPanes({
 }) {
   const id = useId();
   const sourcePanel = usePanelRef();
-  const sourceWidth = useRef(50);
   const [dividerLeft, setDividerLeft] = useState(50);
   const parallel = mode === "parallel";
   const sourceId = `${id}-${swapped ? "right" : "left"}`;
@@ -50,7 +56,7 @@ export function TranslationPanes({
     sourcePanel.current?.resize(
       `${mode === "source" ? 100 : mode === "translation" ? 0 : sourceWidth.current}%`,
     );
-  }, [mode, swapped, sourcePanel]);
+  }, [mode, swapped, sourcePanel, sourceWidth]);
 
   // Stable React keys preserve the PDF instance when the panels change sides.
   // Positional panel IDs also refresh the resize library's left/right ordering.
@@ -91,6 +97,7 @@ export function TranslationPanes({
     <div className="translation-panes" data-mode={mode}>
       <ResizablePanelGroup
         orientation="horizontal"
+        resizePreviewMode={deferResize ? "separator" : "panel"}
         disabled={!parallel}
         onLayoutChange={(layout) => {
           if (parallel) setDividerLeft(layout[`${id}-left`]);

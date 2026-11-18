@@ -468,7 +468,7 @@ export interface ReaderAdapter {
   setTheme(theme: ReaderTheme): Promise<void>;
   /** Layout choices that must apply before the first page is shown. */
   preferTheme?(theme: ReaderTheme): void;
-  getContext(): Promise<string>;
+  getContext(at?: DocumentLocation): Promise<string>;
   /** Whether most of a remembered viewport position is on screen again. */
   isNear?(location: DocumentLocation): boolean;
   setBlocks?(blocks: PDFBlock[]): void;
@@ -510,8 +510,11 @@ export interface ReaderAdapter {
   focusBlock?(blockId: string, layout: "source" | "parallel"): Promise<void>;
   /** End a temporary block-focus view and restore the page-level zoom. */
   exitBlockFocus?(): void;
-  /** Center the paragraph containing a saved location, like clicking it. */
-  focusLocation?(location: DocumentLocation): Promise<void>;
+  /** Center a saved location, or the matching side of a bilingual search result. */
+  focusLocation?(
+    location: DocumentLocation,
+    side?: SearchResult["side"],
+  ): Promise<void>;
   /** Center the source block for a chat reference when one can be located. */
   focusReference?(location: DocumentLocation, text: string): Promise<boolean>;
   /** Briefly mark the source block after following a chat reference. */
