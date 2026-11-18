@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type Ref } from "react";
 import type { ResearchRunInput } from "@interleaf/core";
 import { Button } from "@interleaf/ui/components/button";
 import { Textarea } from "@interleaf/ui/components/textarea";
@@ -21,9 +21,11 @@ export function ResearchChat({
   state,
   disabled,
   onSend,
+  questionRef,
 }: {
   state: ResearchState;
   disabled: boolean;
+  questionRef?: Ref<HTMLTextAreaElement>;
   onSend: (
     question: string,
     mode: ResearchRunInput["mode"],
@@ -83,6 +85,7 @@ export function ResearchChat({
         </SelectContent>
       </Select>
       <Textarea
+        ref={questionRef}
         aria-label="研究问题"
         placeholder="输入研究问题或需要查找的论文链接"
         value={question}

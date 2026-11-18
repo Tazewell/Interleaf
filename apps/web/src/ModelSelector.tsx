@@ -9,8 +9,19 @@ import type {
 } from "@interleaf/core";
 import {
   ArrowCounterClockwise as RotateCcw,
+  CaretDown,
   Lightning as Zap,
 } from "@phosphor-icons/react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@interleaf/ui/components/dropdown-menu";
 import {
   Popover,
   PopoverContent,
@@ -239,58 +250,71 @@ export function ModelSelector({
         disabled={disabled}
         onClick={onSettings}
       >
-        选择模型
+        配置 AI 连接
       </Button>
     );
   if (modelsOnly)
     return (
-      <Select
-        value={current?.id ?? null}
-        disabled={disabled || saving}
-        onValueChange={(value) => void choose(value)}
-      >
-        <SelectTrigger
+      <DropdownMenu>
+        <DropdownMenuTrigger
+          render={<Button variant="ghost" size="sm" />}
           className="model-select-trigger"
           aria-label="选择模型"
           aria-busy={loading || saving}
+          disabled={disabled || saving}
         >
           <ProviderIcon provider={provider} size={20} />
           <span className="model-trigger-name">
             {current?.name ?? (loading ? "加载模型…" : "选择模型")}
           </span>
-        </SelectTrigger>
-        <SelectContent
+          <CaretDown className="size-3.5" aria-hidden="true" />
+        </DropdownMenuTrigger>
+        <DropdownMenuContent
           className="model-select-menu"
           side="top"
           align="start"
           sideOffset={8}
-          alignItemWithTrigger={false}
         >
-          {options.map((model) => (
-            <SelectItem
-              key={model.id}
-              value={model.id}
-              label={model.name}
-              className="model-select-option"
-            >
-              <span className="model-select-name">{model.name}</span>
-            </SelectItem>
-          ))}
+          <DropdownMenuRadioGroup
+            value={current?.id ?? ""}
+            onValueChange={(value) => void choose(value)}
+          >
+            <DropdownMenuLabel>问答默认模型</DropdownMenuLabel>
+            {options.map((model) => (
+              <DropdownMenuRadioItem
+                key={model.id}
+                value={model.id}
+                className="model-select-option"
+              >
+                <span className="model-select-name">{model.name}</span>
+              </DropdownMenuRadioItem>
+            ))}
+          </DropdownMenuRadioGroup>
           {loading && (
             <div className="model-select-status" role="status">
               正在获取模型…
             </div>
           )}
           {!loading && error && (
-            <div className="model-select-status" role="alert">
-              {error}。关闭后重新打开可重试。
-            </div>
+            <>
+              <div className="model-select-status" role="alert">
+                {error}
+              </div>
+              <DropdownMenuItem
+                closeOnClick={false}
+                onClick={() => setRetry((value) => value + 1)}
+              >
+                重试获取模型
+              </DropdownMenuItem>
+            </>
           )}
           {!loading && !error && options.length === 0 && (
             <div className="model-select-status">暂无可用模型</div>
           )}
-        </SelectContent>
-      </Select>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem onClick={onSettings}>管理用途模型</DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
     );
   return (
     <Popover

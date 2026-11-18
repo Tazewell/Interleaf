@@ -16,6 +16,17 @@ export function useChatScroll(identity: unknown) {
     followRef.current = value;
     setFollowing(value);
   }, []);
+  const revealMessage = useCallback(
+    (message: HTMLElement) => {
+      const viewport = viewportRef.current;
+      message.scrollIntoView?.({ block: "start" });
+      if (viewport)
+        setFollow(
+          nearBottom(viewport.scrollTop, viewport.scrollHeight, viewport.clientHeight),
+        );
+    },
+    [setFollow],
+  );
   const bottom = useCallback(() => {
     setFollow(true);
     const viewport = viewportRef.current;
@@ -99,5 +110,5 @@ export function useChatScroll(identity: unknown) {
       viewport.removeEventListener("touchmove", touchMove);
     };
   }, [setFollow]);
-  return { viewportRef, contentRef, following, bottom };
+  return { viewportRef, contentRef, following, bottom, revealMessage };
 }

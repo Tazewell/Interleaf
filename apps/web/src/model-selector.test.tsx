@@ -117,6 +117,29 @@ it("saves the selected model while preserving the latest connection configuratio
   );
   expect(useReaderStore.getState().aiModelSaving).toBe(false);
 });
+
+it("lets the reader retry a failed model lookup directly from the menu", async () => {
+  vi.mocked(api.agentModels).mockRejectedValueOnce(new Error("目录暂不可用"));
+  await act(async () =>
+    root.render(
+      <ModelSelector disabled={false} onSettings={onSettings} modelsOnly />,
+    ),
+  );
+  const trigger = host.querySelector<HTMLButtonElement>(
+    '[aria-label="选择模型"]',
+  )!;
+  await act(async () => trigger.click());
+  expect(document.body.textContent).toContain("目录暂不可用");
+
+  const retry = [
+    ...document.querySelectorAll<HTMLElement>('[role="menuitem"]'),
+  ].find((item) => item.textContent?.includes("重试获取模型"));
+  expect(retry).toBeDefined();
+  await act(async () => retry!.click());
+
+  expect(api.agentModels).toHaveBeenCalledTimes(2);
+  expect(document.body.textContent).toContain("Model B");
+});
 it("keeps the previous model after a failed save", async () => {
   vi.mocked(api.saveAIConfig).mockRejectedValue(new Error("save failed"));
   await render();

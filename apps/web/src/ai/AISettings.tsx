@@ -23,8 +23,16 @@ import {
   type ProviderPreset,
 } from "./provider-presets";
 
-export function AISettings({ open }: { open: boolean }) {
-  const [section, setSection] = useState("connection");
+export type AISettingsSection = "connection" | "models" | "translation";
+
+export function AISettings({
+  open,
+  targetSection,
+}: {
+  open: boolean;
+  targetSection?: AISettingsSection;
+}) {
+  const [section, setSection] = useState<string>(targetSection ?? "connection");
   const { aiConfig: config, setAIConfig, aiModelSaving } = useReaderStore();
   const [url, setURL] = useState("");
   const [protocol, setProtocol] =
@@ -34,6 +42,9 @@ export function AISettings({ open }: { open: boolean }) {
   const [clearKey, setClearKey] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  useEffect(() => {
+    if (open && targetSection) setSection(targetSection);
+  }, [open, targetSection]);
   useEffect(() => {
     if (!open) return;
     const controller = new AbortController();
@@ -67,6 +78,12 @@ export function AISettings({ open }: { open: boolean }) {
     !!config && sameConnection(config.connection, { url, protocol });
   const connectionDraftChanged =
     !keepsSavedConnection || !!key.trim() || clearKey;
+  const replacingModels =
+    config &&
+    !keepsSavedConnection &&
+    (Object.keys(config.models).length > 0 ||
+      Object.keys(config.efforts).length > 0 ||
+      config.apiModels.length > 0);
   const saveConnection = async () => {
     if (!config) return;
     setSaving(true);
@@ -233,6 +250,11 @@ export function AISettings({ open }: { open: boolean }) {
                     setClearKey(false);
                   }}
                 />
+                {replacingModels && (
+                  <p className="text-xs text-muted-foreground" role="status">
+                    保存新的 API 地址或协议后，需要重新选择模型和推理强度。
+                  </p>
+                )}
                 <div className="flex flex-wrap items-center justify-end gap-2">
                   <Button
                     type="button"
@@ -252,6 +274,17 @@ export function AISettings({ open }: { open: boolean }) {
                   >
                     保存连接
                   </Button>
+                  {config.connection.url &&
+                    !config.needsConfiguration &&
+                    !connectionDraftChanged && (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => setSection("models")}
+                      >
+                        选择用途模型
+                      </Button>
+                    )}
                 </div>
               </form>
             </TabsContent>

@@ -671,6 +671,13 @@ export const api = {
     ),
   messages: (id: string, signal?: AbortSignal) =>
     request<Message[]>(`/api/documents/${id}/messages`, { signal }),
+  answerSession: (id: string, messageId: string, signal?: AbortSignal) =>
+    request<
+      paths["/api/documents/{id}/messages/{message}/session"]["get"]["responses"][200]["content"]["application/json"]
+    >(
+      `/api/documents/${encodeURIComponent(id)}/messages/${encodeURIComponent(messageId)}/session`,
+      { signal },
+    ),
   chatSessions: (id: string, signal?: AbortSignal) =>
     request<DocumentChatSession[]>(`/api/documents/${id}/chat-sessions`, {
       signal,

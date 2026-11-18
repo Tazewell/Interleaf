@@ -77,10 +77,12 @@ vi.mock("./translation/PDFReadingView", async () => {
       events,
       onReady,
       onAdapterDetached,
+      pageNavigation,
     }: {
       events: ReaderEvents;
       onReady: (adapter: ReaderAdapter, toc: []) => void;
       onAdapterDetached?: () => void;
+      pageNavigation?: ReactNode;
     }) => {
       readerEvents = events;
       readerReady = onReady;
@@ -89,6 +91,7 @@ vi.mock("./translation/PDFReadingView", async () => {
       useEffect(() => onReady(adapter, []), []);
       return (
         <>
+          {pageNavigation}
           <BlockActions block={paragraph} onAction={events.blockAction!} />
           <BlockActions block={figure} onAction={events.blockAction!} />
         </>
@@ -157,15 +160,21 @@ let finishAnswer: (() => void) | undefined;
 let deferAnswer: boolean;
 let showChatEmpty: boolean;
 let restoreAnimations: () => void;
-function Harness({ document = doc }: { document?: typeof doc } = {}) {
+const openSettings = vi.fn();
+function Harness({
+  document = doc,
+  backLabel,
+  onBack = () => {},
+}: { document?: typeof doc; backLabel?: string; onBack?: () => void } = {}) {
   const theme = useReaderStore((state) => state.theme);
   return (
     <TooltipProvider>
       <Workspace
         document={document}
         theme={theme}
-        onBack={() => {}}
-        onSettings={() => {}}
+        onBack={onBack}
+        backLabel={backLabel}
+        onSettings={openSettings}
       />
     </TooltipProvider>
   );
@@ -766,6 +775,69 @@ it("quotes a text selection, focuses the composer and keeps its draft", async ()
   expect(host.querySelector('[aria-label="选中文字操作"]')).toBeNull();
 });
 
+it("opens the AI connection settings from a draft and gives it the return focus", async () => {
+  await type("Continue here after setup");
+  await click("引用此段到 AI 对话");
+  await act(async () => useReaderStore.setState({ aiConfig: undefined }));
+
+  const configure = Array.from(host.querySelectorAll("button")).find(
+    (item) => item.textContent?.trim() === "配置 AI 连接",
+  );
+  expect(configure).toBeDefined();
+  await act(async () => configure!.click());
+
+  expect(openSettings).toHaveBeenCalledWith({
+    section: "connection",
+    returnFocus: input(),
+  });
+  expect(input().value).toBe("Continue here after setup");
+  expect(host.querySelector(".quote-chips")?.textContent).toContain(paragraph.text);
+  expect(requests).toHaveLength(0);
+});
+
+it("shows the reader's back destination when opened from research", async () => {
+  const back = vi.fn();
+  await act(async () =>
+    root.render(<Harness backLabel="返回主题研究" onBack={back} />),
+  );
+  await click("返回主题研究");
+  expect(back).toHaveBeenCalledOnce();
+});
+
+it("locates a draft quote by its displayed page without changing the draft", async () => {
+  const focusReference = vi.fn(async () => true);
+  await act(async () => readerReady({ ...adapter, focusReference }, []));
+  await type("Keep this draft");
+  await click("引用此段到 AI 对话");
+  await click("定位引用 · 第 2 页");
+
+  expect(focusReference).toHaveBeenCalledWith(
+    { type: "pdf", page: 2, quote: paragraph.text, rects: [paragraph.bounds] },
+    paragraph.text,
+  );
+  expect(input().value).toBe("Keep this draft");
+  expect(requests).toHaveLength(0);
+});
+
+it("keeps all six existing quotes and explains the limit when adding another", async () => {
+  for (let index = 1; index <= 7; index++) {
+    await act(async () =>
+      readerEvents.selection({
+        text: `Selection ${index}`,
+        location: { type: "pdf", page: index },
+        anchor: { x: 120, top: 100, bottom: 120 },
+      }),
+    );
+    await click("引用到 AI 对话");
+  }
+
+  const quotes = host.querySelector(".quote-chips");
+  expect(quotes?.children).toHaveLength(6);
+  expect(quotes?.textContent).toContain("Selection 1");
+  expect(quotes?.textContent).not.toContain("Selection 7");
+  expect(host.textContent).toContain("已添加 6 条引用");
+});
+
 it("deduplicates quoted content and lets readers remove it without changing their question", async () => {
   await type("My own question");
   await click("引用此段到 AI 对话");
@@ -901,4 +973,23 @@ it("keeps references when another run starts while page context is being prepare
   } finally {
     context.mockRestore();
   }
+});
+
+it("keeps a PDF page-number draft while the visible page changes", async () => {
+  const goTo = vi.fn(async () => {});
+  await act(async () => {
+    readerReady({ ...adapter, goTo }, []);
+    readerEvents.location({ type: "pdf", page: 4 }, 0.4);
+  });
+  const page = host.querySelector<HTMLInputElement>('input[aria-label="跳转 PDF 页码"]')!;
+  await act(async () => {
+    page.focus();
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(page, "9");
+    page.dispatchEvent(new Event("input", { bubbles: true }));
+    readerEvents.location({ type: "pdf", page: 5 }, 0.5);
+  });
+  expect(page.value).toBe("9");
+  await act(async () => page.form!.requestSubmit());
+  expect(goTo).toHaveBeenCalledOnce();
+  expect(goTo).toHaveBeenCalledWith({ type: "pdf", page: 9 });
 });

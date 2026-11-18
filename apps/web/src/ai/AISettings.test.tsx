@@ -115,6 +115,25 @@ afterEach(async () => {
   vi.unstubAllGlobals();
 });
 
+it("opens the requested AI tab and selects it again on a subsequent visit", async () => {
+  useReaderStore.setState({ aiConfig: saved, aiModelSaving: false });
+  vi.mocked(api.aiConfig).mockResolvedValue(saved);
+  const activeTab = () =>
+    host.querySelector('[role="tab"][aria-selected="true"]');
+  await act(async () =>
+    root.render(<AISettings open targetSection="models" />),
+  );
+  expect(activeTab()?.textContent).toBe("模型");
+  await switchTab("翻译提示");
+  await act(async () =>
+    root.render(<AISettings open={false} targetSection="models" />),
+  );
+  await act(async () =>
+    root.render(<AISettings open targetSection="models" />),
+  );
+  expect(activeTab()?.textContent).toBe("模型");
+});
+
 it("retains connection and translation prompt drafts across AI tabs without saving", async () => {
   await render();
   await enter("API Key", "fake-unsaved-key");

@@ -462,6 +462,14 @@
   opacity: 1;
   color: var(--ink-muted);
 }
+.workspace .quote-chips .quote-chip-location {
+  width: auto;
+  max-width: 42%;
+}
+.workspace .chat-message[data-message-id]:focus-visible {
+  outline: 1px solid var(--ring);
+  outline-offset: 3px;
+}
 .workspace .quote-chips span {
   min-width: 0;
 }

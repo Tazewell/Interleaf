@@ -516,3 +516,47 @@ it("renders section draft content incrementally and replaces it with the final d
   expect(view.host.textContent).toContain("最终报告");
   expect(view.host.textContent).not.toContain("阶段正文");
 });
+
+it.each([
+  { url: "", section: "connection", label: "配置 AI 连接" },
+  { url: "http://localhost:1234", section: "models", label: "选择研究模型" },
+  {
+    url: "http://localhost:1234",
+    section: "connection",
+    label: "配置 AI 连接",
+    needsConfiguration: "请确认主要 API 连接",
+  },
+])(
+  "opens $section settings from a blocked draft and keeps the draft",
+  async ({ url, section, label, needsConfiguration }) => {
+    const onSettings = vi.fn();
+    useReaderStore.setState({
+      aiConfig: {
+        version: 2,
+        connection: { protocol: "openai", url, hasKey: false },
+        models: needsConfiguration ? { research: "saved-model" } : {},
+        efforts: {},
+        apiModels: [],
+        needsConfiguration,
+      },
+    });
+    await render(
+      view.root,
+      <ResearchPanel
+        topicId="topic"
+        onOpenDocument={async () => {}}
+        onSettings={onSettings}
+      />,
+    );
+    await type(view.host, "待配置的研究问题");
+    const question = view.host.querySelector("textarea");
+    const send = [...view.host.querySelectorAll("button")].find(
+      (button) => button.textContent === "开始研究",
+    );
+    expect(send?.disabled).toBe(true);
+    await click(view.host, label);
+    expect(question?.value).toBe("待配置的研究问题");
+    expect(onSettings).toHaveBeenCalledWith({ section, returnFocus: question });
+    expect(researchAPI.createRun).not.toHaveBeenCalled();
+  },
+);

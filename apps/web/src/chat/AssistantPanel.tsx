@@ -1,4 +1,10 @@
-import { lazy, Suspense, useSyncExternalStore, type ReactNode } from "react";
+import {
+  lazy,
+  Suspense,
+  useLayoutEffect,
+  useSyncExternalStore,
+  type ReactNode,
+} from "react";
 import {
   ArrowDown,
   ArrowsClockwise,
@@ -71,6 +77,8 @@ export function AssistantPanel({
   onRegenerate,
   regenerateDisabled = false,
   renderAnswer = (_message, content) => content,
+  focusAnswerId,
+  onAnswerFocused,
 }: {
   session: ChatSession;
   empty: ReactNode;
@@ -79,9 +87,28 @@ export function AssistantPanel({
   onRegenerate: () => void;
   regenerateDisabled?: boolean;
   renderAnswer?: (message: Message, content: ReactNode) => ReactNode;
+  focusAnswerId?: string;
+  onAnswerFocused?: () => void;
 }) {
   const state = useSyncExternalStore(session.subscribe, session.getSnapshot);
   const scroll = useChatScroll(state.pending?.key);
+  const { contentRef, revealMessage } = scroll;
+  useLayoutEffect(() => {
+    if (!focusAnswerId || !contentRef.current) return;
+    const answer = Array.from(
+      contentRef.current.querySelectorAll<HTMLElement>("[data-message-id]"),
+    ).find((row) => row.dataset.messageId === focusAnswerId);
+    if (!answer) return;
+    revealMessage(answer);
+    answer.focus({ preventScroll: true });
+    onAnswerFocused?.();
+  }, [
+    contentRef,
+    focusAnswerId,
+    onAnswerFocused,
+    state.messages,
+    revealMessage,
+  ]);
   const pending = state.pending;
   const retryAction = chatRetryAction(state);
   return (
@@ -121,6 +148,7 @@ export function AssistantPanel({
               <div
                 key={key}
                 data-message-id={message?.id}
+                tabIndex={message?.role === "assistant" ? -1 : undefined}
                 className={`chat-message ${assistant ? "assistant" : "user"}`}
               >
                 {assistant && (

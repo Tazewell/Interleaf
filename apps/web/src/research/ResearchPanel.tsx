@@ -1,4 +1,10 @@
-import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
 import { api } from "@interleaf/api";
 import type { AICapability, DocumentLocation } from "@interleaf/core";
 import { Button } from "@interleaf/ui/components/button";
@@ -24,25 +30,29 @@ import { ResearchSources } from "./ResearchSources";
 import { ResearchCandidates } from "./ResearchCandidates";
 import { refreshAIConfig, useReaderStore } from "../store";
 import { usePaperUI } from "../papers/state";
-export function ResearchPanel(props: {
+import type { SettingsTarget } from "../Settings";
+type ResearchPanelProps = {
   topicId: string;
   onOpenDocument: (id: string, location: DocumentLocation) => Promise<void>;
-}) {
+  onSettings?: (target: SettingsTarget) => void;
+};
+
+export function ResearchPanel(props: ResearchPanelProps) {
   const epoch = useSyncExternalStore(subscribeResearchEpoch, researchEpoch);
   return <ResearchPanelView key={`${epoch}:${props.topicId}`} {...props} />;
 }
 function ResearchPanelView({
   topicId,
   onOpenDocument,
-}: {
-  topicId: string;
-  onOpenDocument: (id: string, location: DocumentLocation) => Promise<void>;
-}) {
+  onSettings,
+}: ResearchPanelProps) {
   const store = useMemo(() => researchStore(topicId), [topicId]);
   const state = useSyncExternalStore(store.subscribe, store.snapshot);
   const config = useReaderStore((s) => s.aiConfig);
   const catalogRevision = useReaderStore((s) => s.aiCatalogRevision);
   const model = config?.models.research || config?.models.chat;
+  const connectionReady =
+    !!config?.connection.url && !config.needsConfiguration;
   const [capability, setCapability] = useState<AICapability>();
   const [catalogError, setCatalogError] = useState("");
   useEffect(() => {
@@ -52,7 +62,7 @@ function ResearchPanelView({
   useEffect(() => {
     const controller = new AbortController();
     setCapability(undefined);
-    if (config?.connection.url && model)
+    if (connectionReady && model)
       void api
         .agentModels("research", controller.signal)
         .then((models) => {
@@ -67,9 +77,10 @@ function ResearchPanelView({
           if (!controller.signal.aborted) setCatalogError(error.message);
         });
     return () => controller.abort();
-  }, [config, model, catalogRevision]);
-  const blocked =
-    !config?.connection.url || !model || capability?.text === false;
+  }, [config, connectionReady, model, catalogRevision]);
+  const questionRef = useRef<HTMLTextAreaElement>(null);
+  const settingsSection = connectionReady ? "models" : "connection";
+  const blocked = !connectionReady || !model || capability?.text === false;
   const active = running(state.run);
   const session = state.sessions.find(
     (session) => session.id === state.sessionId,
@@ -179,11 +190,30 @@ function ResearchPanelView({
           </div>
         )}
         {blocked && (
-          <p role="status">
-            {!config?.connection.url || !model
-              ? "请在设置中配置 API 地址和问答 / 研究模型后开始研究。"
-              : "当前模型不可用，请在设置中检查连接。"}
-          </p>
+          <div className="flex flex-wrap items-center gap-2">
+            <p role="status">
+              {config?.needsConfiguration ||
+                (!connectionReady || !model
+                  ? "请在设置中配置 API 地址和问答 / 研究模型后开始研究。"
+                  : "当前模型无法处理文字，请选择可用模型。")}
+            </p>
+            {onSettings && (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() =>
+                  onSettings({
+                    section: settingsSection,
+                    returnFocus: questionRef.current,
+                  })
+                }
+              >
+                {settingsSection === "connection"
+                  ? "配置 AI 连接"
+                  : "选择研究模型"}
+              </Button>
+            )}
+          </div>
         )}
         {!blocked && capability && capability.tools !== "passed" && (
           <p className="text-sm text-muted-foreground">
@@ -217,6 +247,7 @@ function ResearchPanelView({
           />
         )}
         <ResearchChat
+          questionRef={questionRef}
           state={state}
           disabled={
             blocked ||

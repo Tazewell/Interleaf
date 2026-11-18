@@ -114,6 +114,7 @@ import { toast } from "sonner";
 import { DocumentOverviewDialog } from "./DocumentOverview";
 import { ProcessingUsageDialog } from "./ProcessingUsage";
 import { ModelSelector } from "./ModelSelector";
+import type { SettingsTarget } from "./Settings";
 import { SourceReferences } from "./SourceReferences";
 import { ChatSession } from "./chat/chat-session";
 import { forgetChatSession, getChatSession } from "./chat/session-registry";
@@ -144,11 +145,15 @@ import {
   headingOutline,
   pageOutline,
 } from "./engines/pdf-outline";
+import { useReaderSearch } from "./reader-search";
 import { useReaderStore } from "./store";
 import { scheduleProgress, flushProgress } from "./progress";
 import { Slider } from "@interleaf/ui/components/slider";
 import { Toggle } from "@interleaf/ui/components/toggle";
 import { TranslationFontControls } from "./TranslationFontControls";
+
+const maxDraftQuotes = 6;
+
 function IconButton({
   label,
   children,
@@ -244,13 +249,15 @@ export function Workspace({
   theme,
   processing,
   onBack,
+  backLabel = "返回书库",
   onSettings,
 }: {
   document: ReaderDocument;
   theme: ReaderTheme;
   processing?: Processing;
   onBack: () => void;
-  onSettings: () => void;
+  backLabel?: string;
+  onSettings: (target?: SettingsTarget) => void;
 }) {
   const { setTheme, aiConfig, setAIConfig, aiModelSaving } = useReaderStore();
   const translationSize = theme.translationFontSize ?? 1;
@@ -432,10 +439,11 @@ export function Workspace({
   const [rightTab, setRightTab] = useState("ai");
   const [leftTab, setLeftTab] = useState("toc");
   const [query, setQuery] = useState("");
-  const [results, setResults] = useState<SearchResult[]>([]);
-  const [searchedQuery, setSearchedQuery] = useState("");
+  const [searchScope, setSearchScope] = useState(0);
+  const bumpSearchScope = useCallback(() => setSearchScope((scope) => scope + 1), []);
+  const documentSearch = useReaderSearch(doc.id, adapter, searchScope);
+  const { results, searchedQuery } = documentSearch;
   const searchInput = useRef<HTMLInputElement>(null);
-  const [searching, setSearching] = useState(false);
   const [note, setNote] = useState("");
   const [noteOpen, setNoteOpen] = useState(false);
   const [noteKind, setNoteKind] = useState<"note" | "question">("note");
@@ -468,6 +476,27 @@ export function Workspace({
     null,
   );
   const readingPane = useRef<HTMLDivElement>(null);
+  const answerLookup = useRef<AbortController | null>(null);
+  const [answerTarget, setAnswerTarget] = useState<{
+    documentId: string;
+    sessionId: string;
+    messageId: string;
+  }>();
+  const [answerStatus, setAnswerStatus] = useState("");
+  const clearAnswerTarget = useCallback(() => setAnswerTarget(undefined), []);
+  const cancelAnswerNavigation = useCallback(() => {
+    answerLookup.current?.abort();
+    answerLookup.current = null;
+    setAnswerTarget(undefined);
+    setAnswerStatus("");
+  }, []);
+  useLayoutEffect(() => {
+    cancelAnswerNavigation();
+    return () => answerLookup.current?.abort();
+  }, [doc.id, cancelAnswerNavigation]);
+  useLayoutEffect(() => {
+    if (!right) cancelAnswerNavigation();
+  }, [right, cancelAnswerNavigation]);
   const [sessionCatalog, setSessionCatalog] = useState<{
     documentId: string;
     items: DocumentChatSession[];
@@ -504,18 +533,20 @@ export function Workspace({
   const refreshSessions = useCallback(async () => {
     const serial = ++sessionListSerial.current;
     const items = await api.chatSessions(doc.id, AbortSignal.timeout(15_000));
+    const valid = items.filter(
+      (item) => !deletedSessions.current.get(doc.id)?.has(item.id),
+    );
     if (
       currentDocument.current === doc.id &&
       serial === sessionListSerial.current
     ) {
       setSessionCatalog({
         documentId: doc.id,
-        items: items.filter(
-          (item) => !deletedSessions.current.get(doc.id)?.has(item.id),
-        ),
+        items: valid,
       });
       setSessionError("");
     }
+    return valid;
   }, [doc.id]);
   const selectSession = (id: string) => {
     setSelectedSession({ documentId: doc.id, id });
@@ -546,6 +577,8 @@ export function Workspace({
   const [images, setImages] = useState<ImageAttachment[]>([]);
   const [previewImage, setPreviewImage] = useState<ImageAttachment>();
   const composeInput = useRef<HTMLTextAreaElement>(null);
+  const openChatSettings = (section: SettingsTarget["section"]) =>
+    onSettings({ section, returnFocus: composeInput.current });
   const composerDrafts = useRef(
     new Map<
       string,
@@ -579,6 +612,7 @@ export function Workspace({
       if (localStorage.getItem(key) === id) localStorage.removeItem(key);
     } catch {}
     if (currentDocument.current !== doc.id) return;
+    if (answerTarget?.sessionId === id) cancelAnswerNavigation();
     sessionListSerial.current++;
     const visible = visibleSessions.current;
     const remaining = visible.sessions.filter((item) => !removed.has(item.id));
@@ -621,6 +655,13 @@ export function Workspace({
     ? getChatSession(doc.id, currentSession.id)
     : emptySession;
   const chat = useSyncExternalStore(session.subscribe, session.getSnapshot);
+  const focusAnswerId =
+    right &&
+    rightTab === "ai" &&
+    answerTarget?.documentId === doc.id &&
+    answerTarget.sessionId === currentSession?.id
+      ? answerTarget.messageId
+      : undefined;
   useEffect(() => {
     if (
       !currentSession ||
@@ -639,25 +680,14 @@ export function Workspace({
   const sendSerial = useRef(0);
   const [preparing, setSending] = useState(false);
   const sending = preparing || chat.busy;
-  const [pageInput, setPageInput] = useState("");
+  const [pageDraft, setPageDraft] = useState<string>();
+  const pageInput = pageDraft ?? (location?.type === "pdf" ? String(location.page) : "");
   const abort = useRef<AbortController | null>(null);
-  const searchSerial = useRef(0);
-  const clearSearchResults = () => {
-    searchSerial.current++;
-    setResults([]);
-    setSearchedQuery("");
-    setSearching(false);
-  };
   useLayoutEffect(() => {
     setQuery("");
-    clearSearchResults();
-    return () => {
-      searchSerial.current++;
-    };
   }, [doc.id]);
   const updateReader = (engine?: ReaderAdapter, items?: TOCItem[]) => {
     if (navigationRef.current !== referenceNavigation) return;
-    clearSearchResults();
     referenceNavigation.setReader(engine);
     setReadyReader(engine && { documentId: doc.id, adapter: engine });
     if (items) setTOC(items);
@@ -743,6 +773,13 @@ export function Workspace({
   const move = (next: DocumentLocation) => {
     void adapter?.goTo(next).catch((e) => toast.error(e.message));
   };
+  const openSourceLocation = (
+    reader: ReaderAdapter,
+    next: DocumentLocation,
+  ) =>
+    next.type === "pdf" && reader.focusLocation
+      ? reader.focusLocation(next, "source")
+      : reader.goTo(next);
   const focusAnnotation = (annotation: Annotation) => {
     const go = adapter?.focusLocation
       ? adapter.focusLocation(annotation.location)
@@ -761,16 +798,14 @@ export function Workspace({
         setRightTab("notes");
       } else toast.info("这条批注已不存在，已打开文档");
     } else if (linkTarget.page && doc.type === "pdf")
-      void adapter
-        .goTo({ type: "pdf", page: linkTarget.page })
+      void openSourceLocation(adapter, { type: "pdf", page: linkTarget.page })
         .catch((e) => toast.error(e.message));
   }, [linkTarget, adapter, annotationsLoaded, annotations, doc.id, doc.type]);
   useEffect(() => {
     if (!adapter || researchTarget?.documentId !== doc.id) return;
     usePaperUI.getState().setResearchTarget(null);
     if (researchTarget.location.type === doc.type)
-      void adapter
-        .goTo(researchTarget.location)
+      void openSourceLocation(adapter, researchTarget.location)
         .catch((error) => toast.error(error.message));
   }, [adapter, doc.id, doc.type, researchTarget]);
   const saveLocation = (next: DocumentLocation, percent: number) => {
@@ -796,7 +831,6 @@ export function Workspace({
       referenceNavigation.settle()
     )
       setReturnLocation(undefined);
-    if (next.type === "pdf") setPageInput(String(next.page));
     scheduleProgress(doc.id, { progress: next, percentage: percent }, (e) =>
       toast.error(e.message),
     );
@@ -912,16 +946,15 @@ export function Workspace({
     adapter?.clearSelection();
   };
   const quoteToChat = (quote: ReaderSelection) => {
-    setQuotes((items) =>
-      [
-        ...items.filter(
-          (item) =>
-            item.text !== quote.text ||
-            JSON.stringify(item.location) !== JSON.stringify(quote.location),
-        ),
-        quote,
-      ].slice(-6),
-    );
+    cancelAnswerNavigation();
+    setQuotes((items) => {
+      const remaining = items.filter(
+        (item) =>
+          item.text !== quote.text ||
+          JSON.stringify(item.location) !== JSON.stringify(quote.location),
+      );
+      return remaining.length < maxDraftQuotes ? [...remaining, quote] : items;
+    });
     setRight(true);
     setRightTab("ai");
     adapter?.clearSelection();
@@ -994,32 +1027,49 @@ export function Workspace({
       });
     }
   };
-  const showAnswer = (messageId: string) => {
-    setRight(true);
-    setRightTab("ai");
-    requestAnimationFrame(() =>
-      document
-        .querySelector(`[data-message-id="${CSS.escape(messageId)}"]`)
-        ?.scrollIntoView({ block: "start" }),
-    );
-  };
-  const search = async () => {
-    if (!adapter) return;
-    const serial = ++searchSerial.current;
-    setSearching(true);
+  const showAnswer = async (messageId: string) => {
+    cancelAnswerNavigation();
+    const openAnswer = (sessionId: string) => {
+      if (visibleSessions.current.currentSession?.id !== sessionId)
+        selectSession(sessionId);
+      setAnswerTarget({ documentId: doc.id, sessionId, messageId });
+      setAnswerStatus("");
+      setRight(true);
+      setRightTab("ai");
+    };
+    if (currentSession && chat.messages.some((message) => message.id === messageId)) {
+      openAnswer(currentSession.id);
+      return;
+    }
+    const controller = new AbortController();
+    answerLookup.current = controller;
+    const cancelled = () =>
+      controller.signal.aborted || currentDocument.current !== doc.id;
+    setAnswerStatus("正在查找回答…");
     try {
-      const found = await adapter.search(query.trim());
-      if (serial === searchSerial.current) {
-        setResults(found);
-        setSearchedQuery(query.trim());
+      const { sessionId } = await api.answerSession(
+        doc.id,
+        messageId,
+        AbortSignal.any([controller.signal, AbortSignal.timeout(15_000)]),
+      );
+      if (cancelled()) return;
+      const available = visibleSessions.current.sessions.some(
+        (item) => item.id === sessionId,
+      ) || (await refreshSessions()).some((item) => item.id === sessionId);
+      if (cancelled()) return;
+      if (!available || deletedSessions.current.get(doc.id)?.has(sessionId)) {
+        setAnswerStatus("这条回答已不可用");
+        return;
       }
-    } catch (e) {
-      if (serial === searchSerial.current) toast.error((e as Error).message);
+      openAnswer(sessionId);
+    } catch (error) {
+      if (!cancelled()) setAnswerStatus((error as Error).message);
     } finally {
-      if (serial === searchSerial.current) setSearching(false);
+      if (answerLookup.current === controller) answerLookup.current = null;
     }
   };
   const openSearchResult = (result: SearchResult) => {
+    documentSearch.select(result);
     const go = adapter?.focusLocation
       ? adapter.focusLocation(result.location, result.side)
       : adapter?.goTo(result.location);
@@ -1036,9 +1086,9 @@ export function Workspace({
   ) => {
     if (abort.current || session.getSnapshot().busy || aiModelSaving) return;
     if (!question.trim()) return;
+    cancelAnswerNavigation();
     if (!provider) {
-      toast.info("请先在设置中选择 Agent SDK");
-      onSettings();
+      openChatSettings("connection");
       return;
     }
     if (!session.getSnapshot().loaded) {
@@ -1100,7 +1150,7 @@ export function Workspace({
     if (abort.current || session.getSnapshot().busy || current.aiModelSaving)
       return;
     if (!provider) {
-      onSettings();
+      openChatSettings("connection");
       return;
     }
     const serial = ++sendSerial.current;
@@ -1147,6 +1197,7 @@ export function Workspace({
       return;
     }
     if (action !== "attach" && action !== "explain") return;
+    cancelAnswerNavigation();
     setRight(true);
     setRightTab("ai");
     requestAnimationFrame(() => composeInput.current?.focus());
@@ -1207,13 +1258,21 @@ export function Workspace({
           onSubmit={(e) => {
             e.preventDefault();
             const page = Number(pageInput);
-            if (Number.isInteger(page) && page > 0) move({ type: "pdf", page });
+            if (Number.isInteger(page) && page > 0) {
+              setPageDraft(undefined);
+              move({ type: "pdf", page });
+            }
           }}
         >
           <Input
             aria-label="跳转 PDF 页码"
             value={pageInput}
-            onChange={(e) => setPageInput(e.target.value)}
+            inputMode="numeric"
+            onChange={(e) => setPageDraft(e.target.value)}
+            onBlur={() => setPageDraft(undefined)}
+            onKeyDown={(e) => {
+              if (e.key === "Escape") setPageDraft(undefined);
+            }}
             className="h-7 w-14 text-center"
           />
         </form>
@@ -1233,7 +1292,7 @@ export function Workspace({
       <header className="interleaf-toolbar">
         <div className="interleaf-title-group">
           <IconButton
-            label="返回书库"
+            label={backLabel}
             onClick={() => {
               void flushProgress()
                 .then(onBack)
@@ -1555,7 +1614,7 @@ export function Workspace({
                 <BookmarkPlus />
                 添加书签
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={onSettings}>
+              <DropdownMenuItem onClick={() => onSettings()}>
                 <Settings2 />
                 设置
               </DropdownMenuItem>
@@ -1633,7 +1692,7 @@ export function Workspace({
                 <form
                   onSubmit={(e) => {
                     e.preventDefault();
-                    void search();
+                    documentSearch.submit(query);
                   }}
                   className="flex gap-1"
                 >
@@ -1643,7 +1702,7 @@ export function Workspace({
                     placeholder="搜索文档内容…"
                     value={query}
                     onChange={(e) => {
-                      clearSearchResults();
+                      documentSearch.clear();
                       setQuery(e.target.value);
                     }}
                   />
@@ -1651,20 +1710,31 @@ export function Workspace({
                     size="icon"
                     type="submit"
                     variant="secondary"
-                    disabled={!adapter || searching}
+                    disabled={
+                      !adapter || !query.trim() || documentSearch.status === "searching"
+                    }
                     aria-label="搜索"
                   >
                     <Search />
                   </Button>
                 </form>
-                <p className="my-3 text-xs text-muted-foreground">
-                  {searching ? "正在搜索…" : `${results.length} 个结果`}
+                <p className="my-3 text-xs text-muted-foreground" role="status">
+                  {documentSearch.status === "searching"
+                    ? "正在搜索…"
+                    : documentSearch.status === "waiting"
+                      ? "等待阅读器就绪…"
+                      : documentSearch.status === "error"
+                        ? "搜索失败，请重试。" + (documentSearch.error ? " " + documentSearch.error : "")
+                        : documentSearch.status === "complete"
+                          ? results.length + " 个结果"
+                          : "输入关键词，搜索当前文档。"}
                 </p>
                 <ScrollArea className="h-[calc(100%-90px)]">
                   {results.map((result) => (
                     <Button
                       key={result.id}
-                      variant="ghost"
+                      variant={documentSearch.selectedId === result.id ? "secondary" : "ghost"}
+                      aria-current={documentSearch.selectedId === result.id || undefined}
                       className="search-result"
                       onClick={() => openSearchResult(result)}
                     >
@@ -1711,6 +1781,7 @@ export function Workspace({
                   pageNavigation={pageNavigation}
                   searchResults={results}
                   searchQuery={searchedQuery}
+                  onSearchScopeChanged={bumpSearchScope}
                   onReady={updateReader}
                   onAdapterDetached={updateReader}
                   events={{
@@ -1879,7 +1950,10 @@ export function Workspace({
           <aside className="assistant-sidebar" data-open={right} inert={!right}>
             <Tabs
               value={rightTab}
-              onValueChange={(value) => setRightTab(String(value))}
+              onValueChange={(value) => {
+                cancelAnswerNavigation();
+                setRightTab(String(value));
+              }}
               className="h-full gap-0"
             >
               <div className="panel-header">
@@ -1927,8 +2001,11 @@ export function Workspace({
                   current={currentSession}
                   provider={provider}
                   running={sending}
-                  onChange={selectSession}
-                  onRefresh={refreshSessions}
+                  onChange={(id) => {
+                    cancelAnswerNavigation();
+                    selectSession(id);
+                  }}
+                  onRefresh={async () => { await refreshSessions(); }}
                   onDeleted={sessionDeleted}
                 />
                 {sessionError && (
@@ -1953,6 +2030,8 @@ export function Workspace({
                 <AssistantPanel
                   key={currentSession?.id ?? doc.id}
                   session={session}
+                  focusAnswerId={focusAnswerId}
+                  onAnswerFocused={clearAnswerTarget}
                   onRegenerate={() => void regenerate()}
                   regenerateDisabled={aiModelSaving || sending}
                   renderAnswer={(message, content) => (
@@ -2065,25 +2144,48 @@ export function Workspace({
                 <div className="chat-compose">
                   {quotes.length > 0 && (
                     <div className="quote-chips">
-                      {quotes.map((q, i) => (
-                        <div key={i}>
-                          <Quote size={12} />
-                          <span>{q.text}</span>
-                          <Button
-                            size="icon-xs"
-                            variant="ghost"
-                            aria-label="移除引用"
-                            onClick={() =>
-                              setQuotes((items) =>
-                                items.filter((_, j) => j !== i),
-                              )
-                            }
-                          >
-                            <X />
-                          </Button>
-                        </div>
-                      ))}
+                      {quotes.map((q, i) => {
+                        const label = referenceLabel(q.location, toc);
+                        return (
+                          <div key={i}>
+                            <Quote size={12} aria-hidden="true" />
+                            <span title={q.text}>{q.text}</span>
+                            <Button
+                              size="xs"
+                              variant="ghost"
+                              className="quote-chip-location"
+                              aria-label={`定位引用 · ${label}`}
+                              title={label}
+                              disabled={!adapter || referenceBusy}
+                              onClick={() =>
+                                void visitReference(q.location, q.text).catch(
+                                  (error: Error) => toast.error(error.message),
+                                )
+                              }
+                            >
+                              <span>{label}</span>
+                            </Button>
+                            <Button
+                              size="icon-xs"
+                              variant="ghost"
+                              aria-label="移除引用"
+                              onClick={() =>
+                                setQuotes((items) =>
+                                  items.filter((_, j) => j !== i),
+                                )
+                              }
+                            >
+                              <X />
+                            </Button>
+                          </div>
+                        );
+                      })}
                     </div>
+                  )}
+                  {quotes.length === maxDraftQuotes && (
+                    <p className="chat-status" role="status">
+                      已添加 {maxDraftQuotes} 条引用。移除一条后可继续添加。
+                    </p>
                   )}
                   {!!images.length && imageAttachments(images, true)}
                   <Textarea
@@ -2107,12 +2209,22 @@ export function Workspace({
                     }}
                   />
                   <div className="compose-footer">
-                    <ModelSelector
-                      key={provider}
-                      disabled={sending || !currentSession}
-                      onSettings={onSettings}
-                      modelsOnly
-                    />
+                    {provider ? (
+                      <ModelSelector
+                        disabled={sending || !currentSession}
+                        onSettings={() => openChatSettings("models")}
+                        modelsOnly
+                      />
+                    ) : (
+                      <Button
+                        className="model-select-trigger"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => openChatSettings("connection")}
+                      >
+                        配置 AI 连接
+                      </Button>
+                    )}
                     {sending ? (
                       <Button
                         size="icon-sm"
@@ -2148,6 +2260,11 @@ export function Workspace({
                 </div>
               </TabsContent>
               <TabsContent value="notes" className="notes-panel">
+                {answerStatus && (
+                  <p className="px-3 py-2 text-xs text-muted-foreground" role="status">
+                    {answerStatus}
+                  </p>
+                )}
                 <NotesPanel
                   document={doc}
                   annotations={annotations}
@@ -2159,7 +2276,7 @@ export function Workspace({
                   onSave={saveAnnotationText}
                   onAnswer={(a) => void answerQuestion(a)}
                   onResolve={(a, resolved) => void resolveQuestion(a, resolved)}
-                  onShowAnswer={showAnswer}
+                  onShowAnswer={(messageId) => void showAnswer(messageId)}
                   onExport={() => setExportingNotes(true)}
                   onRecover={async () => {
                     try {

@@ -8,6 +8,7 @@ import {
   type Annotation,
   type ChatSessionDeletion,
   type DocumentChatSession,
+  type ReaderEvents,
 } from "@interleaf/core";
 import { TooltipProvider } from "@interleaf/ui/components/tooltip";
 import { Workspace } from "./Workspace";
@@ -25,6 +26,7 @@ type PickerProps = {
 let picker: PickerProps;
 let serverSessions: DocumentChatSession[];
 let annotations: Annotation[];
+let readerEvents: ReaderEvents;
 vi.mock("sonner", () => ({
   toast: { error: vi.fn(), info: vi.fn(), success: vi.fn() },
 }));
@@ -41,6 +43,7 @@ vi.mock("@interleaf/api", () => ({
     updateAnnotation: vi.fn(),
     messages: vi.fn(async () => []),
     sessionMessages: vi.fn(async () => []),
+    answerSession: vi.fn(),
     chatSessions: vi.fn(async (id: string) =>
       structuredClone(serverSessions.filter((s) => s.documentId === id)),
     ),
@@ -73,18 +76,23 @@ vi.mock("./chat/SessionPicker", () => ({
     );
   },
 }));
-vi.mock("./chat/AssistantPanel", () => ({ AssistantPanel: () => null }));
+vi.mock("./chat/MessageMarkdown", () => ({
+  MessageMarkdown: ({ content }: { content: string }) => content,
+}));
+vi.mock("./ProviderIdentity", () => ({ ProviderGlyph: () => null }));
 vi.mock("./ModelSelector", () => ({ ModelSelector: () => null }));
 vi.mock("./NotesPanel", () => ({
   NotesPanel: ({
     annotations: items,
     onSave,
+    onShowAnswer,
   }: {
     annotations: Annotation[];
     onSave: (
       annotation: Annotation,
       patch: { note: string; tags: string[] },
     ) => Promise<boolean>;
+    onShowAnswer: (id: string) => void;
   }) => (
     <>
       <output aria-label="批注内容">{JSON.stringify(items)}</output>
@@ -94,12 +102,18 @@ vi.mock("./NotesPanel", () => ({
       >
         保存笔记
       </button>
+      <button onClick={() => onShowAnswer("linked-answer")}>查看回答</button>
     </>
   ),
 }));
 vi.mock("./DocumentOverview", () => ({ DocumentOverviewDialog: () => null }));
 vi.mock("./ProcessingUsage", () => ({ ProcessingUsageDialog: () => null }));
-vi.mock("./translation/PDFReadingView", () => ({ PDFReadingView: () => null }));
+vi.mock("./translation/PDFReadingView", () => ({
+  PDFReadingView: ({ events }: { events: ReaderEvents }) => {
+    readerEvents = events;
+    return null;
+  },
+}));
 vi.mock("./translation/EPUBReadingView", () => ({
   EPUBReadingView: () => null,
 }));
@@ -192,8 +206,19 @@ const a: DocumentChatSession = {
 };
 const b: DocumentChatSession = { ...a, id: "session-b", title: "B" };
 const c: DocumentChatSession = { ...a, id: "session-c", title: "C" };
+const linkedAnswer = {
+  id: "linked-answer",
+  documentId: doc.id,
+  role: "assistant" as const,
+  content: "The linked answer",
+  createdAt: "",
+};
 let root: Root, host: HTMLDivElement;
 let storage: Map<string, string>;
+const originalGetAnimations = Object.getOwnPropertyDescriptor(
+  Element.prototype,
+  "getAnimations",
+);
 const input = () =>
   host.querySelector<HTMLTextAreaElement>('textarea[aria-label="向 AI 提问"]')!;
 const render = (document = doc) =>
@@ -223,6 +248,118 @@ async function select(id: string) {
       .click(),
   );
 }
+async function openLinkedAnswer() {
+  await act(async () =>
+    [...host.querySelectorAll<HTMLElement>('[role="tab"]')]
+      .find((tab) => tab.textContent?.startsWith("批注"))!
+      .click(),
+  );
+  await act(async () =>
+    [...host.querySelectorAll<HTMLButtonElement>("button")]
+      .find((button) => button.textContent === "查看回答")!
+      .click(),
+  );
+}
+
+it("opens and focuses the annotated answer in its saved session", async () => {
+  vi.mocked(api.sessionMessages).mockImplementation(async (_, id) =>
+    id === b.id ? [{ ...linkedAnswer, sessionId: b.id }] : [],
+  );
+  vi.mocked(api.answerSession).mockResolvedValue({ sessionId: b.id });
+  await openLinkedAnswer();
+
+  expect(picker.current?.id).toBe(b.id);
+  expect(document.activeElement?.getAttribute("data-message-id")).toBe(
+    linkedAnswer.id,
+  );
+  expect(api.answerSession).toHaveBeenCalledWith(
+    doc.id,
+    linkedAnswer.id,
+    expect.any(AbortSignal),
+  );
+});
+
+it("opens the current session's annotated answer without looking it up again", async () => {
+  vi.mocked(api.sessionMessages).mockResolvedValue([
+    { ...linkedAnswer, sessionId: a.id },
+  ]);
+  await act(async () => getChatSession(doc.id, a.id).load());
+  await openLinkedAnswer();
+
+  expect(picker.current?.id).toBe(a.id);
+  expect(document.activeElement?.getAttribute("data-message-id")).toBe(
+    linkedAnswer.id,
+  );
+  expect(api.answerSession).not.toHaveBeenCalled();
+});
+
+it("ignores a lookup that completes after switching documents", async () => {
+  let complete!: (value: { sessionId: string }) => void;
+  vi.mocked(api.answerSession).mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        complete = resolve;
+      }),
+  );
+  await openLinkedAnswer();
+  const [, , signal] = vi.mocked(api.answerSession).mock.calls[0]!;
+  await act(async () => render(otherDoc));
+  await act(async () => complete({ sessionId: b.id }));
+
+  expect(signal?.aborted).toBe(true);
+  expect(storage.get(`interleaf.chat-session.${doc.id}`)).toBeUndefined();
+  expect(host.textContent).not.toContain(linkedAnswer.content);
+});
+
+it("keeps the current chat draft when quoting during an answer lookup", async () => {
+  let complete!: (value: { sessionId: string }) => void;
+  vi.mocked(api.answerSession).mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        complete = resolve;
+      }),
+  );
+  await type("Current draft");
+  await openLinkedAnswer();
+  await act(async () =>
+    readerEvents.selection({
+      text: "New quote",
+      location: { type: "pdf", page: 2 },
+      anchor: { x: 120, top: 100, bottom: 120 },
+    }),
+  );
+  await act(async () =>
+    host
+      .querySelector<HTMLButtonElement>('button[aria-label="引用到 AI 对话"]')!
+      .click(),
+  );
+  await act(async () => complete({ sessionId: b.id }));
+
+  expect(picker.current?.id).toBe(a.id);
+  expect(input().value).toBe("Current draft");
+  expect(host.querySelector(".quote-chips")?.textContent).toContain(
+    "New quote",
+  );
+});
+
+it("keeps the annotation open when its answer session is deleted during lookup", async () => {
+  let complete!: (value: { sessionId: string }) => void;
+  vi.mocked(api.answerSession).mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        complete = resolve;
+      }),
+  );
+  await openLinkedAnswer();
+  await deleted(b.id);
+  await act(async () => complete({ sessionId: b.id }));
+
+  expect(picker.current?.id).toBe(a.id);
+  expect(host.querySelector('.notes-panel [role="status"]')?.textContent).toBe(
+    "这条回答已不可用",
+  );
+  expect(storage.get(`interleaf.chat-session.${doc.id}`)).toBeUndefined();
+});
 async function deleted(
   id: string,
   result: ChatSessionDeletion = { ok: true, unlinkedAnnotationIds: [] },
@@ -233,11 +370,25 @@ async function deleted(
 }
 beforeEach(async () => {
   vi.clearAllMocks();
+  vi.mocked(api.sessionMessages).mockReset().mockResolvedValue([]);
+  vi.mocked(api.answerSession).mockReset();
   serverSessions = [a, b, c];
   annotations = [];
   storage = new Map();
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+  Object.defineProperty(Element.prototype, "getAnimations", {
+    configurable: true,
+    value: () => [],
+  });
   vi.stubGlobal("PointerEvent", MouseEvent);
+  vi.stubGlobal(
+    "ResizeObserver",
+    class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    },
+  );
   vi.stubGlobal("localStorage", {
     getItem: (key: string) => storage.get(key) ?? null,
     setItem: (key: string, value: string) => storage.set(key, value),
@@ -254,6 +405,13 @@ afterEach(async () => {
     for (const id of [a.id, b.id, c.id, "replacement", "other-session"])
       forgetChatSession(d.id, id);
   host.remove();
+  if (originalGetAnimations)
+    Object.defineProperty(
+      Element.prototype,
+      "getAnimations",
+      originalGetAnimations,
+    );
+  else Reflect.deleteProperty(Element.prototype, "getAnimations");
   document.body.innerHTML = "";
   vi.unstubAllGlobals();
   vi.useRealTimers();

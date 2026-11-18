@@ -1,7 +1,7 @@
 import { ShortcutPanel } from "./shortcuts/ShortcutPanel";
-import { AISettings } from "./ai/AISettings";
+import { AISettings, type AISettingsSection } from "./ai/AISettings";
 import { AutoTranslationSettings } from "./papers/AutoTranslationSettings";
-import { useEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useState } from "react";
 import {
   FileText,
   Robot as Bot,
@@ -24,6 +24,7 @@ import { Button } from "@interleaf/ui/components/button";
 import { Input } from "@interleaf/ui/components/input";
 import {
   Dialog,
+  DialogClose,
   DialogContent,
   DialogHeader,
   DialogTitle,
@@ -55,13 +56,25 @@ import { Checkbox } from "@interleaf/ui/components/checkbox";
 import { toast } from "sonner";
 import { columnLabels, defaultColumns, toggleColumn } from "./papers/model";
 import { savePaperPreferences } from "./papers/actions";
+
+export type SettingsTarget = {
+  section: AISettingsSection;
+  returnFocus?: HTMLElement | null;
+};
+
 export function Settings({
   open,
   onOpenChange,
+  target,
 }: {
   open: boolean;
   onOpenChange: (value: boolean) => void;
+  target?: SettingsTarget;
 }) {
+  const [tab, setTab] = useState("agent");
+  useLayoutEffect(() => {
+    if (open) setTab("agent");
+  }, [open, target]);
   const [journalRank, setJournalRank] = useState<JournalRankConfig | null>(
     null,
   );
@@ -109,15 +122,36 @@ export function Settings({
     useReaderStore((s) => s.libraryPreferences.papers) || {};
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="settings-dialog">
-        <DialogHeader>
+      <DialogContent
+        className="settings-dialog"
+        showCloseButton={!target}
+        finalFocus={
+          target
+            ? () => {
+                const element = target.returnFocus;
+                return element?.isConnected ? element : true;
+              }
+            : undefined
+        }
+      >
+        <DialogHeader
+          className={
+            target ? "flex-row items-center justify-between" : undefined
+          }
+        >
           <DialogTitle>设置</DialogTitle>
           <DialogDescription className="sr-only">
             AI 连接、显示、阅读、快捷键、诊断与论文库
           </DialogDescription>
+          {target && (
+            <DialogClose render={<Button variant="outline" size="sm" />}>
+              返回
+            </DialogClose>
+          )}
         </DialogHeader>
         <Tabs
-          defaultValue="agent"
+          value={tab}
+          onValueChange={(value) => setTab(String(value))}
           orientation="vertical"
           className="settings-tabs"
         >
@@ -579,7 +613,7 @@ export function Settings({
             </section>
           </TabsContent>
           <TabsContent value="agent" className="settings-panel" keepMounted>
-            <AISettings open={open} />
+            <AISettings open={open} targetSection={target?.section} />
             <CommandLineSettings open={open} />
           </TabsContent>
         </Tabs>

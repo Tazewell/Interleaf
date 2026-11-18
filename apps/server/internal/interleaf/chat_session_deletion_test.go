@@ -43,6 +43,45 @@ func deletionQuestion(t *testing.T, s *Server, documentID, answerID string) Anno
 	return annotation
 }
 
+func TestChatAnswerSessionIsScopedToSavedAnswersAndLiveDocuments(t *testing.T) {
+	s, doc, session := deletionFixture(t)
+	answer := Message{ID: "saved-answer", DocumentID: doc.ID, SessionID: session.ID, Role: "assistant", Content: "Answer"}
+	question := Message{ID: "saved-question", DocumentID: doc.ID, SessionID: session.ID, Role: "user", Content: "Question"}
+	for _, message := range []Message{answer, question} {
+		if err := s.Store.saveMessage(message); err != nil {
+			t.Fatal(err)
+		}
+	}
+	path := func(documentID, messageID string) string {
+		return "/api/documents/" + documentID + "/messages/" + messageID + "/session"
+	}
+	w := request(t, s, "GET", path(doc.ID, answer.ID), nil)
+	var located struct{ SessionID string }
+	if w.Code != 200 || json.Unmarshal(w.Body.Bytes(), &located) != nil || located.SessionID != session.ID {
+		t.Fatalf("locate answer: %d %s", w.Code, w.Body.String())
+	}
+	for _, unavailable := range []string{path("other-document", answer.ID), path(doc.ID, question.ID)} {
+		if w := request(t, s, "GET", unavailable, nil); w.Code != 404 {
+			t.Fatalf("unexpected lookup result for %s: %d %s", unavailable, w.Code, w.Body.String())
+		}
+	}
+	if _, err := s.Store.DB.Exec("UPDATE documents SET deleted_at=? WHERE id=?", now(), doc.ID); err != nil {
+		t.Fatal(err)
+	}
+	if w := request(t, s, "GET", path(doc.ID, answer.ID), nil); w.Code != 404 {
+		t.Fatalf("trashed document answered: %d %s", w.Code, w.Body.String())
+	}
+	if _, err := s.Store.DB.Exec("UPDATE documents SET deleted_at='' WHERE id=?", doc.ID); err != nil {
+		t.Fatal(err)
+	}
+	if w := request(t, s, "DELETE", "/api/documents/"+doc.ID+"/chat-sessions/"+session.ID, nil); w.Code != 200 {
+		t.Fatalf("delete session: %d %s", w.Code, w.Body.String())
+	}
+	if w := request(t, s, "GET", path(doc.ID, answer.ID), nil); w.Code != 404 {
+		t.Fatalf("deleted answer looked up: %d %s", w.Code, w.Body.String())
+	}
+}
+
 func TestChatSessionDeletionIsScopedAndUnlinksOnlyItsAnswers(t *testing.T) {
 	s, doc, target := deletionFixture(t)
 	w := request(t, s, "POST", "/api/documents/"+doc.ID+"/chat-sessions", strings.NewReader(`{"provider":"api"}`))

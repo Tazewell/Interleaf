@@ -60,6 +60,26 @@ func (s *Store) chatSession(documentID, sessionID string) (ChatSession, error) {
 	return session, err
 }
 
+func (s *Server) chatAnswerSession(w http.ResponseWriter, r *http.Request) {
+	var sessionID string
+	err := s.Store.DB.QueryRowContext(r.Context(), `
+		SELECT c.id
+		FROM messages m
+		JOIN chat_sessions c ON c.id=json_extract(m.body,'$.sessionId') AND c.document_id=m.document_id
+		JOIN documents d ON d.id=m.document_id
+		WHERE m.id=? AND m.document_id=? AND d.deleted_at='' AND json_extract(m.body,'$.role')='assistant'`,
+		r.PathValue("message"), r.PathValue("id")).Scan(&sessionID)
+	if errors.Is(err, sql.ErrNoRows) {
+		fail(w, http.StatusNotFound, "这条回答已不可用")
+		return
+	}
+	if err != nil {
+		fail(w, http.StatusInternalServerError, "无法查找回答所属的会话")
+		return
+	}
+	respond(w, http.StatusOK, map[string]string{"sessionId": sessionID})
+}
+
 // Avoid taking the legacy generation lock for ordinary session polling.
 func (s *Server) ensureChatSession(documentID, provider string) (string, error) {
 	var existing string
