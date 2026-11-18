@@ -561,11 +561,11 @@ it("keeps explicit following smooth by default", async () => {
   }
 });
 
-it("finds the same middle block in a long document with a bounded number of page layout reads", () => {
+it("finds deep scroll anchors in 1000 pages within logarithmic plus visible page layout reads", () => {
   const host = document.createElement("div");
   host.getBoundingClientRect = () => new DOMRect(0, 0, 600, 600);
   let layoutReads = 0;
-  const pages = Array.from({ length: 80 }, (_, i) => {
+  const pages = Array.from({ length: 1000 }, (_, i) => {
     const page = document.createElement("div");
     page.getBoundingClientRect = () => {
       layoutReads++;
@@ -573,7 +573,7 @@ it("finds the same middle block in a long document with a bounded number of page
     };
     return page;
   });
-  let blocks: PDFBlock[] = Array.from({ length: 1600 }, (_, i) => ({
+  let blocks: PDFBlock[] = Array.from({ length: 20000 }, (_, i) => ({
     id: `paragraph-${i}`,
     page: Math.floor(i / 20) + 1,
     label: "text",
@@ -585,21 +585,27 @@ it("finds the same middle block in a long document with a bounded number of page
     { getPageView: (i: number) => ({ div: pages[i] }) } as unknown as PDFViewer,
     vi.fn(),
     () => blocks,
-    { location: vi.fn(), selection: vi.fn() },
+    { location: vi.fn(), selection: vi.fn(), readingAnchor: vi.fn() },
   );
   try {
     expect(nav.anchor()?.blockId).toBe("paragraph-6");
-    expect(layoutReads).toBeLessThanOrEqual(160);
+    expect(layoutReads).toBeLessThanOrEqual(24);
     layoutReads = 0;
-    host.scrollTop = 1100;
-    expect(nav.anchor()?.blockId).toBe("paragraph-26");
-    expect(layoutReads).toBeLessThanOrEqual(160);
+    host.scrollTop = 876 * 1100;
+    host.dispatchEvent(new Event("scroll"));
+    tick(0);
+    expect(layoutReads).toBeLessThanOrEqual(24);
+    layoutReads = 0;
+    expect(nav.anchor()?.blockId).toBe("paragraph-17526");
+    // Each independent anchor (including the scroll callback) has its own
+    // current geometry; neither may traverse the complete document.
+    expect(layoutReads).toBeLessThanOrEqual(24);
 
     // Parsing can replace the block array; the next anchor must use fresh data.
     blocks = [
       {
         id: "replacement",
-        page: 2,
+        page: 877,
         label: "text",
         text: "Replacement",
         bounds: { x: 0.1, y: 0.2, width: 0.8, height: 0.2 },
@@ -610,3 +616,179 @@ it("finds the same middle block in a long document with a bounded number of page
     nav.destroy();
   }
 });
+
+function continuousPages(count = 8) {
+  const host = document.createElement("div");
+  let viewportHeight = 600;
+  host.getBoundingClientRect = () => new DOMRect(0, 0, 600, viewportHeight);
+  const heights = Array.from({ length: count }, (_, i) =>
+    i % 2 === 0 ? 1000 : 600,
+  );
+  const tops: number[] = [];
+  for (let i = 0, top = 0; i < count; i++) {
+    tops.push(top);
+    top += heights[i] + 100;
+  }
+  let scale = 1;
+  const missing = new Set<number>();
+  const zeroSize = new Set<number>();
+  let reads = 0;
+  const pages = heights.map((height, i) => {
+    const page = document.createElement("div");
+    page.getBoundingClientRect = () => {
+      reads++;
+      return new DOMRect(
+        0,
+        tops[i] * scale - host.scrollTop,
+        zeroSize.has(i) ? 0 : 600 * scale,
+        zeroSize.has(i) ? 0 : height * scale,
+      );
+    };
+    return page;
+  });
+  let blocks: PDFBlock[] = heights.map((_, i) => ({
+    id: `page-${i + 1}`,
+    page: i + 1,
+    label: "text",
+    text: "Paragraph",
+    bounds: { x: 0.1, y: 0.2, width: 0.8, height: 0.2 },
+  }));
+  const readingAnchor = vi.fn();
+  const nav = new PDFReadingNavigation(
+    host,
+    {
+      getPageView: (i: number) => ({
+        div: missing.has(i) ? undefined : pages[i],
+      }),
+    } as unknown as PDFViewer,
+    vi.fn(),
+    () => blocks,
+    { location: vi.fn(), selection: vi.fn(), readingAnchor },
+  );
+  return {
+    host,
+    nav,
+    blocks,
+    tops,
+    heights,
+    missing,
+    zeroSize,
+    readingAnchor,
+    get reads() {
+      return reads;
+    },
+    resetReads() {
+      reads = 0;
+    },
+    setBlocks(value: PDFBlock[]) {
+      blocks = value;
+    },
+    resize(value: number) {
+      viewportHeight = value;
+    },
+    zoom(value: number) {
+      scale = value;
+    },
+  };
+}
+
+it("finds deep anchors with mixed page heights and current zoom/viewport geometry", () => {
+  const s = continuousPages(1000);
+  try {
+    s.host.scrollTop = s.tops[877] + 180 - 300;
+    s.host.dispatchEvent(new Event("scroll"));
+    tick(0);
+    expect(s.readingAnchor).toHaveBeenLastCalledWith({
+      blockId: "page-878",
+      fraction: 0.5,
+    });
+    expect(s.reads).toBeLessThanOrEqual(24);
+    s.resetReads();
+    s.zoom(2);
+    s.resize(800);
+    s.host.scrollTop = s.tops[877] * 2 + 360 - 400;
+    expect(s.nav.anchor()).toEqual({ blockId: "page-878", fraction: 0.5 });
+    expect(s.reads).toBeLessThanOrEqual(24);
+  } finally {
+    s.nav.destroy();
+  }
+});
+
+it("preserves the gap anchor between mixed-height pages", () => {
+  const s = continuousPages();
+  try {
+    // Page 1 paragraph ends at 400; page 2 paragraph starts at 1220.
+    s.host.scrollTop = 510;
+    expect(s.nav.anchor()).toEqual({
+      blockId: "page-1",
+      fraction: 1,
+      gap: { nextBlockId: "page-2", fraction: 0.5 },
+    });
+  } finally {
+    s.nav.destroy();
+  }
+});
+
+it("includes all visible mixed-height pages when the viewport spans seven pages", () => {
+  const s = continuousPages(1000);
+  try {
+    s.resize(6160);
+    expect(s.nav.anchor()).toEqual({ blockId: "page-4", fraction: 0.5 });
+    // Ten bisection probes + seven visible pages + boundary/gap endpoints.
+    expect(s.reads).toBeLessThanOrEqual(21);
+  } finally {
+    s.nav.destroy();
+  }
+});
+
+it("locates sparse block pages and refreshes their index when parsing replaces the array", () => {
+  const s = continuousPages(1000);
+  try {
+    s.setBlocks([s.blocks[0], s.blocks[876], s.blocks[999]]);
+    s.host.scrollTop = s.tops[876];
+    expect(s.nav.anchor()).toEqual({ blockId: "page-877", fraction: 0.5 });
+    s.setBlocks([{ ...s.blocks[876], id: "reparsed" }]);
+    expect(s.nav.anchor()).toEqual({ blockId: "reparsed", fraction: 0.5 });
+    s.setBlocks([s.blocks[0]]);
+    expect(s.nav.anchor()).toBeUndefined();
+    s.setBlocks([]);
+    expect(s.nav.anchor()).toBeUndefined();
+  } finally {
+    s.nav.destroy();
+  }
+});
+
+it.each(["missing", "zeroSize"] as const)(
+  "falls back when a binary-search page has %s geometry",
+  (kind) => {
+    const s = continuousPages(1000);
+    try {
+      s[kind].add(500);
+      s.host.scrollTop = s.tops[876];
+      expect(s.nav.anchor()).toEqual({ blockId: "page-877", fraction: 0.5 });
+      s[kind].clear();
+      s.host.scrollTop = s.tops[123] + 180 - 300;
+      s.resetReads();
+      expect(s.nav.anchor()).toEqual({ blockId: "page-124", fraction: 0.5 });
+      expect(s.reads).toBeLessThanOrEqual(24);
+    } finally {
+      s.nav.destroy();
+    }
+  },
+);
+
+it.each(["missing", "zeroSize"] as const)(
+  "does not invent a visible paragraph for a page with %s geometry",
+  (kind) => {
+    const s = continuousPages(1000);
+    try {
+      s[kind].add(876);
+      s.host.scrollTop = s.tops[876];
+      expect(s.nav.anchor()).toBeUndefined();
+      s[kind].clear();
+      expect(s.nav.anchor()).toEqual({ blockId: "page-877", fraction: 0.5 });
+    } finally {
+      s.nav.destroy();
+    }
+  },
+);

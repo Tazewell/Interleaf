@@ -26,6 +26,7 @@ export class PDFReadingNavigation {
   private orderedBlocks: PDFBlock[] = [];
   private blockOrder = new Map<string, number>();
   private pageBlocks = new Map<number, PDFBlock[]>();
+  private blockPages: number[] = [];
   private followedPosition?: { left: number; top: number };
   private readingColumn?: { page: number; x: number; width: number };
   constructor(
@@ -120,16 +121,54 @@ export class PDFReadingNavigation {
       x = viewport.left + viewport.width / 2;
     const pages = new Map<number, DOMRect | undefined>();
     const pageRect = (page: number) => {
-      if (!pages.has(page))
-        pages.set(page, this.pageNode(page)?.getBoundingClientRect());
+      if (!pages.has(page)) {
+        const rect = this.pageNode(page)?.getBoundingClientRect();
+        pages.set(
+          page,
+          rect && rect.width > 0 && rect.height > 0 ? rect : undefined,
+        );
+      }
       return pages.get(page);
     };
     const visible: Array<{ page: number; blocks: PDFBlock[]; rect: DOMRect }> =
       [];
-    for (const [page, blocks] of this.pageBlocks) {
-      const rect = pageRect(page);
-      if (rect && rect.bottom >= viewport.top && rect.top <= viewport.bottom)
-        visible.push({ page, blocks, rect });
+    // Continuous vertical PDF pages have monotonically increasing bottoms,
+    // even with mixed page sizes. Keep only the page-number index between
+    // anchors: zoom, resize and scrolling must always use current geometry.
+    let low = 0,
+      high = this.blockPages.length,
+      fallback = false;
+    while (low < high) {
+      const middle = (low + high) >>> 1;
+      const rect = pageRect(this.blockPages[middle]);
+      if (!rect) {
+        fallback = true;
+        break;
+      }
+      if (rect.bottom < viewport.top) low = middle + 1;
+      else high = middle;
+    }
+    if (!fallback) {
+      for (let i = low; i < this.blockPages.length; i++) {
+        const page = this.blockPages[i],
+          rect = pageRect(page);
+        if (!rect) {
+          fallback = true;
+          break;
+        }
+        if (rect.top > viewport.bottom) break;
+        visible.push({ page, blocks: this.pageBlocks.get(page)!, rect });
+      }
+    }
+    // Missing/hidden page views cannot establish the search boundary. Prefer
+    // the complete scan to dropping valid visible pages; reuse reads this call.
+    if (fallback) {
+      visible.length = 0;
+      for (const [page, blocks] of this.pageBlocks) {
+        const rect = pageRect(page);
+        if (rect && rect.bottom >= viewport.top && rect.top <= viewport.bottom)
+          visible.push({ page, blocks, rect });
+      }
     }
     const column = this.readingColumn;
     const columnPage = column && pageRect(column.page);
@@ -279,6 +318,7 @@ export class PDFReadingNavigation {
       page.push(block);
       this.pageBlocks.set(block.page, page);
     }
+    this.blockPages = [...this.pageBlocks.keys()];
   }
   private readableBlocks() {
     this.indexBlocks();
