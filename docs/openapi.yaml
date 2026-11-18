@@ -6918,7 +6918,17 @@
                       "application/json":
                         {
                           "schema":
-                            { "type": "object", "additionalProperties": false },
+                            {
+                              "type": "object",
+                              "additionalProperties": false,
+                              "properties":
+                                {
+                                  "layout":
+                                    {
+                                      "$ref": "#/components/schemas/NativePDFReadingLayout",
+                                    },
+                                },
+                            },
                         },
                     },
                 },
@@ -10310,11 +10320,22 @@
                   "paragraphs",
                 ],
             },
+          "NativePDFReadingLayout":
+            {
+              "type": "string",
+              "enum": ["side-by-side", "translation-only"],
+              "default": "side-by-side",
+            },
           "NativePDFReadingManifest":
             {
               "type": "object",
               "properties":
                 {
+                  "layout":
+                    {
+                      "$ref": "#/components/schemas/NativePDFReadingLayout",
+                      "description": "Omitted by historical metadata; defaults to side-by-side.",
+                    },
                   "version": { "type": "integer", "const": 1 },
                   "documentId": { "type": "string" },
                   "cacheKey": { "type": "string" },

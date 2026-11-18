@@ -31,3 +31,18 @@ it("uses authenticated native reading transport, escaped identities and cancella
     "/pub/reading%2Ftoken/doc%2Fone/native-pdf-reading/key%2Fone/file",
   );
 });
+
+it("sends explicit translation-only layout while preserving legacy default payload", async () => {
+  const fetcher = vi.fn(async (_url: string, _init?: RequestInit) =>
+    Response.json({ status: "ready" }),
+  );
+  vi.stubGlobal("fetch", fetcher);
+  const signal = new AbortController().signal;
+  await api.createNativePDFReading("doc", signal, "translation-only");
+  await api.createNativePDFReading("doc", undefined, "side-by-side");
+  expect(fetcher.mock.calls[0][1]).toMatchObject({
+    body: JSON.stringify({ layout: "translation-only" }),
+    signal,
+  });
+  expect(fetcher.mock.calls[1][1]).toMatchObject({ body: "{}" });
+});

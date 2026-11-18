@@ -3,10 +3,12 @@ package interleaf
 import (
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -216,7 +218,7 @@ func nativeReadingFixture(t *testing.T) *Server {
 	script := string(raw) + `
 if(args.stage==='render'&&args.reading==='true') {
  const prepared=JSON.parse(fs.readFileSync(args.prepared)),targets=JSON.parse(fs.readFileSync(args.targets));
- const pages=prepared.pages.map(p=>({page:p.page,width:p.width,height:p.height,outputWidth:2*p.width+12,translationOffsetX:p.width+12,paragraphs:p.paragraphs.map(q=>({id:q.id,blockId:q.blockId,sourceHash:crypto.createHash('sha256').update('zh-CN:v1:'+q.originalSource).digest('hex'),bounds:q.bounds,translated:!!targets[q.id],...(targets[q.id]?{target:targets[q.id]}:{})}))}));
+ const pages=prepared.pages.map(p=>({page:p.page,width:p.width,height:p.height,outputWidth:args.mode==='translation-only'?p.width:2*p.width+12,translationOffsetX:args.mode==='translation-only'?0:p.width+12,paragraphs:p.paragraphs.map(q=>({id:q.id,blockId:q.blockId,sourceHash:crypto.createHash('sha256').update('zh-CN:v1:'+q.originalSource).digest('hex'),bounds:q.bounds,translated:!!targets[q.id],...(targets[q.id]?{target:targets[q.id]}:{})}))}));
  const all=pages.flatMap(p=>p.paragraphs);fs.writeFileSync(args['reading-metadata'],JSON.stringify({pages,translatedParagraphs:all.filter(q=>q.translated).length,originalParagraphs:all.filter(q=>!q.translated).length,warnings:[]}));
 }
 `
@@ -588,4 +590,213 @@ func TestNativePDFReadingRejectsCorruptPersistentReports(t *testing.T) {
 }
 func nativeReadingMetadataParagraph(m map[string]any) map[string]any {
 	return m["pages"].([]any)[0].(map[string]any)["paragraphs"].([]any)[0].(map[string]any)
+}
+
+func nativeReadingCreateLayout(t *testing.T, s *Server, layout string) map[string]any {
+	t.Helper()
+	w := request(t, s, "POST", "/api/documents/doc/native-pdf-reading", strings.NewReader(`{"layout":"`+layout+`"}`))
+	if w.Code != 202 && w.Code != 200 {
+		t.Fatalf("layout create %d %s", w.Code, w.Body.String())
+	}
+	return bilingualJSON(t, w)
+}
+func nativeReadingReadyLayout(t *testing.T, s *Server, layout string) map[string]any {
+	t.Helper()
+	v := nativeReadingCreateLayout(t, s, layout)
+	if v["status"] != "ready" {
+		nativeReadingWaitJob(t, nativeReadingTestJob(t, s, v["id"].(string)))
+		w := request(t, s, "GET", "/api/documents/doc/native-pdf-reading/"+v["id"].(string), nil)
+		if w.Code != 200 {
+			t.Fatalf("poll %d %s", w.Code, w.Body.String())
+		}
+		v = bilingualJSON(t, w)
+	}
+	if v["status"] != "ready" {
+		t.Fatalf("not ready %v", v)
+	}
+	return v
+}
+func TestNativePDFReadingLayoutCacheIsolationAndLegacy(t *testing.T) {
+	s := nativeReadingFixture(t)
+	legacy := nativeReadingReady(t, s)
+	// Simulate a completed pre-layout manifest, keeping its historical identity and report hash.
+	legacyPath := filepath.Join(s.nativeReadingDir("doc", legacy["cacheKey"].(string)), "metadata.json")
+	legacyRaw, _ := os.ReadFile(legacyPath)
+	var legacyMetadata map[string]any
+	json.Unmarshal(legacyRaw, &legacyMetadata)
+	delete(legacyMetadata, "layout")
+	legacyRaw, _ = json.Marshal(legacyMetadata)
+	os.WriteFile(legacyPath, legacyRaw, 0600)
+	single := nativeReadingReadyLayout(t, s, "translation-only")
+	if legacy["cacheKey"] == single["cacheKey"] {
+		t.Fatal("cache collision")
+	}
+	m := single["metadata"].(map[string]any)
+	if m["layout"] != "translation-only" || m["rendererVersion"] == legacy["metadata"].(map[string]any)["rendererVersion"] {
+		t.Fatal("layout identity missing")
+	}
+	for _, p := range m["pages"].([]any) {
+		p := p.(map[string]any)
+		if p["outputWidth"] != p["width"] || p["translationOffsetX"] != float64(0) {
+			t.Fatal("single geometry", p)
+		}
+	}
+	snap, e := s.nativeReadingSnapshot("doc")
+	if e != nil {
+		t.Fatal(e)
+	}
+	expected := sourceKey(snap.originalHash + ":" + snap.layoutHash + ":" + snap.translationHash + ":" + nativeReadingVersion)
+	if legacy["cacheKey"] != expected {
+		t.Fatal("legacy key changed")
+	}
+	restarted := NewServer(s.Store, "test-secret", "")
+	t.Cleanup(restarted.Close)
+	t.Setenv("INTERLEAF_NODE", "")
+	for _, layout := range []string{"side-by-side", "translation-only"} {
+		w := request(t, restarted, "POST", "/api/documents/doc/native-pdf-reading", strings.NewReader(`{"layout":"`+layout+`"}`))
+		if w.Code != 200 {
+			t.Fatalf("persistent %s %d %s", layout, w.Code, w.Body.String())
+		}
+	}
+	for _, v := range []map[string]any{legacy, single} {
+		for _, suffix := range []string{"metadata", "file"} {
+			w := request(t, restarted, "GET", "/api/documents/doc/native-pdf-reading/cache/"+v["cacheKey"].(string)+"/"+suffix, nil)
+			if w.Code != 200 {
+				t.Fatalf("cache %d %s", w.Code, w.Body.String())
+			}
+		}
+	}
+}
+func TestNativePDFReadingLayoutRejectsUnknown(t *testing.T) {
+	s := nativeReadingFixture(t)
+	for _, body := range []string{`{"layout":"other"}`, `{"layout":""}`, `{"layout":null}`, `{"layout":42}`, `{"mode":"translation-only"}`} {
+		w := request(t, s, "POST", "/api/documents/doc/native-pdf-reading", strings.NewReader(body))
+		if w.Code != 400 {
+			t.Fatalf("accepted %s: %d %s", body, w.Code, w.Body.String())
+		}
+	}
+}
+func TestNativePDFReadingLayoutConcurrentCancelIsolation(t *testing.T) {
+	s := nativeReadingFixture(t)
+	script := filepath.Join(filepath.Dir(os.Getenv("INTERLEAF_PROCESSOR")), "bilingual-pdf-cli.mjs")
+	raw, _ := os.ReadFile(script)
+	os.WriteFile(script, append([]byte("await new Promise(resolve=>setTimeout(resolve,150));\n"), raw...), 0600)
+	left := nativeReadingCreate(t, s)
+	single := nativeReadingCreateLayout(t, s, "translation-only")
+	duplicate := nativeReadingCreateLayout(t, s, "translation-only")
+	if left["id"] == single["id"] || left["cacheKey"] == single["cacheKey"] || single["id"] != duplicate["id"] {
+		t.Fatal("job collision")
+	}
+	w := request(t, s, "DELETE", "/api/documents/doc/native-pdf-reading/"+single["id"].(string), nil)
+	if w.Code != 204 {
+		t.Fatal(w.Code)
+	}
+	nativeReadingWaitJob(t, nativeReadingTestJob(t, s, left["id"].(string)))
+	w = request(t, s, "GET", "/api/documents/doc/native-pdf-reading/"+left["id"].(string), nil)
+	if w.Code != 200 || bilingualJSON(t, w)["status"] != "ready" {
+		t.Fatalf("other layout cancelled %d %s", w.Code, w.Body.String())
+	}
+	if _, e := os.Stat(filepath.Join(s.nativeReadingDir("doc", single["cacheKey"].(string)), "metadata.json")); !os.IsNotExist(e) {
+		t.Fatal("cancelled layout published")
+	}
+}
+func TestNativePDFReadingLayoutRejectsMixedMetadata(t *testing.T) {
+	for _, kind := range []string{"missing-layout", "other-layout", "unknown-layout", "empty-layout", "null-layout", "renderer", "geometry"} {
+		t.Run(kind, func(t *testing.T) {
+			s := nativeReadingFixture(t)
+			v := nativeReadingReadyLayout(t, s, "translation-only")
+			key := v["cacheKey"].(string)
+			path := filepath.Join(s.nativeReadingDir("doc", key), "metadata.json")
+			raw, _ := os.ReadFile(path)
+			var m map[string]any
+			json.Unmarshal(raw, &m)
+			switch kind {
+			case "missing-layout":
+				delete(m, "layout")
+			case "other-layout":
+				m["layout"] = "side-by-side"
+			case "unknown-layout":
+				m["layout"] = "other"
+			case "empty-layout":
+				m["layout"] = ""
+			case "null-layout":
+				m["layout"] = nil
+			case "renderer":
+				m["rendererVersion"] = nativeReadingVersion
+			case "geometry":
+				p := m["pages"].([]any)[0].(map[string]any)
+				p["outputWidth"] = 2*p["width"].(float64) + 12
+				p["translationOffsetX"] = p["width"].(float64) + 12
+			}
+			raw, _ = json.Marshal(m)
+			var changed nativeReadingManifest
+			json.Unmarshal(raw, &changed)
+			m["reportSha256"] = nativeReadingReportHash(changed.nativeReadingReport)
+			raw, _ = json.Marshal(m)
+			os.WriteFile(path, raw, 0600)
+			for _, suffix := range []string{"metadata", "file"} {
+				w := request(t, s, "GET", "/api/documents/doc/native-pdf-reading/cache/"+key+"/"+suffix, nil)
+				if w.Code != 409 {
+					t.Fatalf("mixed %s %d %s", kind, w.Code, w.Body.String())
+				}
+			}
+			w := request(t, s, "GET", "/api/documents/doc/native-pdf-reading/"+v["id"].(string), nil)
+			if w.Code != 409 {
+				t.Fatal("mixed status accepted")
+			}
+		})
+	}
+}
+
+func TestNativePDFReadingLayoutsNeverCallModelOrMutateInputs(t *testing.T) {
+	s := nativeReadingFixture(t)
+	var calls atomic.Int32
+	provider := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { calls.Add(1); w.WriteHeader(500) }))
+	defer provider.Close()
+	os.Remove(s.nativeAIPath()) // Replace the fixture's intentionally corrupt configuration with a counted provider.
+	bilingualConfig(t, s, provider.URL, "secret", "openai")
+	d, _ := s.Store.Document("doc")
+	original, _ := os.ReadFile(s.Store.File(d))
+	config, _ := os.ReadFile(s.nativeAIPath())
+	before, _ := s.visibleTranslations("doc", layoutManifest{Pages: 2, Blocks: []PDFBlock{{ID: "p1-b1", Page: 1, Text: "Hello world."}}})
+	beforeRaw, _ := json.Marshal(before)
+	nativeReadingReady(t, s)
+	nativeReadingReadyLayout(t, s, "translation-only")
+	if calls.Load() != 0 {
+		t.Fatal("reading called provider", calls.Load())
+	}
+	actual, _ := os.ReadFile(s.Store.File(d))
+	actualConfig, _ := os.ReadFile(s.nativeAIPath())
+	after, _ := s.visibleTranslations("doc", layoutManifest{Pages: 2, Blocks: []PDFBlock{{ID: "p1-b1", Page: 1, Text: "Hello world."}}})
+	afterRaw, _ := json.Marshal(after)
+	if string(original) != string(actual) || string(config) != string(actualConfig) || string(beforeRaw) != string(afterRaw) {
+		t.Fatal("reading modified original, configuration or translations")
+	}
+}
+
+func TestNativePDFReadingLayoutRejectsWrongRendererGeometry(t *testing.T) {
+	for _, layout := range []string{"side-by-side", "translation-only"} {
+		t.Run(layout, func(t *testing.T) {
+			s := nativeReadingFixture(t)
+			script := filepath.Join(filepath.Dir(os.Getenv("INTERLEAF_PROCESSOR")), "bilingual-pdf-cli.mjs")
+			raw, _ := os.ReadFile(script)
+			raw = append(raw, []byte(`
+if(args.stage==='render'&&args.reading==='true') {
+ const report=JSON.parse(fs.readFileSync(args['reading-metadata']));
+ for(const p of report.pages) {p.outputWidth=args.mode==='translation-only'?2*p.width+12:p.width;p.translationOffsetX=args.mode==='translation-only'?p.width+12:0;}
+ fs.writeFileSync(args['reading-metadata'],JSON.stringify(report));
+}
+`)...)
+			os.WriteFile(script, raw, 0600)
+			v := nativeReadingCreateLayout(t, s, layout)
+			j := nativeReadingTestJob(t, s, v["id"].(string))
+			nativeReadingWaitJob(t, j)
+			if j.snapshot().Status != "failed" {
+				t.Fatal("wrong-layout renderer report accepted")
+			}
+			if _, e := os.Stat(filepath.Join(s.nativeReadingDir("doc", v["cacheKey"].(string)), "metadata.json")); !os.IsNotExist(e) {
+				t.Fatal("invalid layout published")
+			}
+		})
+	}
 }

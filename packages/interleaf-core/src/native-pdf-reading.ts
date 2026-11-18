@@ -1,5 +1,7 @@
 import type { NativePDFBounds } from "./bilingual-pdf";
 
+export type NativePDFReadingLayout = "side-by-side" | "translation-only";
+
 /** Geometry and identity of one paragraph in the derived PDF, never a new translation. */
 export interface NativePDFReadingParagraph {
   id: string;
@@ -27,6 +29,8 @@ export interface NativePDFReadingReport {
   warnings: string[];
 }
 export interface NativePDFReadingManifest extends NativePDFReadingReport {
+  /** Omitted by historical manifests; defaults to side-by-side. */
+  layout?: NativePDFReadingLayout;
   version: 1;
   documentId: string;
   cacheKey: string;

@@ -19,6 +19,27 @@ import (
 
 const nativeReadingVersion = bilingualPDFVersion + ":reading-v2:side-by-side:keep-original"
 const nativeReadingTerminalLimit = 16
+const nativeReadingSideBySide = "side-by-side"
+const nativeReadingTranslationOnly = "translation-only"
+
+func nativeReadingLayout(layout string) string {
+	if layout == "" {
+		return nativeReadingSideBySide
+	}
+	return layout
+}
+func nativeReadingRenderer(layout string) string {
+	if layout == nativeReadingTranslationOnly {
+		return nativeReadingVersion + ":translation-only:v1"
+	}
+	return nativeReadingVersion
+}
+func validNativeReadingGeometry(p nativeReadingPage, layout string) bool {
+	if nativeReadingLayout(layout) == nativeReadingTranslationOnly {
+		return p.OutputWidth == p.Width && p.TranslationOffsetX == 0
+	}
+	return nativeReadingLayout(layout) == nativeReadingSideBySide && p.OutputWidth == 2*p.Width+12 && p.TranslationOffsetX == p.Width+12
+}
 
 type nativeReadingReport struct {
 	Pages      []nativeReadingPage `json:"pages"`
@@ -49,6 +70,7 @@ type nativeReadingParagraph struct {
 }
 type nativeReadingManifest struct {
 	nativeReadingReport
+	Layout              string `json:"layout,omitempty"`
 	Version             int    `json:"version"`
 	DocumentID          string `json:"documentId"`
 	CacheKey            string `json:"cacheKey"`
@@ -74,6 +96,7 @@ type nativeReadingJob struct {
 	mu         sync.Mutex
 	state      nativeReadingStatus
 	documentID string
+	layout     string
 	source     *bilingualJob
 	cancel     context.CancelFunc
 	done       chan struct{}
@@ -165,13 +188,14 @@ func (s *Server) finishNativeReadingJob(j *nativeReadingJob, err error) {
 }
 
 type nativeReadingSnapshot struct {
+	layoutMode                                                          string
 	documentID, paperID, originalHash, layoutHash, translationHash, key string
 	original, layout                                                    []byte
 	manifest                                                            layoutManifest
 	reading                                                             []TranslationBlock
 }
 
-func (s *Server) nativeReadingSnapshot(documentID string) (*nativeReadingSnapshot, error) {
+func (s *Server) nativeReadingSnapshot(documentID string, layouts ...string) (*nativeReadingSnapshot, error) {
 	d, e := s.Store.Document(documentID)
 	if e != nil || d.DeletedAt != "" || d.Type != "pdf" {
 		return nil, errors.New("PDF 文档不存在或已删除")
@@ -220,7 +244,34 @@ func (s *Server) nativeReadingSnapshot(documentID string) (*nativeReadingSnapsho
 	})
 	data, _ := json.Marshal(stable)
 	v := &nativeReadingSnapshot{documentID: d.ID, paperID: d.PaperID, original: original, layout: raw, manifest: m.layoutManifest, reading: stable, originalHash: sourceKey(string(original)), layoutHash: sourceKey(string(raw)), translationHash: sourceKey(string(data))}
-	v.key = sourceKey(v.originalHash + ":" + v.layoutHash + ":" + v.translationHash + ":" + nativeReadingVersion)
+	layout := nativeReadingSideBySide
+	if len(layouts) > 0 {
+		layout = nativeReadingLayout(layouts[0])
+	}
+	if layout != nativeReadingSideBySide && layout != nativeReadingTranslationOnly {
+		return nil, errors.New("invalid reading layout")
+	}
+	v.setLayout(layout)
+	return v, nil
+}
+func (v *nativeReadingSnapshot) setLayout(layout string) {
+	v.layoutMode = nativeReadingLayout(layout)
+	v.key = sourceKey(v.originalHash + ":" + v.layoutHash + ":" + v.translationHash + ":" + nativeReadingRenderer(v.layoutMode))
+}
+
+// Identify the requested cache from a fresh source snapshot, never untrusted metadata.
+func (s *Server) nativeReadingSnapshotForKey(documentID, key string) (*nativeReadingSnapshot, error) {
+	v, e := s.nativeReadingSnapshot(documentID)
+	if e != nil {
+		return nil, e
+	}
+	if v.key == key {
+		return v, nil
+	}
+	v.setLayout(nativeReadingTranslationOnly)
+	if v.key != key {
+		return nil, errors.New("stale reading cache")
+	}
 	return v, nil
 }
 func (s *Server) registerNativePDFReadingRoutes(m *http.ServeMux) {
@@ -246,8 +297,21 @@ func (s *Server) readNativeReading(v *nativeReadingSnapshot) (*nativeReadingMani
 	if e != nil {
 		return nil, nil, e
 	}
+	// Omission is the only legacy default; explicit null/empty/unknown layouts are invalid.
+	var identity struct {
+		Layout json.RawMessage `json:"layout"`
+	}
+	if json.Unmarshal(raw, &identity) != nil {
+		return nil, nil, errors.New("阅读缓存布局无效")
+	}
+	if len(identity.Layout) > 0 {
+		var layout string
+		if json.Unmarshal(identity.Layout, &layout) != nil || (layout != nativeReadingSideBySide && layout != nativeReadingTranslationOnly) {
+			return nil, nil, errors.New("阅读缓存布局无效")
+		}
+	}
 	var m nativeReadingManifest
-	if json.Unmarshal(raw, &m) != nil || m.Version != 1 || m.DocumentID != v.documentID || m.CacheKey != v.key || m.OriginalSHA256 != v.originalHash || m.LayoutRevision != v.layoutHash || m.TranslationRevision != v.translationHash || m.RendererVersion != nativeReadingVersion {
+	if json.Unmarshal(raw, &m) != nil || m.Version != 1 || m.DocumentID != v.documentID || m.CacheKey != v.key || m.OriginalSHA256 != v.originalHash || m.LayoutRevision != v.layoutHash || m.TranslationRevision != v.translationHash || m.RendererVersion != nativeReadingRenderer(v.layoutMode) || nativeReadingLayout(m.Layout) != nativeReadingLayout(v.layoutMode) {
 		return nil, nil, errors.New("阅读缓存修订无效")
 	}
 	if e := validateCachedNativeReadingReport(m.nativeReadingReport, v); e != nil {
@@ -263,9 +327,18 @@ func (s *Server) readNativeReading(v *nativeReadingSnapshot) (*nativeReadingMani
 	return &m, pdf, nil
 }
 func (s *Server) createNativeReading(w http.ResponseWriter, r *http.Request) {
-	var body struct{}
+	var body struct {
+		Layout json.RawMessage `json:"layout"`
+	}
 	if !decode(w, r, &body) {
 		return
+	}
+	layout := nativeReadingSideBySide
+	if len(body.Layout) > 0 {
+		if json.Unmarshal(body.Layout, &layout) != nil || string(body.Layout) == "null" || (layout != nativeReadingSideBySide && layout != nativeReadingTranslationOnly) {
+			fail(w, 400, "无效的阅读布局")
+			return
+		}
 	}
 	ctx, finish, e := s.beginDocumentTask(context.Background(), r.PathValue("id"))
 	if e != nil {
@@ -281,7 +354,7 @@ func (s *Server) createNativeReading(w http.ResponseWriter, r *http.Request) {
 	s.nativeReadingMu.Lock()
 	defer s.nativeReadingMu.Unlock()
 	s.pruneNativeReadingJobsLocked()
-	v, e := s.nativeReadingSnapshot(r.PathValue("id"))
+	v, e := s.nativeReadingSnapshot(r.PathValue("id"), layout)
 	if e != nil {
 		fail(w, 409, "请先完成原文和版面解析后重试")
 		return
@@ -312,7 +385,7 @@ func (s *Server) createNativeReading(w http.ResponseWriter, r *http.Request) {
 	}
 	child, cancel := context.WithTimeout(ctx, bilingualPDFTTL)
 	source := &bilingualJob{documentID: v.documentID, paperID: v.paperID, work: work, originalHash: v.originalHash, layoutHash: v.layoutHash, reading: v.reading, ctx: child, targets: map[string]string{}}
-	j := &nativeReadingJob{state: nativeReadingStatus{ID: id(), CacheKey: v.key, Status: "preparing", Stage: "prepare"}, documentID: v.documentID, source: source, cancel: cancel, done: make(chan struct{})}
+	j := &nativeReadingJob{state: nativeReadingStatus{ID: id(), CacheKey: v.key, Status: "preparing", Stage: "prepare"}, documentID: v.documentID, layout: v.layoutMode, source: source, cancel: cancel, done: make(chan struct{})}
 	if s.nativeReadingJobs == nil {
 		s.nativeReadingJobs = map[string]*nativeReadingJob{}
 	}
@@ -379,7 +452,7 @@ func (s *Server) runNativeReading(j *nativeReadingJob, v *nativeReadingSnapshot)
 	b.state.Stage, b.state.Done, b.state.Total = "layout", 0, len(b.prepared.Pages)
 	b.mu.Unlock()
 	j.mu.Unlock()
-	args = []string{"--stage", "render", "--input", filepath.Join(b.work, "original.pdf"), "--prepared", filepath.Join(b.work, "prepared.json"), "--targets", filepath.Join(b.work, "targets.json"), "--output", filepath.Join(b.work, "output.pdf"), "--mode", "side-by-side", "--reading", "true", "--reading-metadata", filepath.Join(b.work, "report.json")}
+	args = []string{"--stage", "render", "--input", filepath.Join(b.work, "original.pdf"), "--prepared", filepath.Join(b.work, "prepared.json"), "--targets", filepath.Join(b.work, "targets.json"), "--output", filepath.Join(b.work, "output.pdf"), "--mode", nativeReadingLayout(v.layoutMode), "--reading", "true", "--reading-metadata", filepath.Join(b.work, "report.json")}
 	if e = s.bilingualProcessor(b, args); e != nil {
 		return e
 	}
@@ -391,14 +464,14 @@ func (s *Server) runNativeReading(j *nativeReadingJob, v *nativeReadingSnapshot)
 	if json.Unmarshal(raw, &report) != nil {
 		return errors.New("invalid reading report")
 	}
-	if e = validateNativeReadingReport(report, b); e != nil {
+	if e = validateNativeReadingReport(report, b, v.layoutMode); e != nil {
 		return e
 	}
 	pdf, e := limitedBilingualRead(filepath.Join(b.work, "output.pdf"), bilingualFileLimit)
 	if e != nil || !bytes.HasPrefix(pdf, []byte("%PDF-")) {
 		return errors.New("invalid PDF")
 	}
-	m := &nativeReadingManifest{nativeReadingReport: report, Version: 1, DocumentID: v.documentID, CacheKey: v.key, OriginalSHA256: v.originalHash, LayoutRevision: v.layoutHash, TranslationRevision: v.translationHash, RendererVersion: nativeReadingVersion, PDFSHA256: sourceKey(string(pdf)), PDFBytes: len(pdf)}
+	m := &nativeReadingManifest{nativeReadingReport: report, Layout: v.layoutMode, Version: 1, DocumentID: v.documentID, CacheKey: v.key, OriginalSHA256: v.originalHash, LayoutRevision: v.layoutHash, TranslationRevision: v.translationHash, RendererVersion: nativeReadingRenderer(v.layoutMode), PDFSHA256: sourceKey(string(pdf)), PDFBytes: len(pdf)}
 	m.ReportSHA256 = nativeReadingReportHash(report)
 	if e = validateCachedNativeReadingReport(report, v); e != nil {
 		return e
@@ -418,7 +491,7 @@ func (s *Server) runNativeReading(j *nativeReadingJob, v *nativeReadingSnapshot)
 	}
 	s.nativeReadingMu.Lock()
 	defer s.nativeReadingMu.Unlock()
-	current, e := s.nativeReadingSnapshot(v.documentID)
+	current, e := s.nativeReadingSnapshot(v.documentID, v.layoutMode)
 	if e != nil || current.key != v.key || b.ctx.Err() != nil {
 		return errors.New("stale reading task")
 	}
@@ -437,13 +510,17 @@ func (s *Server) runNativeReading(j *nativeReadingJob, v *nativeReadingSnapshot)
 	j.mu.Unlock()
 	return nil
 }
-func validateNativeReadingReport(report nativeReadingReport, b *bilingualJob) error {
+func validateNativeReadingReport(report nativeReadingReport, b *bilingualJob, layouts ...string) error {
+	layout := nativeReadingSideBySide
+	if len(layouts) > 0 {
+		layout = layouts[0]
+	}
 	if len(report.Pages) != len(b.prepared.Pages) {
 		return errors.New("missing reading pages")
 	}
 	translated, original := 0, 0
 	for i, p := range report.Pages {
-		if p.Page != i+1 || p.Width <= 0 || p.Height <= 0 || p.OutputWidth != 2*p.Width+12 || p.TranslationOffsetX != p.Width+12 || len(p.Paragraphs) != len(b.prepared.Pages[i].Paragraphs) {
+		if p.Page != i+1 || p.Width <= 0 || p.Height <= 0 || !validNativeReadingGeometry(p, layout) || len(p.Paragraphs) != len(b.prepared.Pages[i].Paragraphs) {
 			return errors.New("invalid reading geometry")
 		}
 		for k, q := range p.Paragraphs {
@@ -492,7 +569,7 @@ func (s *Server) nativeReadingStatus(w http.ResponseWriter, r *http.Request) {
 	}
 	defer finish()
 	state := j.snapshot()
-	v, e := s.nativeReadingSnapshot(r.PathValue("id"))
+	v, e := s.nativeReadingSnapshot(r.PathValue("id"), j.layout)
 	if e != nil || v.key != state.CacheKey {
 		j.cancelWork()
 		fail(w, 409, "原文或译文已变化，请重新生成")
@@ -528,7 +605,7 @@ func (s *Server) nativeReadingCache(w http.ResponseWriter, r *http.Request, file
 	var once sync.Once
 	release := func() { once.Do(finish) }
 	defer release()
-	v, e := s.nativeReadingSnapshot(r.PathValue("id"))
+	v, e := s.nativeReadingSnapshotForKey(r.PathValue("id"), r.PathValue("key"))
 	if e != nil || v.key != r.PathValue("key") {
 		fail(w, 409, "原文或译文已变化，请重新生成")
 		return
@@ -577,7 +654,7 @@ func validateCachedNativeReadingReport(report nativeReadingReport, v *nativeRead
 	ids := map[string]bool{}
 	translated, original := 0, 0
 	for i, p := range report.Pages {
-		if p.Page != i+1 || !finiteNativeReadingNumber(p.Width) || !finiteNativeReadingNumber(p.Height) || p.Width <= 0 || p.Height <= 0 || p.Width > 14400 || p.Height > 14400 || p.OutputWidth != 2*p.Width+12 || p.TranslationOffsetX != p.Width+12 || p.Paragraphs == nil {
+		if p.Page != i+1 || !finiteNativeReadingNumber(p.Width) || !finiteNativeReadingNumber(p.Height) || p.Width <= 0 || p.Height <= 0 || p.Width > 14400 || p.Height > 14400 || !validNativeReadingGeometry(p, v.layoutMode) || p.Paragraphs == nil {
 			return invalid()
 		}
 		for _, q := range p.Paragraphs {

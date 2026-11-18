@@ -338,10 +338,18 @@ export const api = {
     request<import("@interleaf/core").TranslationBlock[]>(
       `/api/documents/${id}/translations`,
     ),
-  createNativePDFReading: (id: string, signal?: AbortSignal) =>
+  createNativePDFReading: (
+    id: string,
+    signal?: AbortSignal,
+    layout?: import("@interleaf/core").NativePDFReadingLayout,
+  ) =>
     request<import("@interleaf/core").NativePDFReadingJob>(
       `/api/documents/${encodeURIComponent(id)}/native-pdf-reading`,
-      { method: "POST", body: "{}", signal },
+      {
+        method: "POST",
+        body: JSON.stringify(layout === "translation-only" ? { layout } : {}),
+        signal,
+      },
     ),
   nativePDFReading: (id: string, job: string, signal?: AbortSignal) =>
     request<import("@interleaf/core").NativePDFReadingJob>(

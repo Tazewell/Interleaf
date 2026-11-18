@@ -6681,7 +6681,9 @@ export interface paths {
             };
             requestBody: {
                 content: {
-                    "application/json": Record<string, never>;
+                    "application/json": {
+                        layout?: components["schemas"]["NativePDFReadingLayout"];
+                    };
                 };
             };
             responses: {
@@ -8126,7 +8128,14 @@ export interface components {
             translationOffsetX: number;
             paragraphs: components["schemas"]["NativePDFReadingParagraph"][];
         };
+        /**
+         * @default side-by-side
+         * @enum {string}
+         */
+        NativePDFReadingLayout: "side-by-side" | "translation-only";
         NativePDFReadingManifest: {
+            /** @description Omitted by historical metadata; defaults to side-by-side. */
+            layout?: components["schemas"]["NativePDFReadingLayout"];
             /** @constant */
             version: 1;
             documentId: string;
