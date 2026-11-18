@@ -2,6 +2,7 @@ import { create } from "zustand";
 import {
   AlertDialog,
   AlertDialogAction,
+  AlertDialogCancel,
   AlertDialogContent,
   AlertDialogDescription,
   AlertDialogFooter,
@@ -9,12 +10,9 @@ import {
   AlertDialogTitle,
 } from "@interleaf/ui/components/alert-dialog";
 
-export interface LargePaper {
+interface LargePaper {
   name: string;
   pages: number;
-  /** Browser uploads keep the file; desktop imports keep a one-time ID. */
-  file?: File;
-  id?: string;
 }
 
 export function LargePaperDialog({
@@ -42,7 +40,18 @@ export function LargePaperDialog({
             请确认是否是论文？如果是图书类，请导入图书库。
           </AlertDialogDescription>
         </AlertDialogHeader>
+        {papers.some((paper) => paper.pages > 0) && (
+          <ul className="max-h-40 space-y-1 overflow-auto text-sm text-muted-foreground">
+            {papers.map((paper, index) => (
+              <li key={index} className="break-words">
+                {paper.name}
+                {paper.pages > 0 ? ` · ${paper.pages} 页` : ""}
+              </li>
+            ))}
+          </ul>
+        )}
         <AlertDialogFooter>
+          <AlertDialogCancel disabled={busy}>取消</AlertDialogCancel>
           <AlertDialogAction
             variant="outline"
             disabled={busy}

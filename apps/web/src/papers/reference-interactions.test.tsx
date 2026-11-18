@@ -95,7 +95,7 @@ const button = (label: string) =>
     (b) =>
       b.textContent?.trim() === label || b.getAttribute("aria-label") === label,
   );
-it("disables file actions for metadata-only papers without snapshot requests", async () => {
+it("offers attachment import for metadata-only papers without requesting a snapshot", async () => {
   await act(async () =>
     root.render(
       <PaperDetail
@@ -104,7 +104,7 @@ it("disables file actions for metadata-only papers without snapshot requests", a
       />,
     ),
   );
-  expect(button("先添加附件")?.disabled).toBe(true);
+  expect(button("添加附件")?.disabled).toBe(false);
   expect(button("查找论文信息")?.disabled).toBe(true);
   expect(api.snapshotStatus).not.toHaveBeenCalled();
 });

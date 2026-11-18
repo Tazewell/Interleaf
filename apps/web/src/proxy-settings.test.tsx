@@ -87,6 +87,7 @@ beforeEach(() => {
     setAppearance: vi.fn(),
     importFiles: vi.fn(),
     importLargePapers: vi.fn(),
+    retryImports: vi.fn(),
     showDocumentFile: vi.fn(),
     openDocumentFile: vi.fn(),
     openExternal: vi.fn(),

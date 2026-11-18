@@ -77,6 +77,9 @@ contextBridge.exposeInMainWorld("interleafDesktop", {
     library: "books" | "papers",
     folder = "",
   ) => ipcRenderer.invoke("interleaf:import-large", ids, library, folder),
+  retryImports: (ids: string[], library: "books" | "papers", folder = "") =>
+    ipcRenderer.invoke("interleaf:retry-imports", ids, library, folder),
+  discardImports: (ids: string[]) => ipcRenderer.invoke("interleaf:discard-imports", ids),
   showDocumentFile: (id: string, type: "pdf" | "epub") =>
     ipcRenderer.invoke("interleaf:document-file", id, type, "show"),
   openDocumentFile: (id: string, type: "pdf" | "epub") =>

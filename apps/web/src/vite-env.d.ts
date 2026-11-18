@@ -57,12 +57,18 @@ interface Window {
     importFiles: (
       library: "books" | "papers",
       folder?: string,
-    ) => Promise<Array<{ id: string; name: string; pages: number }>>;
+    ) => Promise<import("@interleaf/core").DesktopImportResult[]>;
     importLargePapers: (
       ids: string[],
       library: "books" | "papers",
       folder?: string,
-    ) => Promise<void>;
+    ) => Promise<import("@interleaf/core").DesktopImportResult[]>;
+    retryImports: (
+      ids: string[],
+      library: "books" | "papers",
+      folder?: string,
+    ) => Promise<import("@interleaf/core").DesktopImportResult[]>;
+    discardImports?: (ids: string[]) => Promise<void>;
     showDocumentFile: (id: string, type: "pdf" | "epub") => Promise<void>;
     openDocumentFile: (id: string, type: "pdf" | "epub") => Promise<void>;
     openExternal: (url: string) => Promise<void>;

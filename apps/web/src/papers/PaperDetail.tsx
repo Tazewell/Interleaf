@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   BookOpen,
   ArrowSquareOut as ExternalLink,
@@ -21,6 +21,7 @@ import type {
 } from "@interleaf/core";
 import { Button } from "@interleaf/ui/components/button";
 import { api, publicationURL } from "@interleaf/api";
+import { toast } from "sonner";
 import {
   Dialog,
   DialogContent,
@@ -45,7 +46,8 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@interleaf/ui/components/dropdown-menu";
-import { useReaderStore } from "../store";
+import { refreshLibrary, useReaderStore } from "../store";
+import { libraryModes } from "../LibraryModeSwitcher";
 import { libraryPapers } from "./projection";
 import {
   lookupPaper,
@@ -173,6 +175,33 @@ export function PaperDetail({
   const [lookingUp, setLookingUp] = useState(false);
   const [snapshotAvailable, setSnapshotAvailable] = useState(false);
   const [snapshotOpen, setSnapshotOpen] = useState(false);
+  const attachmentInput = useRef<HTMLInputElement>(null);
+  const [addingAttachment, setAddingAttachment] = useState(false);
+  const [attachmentFailure, setAttachmentFailure] = useState<{
+    document: Document;
+    message: string;
+  }>();
+  const addAttachment = async (file?: File) => {
+    if (!doc.paperId || addingAttachment) return;
+    setAddingAttachment(true);
+    let imported: Document | undefined;
+    try {
+      imported = file
+        ? await api.import(file, "books")
+        : attachmentFailure?.document;
+      if (!imported) return;
+      await api.attachPaper(doc.paperId, imported.id, "original", true);
+      setAttachmentFailure(undefined);
+    } catch (error) {
+      const message = (error as Error).message;
+      if (imported) setAttachmentFailure({ document: imported, message });
+      else toast.error(message);
+    } finally {
+      if (imported)
+        await refreshLibrary().catch((error) => toast.error(error.message));
+      setAddingAttachment(false);
+    }
+  };
   useEffect(() => {
     let active = true;
     setSnapshotAvailable(false);
@@ -231,21 +260,54 @@ export function PaperDetail({
           }}
         />
         <p className="paper-detail-byline">{paperByline(doc)}</p>
-        <Button
-          className="paper-detail-open"
-          disabled={doc.metadataOnly}
-          title={doc.metadataOnly ? "该文献尚无附件" : undefined}
-          onClick={() => actions.open(doc)}
-        >
-          <BookOpen />
-          {percent > 1
-            ? `继续阅读 · ${percent}%`
-            : doc.metadataOnly
-              ? doc.attachments?.length
-                ? "从附件打开"
-                : "先添加附件"
-              : "开始阅读"}
-        </Button>
+        {doc.metadataOnly ? (
+          <>
+            <input
+              ref={attachmentInput}
+              type="file"
+              accept=".pdf,.epub"
+              hidden
+              onChange={(event) => {
+                const file = event.currentTarget.files?.[0];
+                event.currentTarget.value = "";
+                if (file) void addAttachment(file);
+              }}
+            />
+            <Button
+              className="paper-detail-open"
+              disabled={addingAttachment || !doc.paperId}
+              onClick={() => attachmentInput.current?.click()}
+            >
+              <Plus />
+              {addingAttachment ? "正在添加附件…" : "添加附件"}
+            </Button>
+            {attachmentFailure && (
+              <div className="space-y-1">
+                <p className="text-sm text-muted-foreground" role="status">
+                  《{attachmentFailure.document.title}》仍在
+                  {libraryModes[attachmentFailure.document.library].label}。
+                  添加附件失败：{attachmentFailure.message}
+                </p>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={addingAttachment}
+                  onClick={() => void addAttachment()}
+                >
+                  重试添加附件
+                </Button>
+              </div>
+            )}
+          </>
+        ) : (
+          <Button
+            className="paper-detail-open"
+            onClick={() => actions.open(doc)}
+          >
+            <BookOpen />
+            {percent > 1 ? `继续阅读 · ${percent}%` : "开始阅读"}
+          </Button>
+        )}
         <div className="paper-detail-actions">
           <DropdownMenu>
             <DropdownMenuTrigger

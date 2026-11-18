@@ -46,7 +46,7 @@ export function filterDocuments(
               ? d.percentage >= 1
               : d.percentage > 0 && d.percentage < 1)) &&
         filters.tags.every((tag) => tags.includes(tag.toLowerCase())) &&
-        `${d.title} ${d.author} ${d.tags.join(" ")}`
+        `${d.title} ${d.author} ${d.tags.join(" ")} ${d.metadata.doi ?? ""}`
           .toLocaleLowerCase()
           .includes(text)
       );

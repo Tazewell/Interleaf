@@ -1,3 +1,4 @@
+export type { DesktopImportResult } from "./desktop-import";
 export type {
   BilingualPDFOptions,
   BilingualPDFJob,

@@ -159,6 +159,9 @@ export interface PaperLibraryProps {
   openDocument: (doc: Document) => void;
   moveToBooks: (doc: Document) => void;
   onResearchFolder?: (folder: string) => void;
+  onImportFiles?: () => void;
+  onImportOther?: () => void;
+  importing?: boolean;
 }
 
 const busy = (job?: Processing) =>
@@ -172,6 +175,9 @@ export function PaperLibrary({
   openDocument: openFile,
   moveToBooks,
   onResearchFolder,
+  onImportFiles,
+  onImportOther,
+  importing,
 }: PaperLibraryProps) {
   const openDocument = (doc: Document) => {
     if (!doc.metadataOnly)
@@ -261,7 +267,10 @@ export function PaperLibrary({
       .filter((group) => group.length > 0);
   }, [view, visible, documents, prefs.notDuplicates]);
   const visibleIds = visible.map((d) => d.id);
-  const selected = documents.find((d) => d.id === selectedId);
+  const selected = documents.find(
+    (d) =>
+      d.id === selectedId || (d.paperId && `paper:${d.paperId}` === selectedId),
+  );
   const pickedDocs = documents.filter((d) => picked.has(d.id));
   const pickedById = new Map(pickedDocs.map((doc) => [doc.id, doc]));
   const pickedPDFs = [...picked]
@@ -351,7 +360,8 @@ export function PaperLibrary({
   }, []);
   useEffect(() => {
     // A paper that left the library (trash, move) cannot stay selected.
-    if (selectedId && !selected) ui.select(null);
+    if (selectedId && selectedId !== selected?.id)
+      ui.select(selected?.id ?? null);
   }, [selectedId, selected, ui]);
   const mainRef = useRef<HTMLElement>(null);
   useEffect(() => {
@@ -544,6 +554,24 @@ export function PaperLibrary({
   const emptyState = (
     <div className="empty-state">
       <h2>{documents.length ? "没有符合条件的论文" : "暂无论文"}</h2>
+      {!documents.length && (onImportFiles || onImportOther) && (
+        <div className="flex flex-wrap justify-center gap-2">
+          {onImportFiles && (
+            <Button onClick={onImportFiles} disabled={importing}>
+              导入论文 PDF
+            </Button>
+          )}
+          {onImportOther && (
+            <Button
+              variant="outline"
+              onClick={onImportOther}
+              disabled={importing}
+            >
+              其他导入方式
+            </Button>
+          )}
+        </div>
+      )}
       {documents.length > 0 &&
         (query || view !== "all" || tagFilter.tags.length > 0) && (
           <Button

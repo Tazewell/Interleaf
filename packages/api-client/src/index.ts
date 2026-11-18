@@ -46,7 +46,12 @@ import type {
   JournalRankConfig,
   JournalRankResult,
 } from "@interleaf/core";
-import { request, sessionToken, RequestError } from "./transport";
+import {
+  request,
+  requestResponse,
+  sessionToken,
+  RequestError,
+} from "./transport";
 import { nativeAI } from "./native-ai";
 export { researchAPI } from "./research";
 export { configureAPI, RequestError } from "./transport";
@@ -63,6 +68,25 @@ export function blockImageURL(
     documentId,
     `assets/${encodeURIComponent(blockId)}.png${revision ? `?v=${encodeURIComponent(revision)}` : ""}`,
   );
+}
+function uploadDocument(
+  file: File,
+  library: LibraryMode,
+  allowLarge: boolean,
+  folder: string,
+) {
+  const form = new FormData();
+  form.append("library", library);
+  if (allowLarge) form.append("allowLarge", "1");
+  if (folder.startsWith("smart:"))
+    form.append("smartCategory", folder.slice(6));
+  else if (folder)
+    form.append(
+      "folder",
+      folder.startsWith("folder:") ? folder.slice(7) : folder,
+    );
+  form.append("file", file);
+  return requestResponse("/api/documents", { method: "POST", body: form });
 }
 export const client = createClient<paths>();
 client.use({
@@ -510,19 +534,21 @@ export const api = {
     library: LibraryMode = "books",
     allowLarge = false,
     folder = "",
-  ) => {
-    const form = new FormData();
-    form.append("library", library);
-    if (allowLarge) form.append("allowLarge", "1");
-    if (folder.startsWith("smart:"))
-      form.append("smartCategory", folder.slice(6));
-    else if (folder)
-      form.append(
-        "folder",
-        folder.startsWith("folder:") ? folder.slice(7) : folder,
-      );
-    form.append("file", file);
-    return request<Document>("/api/documents", { method: "POST", body: form });
+  ) =>
+    uploadDocument(file, library, allowLarge, folder).then(
+      (response): Promise<Document> => response.json(),
+    ),
+  importWithOutcome: async (
+    file: File,
+    library: LibraryMode,
+    allowLarge: boolean,
+    folder: string,
+  ): Promise<{ document: Document; existing: boolean }> => {
+    const response = await uploadDocument(file, library, allowLarge, folder);
+    return {
+      document: await response.json(),
+      existing: response.status === 200,
+    };
   },
   /** Import a paper from an arXiv ID, DOI, paper link, PDF link or title. */
   resolveDocument: (

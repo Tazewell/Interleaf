@@ -10,7 +10,7 @@ import {
 import { spawn, type ChildProcess } from "node:child_process";
 import { join, resolve } from "node:path";
 import { createInterface } from "node:readline";
-import { readFile, realpath, lstat } from "node:fs/promises";
+import { realpath, lstat } from "node:fs/promises";
 import {
   libraryDirectory,
   migrateLibrary,
@@ -38,6 +38,7 @@ import { startDiagnosticService } from "./diagnostic-service";
 import { serverSpawnDiagnostics } from "./server-spawn-diagnostics";
 import { discoverEndNote } from "./endnote-discovery";
 import { commandLineStatus, setCommandLine } from "./command-line";
+import { DesktopImportService } from "./desktop-import";
 const isolation = devIsolation({
   isPackaged: app.isPackaged,
   env: process.env,
@@ -197,47 +198,35 @@ function windowBackground(appearance: unknown) {
   if (appearance === "sepia") return "#eeede7";
   return nativeTheme.shouldUseDarkColors ? "#171717" : "#ffffff";
 }
-// Long papers wait for the reader's choice. The renderer refers to them by
-// one-time IDs, never by path.
-const largePapers = new Map<string, string>();
-async function importPaths(
-  paths: string[],
-  library: "books" | "papers" = "books",
-  allowLarge = false,
-  folder = "",
-) {
-  const accepted = library === "papers" ? /\.pdf$/i : /\.(epub|pdf)$/i;
-  const large: Array<{ id: string; name: string; pages: number }> = [];
-  for (const path of paths) {
-    if (!accepted.test(path)) continue;
-    const data = await readFile(path);
-    const name = path.split(/[\\/]/).pop()!;
-    const form = new FormData();
-    form.append("library", library);
-    if (allowLarge) form.append("allowLarge", "1");
-    if (folder.startsWith("smart:"))
-      form.append("smartCategory", folder.slice(6));
-    else if (folder)
-      form.append(
-        "folder",
-        folder.startsWith("folder:") ? folder.slice(7) : folder,
-      );
-    form.append("file", new Blob([data]), name);
-    const response = await fetch(`${serverURL}/api/documents`, {
+// Import capabilities stay in the main process. The renderer only receives
+// one-time IDs for paths the reader selected in the native file picker.
+const documentImports = new DesktopImportService(
+  (body) =>
+    fetch(`${serverURL}/api/documents`, {
       method: "POST",
       headers: { Authorization: `Bearer ${serverToken}` },
-      body: form,
-    });
-    if (!response.ok) {
-      const failure = await response.json();
-      if (failure.code !== "large-paper") throw new Error(failure.error);
-      const id = randomBytes(16).toString("hex");
-      largePapers.set(id, path);
-      large.push({ id, name, pages: failure.pages });
-    }
-  }
-  window?.webContents.send("interleaf:library-changed");
-  return large;
+      body,
+    }),
+  () => {
+    if (window && !window.isDestroyed())
+      window.webContents.send("interleaf:library-changed");
+  },
+);
+async function importOpenedFiles(paths: string[]) {
+  const results = await documentImports.importPaths(paths, "books");
+  documentImports.discard(results.flatMap(({ retryId }) => retryId ? [retryId] : []));
+  const failures = results.flatMap((result) =>
+    result.status === "failed"
+      ? [`${result.name}：${result.message}`]
+      : result.status === "large"
+        ? [`${result.name}：请从书库导入并确认长文献。`]
+        : [],
+  );
+  if (failures.length)
+    dialog.showErrorBox(
+      "导入失败",
+      failures.join("\n"),
+    );
 }
 // interleaf:// links reach one window. The renderer claims queued links once its
 // listener exists; later links are sent directly.
@@ -276,7 +265,7 @@ const pendingFiles: string[] = [];
 app.on("open-file", (event, path) => {
   event.preventDefault();
   if (serverURL)
-    void importPaths([path]).catch((e) =>
+    void importOpenedFiles([path]).catch((e) =>
       dialog.showErrorBox("导入失败", e.message),
     );
   else pendingFiles.push(path);
@@ -775,32 +764,39 @@ app
         });
         return selected.canceled
           ? []
-          : importPaths(selected.filePaths, library, false, folder);
+          : documentImports.importPaths(selected.filePaths, library, folder);
       },
     );
-    ipcMain.handle(
-      "interleaf:import-large",
-      async (event, ids: unknown, library: unknown, folder: unknown) => {
-        if (
-          event.sender !== window?.webContents ||
-          event.senderFrame !== window.webContents.mainFrame
-        )
-          throw new Error("Invalid sender");
-        if (
-          !Array.isArray(ids) ||
-          (library !== "books" && library !== "papers") ||
-          typeof folder !== "string" ||
-          (library !== "papers" && folder)
-        )
-          throw new Error("Invalid import");
-        const paths = ids.flatMap((id) => {
-          const path = typeof id === "string" ? largePapers.get(id) : undefined;
-          if (path) largePapers.delete(id);
-          return path ? [path] : [];
-        });
-        await importPaths(paths, library, true, folder);
-      },
-    );
+    ipcMain.handle("interleaf:discard-imports", (event, ids: unknown) => {
+      settingsSender(event);
+      if (!Array.isArray(ids) || ids.some((id) => typeof id !== "string"))
+        throw new Error("Invalid import");
+      documentImports.discard(ids);
+    });
+    for (const [channel, kind] of [
+      ["interleaf:import-large", "large"],
+      ["interleaf:retry-imports", "failed"],
+    ] as const) {
+      ipcMain.handle(
+        channel,
+        async (event, ids: unknown, library: unknown, folder: unknown) => {
+          if (
+            event.sender !== window?.webContents ||
+            event.senderFrame !== window.webContents.mainFrame
+          )
+            throw new Error("Invalid sender");
+          if (
+            !Array.isArray(ids) ||
+            ids.some((id) => typeof id !== "string") ||
+            (library !== "books" && library !== "papers") ||
+            typeof folder !== "string" ||
+            (library !== "papers" && folder)
+          )
+            throw new Error("Invalid import");
+          return documentImports.retry(ids, kind, library, folder);
+        },
+      );
+    }
     ipcMain.handle(
       "interleaf:configure-bibliography-export",
       async (event, options: unknown) => {
@@ -847,7 +843,7 @@ app
       },
     );
     await window.loadURL(`${url}/#token=${serverToken}`);
-    if (pendingFiles.length) await importPaths(pendingFiles.splice(0));
+    if (pendingFiles.length) await importOpenedFiles(pendingFiles.splice(0));
     updateService = await startUpdateService(window);
     ipcMain.handle("interleaf:check-updates", (event) => {
       if (

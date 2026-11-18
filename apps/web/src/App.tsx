@@ -23,12 +23,8 @@ import {
   Sun,
 } from "@phosphor-icons/react";
 import { version } from "../../desktop/package.json";
-import { api, RequestError, researchAPI } from "@interleaf/api";
-import {
-  LargePaperConfirmation,
-  LargePaperDialog,
-  type LargePaper,
-} from "./LargePaperDialog";
+import { api, researchAPI } from "@interleaf/api";
+import { LargePaperConfirmation, LargePaperDialog } from "./LargePaperDialog";
 import type { Document, LibraryMode } from "@interleaf/core";
 import { Button } from "@interleaf/ui/components/button";
 import { Tabs, TabsTrigger } from "@interleaf/ui/components/tabs";
@@ -71,15 +67,11 @@ import { PaperLibrary } from "./papers/PaperLibrary";
 import { PaperSidebar } from "./papers/PaperSidebar";
 import { ResearchPanel } from "./research/ResearchPanel";
 import { ResearchNavigation } from "./research/ResearchNavigation";
-import {
-  researchEpoch,
-  researchSignal,
-  resetResearchLibrary,
-} from "./research/research-session";
+import { researchEpoch, researchSignal } from "./research/research-session";
 import { usePaperUI } from "./papers/state";
 import { ImportPaperDialog } from "./papers/ImportPaperDialog";
 import { libraryModes } from "./LibraryModeSwitcher";
-import { Settings } from "./Settings";
+import { Settings, type SettingsTarget } from "./Settings";
 import { Workspace } from "./Workspace";
 import { useProcessing } from "./ProcessingStatus";
 import { useUpdateProgress } from "./update-progress";
@@ -90,6 +82,9 @@ import { LibraryDocuments } from "./LibraryDocuments";
 import { filterDocuments, initialFilters } from "./library";
 import { ReleaseNotesHost } from "./release-notes/ReleaseNotesHost";
 import { libraryPapers } from "./papers/projection";
+import { LibrarySearchDialog } from "./LibrarySearchDialog";
+import { ImportResultsDialog } from "./ImportResultsDialog";
+import { useLibraryImport, type ImportTarget } from "./library-import";
 const currentMode = () =>
   libraryMode(useReaderStore.getState().libraryPreferences);
 export function App() {
@@ -154,9 +149,15 @@ export function App() {
       }),
     [],
   );
-  const documents = papers
-    ? libraryPapers(paperItems, allDocuments)
-    : allDocuments.filter((d) => d.library === mode);
+  const paperDocuments = useMemo(
+    () => libraryPapers(paperItems, allDocuments),
+    [paperItems, allDocuments],
+  );
+  const bookDocuments = useMemo(
+    () => allDocuments.filter((d) => d.library === "books"),
+    [allDocuments],
+  );
+  const documents = papers ? paperDocuments : bookDocuments;
   const resolvedTheme = useResolvedTheme(theme);
   const { jobs, error: processingError } = useProcessing();
   useUpdateProgress();
@@ -165,6 +166,11 @@ export function App() {
     [jobs],
   );
   const [settings, setSettings] = useState(false);
+  const [settingsTarget, setSettingsTarget] = useState<SettingsTarget>();
+  const openSettings = (target?: SettingsTarget) => {
+    setSettingsTarget(target);
+    setSettings(true);
+  };
   const [checkingUpdates, setCheckingUpdates] = useState(false);
   const [about, setAbout] = useState(false);
   const [filter, setFilter] = useState("all");
@@ -173,10 +179,9 @@ export function App() {
   const [editingLibrary, setEditingLibrary] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
-  const [commandQuery, setCommandQuery] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [largePapers, setLargePapers] = useState<LargePaper[]>([]);
-  const [largePaperFolder, setLargePaperFolder] = useState("");
+  const importer = useLibraryImport();
+  const [sampleBusy, setSampleBusy] = useState(false);
+  const busy = sampleBusy || importer.busy;
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [command, setCommand] = useState(false);
@@ -185,7 +190,8 @@ export function App() {
   useShortcut("libraryLeft", () => setNav((value) => !value), !active);
   useShortcut("search", () => setCommand(true), !active);
   const fileRef = useRef<HTMLInputElement>(null);
-  const fileFolderRef = useRef("");
+  const fileTargetRef = useRef<ImportTarget | null>(null);
+  const chooseFilesRef = useRef<() => void>(() => {});
   const hydrated = useRef(false);
   useEffect(() => {
     Promise.all([
@@ -231,7 +237,7 @@ export function App() {
       }
       if ((e.metaKey || e.ctrlKey) && e.key === "o") {
         e.preventDefault();
-        chooseFiles();
+        chooseFilesRef.current();
       }
     };
     window.addEventListener("keydown", key);
@@ -244,55 +250,21 @@ export function App() {
       ? view
       : "";
   };
-  const chooseFiles = (folder = currentPaperFolder()) => {
+  const importTarget = (folder = currentPaperFolder()): ImportTarget => {
+    const library = currentMode();
+    return { library, folder: library === "papers" ? folder : "" };
+  };
+  const chooseFiles = (folder?: string) => {
+    if (busy || importer.entries.length) return;
+    const target = importTarget(folder);
     if (window.interleafDesktop) {
-      setBusy(true);
-      void window.interleafDesktop
-        .importFiles(currentMode(), folder)
-        .then((large) => {
-          setLargePapers(large);
-          setLargePaperFolder(folder);
-        })
-        .catch((e) => toast.error(e.message))
-        .finally(() => setBusy(false));
+      void importer.choose(target);
     } else {
-      fileFolderRef.current = folder;
+      fileTargetRef.current = target;
       fileRef.current?.click();
     }
   };
-  // Long papers are confirmed together: keep them as papers or switch to books.
-  const importLargePapers = async (library: LibraryMode) => {
-    const papers = largePapers;
-    setBusy(true);
-    try {
-      if (library === "books") switchMode("books");
-      const desktop = papers.flatMap((p) => (p.id ? [p.id] : []));
-      if (desktop.length)
-        await window.interleafDesktop?.importLargePapers(
-          desktop,
-          library,
-          library === "papers" ? largePaperFolder : "",
-        );
-      for (const paper of papers)
-        if (paper.file)
-          await api.import(
-            paper.file,
-            library,
-            true,
-            library === "papers" ? largePaperFolder : "",
-          );
-      await refreshLibrary();
-      toast.success(
-        `已导入 ${papers.length} 个文件到${libraryModes[library].label}`,
-      );
-    } catch (e) {
-      toast.error((e as Error).message);
-    } finally {
-      setLargePapers([]);
-      setLargePaperFolder("");
-      setBusy(false);
-    }
-  };
+  chooseFilesRef.current = chooseFiles;
   useEffect(() => {
     if (loading) return;
     return window.interleafDesktop?.onOpenLink?.((target) => {
@@ -306,11 +278,6 @@ export function App() {
   useEffect(
     () =>
       window.interleafDesktop?.onLibraryChanged(() => {
-        resetResearchLibrary();
-        ++researchSelection.current;
-        researchOpening.current = null;
-        usePaperUI.getState().setResearchTopic(null);
-        usePaperUI.getState().setResearchTarget(null);
         void refreshLibrary().catch((e) => toast.error(e.message));
       }),
     [],
@@ -335,56 +302,8 @@ export function App() {
       window.clearInterval(timer);
     };
   }, []);
-  const importFiles = async (files: File[], folder = currentPaperFolder()) => {
-    const target = currentMode();
-    const accepted = files.filter((file) =>
-      target === "papers"
-        ? /\.pdf$/i.test(file.name)
-        : /\.(epub|pdf)$/i.test(file.name),
-    );
-    if (accepted.length < files.length)
-      toast.info(
-        target === "papers"
-          ? "论文库只支持 PDF，已跳过其他文件"
-          : "仅支持 EPUB 和 PDF，已跳过其他文件",
-      );
-    if (!accepted.length) return;
-    setBusy(true);
-    try {
-      const elsewhere: Document[] = [];
-      const large: LargePaper[] = [];
-      for (const file of accepted) {
-        try {
-          const document = await api.import(
-            file,
-            target,
-            false,
-            target === "papers" ? folder : "",
-          );
-          if (document.library !== target) elsewhere.push(document);
-        } catch (e) {
-          if (!(e instanceof RequestError) || e.code !== "large-paper") throw e;
-          large.push({ name: file.name, pages: e.pages ?? 0, file });
-        }
-      }
-      await refreshLibrary();
-      setLargePapers(large);
-      setLargePaperFolder(folder);
-      if (elsewhere.length)
-        toast.info(
-          `${elsewhere.length} 个文件已在${libraryModes[elsewhere[0].library].label}中，可在那里移动`,
-        );
-      const imported = accepted.length - elsewhere.length - large.length;
-      if (imported > 0) toast.success(`已导入 ${imported} 个文件`);
-      setError("");
-    } catch (e) {
-      toast.error((e as Error).message);
-    } finally {
-      setBusy(false);
-    }
-  };
   const sample = async () => {
-    setBusy(true);
+    setSampleBusy(true);
     try {
       for (const name of ["the-art-of-reading.epub", "reading-notes.pdf"]) {
         const response = await fetch(`/samples/${name}`);
@@ -396,13 +315,16 @@ export function App() {
     } catch (e) {
       toast.error((e as Error).message);
     } finally {
-      setBusy(false);
+      setSampleBusy(false);
     }
+  };
+  const cancelResearchOpening = () => {
+    ++researchSelection.current;
+    researchOpening.current = null;
   };
   const switchMode = (next: LibraryMode) => {
     if (next === mode) return;
-    ++researchSelection.current;
-    researchOpening.current = null;
+    cancelResearchOpening();
     usePaperUI.getState().setResearchTopic(null);
     setFilter("all");
     setFilters(initialFilters);
@@ -428,17 +350,26 @@ export function App() {
     open(doc);
     void api.update(doc.id, {}).catch((e) => toast.error(e.message));
   };
+  const openSearchResult = (doc: Document) => {
+    switchMode(doc.library);
+    if (!doc.metadataOnly) {
+      openDocument(doc);
+      return;
+    }
+    cancelResearchOpening();
+    open(null);
+    const paperUI = usePaperUI.getState();
+    paperUI.setView("all");
+    paperUI.setQuery("");
+    paperUI.setTagFilter({ ...paperUI.tagFilter, tags: [] });
+    paperUI.stopPicking();
+    paperUI.select(doc.id);
+  };
   const filtered = filterDocuments(
     documents,
     filter,
     filter === "all" ? "" : query,
     filters,
-  );
-  const searchResults = filterDocuments(
-    documents,
-    "all",
-    commandQuery,
-    initialFilters,
   );
   const editing = documents.find((d) => d.id === editingId);
   const awaitingClassification = documents.some(
@@ -482,7 +413,11 @@ export function App() {
         }}
         onDrop={(e) => {
           e.preventDefault();
-          void importFiles(Array.from(e.dataTransfer.files));
+          if (!busy)
+            void importer.drop(
+              Array.from(e.dataTransfer.files),
+              importTarget(),
+            );
         }}
       >
         <input
@@ -492,10 +427,11 @@ export function App() {
           multiple
           accept={papers ? ".pdf" : ".pdf,.epub"}
           onChange={(e) => {
-            void importFiles(
+            void importer.drop(
               Array.from(e.target.files || []),
-              fileFolderRef.current,
+              fileTargetRef.current ?? importTarget(),
             );
+            fileTargetRef.current = null;
             e.target.value = "";
           }}
         />
@@ -509,7 +445,8 @@ export function App() {
               open(null);
               void refreshLibrary();
             }}
-            onSettings={() => setSettings(true)}
+            onSettings={openSettings}
+            backLabel={papers && researchTopicId ? "返回主题研究" : undefined}
           />
         ) : (
           <>
@@ -560,11 +497,7 @@ export function App() {
                 onClick={() => setCommand(true)}
               >
                 <Search />
-                <span className="gnav-search-label">
-                  {papers
-                    ? "搜索论文标题、作者、DOI、标签"
-                    : "搜索标题、作者、标签"}
-                </span>
+                <span className="gnav-search-label">搜索标题、作者、DOI</span>
                 <span className="gnav-shortcut" aria-hidden="true">
                   <kbd>
                     {isMac() ? (
@@ -637,7 +570,7 @@ export function App() {
                         variant="ghost"
                         className="gnav-icon"
                         aria-label="设置"
-                        onClick={() => setSettings(true)}
+                        onClick={() => openSettings()}
                       />
                     }
                   >
@@ -755,6 +688,7 @@ export function App() {
               {papers && researchTopicId ? (
                 <ResearchPanel
                   topicId={researchTopicId}
+                  onSettings={openSettings}
                   onOpenDocument={async (documentId, location) => {
                     const document = useReaderStore
                       .getState()
@@ -771,6 +705,16 @@ export function App() {
                     useReaderStore.getState().open(document);
                   }}
                 />
+              ) : error ? (
+                <main className="library-main">
+                  <div className="empty-state">
+                    <h2>暂时无法连接本地书库</h2>
+                    <p>{error}</p>
+                    <Button variant="outline" onClick={() => location.reload()}>
+                      重新连接
+                    </Button>
+                  </div>
+                </main>
               ) : papers ? (
                 <PaperLibrary
                   documents={documents}
@@ -780,6 +724,9 @@ export function App() {
                   openDocument={openDocument}
                   moveToBooks={(doc) => void moveDocument(doc, "books")}
                   onResearchFolder={(folder) => void openResearch(folder)}
+                  onImportFiles={() => chooseFiles()}
+                  onImportOther={() => setImportingPaper(true)}
+                  importing={busy}
                 />
               ) : (
                 <main className="library-main">
@@ -851,18 +798,7 @@ export function App() {
                         解析进度暂时不可用：{processingError}
                       </p>
                     )}
-                    {error ? (
-                      <div className="empty-state">
-                        <h2>暂时无法连接本地书库</h2>
-                        <p>{error}</p>
-                        <Button
-                          variant="outline"
-                          onClick={() => location.reload()}
-                        >
-                          重新连接
-                        </Button>
-                      </div>
-                    ) : loading ? (
+                    {loading ? (
                       <div className="empty-state">
                         <LoaderCircle className="animate-spin text-muted-foreground" />
                         <p>正在打开本地书库</p>
@@ -878,7 +814,7 @@ export function App() {
                         openDocument={openDocument}
                         favorite={favorite}
                         onEdit={setEditingId}
-                        onSettings={() => setSettings(true)}
+                        onSettings={() => openSettings()}
                       />
                     ) : filtered.length ? (
                       <LibraryDocuments
@@ -893,7 +829,7 @@ export function App() {
                         favorite={favorite}
                         onEdit={setEditingId}
                         onMove={moveDocument}
-                        onSettings={() => setSettings(true)}
+                        onSettings={() => openSettings()}
                       />
                     ) : (
                       <div className="empty-state">
@@ -910,9 +846,7 @@ export function App() {
                             ? "没有符合筛选条件的文档"
                             : filter === "favorites"
                               ? "暂无收藏"
-                              : papers
-                                ? "暂无论文"
-                                : "暂无文档"}
+                              : "暂无文档"}
                         </h2>
                         {!!documents.length && (
                           <Button
@@ -926,14 +860,23 @@ export function App() {
                             显示全部文档
                           </Button>
                         )}
-                        {!documents.length && !papers && (
-                          <Button
-                            variant="link"
-                            onClick={() => void sample()}
-                            disabled={busy}
-                          >
-                            先体验示例文档 <ArrowUpRight className="size-3" />
-                          </Button>
+                        {!documents.length && filter === "all" && (
+                          <div className="flex flex-wrap items-center justify-center gap-2">
+                            <Button
+                              onClick={() => chooseFiles()}
+                              disabled={busy}
+                            >
+                              <UploadSimple />
+                              导入 EPUB / PDF
+                            </Button>
+                            <Button
+                              variant="link"
+                              onClick={() => void sample()}
+                              disabled={busy}
+                            >
+                              先体验示例文档 <ArrowUpRight className="size-3" />
+                            </Button>
+                          </div>
                         )}
                       </div>
                     )}
@@ -951,7 +894,11 @@ export function App() {
             onClose={() => setEditingId(null)}
           />
         )}
-        <Settings open={settings} onOpenChange={setSettings} />
+        <Settings
+          open={settings}
+          onOpenChange={setSettings}
+          target={settingsTarget}
+        />
         <ImportPaperDialog
           open={importingPaper}
           onOpenChange={setImportingPaper}
@@ -1014,59 +961,34 @@ export function App() {
             </div>
           </DialogContent>
         </Dialog>
-        <Dialog open={command} onOpenChange={setCommand}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle className="flex items-center gap-2">
-                <Command className="size-5" />
-                快速查找
-              </DialogTitle>
-              <DialogDescription>搜索书库，或打开常用操作。</DialogDescription>
-            </DialogHeader>
-            <Input
-              autoFocus
-              placeholder="搜索标题、作者、标签…"
-              value={commandQuery}
-              onChange={(e) => setCommandQuery(e.target.value)}
-            />
-            <div className="min-w-0 max-h-72 space-y-1 overflow-auto">
-              {searchResults.map((d) => (
-                <Button
-                  key={d.id}
-                  variant="ghost"
-                  className="min-w-0 w-full justify-start"
-                  title={d.title}
-                  onClick={() => {
-                    openDocument(d);
-                    setCommand(false);
-                  }}
-                >
-                  <BookOpen />
-                  <span className="min-w-0 flex-1 truncate text-left">
-                    {d.title}
-                  </span>
-                </Button>
-              ))}
-              <Button
-                variant="ghost"
-                className="w-full justify-start"
-                onClick={() => {
-                  setCommand(false);
-                  setSettings(true);
-                }}
-              >
-                <Settings2 />
-                打开设置
-              </Button>
-            </div>
-          </DialogContent>
-        </Dialog>
+        <LibrarySearchDialog
+          open={command}
+          onOpenChange={setCommand}
+          mode={mode}
+          books={bookDocuments}
+          papers={paperDocuments}
+          jobs={jobsById}
+          onSelect={openSearchResult}
+          onSettings={openSettings}
+        />
+        <ImportResultsDialog
+          open={importer.entries.length > 0 && !importer.confirm.length}
+          entries={importer.entries}
+          busy={importer.busy}
+          refreshError={importer.refreshError}
+          onClose={importer.close}
+          onRetry={() => void importer.retry()}
+          onRead={(entry) => void importer.read(entry, openSearchResult)}
+        />
         <LargePaperConfirmation />
         <LargePaperDialog
-          papers={largePapers}
+          papers={importer.confirm.map(({ result }) => ({
+            name: result.name,
+            pages: result.pages ?? 0,
+          }))}
           busy={busy}
-          onChoose={(library) => void importLargePapers(library)}
-          onCancel={() => setLargePapers([])}
+          onChoose={(library) => void importer.retry(library)}
+          onCancel={importer.cancelLarge}
         />
         <Toaster
           richColors

@@ -95,6 +95,7 @@ it("groups proxy settings and log export under diagnostics without a network tab
     setAppearance: vi.fn(),
     importFiles: vi.fn(),
     importLargePapers: vi.fn(),
+    retryImports: vi.fn(),
     showDocumentFile: vi.fn(),
     openDocumentFile: vi.fn(),
     openExternal: vi.fn(),
