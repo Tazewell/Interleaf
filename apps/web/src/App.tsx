@@ -1,5 +1,5 @@
 import { useShortcut, loadBindings, isMac } from "./shortcuts/shortcuts";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import {
   BookOpen,
   UploadSimple,
@@ -65,14 +65,12 @@ import {
 import { TrashView } from "./TrashView";
 import { PaperLibrary } from "./papers/PaperLibrary";
 import { PaperSidebar } from "./papers/PaperSidebar";
-import { ResearchPanel } from "./research/ResearchPanel";
 import { ResearchNavigation } from "./research/ResearchNavigation";
 import { researchEpoch, researchSignal } from "./research/research-session";
 import { usePaperUI } from "./papers/state";
 import { ImportPaperDialog } from "./papers/ImportPaperDialog";
 import { libraryModes } from "./LibraryModeSwitcher";
-import { Settings, type SettingsTarget } from "./Settings";
-import { Workspace } from "./Workspace";
+import type { SettingsTarget } from "./Settings";
 import { useProcessing } from "./ProcessingStatus";
 import { useUpdateProgress } from "./update-progress";
 import { useResolvedTheme } from "./appearance";
@@ -85,6 +83,20 @@ import { libraryPapers } from "./papers/projection";
 import { LibrarySearchDialog } from "./LibrarySearchDialog";
 import { ImportResultsDialog } from "./ImportResultsDialog";
 import { useLibraryImport, type ImportTarget } from "./library-import";
+import { recordLibraryReady } from "./diagnostics";
+
+const Workspace = lazy(() =>
+  import("./Workspace").then(({ Workspace }) => ({ default: Workspace })),
+);
+const ResearchPanel = lazy(() =>
+  import("./research/ResearchPanel").then(({ ResearchPanel }) => ({
+    default: ResearchPanel,
+  })),
+);
+const Settings = lazy(() =>
+  import("./Settings").then(({ Settings }) => ({ default: Settings })),
+);
+
 const currentMode = () =>
   libraryMode(useReaderStore.getState().libraryPreferences);
 export function App() {
@@ -165,11 +177,12 @@ export function App() {
     () => new Map(jobs.map((job) => [job.documentId, job])),
     [jobs],
   );
-  const [settings, setSettings] = useState(false);
-  const [settingsTarget, setSettingsTarget] = useState<SettingsTarget>();
+  const [settings, setSettings] = useState<{
+    open: boolean;
+    target?: SettingsTarget;
+  }>();
   const openSettings = (target?: SettingsTarget) => {
-    setSettingsTarget(target);
-    setSettings(true);
+    setSettings({ open: true, target });
   };
   const [checkingUpdates, setCheckingUpdates] = useState(false);
   const [about, setAbout] = useState(false);
@@ -197,9 +210,6 @@ export function App() {
     Promise.all([
       refreshLibrary(),
       loadLibraryPreferences(),
-      loadBindings().catch(() =>
-        toast.error("快捷键设置读取失败，暂时使用默认快捷键。"),
-      ),
       api.settings().then((value) => setTheme(value)),
     ])
       .catch((e) => setError(e.message))
@@ -208,6 +218,22 @@ export function App() {
         hydrated.current = true;
       });
   }, [setTheme]);
+  useEffect(() => {
+    void loadBindings().catch(() =>
+      toast.error("快捷键设置读取失败，暂时使用默认快捷键。"),
+    );
+  }, []);
+  useEffect(() => {
+    if (loading || error || active || (papers && researchTopicId)) return;
+    const ready = () => {
+      if (document.visibilityState !== "visible") return;
+      document.removeEventListener("visibilitychange", ready);
+      recordLibraryReady();
+    };
+    document.addEventListener("visibilitychange", ready);
+    ready();
+    return () => document.removeEventListener("visibilitychange", ready);
+  }, [loading, error, active, papers, researchTopicId]);
   useEffect(() => {
     if (loading) return;
     void refreshTrash().catch((e) => toast.error(e.message));
@@ -436,18 +462,29 @@ export function App() {
           }}
         />
         {active ? (
-          <Workspace
-            key={active.id}
-            document={active}
-            theme={resolvedTheme}
-            processing={jobs.find((job) => job.documentId === active.id)}
-            onBack={() => {
-              open(null);
-              void refreshLibrary();
-            }}
-            onSettings={openSettings}
-            backLabel={papers && researchTopicId ? "返回主题研究" : undefined}
-          />
+          <Suspense
+            fallback={
+              <main className="empty-state">
+                <p role="status">正在打开文档…</p>
+                <Button variant="outline" onClick={() => open(null)}>
+                  {papers && researchTopicId ? "返回主题研究" : "返回书库"}
+                </Button>
+              </main>
+            }
+          >
+            <Workspace
+              key={active.id}
+              document={active}
+              theme={resolvedTheme}
+              processing={jobs.find((job) => job.documentId === active.id)}
+              onBack={() => {
+                open(null);
+                void refreshLibrary();
+              }}
+              onSettings={openSettings}
+              backLabel={papers && researchTopicId ? "返回主题研究" : undefined}
+            />
+          </Suspense>
         ) : (
           <>
             <header className="global-nav">
@@ -686,25 +723,37 @@ export function App() {
                 {papers && <ResearchNavigation />}
               </aside>
               {papers && researchTopicId ? (
-                <ResearchPanel
-                  topicId={researchTopicId}
-                  onSettings={openSettings}
-                  onOpenDocument={async (documentId, location) => {
-                    const document = useReaderStore
-                      .getState()
-                      .documents.find((document) => document.id === documentId);
-                    if (
-                      !document ||
-                      document.metadataOnly ||
-                      document.type !== location.type
-                    )
-                      throw new Error("原文不可用，请返回论文库检查附件。");
-                    usePaperUI
-                      .getState()
-                      .setResearchTarget({ documentId, location });
-                    useReaderStore.getState().open(document);
-                  }}
-                />
+                <Suspense
+                  fallback={
+                    <main className="library-main">
+                      <div className="empty-state">
+                        <p role="status">正在打开主题研究…</p>
+                      </div>
+                    </main>
+                  }
+                >
+                  <ResearchPanel
+                    topicId={researchTopicId}
+                    onSettings={openSettings}
+                    onOpenDocument={async (documentId, location) => {
+                      const document = useReaderStore
+                        .getState()
+                        .documents.find(
+                          (document) => document.id === documentId,
+                        );
+                      if (
+                        !document ||
+                        document.metadataOnly ||
+                        document.type !== location.type
+                      )
+                        throw new Error("原文不可用，请返回论文库检查附件。");
+                      usePaperUI
+                        .getState()
+                        .setResearchTarget({ documentId, location });
+                      useReaderStore.getState().open(document);
+                    }}
+                  />
+                </Suspense>
               ) : error ? (
                 <main className="library-main">
                   <div className="empty-state">
@@ -894,11 +943,24 @@ export function App() {
             onClose={() => setEditingId(null)}
           />
         )}
-        <Settings
-          open={settings}
-          onOpenChange={setSettings}
-          target={settingsTarget}
-        />
+        {settings && (
+          <Suspense
+            fallback={
+              <div
+                className="pointer-events-none fixed right-4 top-14 z-50 rounded-lg border bg-background px-3 py-2 text-sm text-foreground shadow-sm"
+                role="status"
+              >
+                正在打开设置…
+              </div>
+            }
+          >
+            <Settings
+              open={settings.open}
+              onOpenChange={(open) => setSettings({ ...settings, open })}
+              target={settings.target}
+            />
+          </Suspense>
+        )}
         <ImportPaperDialog
           open={importingPaper}
           onOpenChange={setImportingPaper}

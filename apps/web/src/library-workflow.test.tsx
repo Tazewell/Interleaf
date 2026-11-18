@@ -15,7 +15,13 @@ import { usePaperUI } from "./papers/state";
 import { useReaderStore } from "./store";
 
 vi.mock("./Workspace", () => ({ Workspace: () => null }));
-vi.mock("./Settings", () => ({ Settings: () => null }));
+const settingsMounted = vi.hoisted(() => vi.fn());
+vi.mock("./Settings", () => ({
+  Settings: ({ open }: { open: boolean }) => {
+    settingsMounted(open);
+    return open ? <p>设置窗口已打开</p> : null;
+  },
+}));
 vi.mock("./release-notes/ReleaseNotesHost", () => ({
   ReleaseNotesHost: () => null,
 }));
@@ -151,6 +157,35 @@ const drop = (files: File[]) => {
   Object.defineProperty(event, "dataTransfer", { value: { files } });
   host.querySelector(".app")!.dispatchEvent(event);
 };
+
+it("shows a usable library while saved shortcut preferences are pending", async () => {
+  vi.mocked(api.documents).mockResolvedValue([
+    book({ id: "first", title: "Ready to read" }),
+  ]);
+  let finishShortcuts!: () => void;
+  vi.mocked(api.shortcutPreferences).mockReturnValue(
+    new Promise((resolve) => {
+      finishShortcuts = () => resolve({});
+    }),
+  );
+  await render();
+  expect(host.textContent).toContain("Ready to read");
+  expect(host.textContent).not.toContain("正在打开本地书库");
+  expect(api.shortcutPreferences).toHaveBeenCalledOnce();
+  await act(async () => finishShortcuts());
+});
+
+it("mounts settings only after it is requested from the library", async () => {
+  await render();
+  expect(settingsMounted).not.toHaveBeenCalled();
+  await act(async () =>
+    host.querySelector<HTMLButtonElement>('button[aria-label="设置"]')!.click(),
+  );
+  await act(async () => {
+    await vi.dynamicImportSettled();
+  });
+  expect(host.textContent).toContain("设置窗口已打开");
+});
 
 it("finds a DOI from the other library and opens the metadata-only detail", async () => {
   vi.mocked(api.papers).mockImplementation(async (trash) =>
