@@ -1,6 +1,7 @@
 import type {
   Annotation,
   NativePDFReadingManifest,
+  NativePDFReadingLayout,
   NativePDFReadingPage,
   NativePDFReadingParagraph,
   PDFLocation,
@@ -11,6 +12,17 @@ export interface NativePDFReadingDescriptor {
   metadata: NativePDFReadingManifest;
   fileURL: string;
   translations: TranslationBlock[];
+}
+export function nativeReadingLayout(
+  metadata: Pick<NativePDFReadingManifest, "layout">,
+): NativePDFReadingLayout {
+  if (metadata.layout === undefined) return "side-by-side";
+  if (
+    metadata.layout === "side-by-side" ||
+    metadata.layout === "translation-only"
+  )
+    return metadata.layout;
+  throw new Error("不支持的原版式阅读布局");
 }
 export type ReadingRect = {
   x: number;
@@ -35,7 +47,9 @@ export function sourceToDisplay(
 export function displayToSource(
   page: NativePDFReadingPage,
   rect: ReadingRect,
+  layout: NativePDFReadingLayout = "side-by-side",
 ): ReadingRect | undefined {
+  if (layout === "translation-only") return;
   const x = rect.x * page.outputWidth,
     width = rect.width * page.outputWidth;
   if (
@@ -102,10 +116,11 @@ export function nativeSelectionLocation(
   translations: TranslationBlock[],
   text: string,
   rects: ReadingRect[],
+  layout: NativePDFReadingLayout = "side-by-side",
 ): PDFLocation {
   const basic: PDFLocation = { type: "pdf", page: page.page, quote: text };
   if (!rects.length) return basic;
-  const source = rects.map((r) => displayToSource(page, r));
+  const source = rects.map((r) => displayToSource(page, r, layout));
   if (source.every((r) => !!r))
     return { ...basic, rects: source as ReadingRect[] };
   const paragraphs = page.paragraphs.filter((p) => {
@@ -174,6 +189,7 @@ export function projectNativeAnnotations(
   annotations: Annotation[],
   descriptor: NativePDFReadingDescriptor,
 ): Annotation[] {
+  const layout = nativeReadingLayout(descriptor.metadata);
   return annotations.flatMap((a) => {
     if (a.location.type !== "pdf") return [];
     const location = a.location;
@@ -198,6 +214,7 @@ export function projectNativeAnnotations(
           : [];
       });
     }
+    if (layout === "translation-only") return [];
     const page = descriptor.metadata.pages.find(
       (p) => p.page === location.page,
     );

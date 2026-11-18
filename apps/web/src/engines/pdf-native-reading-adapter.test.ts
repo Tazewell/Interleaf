@@ -7,6 +7,7 @@ const state = vi.hoisted(() => ({
   documents: [] as unknown[],
   destroys: [] as ReturnType<typeof vi.fn>[],
   viewers: 0,
+  single: false,
   renderedOriginal: [] as boolean[],
   defer: false,
   suppressPagesInit: false,
@@ -34,15 +35,23 @@ vi.mock("pdfjs-dist", () => ({
         original ? [{ title: "Original heading", dest: [0], items: [] }] : null,
       getPage: async () => ({
         getViewport: () => ({
-          width: original ? 600 : 1212,
+          width: original || state.single ? 600 : 1212,
           height: 800,
           convertToViewportPoint: (x: number, y: number) => [x, 800 - y],
         }),
         getTextContent: async () => ({
           items: [
             {
-              str: original ? "Original source context" : "Visible source 译文",
-              transform: [1, 0, 0, 1, 672, 704],
+              str: state.single
+                ? original
+                  ? "Original source context 2026"
+                  : "译文 2026"
+                : original
+                  ? "Original source context"
+                  : "Visible source 译文",
+              transform: state.single
+                ? [1, 0, 0, 1, original ? 60 : 120, original ? 704 : 480]
+                : [1, 0, 0, 1, 672, 704],
               height: 16,
             },
           ],
@@ -153,6 +162,7 @@ beforeEach(() => {
   state.documents = [];
   state.destroys = [];
   state.viewers = 0;
+  state.single = false;
   state.renderedOriginal = [];
   state.defer = false;
   state.suppressPagesInit = false;
@@ -172,6 +182,194 @@ beforeEach(() => {
     { location: vi.fn(), selection: vi.fn() },
     descriptor,
   );
+});
+async function singleAdapter() {
+  await adapter.destroy();
+  host.innerHTML = "";
+  state.single = true;
+  adapter = new PDFReaderAdapter(
+    host,
+    { location: vi.fn(), selection: vi.fn() },
+    {
+      ...descriptor,
+      metadata: {
+        ...descriptor.metadata,
+        layout: "translation-only",
+        pages: descriptor.metadata.pages.map((p) => ({
+          ...p,
+          outputWidth: 600,
+          translationOffsetX: 0,
+        })),
+      },
+    },
+  );
+}
+it("single search navigation resolves shared English/digits against displayed ink before the original", async () => {
+  await singleAdapter();
+  await adapter.open(paper());
+  const go = vi
+    .spyOn((adapter as any).navigation, "goTo")
+    .mockResolvedValue(true);
+  const hits = await adapter.search("2026");
+  await adapter.goTo(hits[0].location);
+  expect(go.mock.lastCall?.[1]).toMatchObject({ x: 0.2, y: 0.38 });
+  expect(adapter.getPageCount()).toBe(1);
+  expect(await adapter.getContext()).toBe("Original source context 2026");
+  expect(await adapter.search("Original source")).toEqual([]);
+});
+it("searches the original and the displayed single translation independently on the same page", async () => {
+  await singleAdapter();
+  await adapter.open(paper());
+  expect(await adapter.search("译文")).toHaveLength(1);
+  expect(await adapter.searchSource?.("Original source")).toEqual([
+    {
+      id: "1",
+      excerpt: "Original source context 2026",
+      location: { type: "pdf", page: 1, quote: "Original source" },
+    },
+  ]);
+  expect(await adapter.searchSource?.("译文")).toEqual([]);
+  expect(await adapter.search("Original source")).toEqual([]);
+  expect(await adapter.getContext()).toBe("Original source context 2026");
+});
+it("single selection creates translation anchors and refuses source rectangles at preparation", async () => {
+  await singleAdapter();
+  host.querySelector(".pdfViewer")!.innerHTML =
+    '<div class="page" data-page-number="1"><span>译文</span></div>';
+  const page = host.querySelector(".page")!;
+  vi.spyOn(page, "getBoundingClientRect").mockReturnValue(
+    new DOMRect(0, 0, 600, 800),
+  );
+  const range = document.createRange();
+  range.selectNodeContents(page.firstChild!);
+  Object.assign(range, { getClientRects: () => [new DOMRect(60, 80, 30, 20)] });
+  window.getSelection()!.addRange(range);
+  page.dispatchEvent(new MouseEvent("mouseup", { bubbles: true }));
+  expect(adapter.getSelection()?.location).toMatchObject({
+    translation: { blockId: "b" },
+  });
+  expect(adapter.getSelection()?.location).not.toHaveProperty("rects");
+  await expect(
+    adapter.prepareAnnotation({
+      text: "source",
+      location: {
+        type: "pdf",
+        page: 1,
+        rects: [{ x: 0.1, y: 0.1, width: 0.2, height: 0.1 }],
+      },
+    }),
+  ).rejects.toThrow();
+});
+it("single mode paints only validated translated annotations and preserves saved source data", async () => {
+  await singleAdapter();
+  host.querySelector(".pdfViewer")!.innerHTML =
+    '<div class="page" data-page-number="1"></div>';
+  const source = {
+    id: "s",
+    documentId: "p",
+    kind: "highlight" as const,
+    quote: "source",
+    note: "",
+    createdAt: "",
+    color: "#123456",
+    location: {
+      type: "pdf" as const,
+      page: 1,
+      rects: [{ x: 0.1, y: 0.1, width: 0.8, height: 0.2 }],
+    },
+  };
+  await adapter.highlight([source]);
+  expect(host.querySelector(".interleaf-highlight")).toBeNull();
+  expect(source.location.rects[0].x).toBe(0.1);
+  await adapter.highlight([
+    {
+      ...source,
+      location: {
+        type: "pdf",
+        page: 1,
+        translation: {
+          blockId: "b",
+          sourceHash: "h",
+          start: 0,
+          end: 2,
+          sentenceIndexes: [0],
+          targetText: "译文",
+        },
+      },
+    },
+  ]);
+  expect(
+    host.querySelector<HTMLElement>(".interleaf-highlight")?.style.left,
+  ).toBe("10%");
+});
+it("single mode exposes figure actions and dark regions once, without source text menus or links", async () => {
+  await singleAdapter();
+  await adapter.open(paper());
+  host.querySelector(".pdfViewer")!.innerHTML =
+    '<div class="page" data-page-number="1"></div>';
+  const bounds = { x: 0.1, y: 0.1, width: 0.4, height: 0.3 };
+  adapter.setBlocks([
+    { id: "text", page: 1, label: "text", text: "English copy action", bounds },
+    {
+      id: "fig",
+      page: 1,
+      label: "image",
+      image: "assets/figure.png",
+      text: "",
+      bounds,
+    },
+  ]);
+  expect((adapter as any).displayBlocks.map((b: any) => b.id)).toEqual(["fig"]);
+  expect((adapter as any).figureRegions(1)).toEqual([bounds]);
+  state.annotations = [
+    { subtype: "Link", rect: [60, 700, 180, 720], url: "https://example.com" },
+  ];
+  await (adapter as any).paintNativeLinks(1);
+  expect(host.querySelector(".interleaf-native-link")).toBeNull();
+});
+it("single mode does not paint original reference or sentence markers onto translated text", async () => {
+  await singleAdapter();
+  const nav = (adapter as any).navigation;
+  const markers = [
+    "sentenceRanges",
+    "focusPassages",
+    "focusSentences",
+    "matchSentences",
+  ].map((method) => vi.spyOn(nav, method));
+  const show = vi.spyOn((adapter as any).locationHighlight, "show");
+  adapter.flashReference(
+    {
+      type: "pdf",
+      page: 1,
+      quote: "source",
+      rects: [{ x: 0.1, y: 0.1, width: 0.2, height: 0.1 }],
+    },
+    "source",
+  );
+  expect(adapter.sentenceRanges([])).toEqual([]);
+  await adapter.focusPassages([]);
+  await adapter.focusSentences("b", ["source"]);
+  await adapter.matchSentences({ type: "pdf", page: 1 }, []);
+  expect(show).not.toHaveBeenCalled();
+  expect(markers.every((marker) => marker.mock.calls.length === 0)).toBe(true);
+});
+it("single progress remains normalized to original page dimensions", async () => {
+  await singleAdapter();
+  host.querySelector(".pdfViewer")!.innerHTML =
+    '<div class="page" data-page-number="1"></div>';
+  vi.spyOn(
+    host.querySelector(".page")!,
+    "getBoundingClientRect",
+  ).mockReturnValue(new DOMRect(-60, -160, 600, 800));
+  vi.spyOn(host, "getBoundingClientRect").mockReturnValue(
+    new DOMRect(0, 0, 300, 400),
+  );
+  expect(adapter.getLocation()).toEqual({
+    type: "pdf",
+    page: 1,
+    x: 0.1,
+    y: 0.2,
+  });
 });
 afterEach(async () => {
   await adapter.destroy();
@@ -362,26 +560,30 @@ it("preserves figures on both halves in deep dark mode", () => {
     { x: 672 / 1212, y: 0.1, width: 240 / 1212, height: 0.3 },
   ]);
 });
-it("keeps cross-page text usable as a page citation but refuses a precise annotation", async () => {
-  host.querySelector(".pdfViewer")!.innerHTML =
-    '<div class="page" data-page-number="1"><span>译文</span></div><div class="page" data-page-number="2"><span>另页</span></div>';
-  const pages = host.querySelectorAll(".page");
-  const range = document.createRange();
-  range.setStart(pages[0].firstChild!.firstChild!, 0);
-  range.setEnd(pages[1].firstChild!.firstChild!, 2);
-  Object.assign(range, { getClientRects: () => [] });
-  window.getSelection()!.removeAllRanges();
-  window.getSelection()!.addRange(range);
-  pages[1].dispatchEvent(new MouseEvent("mouseup", { bubbles: true }));
-  expect(adapter.getSelection()?.location).toEqual({
-    type: "pdf",
-    page: 1,
-    quote: "译文另页",
-  });
-  await expect(
-    adapter.prepareAnnotation(adapter.getSelection()!),
-  ).rejects.toThrow();
-});
+it.each(["side-by-side", "translation-only"])(
+  "keeps cross-page text usable as a page citation but refuses a precise annotation in %s",
+  async (layout) => {
+    if (layout === "translation-only") await singleAdapter();
+    host.querySelector(".pdfViewer")!.innerHTML =
+      '<div class="page" data-page-number="1"><span>译文</span></div><div class="page" data-page-number="2"><span>另页</span></div>';
+    const pages = host.querySelectorAll(".page");
+    const range = document.createRange();
+    range.setStart(pages[0].firstChild!.firstChild!, 0);
+    range.setEnd(pages[1].firstChild!.firstChild!, 2);
+    Object.assign(range, { getClientRects: () => [] });
+    window.getSelection()!.removeAllRanges();
+    window.getSelection()!.addRange(range);
+    pages[1].dispatchEvent(new MouseEvent("mouseup", { bubbles: true }));
+    expect(adapter.getSelection()?.location).toEqual({
+      type: "pdf",
+      page: 1,
+      quote: "译文另页",
+    });
+    await expect(
+      adapter.prepareAnnotation(adapter.getSelection()!),
+    ).rejects.toThrow();
+  },
+);
 
 it("disposes both pending document loads and never binds a stale result to the viewer", async () => {
   state.defer = true;

@@ -1,6 +1,7 @@
 import { openExternalLink } from "../reading-links";
 import {
   sourceToDisplay,
+  nativeReadingLayout,
   nativeSelectionLocation,
   projectNativeAnnotations,
   paragraphSourceBounds,
@@ -74,6 +75,12 @@ export class PDFReaderAdapter implements ReaderAdapter {
   private readingPage(page: number) {
     return this.nativeReading?.metadata.pages.find((p) => p.page === page);
   }
+  private get translationOnly() {
+    return (
+      this.nativeReading &&
+      nativeReadingLayout(this.nativeReading.metadata) === "translation-only"
+    );
+  }
   private displayLocation(location: PDFLocation): PDFLocation {
     const page = this.readingPage(location.page);
     if (!page) return location;
@@ -95,7 +102,7 @@ export class PDFReaderAdapter implements ReaderAdapter {
   private locationHighlight: PDFLocationHighlight;
   private linkPreview: PDFLinkPreview;
   private removeExternalLinks: () => void;
-  private texts = new Map<number, string>();
+  private texts = new WeakMap<pdfjs.PDFDocumentProxy, Map<number, string>>();
   private resize: ResizeObserver;
   private resizeTimer?: ReturnType<typeof setTimeout>;
   private fitWidth = true;
@@ -123,11 +130,16 @@ export class PDFReaderAdapter implements ReaderAdapter {
   private queuedDarkPages = new Map<HTMLCanvasElement, DarkPage>();
   private activeDarkPage?: DarkPage & { id: number };
   private figureLinks: PDFFigureLinks;
+  searchSource?: ReaderAdapter["search"];
   constructor(
     private container: HTMLElement,
     private events: ReaderEvents,
     private nativeReading?: NativePDFReadingDescriptor,
   ) {
+    if (nativeReading) {
+      nativeReadingLayout(nativeReading.metadata);
+      this.searchSource = (query) => this.searchPDF(this.sourcePDF, query);
+    }
     container.classList.add("pdf-container");
     this.removeExternalLinks = installPDFExternalLinks(container);
     this.figureLinks = new PDFFigureLinks(
@@ -458,11 +470,15 @@ export class PDFReaderAdapter implements ReaderAdapter {
     const request = ++this.navigationRequest;
     this.clearSelection();
     const page = Math.max(1, Math.min(this.pdf.numPages, location.page));
-    const pdfPage = await this.sourcePDF!.getPage(page);
+    // Single-layout quotes describe the displayed ink, including shared numbers
+    // and English. Never let a coincidental original match steal that target.
+    const pdfPage = await (
+      this.translationOnly ? this.pdf : this.sourcePDF!
+    ).getPage(page);
     if (this.disposed || request !== this.navigationRequest) return;
     const viewport = pdfPage.getViewport({ scale: 1 });
     let point =
-      location.rects?.[0] ||
+      (!this.translationOnly && location.rects?.[0]) ||
       (location.x !== undefined || location.y !== undefined
         ? { x: location.x ?? 0, y: location.y ?? 0 }
         : undefined);
@@ -474,13 +490,14 @@ export class PDFReaderAdapter implements ReaderAdapter {
         viewport,
       );
     }
-    // Search indexes the displayed PDF. A translation-only quote has no source
-    // match, so resolve its display point internally without saving wide coords.
+    // Dual-layout search can find text only on the translation half. Resolve
+    // that displayed position without persisting wide-page coordinates.
     let nativeQuotePoint: { x: number; y: number } | undefined;
     if (
       !point &&
       location.quote &&
       this.nativeReading &&
+      !this.translationOnly &&
       !location.translation
     ) {
       const displayedPage = await this.pdf.getPage(page);
@@ -524,23 +541,35 @@ export class PDFReaderAdapter implements ReaderAdapter {
   async previous() {
     await this.goTo({ type: "pdf", page: this.location.page - 1 });
   }
-  private async pageText(page: number) {
-    if (!this.texts.has(page) && this.pdf) {
-      const p = await this.pdf.getPage(page);
-      const content = await p.getTextContent();
-      this.texts.set(
-        page,
-        content.items.map((item) => ("str" in item ? item.str : "")).join(" "),
-      );
+  private async pageText(pdf: pdfjs.PDFDocumentProxy, page: number) {
+    let pages = this.texts.get(pdf);
+    if (!pages) {
+      pages = new Map();
+      this.texts.set(pdf, pages);
     }
-    return this.texts.get(page) || "";
+    const cached = pages.get(page);
+    if (cached !== undefined) return cached;
+    const pageProxy = await pdf.getPage(page);
+    const content = await pageProxy.getTextContent();
+    const text = content.items
+      .map((item) => ("str" in item ? item.str : ""))
+      .join(" ");
+    pages.set(page, text);
+    return text;
   }
-  async search(query: string): Promise<SearchResult[]> {
+  search(query: string) {
+    return this.searchPDF(this.pdf, query);
+  }
+  private async searchPDF(
+    pdf: pdfjs.PDFDocumentProxy | undefined,
+    query: string,
+  ): Promise<SearchResult[]> {
     const results: SearchResult[] = [];
-    if (!query.trim() || !this.pdf) return results;
-    for (let page = 1; page <= this.pdf.numPages && !this.disposed; page++) {
-      const text = await this.pageText(page);
-      const index = text.toLocaleLowerCase().indexOf(query.toLocaleLowerCase());
+    if (!query.trim() || !pdf) return results;
+    const needle = query.toLocaleLowerCase();
+    for (let page = 1; page <= pdf.numPages && !this.disposed; page++) {
+      const text = await this.pageText(pdf, page);
+      const index = text.toLocaleLowerCase().indexOf(needle);
       if (index >= 0)
         results.push({
           id: `${page}`,
@@ -755,6 +784,9 @@ export class PDFReaderAdapter implements ReaderAdapter {
             this.nativeReading!.translations,
             text,
             rects,
+            this.nativeReading
+              ? nativeReadingLayout(this.nativeReading.metadata)
+              : undefined,
           )
         : {
             type: "pdf",
@@ -785,7 +817,7 @@ export class PDFReaderAdapter implements ReaderAdapter {
         // Right-side selection geometry is never a persisted source highlight.
         if (location.rects?.length)
           return { ...selection, location: { ...location, rects: undefined } };
-      } else if (!location.rects?.length) {
+      } else if (this.translationOnly || !location.rects?.length) {
         throw new Error(
           "此选区跨越原译文或无法精确定位，请在单个段落内重新选择",
         );
@@ -812,16 +844,24 @@ export class PDFReaderAdapter implements ReaderAdapter {
       )
       .flatMap(({ bounds }) => {
         const page = this.readingPage(pageNumber);
-        return page
-          ? [
-              sourceToDisplay(page, bounds),
-              sourceToDisplay(page, bounds, "translation"),
-            ]
-          : [bounds];
+        return page && this.translationOnly
+          ? [sourceToDisplay(page, bounds, "translation")]
+          : page
+            ? [
+                sourceToDisplay(page, bounds),
+                sourceToDisplay(page, bounds, "translation"),
+              ]
+            : [bounds];
       });
   }
   private async paintNativeLinks(pageNumber: number) {
-    if (!this.nativeReading || !this.originalPDF || this.disposed) return;
+    if (
+      !this.nativeReading ||
+      this.translationOnly ||
+      !this.originalPDF ||
+      this.disposed
+    )
+      return;
     const pageNode = this.container.querySelector<HTMLElement>(
       `.page[data-page-number="${pageNumber}"]`,
     );
@@ -1153,25 +1193,35 @@ export class PDFReaderAdapter implements ReaderAdapter {
     this.clearSelection();
   }
   async getContext() {
-    if (!this.nativeReading) return this.pageText(this.location.page);
-    const page = await this.sourcePDF?.getPage(this.location.page);
-    const content = await page?.getTextContent();
-    return (
-      content?.items.map((item) => ("str" in item ? item.str : "")).join(" ") ??
-      ""
-    );
+    return this.sourcePDF
+      ? this.pageText(this.sourcePDF, this.location.page)
+      : "";
   }
   setBlocks(blocks: PDFBlock[]) {
     const figuresChanged =
       this.figureRegionSignature(this.blockData) !==
       this.figureRegionSignature(blocks);
     this.blockData = blocks;
-    this.displayBlocks = blocks.map((block) => {
-      const page = this.readingPage(block.page);
-      return page
-        ? { ...block, bounds: sourceToDisplay(page, block.bounds) }
-        : block;
-    });
+    this.displayBlocks = blocks
+      .filter(
+        (block) =>
+          !this.translationOnly ||
+          (!!block.image &&
+            (block.label === "image" || block.label === "chart")),
+      )
+      .map((block) => {
+        const page = this.readingPage(block.page);
+        return page
+          ? {
+              ...block,
+              bounds: sourceToDisplay(
+                page,
+                block.bounds,
+                this.translationOnly ? "translation" : "source",
+              ),
+            }
+          : block;
+      });
     this.blocks.setBlocks(this.displayBlocks);
     this.figureLinks.repaint();
     if (figuresChanged) this.linkPreview.invalidate();
@@ -1179,6 +1229,7 @@ export class PDFReaderAdapter implements ReaderAdapter {
       this.redrawDarkPages();
   }
   async focusReference(location: DocumentLocation, text: string) {
+    if (this.translationOnly) return false;
     if (location.type !== "pdf" || this.disposed) return false;
     const block = referenceBlock(this.blockData, location, text);
     if (!block) return false;
@@ -1196,6 +1247,7 @@ export class PDFReaderAdapter implements ReaderAdapter {
     return reached;
   }
   flashReference(location: DocumentLocation, text: string) {
+    if (this.translationOnly) return;
     if (location.type !== "pdf" || this.disposed) return;
     const block =
       referenceBlock(this.blockData, { ...location, quote: undefined }, "") ??
@@ -1223,6 +1275,11 @@ export class PDFReaderAdapter implements ReaderAdapter {
     this.blocks.setSearchBlocks(blockIds);
   }
   async focusBlock(blockId: string, layout: "source" | "parallel") {
+    if (
+      this.translationOnly &&
+      !this.displayBlocks.some((b) => b.id === blockId)
+    )
+      return;
     this.fitWidth = false;
     this.blockFocused = true;
     this.clearSelection();
@@ -1250,6 +1307,11 @@ export class PDFReaderAdapter implements ReaderAdapter {
     anchor: import("@interleaf/core").PDFReadingAnchor,
     options?: { smooth?: boolean },
   ) {
+    if (
+      this.translationOnly &&
+      !this.displayBlocks.some((b) => b.id === anchor.blockId)
+    )
+      return Promise.resolve();
     return this.navigation.follow(anchor, options);
   }
   previewCitation(
@@ -1267,9 +1329,11 @@ export class PDFReaderAdapter implements ReaderAdapter {
       return resolvePDFCitation(this.sourcePDF, block, label, pdfjs.OPS);
   }
   sentenceRanges(passages: import("@interleaf/core").PDFPassage[]) {
+    if (this.translationOnly) return [];
     return this.navigation.sentenceRanges(passages);
   }
   focusSentences(blockId: string, sources: string[], scroll = false) {
+    if (this.translationOnly) return Promise.resolve();
     return this.navigation.focusSentences(blockId, sources, scroll);
   }
   hoverBlock(blockId: string | null) {
@@ -1279,12 +1343,14 @@ export class PDFReaderAdapter implements ReaderAdapter {
     passages: import("@interleaf/core").PDFPassage[],
     scroll = false,
   ) {
+    if (this.translationOnly) return Promise.resolve();
     return this.navigation.focusPassages(passages, scroll);
   }
   matchSentences(
     location: PDFLocation,
     translations: import("@interleaf/core").TranslationBlock[],
   ) {
+    if (this.translationOnly) return Promise.resolve([]);
     return this.navigation.matchSentences(
       this.displayLocation(location),
       translations,

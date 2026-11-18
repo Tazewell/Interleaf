@@ -460,6 +460,8 @@ export interface ReaderAdapter {
   next(): Promise<void>;
   previous(): Promise<void>;
   search(query: string): Promise<SearchResult[]>;
+  /** Search the original excerpt when the displayed document is a derivative. */
+  searchSource?(query: string): Promise<SearchResult[]>;
   getSelection(): ReaderSelection | null;
   clearSelection(): void;
   highlight(annotations: Annotation[]): Promise<void>;
