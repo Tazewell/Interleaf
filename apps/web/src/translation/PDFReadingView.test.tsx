@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { ReadingLinkNavigation } from "../reading-links";
-import { act, useContext, useEffect } from "react";
+import { act, useContext, useEffect, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import {
@@ -158,6 +158,11 @@ async function renderView(
   searchResults: SearchResult[] = [],
   sidebarsOpen = { left: true, right: true },
   documentId = "doc",
+  searchQuery = "",
+  { onSearchScopeChanged, pageNavigation }: {
+    onSearchScopeChanged?: () => void;
+    pageNavigation?: ReactNode;
+  } = {},
 ) {
   await act(async () =>
     root.render(
@@ -168,6 +173,9 @@ async function renderView(
         theme={theme}
         annotations={[]}
         searchResults={searchResults}
+        searchQuery={searchQuery}
+        onSearchScopeChanged={onSearchScopeChanged}
+        pageNavigation={pageNavigation}
         blocks={[
           {
             id: "p1-b1",
@@ -303,6 +311,37 @@ it("uses repaired text for search and focuses the matching block", async () => {
   expect(adapter.focusBlock).toHaveBeenCalledWith("p1-b1", "parallel");
 });
 
+it("focuses the translated search hit without moving the paused original", async () => {
+  const results = await fixture.ready!.search("第二句");
+  await renderView(defaultTheme, [], results, undefined, "doc", "第二句");
+  await click("流式对照");
+  const { pane } = translationGeometry();
+  await click("同步滚动");
+  vi.mocked(adapter.focusBlock!).mockClear();
+  vi.mocked(adapter.flashReference!).mockClear();
+  await act(async () =>
+    fixture.ready!.focusLocation!(results[0].location, results[0].side),
+  );
+  expect(adapter.focusBlock).not.toHaveBeenCalled();
+  expect(adapter.flashReference).not.toHaveBeenCalled();
+  expect(pane.scrollTop).toBeGreaterThan(0);
+  expect(fixture.events!.readingAnchor).toBeUndefined();
+  expect(pane.querySelector('[data-translation-block="p1-b1"][data-search-hit]')).not.toBeNull();
+});
+
+it("notifies when a flow content switch changes search scope without changing the adapter", async () => {
+  const onScopeChanged = vi.fn();
+  await renderView(defaultTheme, [], [], undefined, "doc", "", {
+    onSearchScopeChanged: onScopeChanged,
+  });
+  const reader = fixture.ready;
+  await choosePDFFormat(host, "流式");
+  expect(onScopeChanged).not.toHaveBeenCalled();
+  await click("流式对照");
+  expect(fixture.ready).toBe(reader);
+  expect(onScopeChanged).toHaveBeenCalledOnce();
+});
+
 it("retains PDF.js search on pages without parsed blocks", async () => {
   adapter.getPageCount = () => 2;
   vi.mocked(adapter.search).mockResolvedValueOnce([
@@ -431,13 +470,12 @@ it("keeps the translated selection and navigation metadata without marking the o
   const prepared = await fixture.ready!.prepareAnnotation!(selected);
   expect(prepared.location.translation).toEqual(selected.location.translation);
   expect(prepared.location.sentenceLink).toBeUndefined();
-  await click("取消同步效果");
+  const { pane } = translationGeometry();
+  await click("同步滚动");
   vi.mocked(adapter.focusBlock!).mockClear();
   await act(async () => fixture.ready!.focusLocation!(prepared.location));
-  expect(adapter.focusBlock).toHaveBeenCalledExactlyOnceWith(
-    "p1-b1",
-    "parallel",
-  );
+  expect(pane.scrollTop).toBe(400);
+  expect(adapter.focusBlock).not.toHaveBeenCalled();
   await act(async () => fixture.ready!.clearSelection());
   expect(events.selection).toHaveBeenLastCalledWith(null);
   document.dispatchEvent(new Event("selectionchange"));
@@ -666,14 +704,12 @@ it("can disable automatic original centering while reading the translation", asy
   await click("流式对照");
   vi.mocked(adapter.focusBlock!).mockClear();
   const centerButton = host.querySelector<HTMLButtonElement>(
-    '[aria-label="取消同步效果"]',
+    '[aria-label="同步滚动"]',
   )!;
   expect(centerButton.getAttribute("aria-pressed")).toBe("true");
   await act(async () => centerButton.click());
   expect(
-    host
-      .querySelector('[aria-label="开启同步效果"]')
-      ?.getAttribute("aria-pressed"),
+    host.querySelector('[aria-label="同步滚动"]')?.getAttribute("aria-pressed"),
   ).toBe("false");
   const pane = host.querySelector<HTMLElement>(".translation-document")!;
   const block = pane.querySelector<HTMLElement>("[data-translation-block]")!;
@@ -691,9 +727,7 @@ it("can disable automatic original centering while reading the translation", asy
   });
   expect(adapter.followBlock).not.toHaveBeenCalled();
   await act(async () => {
-    host
-      .querySelector<HTMLButtonElement>('[aria-label="开启同步效果"]')!
-      .click();
+    host.querySelector<HTMLButtonElement>('[aria-label="同步滚动"]')!.click();
   });
   await act(async () => {
     pane.dispatchEvent(new WheelEvent("wheel", { bubbles: true, deltaY: 20 }));
@@ -705,9 +739,7 @@ it("can disable automatic original centering while reading the translation", asy
     { smooth: false },
   );
   await act(async () => {
-    host
-      .querySelector<HTMLButtonElement>('[aria-label="取消同步效果"]')!
-      .click();
+    host.querySelector<HTMLButtonElement>('[aria-label="同步滚动"]')!.click();
   });
   const translatedBlock = host.querySelector<HTMLElement>(
     "[data-translation-block]",
@@ -749,7 +781,7 @@ it("exposes source anchors only while source input owns reading, even without sy
     source.dispatchEvent(new WheelEvent("wheel", { bubbles: true })),
   );
   expect(sourceEvents.readingAnchor).toBeTypeOf("function");
-  await click("取消同步效果");
+  await click("同步滚动");
   expect(fixture.events!.readingAnchor).toBeTypeOf("function");
   await act(async () =>
     pane.dispatchEvent(new WheelEvent("wheel", { bubbles: true })),
@@ -1418,14 +1450,14 @@ it.each(["mode", "wheel"])(
 it("disables source following and smoothly resynchronizes from the source when enabled", async () => {
   await click("流式对照");
   const { pane } = translationGeometry();
-  await click("取消同步效果");
+  await click("同步滚动");
   await act(async () =>
     fixture.events!.readingAnchor?.({ blockId: "p1-b1", fraction: 0.5 }),
   );
   expect(pane.scrollTop).toBe(0);
   vi.useFakeTimers();
   try {
-    await click("开启同步效果");
+    await click("同步滚动");
     expect(pane.scrollTop).toBe(0);
     await act(async () => {
       await vi.advanceTimersByTimeAsync(96);
@@ -1441,10 +1473,102 @@ it("disables source following and smoothly resynchronizes from the source when e
   }
 });
 
+it("keeps the source page fixed when navigating the focused translation while paused", async () => {
+  await renderView(
+    defaultTheme,
+    [
+      {
+        id: "p2-b1",
+        page: 2,
+        text: "Next page.",
+        label: "text",
+        bounds: { x: 0.1, y: 0.2, width: 0.3, height: 0.2 },
+      },
+    ],
+    [],
+    undefined,
+    "doc",
+    "",
+    {
+      pageNavigation: (
+        <button onClick={() => void fixture.ready!.next()}>下一页</button>
+      ),
+    },
+  );
+  await click("流式对照");
+  const { pane } = translationGeometry();
+  const next = pane.querySelector<HTMLElement>(
+    '[data-translation-block="p2-b1"]',
+  )!;
+  next.getBoundingClientRect = () =>
+    new DOMRect(40, 1100 - pane.scrollTop, 520, 200);
+  await click("同步滚动");
+  await act(async () => pane.focus());
+  vi.mocked(adapter.goTo).mockClear();
+  const nextButton = host.querySelector<HTMLButtonElement>(
+    ".pdf-page-navigation button",
+  )!;
+  await act(async () => {
+    nextButton.dispatchEvent(new MouseEvent("pointerdown", { bubbles: true }));
+    nextButton.focus();
+    nextButton.dispatchEvent(
+      new KeyboardEvent("keydown", { key: "Enter", bubbles: true }),
+    );
+    nextButton.click();
+  });
+  expect(adapter.goTo).not.toHaveBeenCalled();
+  expect(fixture.ready!.getLocation()).toMatchObject({ type: "pdf", page: 2 });
+  expect(pane.scrollTop).toBe(800);
+  const source = host.querySelector<HTMLElement>(".translation-source")!;
+  events.location.mockClear();
+  await act(async () =>
+    source.dispatchEvent(new MouseEvent("pointerdown", { bubbles: true })),
+  );
+  expect(events.location).toHaveBeenLastCalledWith({ type: "pdf", page: 1 }, 0.5);
+});
+
+it("steps past a page with no flow translation blocks in both directions", async () => {
+  await renderView(defaultTheme, [
+    {
+      id: "p3-b1",
+      page: 3,
+      text: "Later page.",
+      label: "text",
+      bounds: { x: 0.1, y: 0.2, width: 0.3, height: 0.2 },
+    },
+  ]);
+  await click("流式对照");
+  const { pane } = translationGeometry();
+  const next = pane.querySelector<HTMLElement>(
+    '[data-translation-block="p3-b1"]',
+  )!;
+  next.getBoundingClientRect = () =>
+    new DOMRect(40, 1100 - pane.scrollTop, 520, 200);
+  await click("同步滚动");
+  await act(async () => pane.focus());
+  await act(async () => fixture.ready!.next());
+  expect(fixture.ready!.getLocation()).toMatchObject({ type: "pdf", page: 3 });
+  await act(async () => fixture.ready!.previous());
+  expect(fixture.ready!.getLocation()).toMatchObject({ type: "pdf", page: 1 });
+});
+
+it("reports an explicit page jump with no flow content in the paused translation", async () => {
+  await click("流式对照");
+  const { pane } = translationGeometry();
+  await click("同步滚动");
+  await act(async () => pane.focus());
+  await act(async () => {
+    await expect(
+      fixture.ready!.goTo({ type: "pdf", page: 2 }),
+    ).rejects.toThrow("第 2 页");
+  });
+  expect(fixture.ready!.getLocation()).toMatchObject({ type: "pdf", page: 1 });
+});
+
 it("disables translation following and resynchronizes from the last manually scrolled translation", async () => {
   await click("流式对照");
   const { pane } = translationGeometry();
-  await click("取消同步效果");
+  await click("同步滚动");
   vi.mocked(adapter.followBlock!).mockClear();
   vi.useFakeTimers();
   try {
@@ -1457,7 +1581,7 @@ it("disables translation following and resynchronizes from the last manually scr
       await vi.advanceTimersByTimeAsync(32);
     });
     expect(adapter.followBlock).not.toHaveBeenCalled();
-    await click("开启同步效果");
+    await click("同步滚动");
     expect(adapter.followBlock).toHaveBeenLastCalledWith({
       blockId: "p1-b1",
       fraction: 0.5,
@@ -1471,8 +1595,9 @@ it("disables translation following and resynchronizes from the last manually scr
 it.each(["原页", "流式对照"])(
   "keeps annotation and search focus available with sync disabled in %s",
   async (mode) => {
-    if (mode === "流式对照") await click(mode);
-    await click("取消同步效果");
+    await click("流式对照");
+    await click("同步滚动");
+    if (mode === "原页") await click(mode);
     vi.mocked(adapter.focusBlock!).mockClear();
     await act(async () => {
       void fixture.ready!.focusLocation?.({
@@ -1488,9 +1613,9 @@ it.each(["原页", "流式对照"])(
     );
     expect(
       host
-        .querySelector('[aria-label="开启同步效果"]')
+        .querySelector('[aria-label="同步滚动"]')
         ?.getAttribute("aria-pressed"),
-    ).toBe("false");
+    ).toBe(mode === "原页" ? undefined : "false");
   },
 );
 
@@ -1508,7 +1633,7 @@ it("focuses the image from a translated figure reference even with sync disabled
     },
   ]);
   await click("流式对照");
-  await click("取消同步效果");
+  await click("同步滚动");
   vi.mocked(adapter.focusBlock!).mockClear();
   await act(async () =>
     host.querySelector<HTMLAnchorElement>('a[href="#figure"]')!.click(),
@@ -1703,7 +1828,7 @@ it("strips legacy cross-side links when preparing a mark without losing its posi
     rects: location.rects,
   });
   await click("流式对照");
-  await click("取消同步效果");
+  await click("同步滚动");
   vi.mocked(adapter.focusBlock!).mockClear();
   await act(async () => fixture.ready!.focusLocation!(prepared.location));
   expect(adapter.focusBlock).toHaveBeenCalledExactlyOnceWith(

@@ -141,6 +141,12 @@ export class PDFReaderAdapter implements ReaderAdapter {
       this.searchSource = (query) => this.searchPDF(this.sourcePDF, query);
     }
     container.classList.add("pdf-container");
+    container.tabIndex = 0;
+    container.setAttribute("role", "region");
+    container.setAttribute(
+      "aria-label",
+      this.translationOnly ? "译文阅读区" : "原文阅读区",
+    );
     this.removeExternalLinks = installPDFExternalLinks(container);
     this.figureLinks = new PDFFigureLinks(
       container,
@@ -635,6 +641,9 @@ export class PDFReaderAdapter implements ReaderAdapter {
     const command = zoomCommand(event);
     if (!command || event.defaultPrevented || !this.canZoom(event.target))
       return;
+    const focusedPane =
+      event.target instanceof Element && event.target.closest(".pdf-container");
+    if (focusedPane && focusedPane !== this.container) return;
     event.preventDefault();
     this.wheelScale = undefined;
     if (command === "width") {

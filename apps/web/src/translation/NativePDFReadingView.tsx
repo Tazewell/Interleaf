@@ -41,6 +41,7 @@ export function NativePDFReadingView({
   pageNavigation,
   split,
   layout = "side-by-side",
+  syncEnabled = true,
 }: {
   document: Document;
   theme: ReaderTheme;
@@ -55,6 +56,7 @@ export function NativePDFReadingView({
   pageNavigation?: ReactNode;
   split: TranslationSplit;
   layout?: NativePDFReadingLayout;
+  syncEnabled?: boolean;
 }) {
   // Only completed text affects the derived PDF; queue updates should leave the viewport alone.
   const revision = useMemo(
@@ -162,6 +164,7 @@ export function NativePDFReadingView({
           <View
             key={metadata.cacheKey}
             split={split}
+            syncEnabled={syncEnabled}
             document={doc}
             theme={theme}
             annotations={annotations}
@@ -172,9 +175,7 @@ export function NativePDFReadingView({
               translations,
               alongsideOriginal: !single,
             }}
-            onReady={(adapter, toc) => {
-              void ready(adapter, toc);
-            }}
+            onReady={ready}
             events={{
               ...events,
               location: (next, percentage) => {

@@ -10,7 +10,7 @@ import {
 } from "react";
 import { useTranslations } from "./useTranslations";
 import { createPortal } from "react-dom";
-import { Crosshair } from "@phosphor-icons/react";
+import { LinkSimple } from "@phosphor-icons/react";
 import type {
   Annotation,
   Document as ReaderDocument,
@@ -29,15 +29,12 @@ import type {
 import { defaultTheme, isPDFPageDecoration } from "@interleaf/core";
 import { api } from "@interleaf/api";
 import { Button } from "@interleaf/ui/components/button";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "@interleaf/ui/components/tooltip";
+import { Toggle } from "@interleaf/ui/components/toggle";
 import { Popover, PopoverContent } from "@interleaf/ui/components/popover";
 import { toast } from "sonner";
 import { InterleafView } from "../InterleafView";
 import {
+  isPDFPageJump,
   locationAtReadingAnchor,
   overlap,
   ReadingSync,
@@ -98,13 +95,13 @@ export function PDFReadingView({
   blocks,
   processing,
   toolbarHost,
-  autoCenterHost,
   pageNavigation,
   sidebarsOpen,
   searchResults = emptySearchResults,
   searchQuery = "",
   onReady,
   onAdapterDetached,
+  onSearchScopeChanged,
   events,
 }: {
   document: ReaderDocument;
@@ -120,6 +117,7 @@ export function PDFReadingView({
   searchQuery?: string;
   onReady: (adapter: ReaderAdapter, toc: TOCItem[]) => void;
   onAdapterDetached?: () => void;
+  onSearchScopeChanged?: () => void;
   events: ReaderEvents;
 }) {
   const [content, setContent] = useState<PDFReadingContent>("source"),
@@ -179,6 +177,14 @@ export function PDFReadingView({
     control = useRef(new ReadingSync()),
     side = useRef<"source" | "translation">("source"),
     reading = useRef<PDFReadingAnchor | undefined>(undefined);
+  const paneReading = useRef<
+    Partial<Record<typeof side.current, PDFReadingAnchor>>
+  >({});
+  const pendingSideFocus = useRef<{
+    documentId: string;
+    location: DocumentLocation;
+    side: NonNullable<SearchResult["side"]>;
+  } | undefined>(undefined);
   const nativeLocation = useRef<{
     documentId: string;
     location?: DocumentLocation;
@@ -199,6 +205,7 @@ export function PDFReadingView({
   const sourceActive = useRef(true);
   const recordReading = (anchor: PDFReadingAnchor) => {
     reading.current = anchor;
+    paneReading.current[side.current] = anchor;
   };
   const translationMotion = useRef({
     operation: 0,
@@ -243,10 +250,19 @@ export function PDFReadingView({
     () => new Map(blocks.map((block) => [block.id, block])),
     [blocks],
   );
+  const equationNumbers = useMemo(() => formulaNumbers(blocks), [blocks]);
+  const visibleBlocks = useMemo(
+    () =>
+      blocks.filter(
+        (b) => !isPDFPageDecoration(b) && !equationNumbers.pairedIds.has(b.id),
+      ),
+    [blocks, equationNumbers],
+  );
   const state = useRef({
     sourceBlocksById,
     mode,
     blocks,
+    visibleBlocks,
     translations,
     events,
     theme,
@@ -256,6 +272,7 @@ export function PDFReadingView({
     sourceBlocksById,
     mode,
     blocks,
+    visibleBlocks,
     translations,
     events,
     theme,
@@ -289,7 +306,6 @@ export function PDFReadingView({
   const selecting = useRef(false),
     selection = useRef<ReaderSelection | null>(null),
     scrollFrame = useRef(0);
-  const equationNumbers = useMemo(() => formulaNumbers(blocks), [blocks]);
   const [imageCache, setImageCache] = useState<{
     engine: ReaderAdapter;
     documentId: string;
@@ -308,13 +324,6 @@ export function PDFReadingView({
       setImageCache(undefined);
     };
   }, [engine, engineDocument, doc.id]);
-  const visibleBlocks = useMemo(
-    () =>
-      blocks.filter(
-        (b) => !isPDFPageDecoration(b) && !equationNumbers.pairedIds.has(b.id),
-      ),
-    [blocks, equationNumbers],
-  );
   const lastPage = useMemo(
     () => Math.max(1, ...blocks.map((block) => block.page)),
     [blocks],
@@ -420,6 +429,7 @@ export function PDFReadingView({
     const node = targetNode(anchor.blockId),
       host = pane.current;
     if (!node || !host) return;
+    paneReading.current.translation = anchor;
     control.current.following("translation");
     const target =
       sentenceIndex === undefined
@@ -480,7 +490,11 @@ export function PDFReadingView({
       }
     });
   };
-  const focusBlock = (block: PDFBlock, origin: "source" | "translation") => {
+  const focusBlock = (
+    block: PDFBlock,
+    origin: "source" | "translation",
+    onlyOrigin = false,
+  ) => {
     if (isNativeMode(mode)) {
       void engine
         ?.focusBlock?.(block.id, "source")
@@ -497,9 +511,11 @@ export function PDFReadingView({
     // Both panels center their own geometry; a tall translation must not shift
     // a short original away from its center (or vice versa).
     const source =
-      mode !== "translation" ? engine?.focusBlock?.(block.id, mode) : undefined;
+      mode !== "translation" && (!onlyOrigin || origin === "source")
+        ? engine?.focusBlock?.(block.id, mode)
+        : undefined;
     const translated =
-      mode !== "source"
+      mode !== "source" && (!onlyOrigin || origin === "translation")
         ? followTranslation(anchor, undefined, { smooth: true, center: true })
         : undefined;
     const completed = Promise.all([source, translated])
@@ -562,11 +578,29 @@ export function PDFReadingView({
       })[0]
     );
   };
-  const go = async (location: DocumentLocation, target = engine) => {
-    input(mode === "translation" ? "translation" : "source");
-    await target?.goTo(location);
+  const go = async (
+    location: DocumentLocation,
+    target = engine,
+    pageControl = false,
+  ) => {
+    const independent = mode === "parallel" && !syncEnabledRef.current;
+    const activePaneJump = independent && pageControl && isPDFPageJump(location);
+    const origin =
+      activePaneJump
+        ? side.current
+        : mode === "translation" ||
+            (independent && location.type === "pdf" && location.translation)
+          ? "translation"
+          : "source";
+    input(origin);
+    if (!independent || origin === "source") await target?.goTo(location);
     if (location.type !== "pdf") return;
-    const block = locationBlock(location);
+    const jumpInTranslation = activePaneJump && origin === "translation";
+    const block = jumpInTranslation
+      ? visibleBlocks.find((item) => item.page === location.page)
+      : locationBlock(location);
+    if (jumpInTranslation && !block)
+      throw new Error(`第 ${location.page} 页没有可显示的流式内容`);
     if (block) {
       const anchor = {
         blockId: block.id,
@@ -582,22 +616,34 @@ export function PDFReadingView({
               ),
       };
       recordReading(anchor);
-      followTranslation(anchor, location.translation?.sentenceIndexes[0]);
+      if (!independent || origin === "translation")
+        followTranslation(anchor, location.translation?.sentenceIndexes[0]);
       state.current.events.location(
         location,
         block.page / Math.max(1, ...state.current.blocks.map((b) => b.page)),
       );
     }
   };
-  const focus = async (location: DocumentLocation) => {
+  const focus = async (location: DocumentLocation, searchSide?: SearchResult["side"]) => {
+    const origin = searchSide ?? (
+      mode === "translation" || (location.type === "pdf" && location.translation)
+        ? "translation"
+        : "source"
+    );
+    if ((mode === "source" && origin === "translation") ||
+        (mode === "translation" && origin === "source")) {
+      pendingSideFocus.current = { documentId: doc.id, location, side: origin };
+      changeMode("parallel", "flow");
+      return;
+    }
     const block = locationBlock(location);
     const completed = block
-      ? focusBlock(block, mode === "translation" ? "translation" : "source")
+      ? focusBlock(block, origin, mode === "parallel" && !syncEnabledRef.current)
       : go(location);
     const operation = explicitFocus.current.operation;
     await completed;
     if (operation !== explicitFocus.current.operation) return;
-    if (location.type === "pdf" && mode !== "translation")
+    if (location.type === "pdf" && origin === "source")
       engine?.flashReference?.(location, location.quote ?? "");
   };
   // Keep the public adapter usable by TOC, notes and page navigation in all modes.
@@ -698,7 +744,7 @@ export function PDFReadingView({
             return { ...value, location };
           };
         if (key === "goTo")
-          return (l: DocumentLocation) => actions.current.go(l, target);
+          return (l: DocumentLocation) => actions.current.go(l, target, true);
         if (key === "search")
           return async (query: string) => {
             const current = state.current;
@@ -723,19 +769,35 @@ export function PDFReadingView({
             return [...found, ...unparsed].slice(0, 100);
           };
         if (key === "focusLocation")
-          return (l: DocumentLocation) => actions.current.focus(l);
+          return (l: DocumentLocation, side?: SearchResult["side"]) =>
+            actions.current.focus(l, side);
         if (key === "next" || key === "previous")
-          return () => {
-            if (!state.current.blocks.length) return target[key]();
-            const block = state.current.blocks.find(
-              (b) => b.id === reading.current?.blockId,
-            );
+          return async () => {
+            const currentState = state.current;
+            const independent =
+              currentState.mode === "parallel" && !syncEnabledRef.current;
+            if (
+              independent ? side.current === "source" : !currentState.blocks.length
+            )
+              return target[key]();
+            const anchor = independent
+              ? paneReading.current.translation
+              : reading.current;
             const current =
-              block?.page ?? (target.getLocation() as { page: number }).page;
-            return actions.current.go({
-              type: "pdf",
-              page: Math.max(1, current + (key === "next" ? 1 : -1)),
-            });
+              currentState.sourceBlocksById.get(anchor?.blockId ?? "")?.page ??
+              (target.getLocation() as { page: number }).page;
+            const direction = key === "next" ? 1 : -1;
+            let page = Math.max(1, current + direction);
+            if (independent) {
+              let distance = Infinity;
+              for (const block of currentState.visibleBlocks) {
+                const step = (block.page - current) * direction;
+                if (step > 0 && step < distance) distance = step;
+              }
+              if (!Number.isFinite(distance)) return;
+              page = current + distance * direction;
+            }
+            return actions.current.go({ type: "pdf", page }, target, true);
           };
         const readingTranslation =
           state.current.mode === "translation" ||
@@ -744,7 +806,9 @@ export function PDFReadingView({
           return () =>
             locationAtReadingAnchor(
               state.current.sourceBlocksById,
-              reading.current,
+              state.current.mode === "parallel" && !syncEnabledRef.current
+                ? paneReading.current.translation
+                : reading.current,
             ) ?? target.getLocation();
         if (key === "isNear" && readingTranslation)
           return (location: DocumentLocation) => {
@@ -817,7 +881,7 @@ export function PDFReadingView({
       };
       const navigation: Pick<
         ReaderAdapter,
-        "focusReference" | "flashReference" | "goTo" | "focusLocation"
+        "focusReference" | "flashReference" | "goTo" | "focusLocation" | "search"
       > = {
         async focusReference(location, text) {
           const target = await navigationTarget(true);
@@ -836,6 +900,12 @@ export function PDFReadingView({
           const target = await navigationTarget(needsOriginalPage(location));
           if (target?.focusLocation) await target.focusLocation(location);
           else await target?.goTo(location);
+        },
+        async search(query) {
+          return (await adapter.search(query)).map((result) => ({
+            ...result,
+            side: "translation",
+          }));
         },
       };
       exposed = new Proxy(adapter, {
@@ -863,7 +933,7 @@ export function PDFReadingView({
     previousMode.current = mode;
     if (isNativeMode(mode)) return;
     if (isNativeMode(previous)) {
-      if (mode === "translation" && reading.current)
+      if (mode !== "source" && reading.current)
         followTranslation(reading.current);
       return;
     }
@@ -872,6 +942,13 @@ export function PDFReadingView({
     events.selection(null);
     window.getSelection()?.removeAllRanges();
     void engine.focusSentences?.("", []);
+    const pending = pendingSideFocus.current;
+    pendingSideFocus.current = undefined;
+    if (pending?.documentId === doc.id && mode === "parallel") {
+      enteringParallel.current = undefined;
+      void focus(pending.location, pending.side);
+      return;
+    }
     if (previous !== mode && mode === "parallel") {
       const block = blocks.find(
         (b) => b.id === (enteringParallel.current ?? reading.current?.blockId),
@@ -974,7 +1051,8 @@ export function PDFReadingView({
       window.removeEventListener("pointercancel", release);
     };
   }, []);
-  const input = (active: typeof side.current) => {
+  const input = (active: typeof side.current, reportLocation = false) => {
+    const changed = side.current !== active;
     cancelTranslationMotion();
     if (explicitFocus.current.moving || active === "translation")
       engine?.cancelBlockFocus?.();
@@ -983,6 +1061,25 @@ export function PDFReadingView({
     setFocusedBlock(undefined);
     side.current = active;
     control.current.input(active);
+    if (!reportLocation || !changed || mode !== "parallel" || syncEnabledRef.current)
+      return;
+    const location =
+      active === "source"
+        ? engine?.getLocation()
+        : locationAtReadingAnchor(
+            sourceBlocksById,
+            paneReading.current.translation,
+          );
+    if (location?.type === "pdf")
+      events.location(
+        location,
+        location.page / (engine?.getPageCount?.() || lastPage),
+      );
+  };
+  const sourceInput = ({ target }: { target: EventTarget }) => {
+    if (target instanceof Element && target.closest(".pdf-page-navigation"))
+      return;
+    input("source", true);
   };
   const sourceSelection = (value: ReaderSelection | null) => {
     if (side.current !== "source") return;
@@ -1056,6 +1153,7 @@ export function PDFReadingView({
           location.page / (engine?.getPageCount?.() || lastPage),
         );
       if (mode === "parallel" && syncEnabledRef.current) {
+        paneReading.current.source = anchor;
         control.current.following("source");
         void engine?.followBlock?.(anchor, { smooth: false });
       }
@@ -1182,48 +1280,28 @@ export function PDFReadingView({
     input(value === "translation" ? "translation" : "source");
     setPopup(undefined);
     setContent(nextContent);
+    if (!isNativeMode(mode) && !isNativeMode(value)) onSearchScopeChanged?.();
     // A half-width source pane needs fit-width; a 100% page would be clipped.
     if (value === "parallel" || value === "native") events.zoom?.("width");
   };
   const activePopup = popup && byId.get(popup.block.id);
-  const toggleSync = () => {
-    const enabled = !syncEnabledRef.current;
+  const toggleSync = (enabled: boolean) => {
     syncEnabledRef.current = enabled;
     setSyncEnabled(enabled);
+    if (mode !== "parallel") return;
     // Stop pending follow animations before changing the synchronization policy.
     input(side.current);
     engine?.cancelBlockFocus?.();
-    const anchor = reading.current;
-    if (!enabled || mode !== "parallel" || !anchor) return;
+    const anchor = paneReading.current[side.current] ?? reading.current;
+    if (!enabled || !anchor) return;
     if (side.current === "source") {
       void followTranslation(anchor, undefined, { smooth: true });
     } else {
+      paneReading.current.source = anchor;
       control.current.following("source");
       void engine?.followBlock?.(anchor).catch((e) => toast.error(e.message));
     }
   };
-  const autoCenterButton = (
-    <Tooltip>
-      <TooltipTrigger
-        render={
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            data-active={syncEnabled || undefined}
-            className={syncEnabled ? "toolbar-icon-active" : undefined}
-            aria-label={syncEnabled ? "取消同步效果" : "开启同步效果"}
-            aria-pressed={syncEnabled}
-            onClick={toggleSync}
-          />
-        }
-      >
-        <Crosshair />
-      </TooltipTrigger>
-      <TooltipContent>
-        {syncEnabled ? "取消同步效果" : "开启同步效果"}
-      </TooltipContent>
-    </Tooltip>
-  );
   // Position reports update the parent without changing paragraph content. Keep
   // that path out of Markdown rendering and annotation-derived block markup.
   const translatedBlocks = useMemo(
@@ -1329,9 +1407,8 @@ export function PDFReadingView({
     ],
   );
   const toolbar = (
-    <div className="translation-toolbar">
+    <div className="translation-toolbar pdf-reading-toolbar">
       <div className="reading-translation-actions">
-        {!autoCenterHost && !isNativeMode(mode) && autoCenterButton}
         <AssistanceControls
           documentId={doc.id}
           processing={processing}
@@ -1355,6 +1432,19 @@ export function PDFReadingView({
         onContentChange={changeMode}
         onFormatChange={(next) => changeMode(content, next)}
       />
+      {content === "parallel" && (
+        <Toggle
+          className="pdf-scroll-sync"
+          size="sm"
+          variant="outline"
+          aria-label="同步滚动"
+          pressed={syncEnabled}
+          onPressedChange={toggleSync}
+        >
+          <LinkSimple aria-hidden="true" />
+          同步滚动
+        </Toggle>
+      )}
     </div>
   );
   return (
@@ -1364,9 +1454,6 @@ export function PDFReadingView({
       data-theme={theme.mode}
       data-dark-contrast={theme.pdfDarkContrast ?? "soft"}
     >
-      {autoCenterHost &&
-        !isNativeMode(mode) &&
-        createPortal(autoCenterButton, autoCenterHost)}
       {toolbarHost ? createPortal(toolbar, toolbarHost) : toolbar}
       {mode === "translation" && (
         <div className="pdf-reading-controls">
@@ -1377,6 +1464,7 @@ export function PDFReadingView({
         <NativePDFReadingView
           key={`${doc.id}:${mode}`}
           split={split}
+          syncEnabled={syncEnabled}
           layout={
             mode === "native-translation" ? "translation-only" : "side-by-side"
           }
@@ -1411,9 +1499,13 @@ export function PDFReadingView({
             <div
               className="translation-source"
               inert={mode === "translation"}
-              onWheelCapture={() => input("source")}
-              onPointerDownCapture={() => input("source")}
-              onKeyDownCapture={() => input("source")}
+              onWheelCapture={sourceInput}
+              onPointerDownCapture={sourceInput}
+              onKeyDownCapture={sourceInput}
+              onFocusCapture={(event) => {
+                if (mode === "parallel" && side.current !== "source")
+                  sourceInput(event);
+              }}
             >
               <InterleafView
                 document={doc}
@@ -1490,13 +1582,17 @@ export function PDFReadingView({
                 className="translation-document"
                 ref={pane}
                 tabIndex={0}
-                aria-label="论文译文"
+                role="region"
+                aria-label="译文阅读区"
+                onFocusCapture={() => {
+                  if (mode === "parallel" && side.current !== "translation") input("translation", true);
+                }}
                 onScroll={() => {
                   hover("translation");
                   translatedScroll();
                 }}
                 onPointerLeave={() => hover("translation")}
-                onWheelCapture={() => input("translation")}
+                onWheelCapture={() => input("translation", true)}
                 onPointerDownCapture={(event) => {
                   const section = (
                     event.target as Element
@@ -1509,7 +1605,7 @@ export function PDFReadingView({
                           y: event.clientY,
                         }
                       : undefined;
-                  input("translation");
+                  input("translation", true);
                   hover("translation");
                   selecting.current = !!section;
                   selection.current = null;
@@ -1534,7 +1630,7 @@ export function PDFReadingView({
                   }
                   translatedSelection();
                 }}
-                onKeyDownCapture={() => input("translation")}
+                onKeyDownCapture={() => input("translation", true)}
                 onKeyUp={translatedSelection}
                 style={{
                   fontSize: `${theme.translationFontSize ?? 1}rem`,

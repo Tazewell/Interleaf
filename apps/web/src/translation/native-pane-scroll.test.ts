@@ -100,3 +100,23 @@ it("restores the shared reading point and each horizontal pan after the DOM pane
   expect(pair.active).toBe("translation");
   pair.destroy();
 });
+
+it("preserves both paused reading positions through a swap and resumes from the last input pane", () => {
+  const source = pane([400, 800, 600]),
+    translated = pane([200, 400, 300]);
+  const pair = linkNativePDFPanes(source, translated);
+  pair.setEnabled(false);
+  scroll(source, 540);
+  translated.dispatchEvent(new FocusEvent("focusin"));
+  scroll(translated, 440);
+  expect(source.scrollTop).toBe(540);
+
+  const restore = pair.captureForSwap();
+  source.scrollTop = translated.scrollTop = 0;
+  restore();
+  expect([source.scrollTop, translated.scrollTop]).toEqual([540, 440]);
+
+  pair.setEnabled(true);
+  expect([source.scrollTop, translated.scrollTop]).toEqual([940, 440]);
+  pair.destroy();
+});

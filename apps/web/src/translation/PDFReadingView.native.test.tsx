@@ -160,6 +160,27 @@ it("separates three reading contents from the layout choice", async () => {
     "原版式",
   );
 });
+it("identifies native single-translation search results as translated text", async () => {
+  await click("译文");
+  expect(await facade.search("译文")).toEqual([
+    { id: "native-only", side: "translation" },
+  ]);
+});
+it("shows the same sync switch only in comparisons and retains its setting across layouts", async () => {
+  const sync = () =>
+    [...host.querySelectorAll("button")].find(
+      (button) => button.textContent === "同步滚动",
+    );
+  expect(sync()).toBeUndefined();
+  await click("对照");
+  expect(sync()?.getAttribute("aria-pressed")).toBe("true");
+  await act(async () => sync()?.click());
+  expect(fixture.nativeProps?.syncEnabled).toBe(false);
+  await choosePDFFormat(host, "流式");
+  expect(sync()?.getAttribute("aria-pressed")).toBe("false");
+  await click("译文");
+  expect(sync()).toBeUndefined();
+});
 it.each(["原版式", "流式"] as const)(
   "opens paragraph comparison in the reader's chosen %s format",
   async (format) => {
@@ -316,9 +337,7 @@ it("opens the native layout at the independent flow pane the reader last scrolle
   ]);
   await click("流式对照");
   await act(async () =>
-    host
-      .querySelector<HTMLButtonElement>('[aria-label="取消同步效果"]')!
-      .click(),
+    host.querySelector<HTMLButtonElement>('[aria-label="同步滚动"]')!.click(),
   );
   const pane = host.querySelector<HTMLElement>(".translation-document")!;
   vi.spyOn(pane, "getBoundingClientRect").mockReturnValue(

@@ -39,6 +39,26 @@
 .pdf-reading-format:hover {
   background: var(--state-hover);
 }
+.workspace .pdf-reading-toolbar .pdf-scroll-sync {
+  grid-column: 3;
+  grid-row: 1;
+  justify-self: end;
+}
+@container interleaf-reading (max-width: 520px) {
+  .workspace .pdf-reading-toolbar .pdf-scroll-sync {
+    grid-column: 1;
+    grid-row: 2;
+  }
+  .workspace
+    .pdf-reading-toolbar:has(.pdf-scroll-sync)
+    .reading-translation-actions {
+    justify-self: start;
+  }
+}
+.pdf-reading :is(.pdf-container, .translation-document):focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: -2px;
+}
 .native-pdf-reading {
   position: relative;
   display: flex;

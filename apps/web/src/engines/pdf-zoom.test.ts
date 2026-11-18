@@ -131,6 +131,26 @@ it("supports zoom out, Ctrl shortcuts and reset to fit width", () => {
   expect(state.scaleValue).toBe("page-width");
   expect(zoom).toHaveBeenLastCalledWith("width");
 });
+it("uses the focused PDF pane to drive a keyboard zoom", async () => {
+  const translated = document.createElement("div");
+  const translateZoom = vi.fn();
+  document.body.append(translated);
+  const reader = new PDFReaderAdapter(translated, {
+    location: vi.fn(),
+    selection: vi.fn(),
+    zoom: translateZoom,
+  });
+  try {
+    await reader.open({ id: "translation-fixture", type: "pdf" } as Document);
+    translated.focus();
+    expect(document.activeElement).toBe(translated);
+    expect(key("+", translated).defaultPrevented).toBe(true);
+    expect(translateZoom).toHaveBeenCalledOnce();
+    expect(zoom).not.toHaveBeenCalled();
+  } finally {
+    await reader.destroy();
+  }
+});
 it.each([
   { ctrlKey: true, metaKey: false },
   { ctrlKey: false, metaKey: true },

@@ -1,9 +1,29 @@
-import type { PDFBlock, PDFLocation, PDFReadingAnchor } from "@interleaf/core";
+import type {
+  DocumentLocation,
+  PDFBlock,
+  PDFLocation,
+  PDFReadingAnchor,
+} from "@interleaf/core";
 
 export type Box = NonNullable<PDFLocation["rects"]>[number];
 export const overlap = (a: Box, b: Box) =>
   Math.max(0, Math.min(a.x + a.width, b.x + b.width) - Math.max(a.x, b.x)) *
   Math.max(0, Math.min(a.y + a.height, b.y + b.height) - Math.max(a.y, b.y));
+
+export function isPDFPageJump(
+  location: DocumentLocation,
+): location is PDFLocation {
+  return (
+    location.type === "pdf" &&
+    location.x === undefined &&
+    location.y === undefined &&
+    !location.quote &&
+    !location.rects?.length &&
+    !location.sourceAnchors?.length &&
+    !location.sentenceLink &&
+    !location.translation
+  );
+}
 
 export function locationAtReadingAnchor(
   blocks: ReadonlyMap<string, PDFBlock>,

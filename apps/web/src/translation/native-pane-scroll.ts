@@ -61,30 +61,53 @@ function viewport(host: HTMLElement) {
 export function linkNativePDFPanes(
   source: HTMLElement,
   translation: HTMLElement,
-  release?: (previous: NativePane) => void,
+  {
+    release,
+    onActive,
+  }: {
+    release?: (previous: NativePane) => void;
+    onActive?: (side: NativePane) => void;
+  } = {},
 ) {
   const panes = {
     source: viewport(source),
     translation: viewport(translation),
   };
   let active: NativePane = "source";
-  let position: Position | undefined;
+  let enabled = true;
+  let positions: Partial<Record<NativePane, Position>> = {};
   const listeners = new AbortController();
   const options = { passive: true, signal: listeners.signal };
   const activate = (side: NativePane) => {
     if (active === side) return;
     release?.(active);
     active = side;
+    onActive?.(side);
   };
   const sync = () => {
-    position = panes[active].read();
-    if (position !== undefined)
-      panes[active === "source" ? "translation" : "source"].write(position);
+    const position = panes[active].read();
+    if (position === undefined) return;
+    positions[active] = position;
+    if (!enabled) return;
+    const follower = active === "source" ? "translation" : "source";
+    positions[follower] = position;
+    panes[follower].write(position);
+  };
+  const capture = () => {
+    if (enabled) {
+      const position = panes[active].read() ?? positions[active];
+      return { source: position, translation: position };
+    }
+    return {
+      source: panes.source.read() ?? positions.source,
+      translation: panes.translation.read() ?? positions.translation,
+    };
   };
   const restore = () => {
-    if (position === undefined) return sync();
-    panes.source.write(position);
-    panes.translation.write(position);
+    if (positions[active] === undefined) sync();
+    if (positions.source !== undefined) panes.source.write(positions.source);
+    if (positions.translation !== undefined)
+      panes.translation.write(positions.translation);
   };
   const observer = new ResizeObserver(restore);
   for (const side of ["source", "translation"] as const) {
@@ -112,14 +135,23 @@ export function linkNativePDFPanes(
     get active() {
       return active;
     },
+    get enabled() {
+      return enabled;
+    },
+    setEnabled(value: boolean) {
+      if (enabled === value) return;
+      enabled = value;
+      if (enabled) sync();
+      else positions = capture();
+    },
     activate,
     sync,
     captureForSwap() {
-      const anchor = panes[active].read() ?? position;
+      const anchors = capture();
       const sourceLeft = source.scrollLeft,
         translatedLeft = translation.scrollLeft;
       return () => {
-        position = anchor;
+        positions = anchors;
         restore();
         source.scrollLeft = sourceLeft;
         translation.scrollLeft = translatedLeft;

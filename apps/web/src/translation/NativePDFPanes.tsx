@@ -7,6 +7,7 @@ import type {
   TOCItem,
 } from "@interleaf/core";
 import { InterleafView } from "../InterleafView";
+import { isPDFPageJump } from "../engines/pdf-reading";
 import { TranslationPanes, type TranslationSplit } from "./TranslationPanes";
 import { linkNativePDFPanes, type NativePane } from "./native-pane-scroll";
 
@@ -35,7 +36,11 @@ function pairedReader(
     next: () => readers[scroll.active].next(),
     previous: () => readers[scroll.active].previous(),
     async goTo(location) {
-      await drive(targetSide(location)).goTo(location);
+      const side =
+        !scroll.enabled && isPDFPageJump(location)
+          ? scroll.active
+          : targetSide(location);
+      await drive(side).goTo(location);
       scroll.sync();
     },
     async focusLocation(location, side = targetSide(location)) {
@@ -117,14 +122,22 @@ export function NativePDFPanes({
   onReady,
   annotations,
   split,
+  syncEnabled = true,
   ...props
-}: PaneProps & { split: TranslationSplit }) {
+}: Omit<PaneProps, "onReady"> & {
+  split: TranslationSplit;
+  syncEnabled?: boolean;
+  onReady: (adapter: ReaderAdapter, toc: TOCItem[]) => void | Promise<void>;
+}) {
   const sourceHost = useRef<HTMLDivElement>(null),
     translatedHost = useRef<HTMLDivElement>(null);
   const slots = useRef<
     Partial<Record<NativePane, { adapter: ReaderAdapter; toc: TOCItem[] }>>
   >({});
   const scroll = useRef<LinkedScroll | undefined>(undefined);
+  const initialized = useRef(false);
+  const syncPreference = useRef(syncEnabled);
+  syncPreference.current = syncEnabled;
   const restoreSwap = useRef<(() => void) | undefined>(undefined);
   const sourceAnnotations = useMemo(
     () => annotations.filter(onSource),
@@ -134,10 +147,14 @@ export function NativePDFPanes({
     restoreSwap.current?.();
     restoreSwap.current = undefined;
   }, [split.swapped]);
+  useLayoutEffect(() => {
+    if (initialized.current) scroll.current?.setEnabled(syncEnabled);
+  }, [syncEnabled]);
   useLayoutEffect(
     () => () => {
       scroll.current?.destroy();
       scroll.current = undefined;
+      initialized.current = false;
       slots.current = {};
     },
     [],
@@ -150,20 +167,38 @@ export function NativePDFPanes({
       source.adapter.getPageCount?.() !== translation.adapter.getPageCount?.()
     )
       throw new Error("对照文件页数与原文不一致，请重新生成");
-    const linked = linkNativePDFPanes(
-      sourceHost.current!.querySelector<HTMLElement>(".pdf-container")!,
-      translatedHost.current!.querySelector<HTMLElement>(".pdf-container")!,
-      (previous) => {
+    const original =
+      sourceHost.current!.querySelector<HTMLElement>(".pdf-container")!;
+    const translated =
+      translatedHost.current!.querySelector<HTMLElement>(".pdf-container")!;
+    const linked = linkNativePDFPanes(original, translated, {
+      release(previous) {
         const reader = slots.current[previous]?.adapter;
         reader?.cancelBlockFocus?.();
         reader?.clearSelection();
       },
-    );
+      onActive(side) {
+        if (linked.enabled) return;
+        const reader = slots.current[side]?.adapter;
+        const location = reader?.getLocation();
+        if (location?.type === "pdf")
+          events.location(
+            location,
+            location.page / (reader?.getPageCount?.() || location.page),
+          );
+      },
+    });
     scroll.current = linked;
-    onReady(
-      pairedReader(source.adapter, translation.adapter, linked),
-      source.toc,
-    );
+    void Promise.resolve(
+      onReady(
+        pairedReader(source.adapter, translation.adapter, linked),
+        source.toc,
+      ),
+    ).then(() => {
+      if (scroll.current !== linked) return;
+      initialized.current = true;
+      linked.setEnabled(syncPreference.current);
+    });
   };
   const paneEvents = (side: NativePane): ReaderEvents => ({
     ...events,

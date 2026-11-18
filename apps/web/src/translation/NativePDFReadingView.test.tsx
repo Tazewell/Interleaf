@@ -23,6 +23,7 @@ const fixture = vi.hoisted(() => ({
   goTo: vi.fn(async () => {}),
   translationGoTo: vi.fn(async () => {}),
   getLocation: vi.fn(() => ({ type: "pdf", page: 7, y: 0.65 })),
+  translationLocation: vi.fn(() => ({ type: "pdf", page: 7, y: 0.65 })),
 }));
 vi.mock("./useNativePDFReading", () => ({
   useNativePDFReading: () => fixture.state,
@@ -46,7 +47,9 @@ vi.mock("../InterleafView", () => ({
               .alongsideOriginal
               ? fixture.translationGoTo
               : fixture.goTo,
-          getLocation: fixture.getLocation,
+          getLocation: translated
+            ? fixture.translationLocation
+            : fixture.getLocation,
           search: async (query: string) => [
             {
               id: "7",
@@ -62,7 +65,11 @@ vi.mock("../InterleafView", () => ({
       );
     }, []);
     return (
-      <div className="pdf-container">
+      <div
+        className="pdf-container"
+        tabIndex={0}
+        aria-label={props.nativeReading ? "译文阅读区" : "原文阅读区"}
+      >
         <div className="pdfViewer" />
         {props.nativeReading ? "缓存的 PDF 译页" : "原始 PDF 页面"}
       </div>
@@ -74,7 +81,8 @@ import { useTranslationSplit } from "./TranslationPanes";
 let root: Root, host: HTMLDivElement;
 const onFlow = vi.fn(),
   onReady = vi.fn(),
-  onRegenerate = vi.fn();
+  onRegenerate = vi.fn(),
+  onLocation = vi.fn();
 const metadata = {
   version: 1,
   layout: "translation-only",
@@ -88,15 +96,18 @@ const metadata = {
 function Harness({
   layout,
   translations,
+  syncEnabled,
 }: {
   layout?: NativePDFReadingLayout;
   translations: TranslationBlock[];
+  syncEnabled?: boolean;
 }) {
   const split = useTranslationSplit();
   return (
     <NativePDFReadingView
       split={split}
       layout={layout}
+      syncEnabled={syncEnabled}
       document={{ id: "doc", type: "pdf" } as Document}
       theme={defaultTheme}
       blocks={[]}
@@ -105,7 +116,7 @@ function Harness({
       initialLocation={{ type: "pdf", page: 3 }}
       onReady={onReady}
       onRegenerate={onRegenerate}
-      events={{ location: vi.fn(), selection: vi.fn() }}
+      events={{ location: onLocation, selection: vi.fn() }}
       onUseFlow={onFlow}
       pageNavigation={<button>原文页码导航</button>}
     />
@@ -114,9 +125,16 @@ function Harness({
 async function render(
   layout?: NativePDFReadingLayout,
   translations: TranslationBlock[] = [],
+  syncEnabled?: boolean,
 ) {
   await act(async () =>
-    root.render(<Harness layout={layout} translations={translations} />),
+    root.render(
+      <Harness
+        layout={layout}
+        translations={translations}
+        syncEnabled={syncEnabled}
+      />,
+    ),
   );
 }
 beforeEach(() => {
@@ -193,6 +211,42 @@ it("opens a shared search term on its selected side and quotes the original of t
   expect(fixture.translationGoTo).toHaveBeenCalledWith(results[1].location);
   expect(fixture.goTo).not.toHaveBeenCalled();
   expect(await reader.getContext()).toBe("原文7");
+});
+it("routes page jumps to the focused native pane while sync is paused", async () => {
+  fixture.state.job = { status: "ready", metadata };
+  await render("side-by-side", [], false);
+  const [reader] = onReady.mock.lastCall! as [ReaderAdapter];
+  const translated = host.querySelector<HTMLElement>(
+    '.pdf-container[aria-label="译文阅读区"]',
+  );
+  expect(translated?.tabIndex).toBe(0);
+  translated!.focus();
+  expect(document.activeElement).toBe(translated);
+  fixture.goTo.mockClear();
+  fixture.translationGoTo.mockClear();
+  await reader.goTo({ type: "pdf", page: 8 });
+  expect(fixture.translationGoTo).toHaveBeenCalledWith({
+    type: "pdf",
+    page: 8,
+  });
+  expect(fixture.goTo).not.toHaveBeenCalled();
+});
+it("reports the focused pane's page when switching between paused native panes", async () => {
+  fixture.state.job = { status: "ready", metadata };
+  fixture.translationLocation.mockReturnValueOnce({
+    type: "pdf",
+    page: 9,
+    y: 0.2,
+  });
+  await render("side-by-side", [], false);
+  const translated = host.querySelector<HTMLElement>(
+    '.pdf-container[aria-label="译文阅读区"]',
+  )!;
+  await act(async () => translated.focus());
+  expect(onLocation).toHaveBeenLastCalledWith(
+    { type: "pdf", page: 9, y: 0.2 },
+    1,
+  );
 });
 it("loads the original document identity with cached geometry and restores its page", async () => {
   fixture.state = {
