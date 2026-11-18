@@ -728,6 +728,119 @@ function translationGeometry(height = 200) {
     new DOMRect(40, 600 - pane.scrollTop, 520, height);
   return { pane, block };
 }
+
+it("exposes source anchors only while source input owns reading, even without sync", async () => {
+  expect(fixture.events!.readingAnchor).toBeTypeOf("function");
+  await click("流式对照");
+  const sourceEvents = fixture.events!;
+  const source = host.querySelector<HTMLElement>(".translation-source")!;
+  const { pane } = translationGeometry();
+  await act(async () =>
+    pane.dispatchEvent(new WheelEvent("wheel", { bubbles: true })),
+  );
+  // The PDF engine checks this optional consumer before reading page geometry.
+  expect(sourceEvents.readingAnchor).toBeUndefined();
+  await act(async () =>
+    source.dispatchEvent(new WheelEvent("wheel", { bubbles: true })),
+  );
+  expect(sourceEvents.readingAnchor).toBeTypeOf("function");
+  await click("取消同步效果");
+  expect(fixture.events!.readingAnchor).toBeTypeOf("function");
+  await act(async () =>
+    pane.dispatchEvent(new WheelEvent("wheel", { bubbles: true })),
+  );
+  expect(fixture.events!.readingAnchor).toBeUndefined();
+  await click("译文");
+  await act(async () =>
+    source.dispatchEvent(new WheelEvent("wheel", { bubbles: true })),
+  );
+  expect(fixture.events!.readingAnchor).toBeUndefined();
+  await click("原页");
+  await act(async () =>
+    source.dispatchEvent(new WheelEvent("wheel", { bubbles: true })),
+  );
+  expect(fixture.events!.readingAnchor).toBeTypeOf("function");
+});
+
+it("withholds source anchors during focus and native translation selection", async () => {
+  await click("流式对照");
+  const source = host.querySelector<HTMLElement>(".translation-source")!;
+  let finish!: () => void;
+  vi.mocked(adapter.focusBlock!).mockImplementationOnce(
+    () =>
+      new Promise<void>((resolve) => {
+        finish = resolve;
+      }),
+  );
+  await act(async () =>
+    fixture.events!.blockFocus!({
+      id: "p1-b1",
+      page: 1,
+      bounds: { x: 0.1, y: 0.2 },
+    } as PDFBlock),
+  );
+  expect(fixture.events!.readingAnchor).toBeUndefined();
+  await act(async () => finish());
+  await act(async () =>
+    source.dispatchEvent(new WheelEvent("wheel", { bubbles: true })),
+  );
+  expect(fixture.events!.readingAnchor).toBeTypeOf("function");
+  await act(async () =>
+    host
+      .querySelector("[data-translation-block]")!
+      .dispatchEvent(
+        new MouseEvent("pointerdown", { bubbles: true, button: 0 }),
+      ),
+  );
+  await act(async () =>
+    source.dispatchEvent(new WheelEvent("wheel", { bubbles: true })),
+  );
+  expect(fixture.events!.readingAnchor).toBeUndefined();
+  await act(async () => window.dispatchEvent(new Event("pointerup")));
+  expect(fixture.events!.readingAnchor).toBeTypeOf("function");
+});
+
+it.each(["source", "mode", "document", "unmount"])(
+  "drops queued translation following after %s transition",
+  async (transition) => {
+    await click("流式对照");
+    const sourceEvents = fixture.events!;
+    const { pane, block } = translationGeometry();
+    const measure = vi.spyOn(block, "getBoundingClientRect");
+    const frames = new Map<number, FrameRequestCallback>();
+    let frameId = 0;
+    vi.stubGlobal("requestAnimationFrame", (callback: FrameRequestCallback) => {
+      frames.set(++frameId, callback);
+      return frameId;
+    });
+    vi.stubGlobal("cancelAnimationFrame", (id: number) => {
+      frames.delete(id);
+    });
+    vi.mocked(adapter.followBlock!).mockClear();
+    await act(async () => {
+      pane.dispatchEvent(new WheelEvent("wheel", { bubbles: true }));
+      pane.dispatchEvent(new Event("scroll"));
+    });
+    expect(frames.size).toBe(1);
+    if (transition === "source")
+      await act(async () =>
+        host
+          .querySelector(".translation-source")!
+          .dispatchEvent(new WheelEvent("wheel", { bubbles: true })),
+      );
+    else if (transition === "mode") await click("原页");
+    else if (transition === "document")
+      await renderView(defaultTheme, [], [], undefined, "next-doc");
+    else await act(async () => root.render(null));
+    await act(async () => {
+      for (const callback of [...frames.values()]) callback(0);
+    });
+    expect(measure).not.toHaveBeenCalled();
+    expect(adapter.followBlock).not.toHaveBeenCalled();
+    if (transition === "document" || transition === "unmount")
+      expect(sourceEvents.readingAnchor).toBeUndefined();
+  },
+);
 it("follows consecutive manual translation scrolls immediately without restarting smooth motion", async () => {
   await click("流式对照");
   const { pane } = translationGeometry(1000);

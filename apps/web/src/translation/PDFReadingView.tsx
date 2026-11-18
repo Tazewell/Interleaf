@@ -98,8 +98,30 @@ export function PDFReadingView({
   const [popup, setPopup] = useState<{ block: PDFBlock; rect: DOMRect }>();
   const [engine, setEngine] = useState<ReaderAdapter>();
   const [engineDocument, setEngineDocument] = useState<string>();
-  const [hoveredBlock, setHoveredBlock] = useState<string>();
-  const [focusedBlock, setFocusedBlock] = useState<string>();
+  const hoveredBlock = useRef<string | undefined>(undefined);
+  const focusedBlock = useRef<string | undefined>(undefined);
+  const translationNodesById = useRef(new Map<string, HTMLElement>());
+  // Interaction markers own only these attributes. Content remains React-owned.
+  const setMarker = (
+    marker: "hovered" | "focused",
+    current: { current: string | undefined },
+    id?: string,
+  ) => {
+    if (current.current === id) return;
+    const previous =
+      current.current && translationNodesById.current.get(current.current);
+    if (previous) previous.removeAttribute(`data-${marker}`);
+    if (marker === "focused" && previous)
+      previous.removeAttribute("aria-current");
+    current.current = id;
+    const next = id && translationNodesById.current.get(id);
+    if (next) next.setAttribute(`data-${marker}`, "true");
+    if (marker === "focused" && next) next.setAttribute("aria-current", "true");
+  };
+  const setHoveredBlock = (id?: string) =>
+    setMarker("hovered", hoveredBlock, id);
+  const setFocusedBlock = (id?: string) =>
+    setMarker("focused", focusedBlock, id);
   const hoverOwner = useRef<"source" | "translation" | undefined>(undefined);
   const hover = (origin: "source" | "translation", blockId?: string) => {
     if (!blockId && hoverOwner.current !== origin) return;
@@ -129,16 +151,19 @@ export function PDFReadingView({
     location?: DocumentLocation;
     restoreSource?: boolean;
   }>({ documentId: doc.id, location: doc.progress });
-  const nativeAdapter = useRef<{
-    documentId: string;
-    adapter: ReaderAdapter;
-  } | undefined>(undefined);
+  const nativeAdapter = useRef<
+    | {
+        documentId: string;
+        adapter: ReaderAdapter;
+      }
+    | undefined
+  >(undefined);
   if (nativeLocation.current.documentId !== doc.id) {
     nativeLocation.current = { documentId: doc.id, location: doc.progress };
     nativeAdapter.current = undefined;
   }
   const translationNodes = useRef<HTMLElement[]>([]);
-  const translationNodesById = useRef(new Map<string, HTMLElement>());
+  const sourceActive = useRef(true);
   const recordReading = (anchor: PDFReadingAnchor) => {
     reading.current = anchor;
   };
@@ -181,8 +206,22 @@ export function PDFReadingView({
       cancelTranslationMotion();
     };
   }, [mode, doc.id]);
-  const state = useRef({ mode, blocks, translations, events, theme });
-  state.current = { mode, blocks, translations, events, theme };
+  const state = useRef({
+    mode,
+    blocks,
+    translations,
+    events,
+    theme,
+    documentId: doc.id,
+  });
+  state.current = {
+    mode,
+    blocks,
+    translations,
+    events,
+    theme,
+    documentId: doc.id,
+  };
   useSentenceMarks(
     root,
     mode === "native" ? undefined : engine,
@@ -246,6 +285,20 @@ export function PDFReadingView({
     [blocks],
   );
   useLayoutEffect(() => {
+    sourceActive.current = true;
+    return () => {
+      sourceActive.current = false;
+      setHoveredBlock(undefined);
+      setFocusedBlock(undefined);
+      hoverOwner.current = undefined;
+      explicitFocus.current.operation++;
+      explicitFocus.current.moving = false;
+      cancelTranslationMotion();
+      cancelAnimationFrame(scrollFrame.current);
+      scrollFrame.current = 0;
+    };
+  }, [mode, doc.id]);
+  useLayoutEffect(() => {
     const nodes = Array.from(
       pane.current?.querySelectorAll<HTMLElement>("[data-translation-block]") ??
         [],
@@ -254,6 +307,17 @@ export function PDFReadingView({
     translationNodesById.current = new Map(
       nodes.map((node) => [node.dataset.translationBlock!, node]),
     );
+    const hovered =
+      hoveredBlock.current &&
+      translationNodesById.current.get(hoveredBlock.current);
+    if (hovered) hovered.setAttribute("data-hovered", "true");
+    const focused =
+      focusedBlock.current &&
+      translationNodesById.current.get(focusedBlock.current);
+    if (focused) {
+      focused.setAttribute("data-focused", "true");
+      focused.setAttribute("aria-current", "true");
+    }
     return () => {
       translationNodes.current = [];
       translationNodesById.current.clear();
@@ -802,7 +866,6 @@ export function PDFReadingView({
       if (operation === motion.operation) motion.moving = false;
     };
   }, [leftOpen, rightOpen, engine, mode, doc.id]);
-  useEffect(() => () => cancelAnimationFrame(scrollFrame.current), []);
   useEffect(() => {
     const release = () => {
       selecting.current = false;
@@ -984,7 +1047,8 @@ export function PDFReadingView({
         // Page events omit movement within the same page. Read the ready native
         // viewport before unmounting; a loading view has no live adapter yet.
         try {
-          nativeLocation.current.location = nativeAdapter.current.adapter.getLocation();
+          nativeLocation.current.location =
+            nativeAdapter.current.adapter.getLocation();
         } catch {
           // A revision reload may already have disposed it; keep the last event.
         }
@@ -1089,10 +1153,7 @@ export function PDFReadingView({
             data-translation-block={block.id}
             data-block-kind={block.image ? "image" : "text"}
             data-label={block.label}
-            data-hovered={hoveredBlock === block.id || undefined}
-            data-focused={focusedBlock === block.id || undefined}
             data-search-hit={searchBlockIds.includes(block.id) || undefined}
-            aria-current={focusedBlock === block.id || undefined}
             tabIndex={0}
             onClick={(event) => {
               const pressed = pressedBlock.current;
@@ -1161,8 +1222,6 @@ export function PDFReadingView({
       visibleBlocks,
       byId,
       annotations,
-      hoveredBlock,
-      focusedBlock,
       searchBlockIds,
       equationNumbers,
       doc.id,
@@ -1276,19 +1335,27 @@ export function PDFReadingView({
                     )
                       events.location(location, percentage);
                   },
-                  readingAnchor: (anchor) => {
-                    if (
-                      explicitFocus.current.moving ||
-                      !control.current.canFollow("source") ||
-                      selecting.current
-                    )
-                      return;
-                    recordReading(anchor);
-                    if (
-                      state.current.mode === "parallel" &&
-                      syncEnabledRef.current
-                    )
-                      followTranslation(anchor);
+                  get readingAnchor() {
+                    const canRecord = () =>
+                      !(
+                        !sourceActive.current ||
+                        state.current.documentId !== doc.id ||
+                        state.current.mode === "translation" ||
+                        state.current.mode === "native" ||
+                        explicitFocus.current.moving ||
+                        !control.current.canFollow("source") ||
+                        selecting.current
+                      );
+                    if (!canRecord()) return undefined;
+                    return (anchor: PDFReadingAnchor) => {
+                      if (!canRecord()) return;
+                      recordReading(anchor);
+                      if (
+                        state.current.mode === "parallel" &&
+                        syncEnabledRef.current
+                      )
+                        followTranslation(anchor);
+                    };
                   },
                   blockHover: (block) => {
                     if (mode === "parallel") hover("source", block?.id);
