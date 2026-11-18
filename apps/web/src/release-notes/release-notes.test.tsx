@@ -63,3 +63,36 @@ it("does not repeat an acknowledged version", async () => {
   expect(document.querySelector('[role="dialog"]')).toBeNull();
   expect(api.saveReleasePreferences).not.toHaveBeenCalled();
 });
+
+it.each([
+  { seenVersion: "0.8.11", newItems: 6, earlierItems: 72 },
+  { seenVersion: "0.8.10", newItems: 10, earlierItems: 68 },
+  { seenVersion: undefined, newItems: 6, earlierItems: 72 },
+])(
+  "shows unread notes before the collapsed history ($seenVersion)",
+  async ({ seenVersion, newItems, earlierItems }) => {
+    vi.mocked(api.releasePreferences).mockResolvedValue({ seenVersion });
+    await act(async () =>
+      root.render(<ReleaseNotesHost ready version="0.8.12" hasDocuments />),
+    );
+
+    const dialog = document.querySelector('[role="dialog"]')!;
+    const title = dialog.querySelector('[data-slot="dialog-title"]')!;
+    const notes = dialog.querySelector(
+      '[role="region"][aria-label="更新条目"]',
+    )!;
+    const history = notes.querySelector("details")!;
+    expect(title.textContent).toContain("0.8.12 更新内容");
+    await vi.waitFor(() => expect(document.activeElement).toBe(title));
+    expect(notes.contains(title)).toBe(false);
+    expect(notes.querySelector('[aria-label="关闭更新说明"]')).toBeNull();
+    expect(notes.querySelectorAll(":scope > ul > li")).toHaveLength(newItems);
+    expect(notes.querySelector(":scope > ul")?.textContent).toContain(
+      "PDF 原版式对照与单栏译文",
+    );
+    expect(history.open).toBe(false);
+    expect(history.querySelectorAll("li")).toHaveLength(earlierItems);
+    await act(async () => history.querySelector("summary")!.click());
+    expect(history.open).toBe(true);
+  },
+);

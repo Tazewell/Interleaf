@@ -1,11 +1,10 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { toast } from "sonner";
-import { Star, ChatText as MessageSquare } from "@phosphor-icons/react";
+import { CaretRight, ChatText, Star } from "@phosphor-icons/react";
 import { Button } from "@interleaf/ui/components/button";
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -17,13 +16,16 @@ export function ReleaseNotesDialog({
   open,
   version,
   items,
+  earlierItems,
   onClose,
 }: {
   open: boolean;
   version: string;
   items: ReleaseItem[];
+  earlierItems: ReleaseItem[];
   onClose: () => void;
 }) {
+  const title = useRef<HTMLHeadingElement>(null);
   const [opening, setOpening] = useState(false);
   const visitGitHub = async (issues: boolean) => {
     const url = `https://github.com/Tazewell/Interleaf${issues ? "/issues/new/choose" : ""}`;
@@ -49,51 +51,88 @@ export function ReleaseNotesDialog({
     <Dialog open={open} onOpenChange={(value) => !value && onClose()}>
       <DialogContent
         showCloseButton={false}
-        className="release-notes-dialog sm:max-w-md"
+        className="release-notes-dialog"
+        initialFocus={title}
       >
-        <DialogHeader>
-          <DialogTitle>纸间 Interleaf {version} 更新内容</DialogTitle>
-          <DialogDescription>
-            {items.length ? "本次更新的主要变化" : "已更新到新版本。"}
-          </DialogDescription>
+        <DialogHeader className="release-notes-header">
+          <DialogTitle
+            ref={title}
+            tabIndex={-1}
+            className="text-lg leading-snug font-semibold outline-none"
+          >
+            纸间 Interleaf {version} 更新内容
+          </DialogTitle>
         </DialogHeader>
-        {items.length > 0 && (
-          <ul className="space-y-4">
-            {items.map((item) => (
-              <li key={item.title} className="space-y-1">
-                <p className="font-medium">{item.title}</p>
-                {item.body && (
-                  <p className="leading-6 text-muted-foreground">{item.body}</p>
-                )}
-              </li>
-            ))}
-          </ul>
-        )}
-        <p className="text-sm leading-6 text-muted-foreground">
-          如果纸间对你有帮助，欢迎在 GitHub 点个
-          Star。遇到问题或有建议，也欢迎提交 Issue。
-        </p>
-        <DialogFooter className="flex-col sm:flex-col">
-          <Button variant="outline" aria-label="关闭更新说明" onClick={onClose}>
+        <div
+          className="release-notes-scroll outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/45"
+          role="region"
+          aria-label="更新条目"
+          tabIndex={0}
+        >
+          {items.length > 0 ? (
+            <ReleaseNoteList items={items} />
+          ) : (
+            <p className="py-4 text-muted-foreground">已更新到此版本。</p>
+          )}
+          {earlierItems.length > 0 && (
+            <details className="release-notes-history group">
+              <summary className="flex cursor-pointer items-center gap-2 py-3 text-muted-foreground hover:text-foreground focus-visible:outline-ring">
+                <CaretRight
+                  aria-hidden
+                  className="size-3.5 group-open:rotate-90"
+                />
+                较早的更新
+              </summary>
+              <ReleaseNoteList items={earlierItems} />
+            </details>
+          )}
+        </div>
+        <DialogFooter className="release-notes-footer">
+          <div className="flex flex-wrap gap-1">
+            <Button
+              variant="ghost"
+              disabled={opening}
+              className="text-muted-foreground"
+              aria-label="去 GitHub 点 Star"
+              onClick={() => void visitGitHub(false)}
+            >
+              <Star />点 Star
+            </Button>
+            <Button
+              variant="ghost"
+              disabled={opening}
+              className="text-muted-foreground"
+              aria-label="在 GitHub 提交问题反馈"
+              onClick={() => void visitGitHub(true)}
+            >
+              <ChatText />
+              问题反馈
+            </Button>
+          </div>
+          <Button
+            className="release-notes-close"
+            aria-label="关闭更新说明"
+            onClick={onClose}
+          >
             关闭
-          </Button>
-          <Button
-            autoFocus
-            disabled={opening}
-            onClick={() => void visitGitHub(false)}
-          >
-            <Star />去 GitHub 点 Star
-          </Button>
-          <Button
-            variant="outline"
-            disabled={opening}
-            onClick={() => void visitGitHub(true)}
-          >
-            <MessageSquare />
-            已点 Star，去提 Issue
           </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+function ReleaseNoteList({ items }: { items: ReleaseItem[] }) {
+  return (
+    <ul className="divide-y divide-border">
+      {items.map((item) => (
+        <li key={item.title} className="space-y-0.5 py-2.5">
+          <p className="font-medium">{item.title}</p>
+          {item.body && (
+            <p className="leading-relaxed text-muted-foreground">{item.body}</p>
+          )}
+        </li>
+      ))}
+    </ul>
   );
 }

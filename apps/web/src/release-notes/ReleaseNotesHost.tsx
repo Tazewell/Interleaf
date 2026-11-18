@@ -3,7 +3,7 @@ import { api } from "@interleaf/api";
 import type { ReleasePreferences } from "@interleaf/core";
 import { toast } from "sonner";
 import { ReleaseNotesDialog } from "./ReleaseNotesDialog";
-import { releaseNotes, type ReleaseItem } from "./releases";
+import { releaseNotesSince } from "./releases";
 
 /** Show notes once after an update, without first-run onboarding. */
 export function ReleaseNotesHost({
@@ -15,7 +15,9 @@ export function ReleaseNotesHost({
   version: string;
   hasDocuments: boolean;
 }) {
-  const [items, setItems] = useState<ReleaseItem[] | null>(null);
+  const [notes, setNotes] = useState<ReturnType<
+    typeof releaseNotesSince
+  > | null>(null);
   const preferences = useRef<ReleasePreferences>({});
   const launched = useRef(false);
   const acknowledge = () => {
@@ -33,17 +35,18 @@ export function ReleaseNotesHost({
         preferences.current = saved;
         if (saved.seenVersion === version) return;
         if (!saved.seenVersion && !hasDocuments) acknowledge();
-        else setItems(releaseNotes[version] ?? []);
+        else setNotes(releaseNotesSince(version, saved.seenVersion));
       })
       .catch(() => {});
   }, [ready, version, hasDocuments]);
   return (
     <ReleaseNotesDialog
-      open={items !== null}
+      open={notes !== null}
       version={version}
-      items={items ?? []}
+      items={notes?.items ?? []}
+      earlierItems={notes?.earlierItems ?? []}
       onClose={() => {
-        setItems(null);
+        setNotes(null);
         acknowledge();
       }}
     />

@@ -1,8 +1,60 @@
-.release-notes-dialog {
-  max-height: min(760px, calc(100dvh - 2rem));
-  overflow-y: auto;
-  scrollbar-width: none;
+.release-notes-dialog[data-slot="dialog-content"] {
+  --release-notes-inset: clamp(1rem, 4vw, 1.5rem);
+  max-width: min(38rem, calc(100% - 2rem));
+  max-height: min(43rem, calc(100dvh - 2rem));
+  grid-template: auto minmax(0, 1fr) auto / minmax(0, 1fr);
+  gap: 0;
+  padding: 0;
+  overflow: hidden;
+  border-radius: var(--ui-radius);
+  background: var(--ui-panel);
+  color: var(--ink);
 }
-.release-notes-dialog::-webkit-scrollbar {
+
+.release-notes-header {
+  padding: 1.125rem var(--release-notes-inset);
+  border-bottom: 1px solid var(--line);
+}
+
+.release-notes-scroll {
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: none;
+  padding: 0.25rem var(--release-notes-inset);
+}
+
+.release-notes-scroll::-webkit-scrollbar,
+.release-notes-history > summary::-webkit-details-marker {
   display: none;
+}
+
+.release-notes-history {
+  border-top: 1px solid var(--line);
+}
+
+.release-notes-history > summary {
+  list-style: none;
+}
+
+.release-notes-footer[data-slot="dialog-footer"] {
+  flex-flow: row wrap;
+  align-items: center;
+  justify-content: space-between;
+  margin: 0;
+  padding: 0.75rem var(--release-notes-inset);
+  border-color: var(--line);
+  border-radius: 0;
+  background: var(--rail);
+}
+
+.release-notes-close[data-slot="button"] {
+  min-width: 4rem;
+  margin-inline-start: auto;
+  background: var(--ui-accent);
+  color: var(--ui-accent-foreground);
+}
+
+.release-notes-close[data-slot="button"]:hover {
+  background: color-mix(in srgb, var(--ui-accent) 90%, var(--surface));
 }
