@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { EventEmitter } from "node:events";
+import { join } from "node:path";
 import { PassThrough } from "node:stream";
 
 // Exercise the real main-process close/flush handlers; only OS boundaries are fake.
@@ -22,6 +23,7 @@ let showMessageBox: ReturnType<typeof vi.fn>;
 let showOpenDialog: ReturnType<typeof vi.fn>;
 let showErrorBox: ReturnType<typeof vi.fn>;
 let execute: ReturnType<typeof vi.fn>;
+let diagnosticRecords: ReturnType<typeof vi.fn>;
 let serverChild: any;
 let exitCount = 0;
 const event = () => ({
@@ -32,6 +34,9 @@ const move = () => handlers.get("interleaf:move-library")!(event());
 
 beforeEach(async (context) => {
   const startupFailure = context.task.name.includes("startup failure");
+  const showDuringNavigation = context.task.name.includes("during navigation");
+  const initiallyVisible =
+    !showDuringNavigation && !context.task.name.includes("after DOM is ready");
   vi.resetModules();
   exitCount = 0;
   handlers = new Map();
@@ -62,6 +67,7 @@ beforeEach(async (context) => {
   showMessageBox = vi.fn().mockResolvedValue({ response: 0 });
   showErrorBox = vi.fn();
   execute = vi.fn();
+  diagnosticRecords = vi.fn();
   vi.doMock("electron", () => ({
     app,
     ipcMain: ipc,
@@ -88,8 +94,13 @@ beforeEach(async (context) => {
       isDestroyed() {
         return this.destroyed;
       }
+      isVisible() {
+        return initiallyVisible;
+      }
       async loadURL() {
         if (startupFailure) throw new Error("load failed");
+        if (showDuringNavigation) this.emit("show");
+        this.webContents.emit("dom-ready");
       }
       close() {
         let prevented = false;
@@ -172,7 +183,7 @@ beforeEach(async (context) => {
   vi.doMock("./diagnostic-service", () => ({
     startDiagnosticService: () => ({
       directory: "/logs",
-      logs: { secrets: [], sessionId: "test", record: vi.fn() },
+      logs: { secrets: [], sessionId: "test", record: diagnosticRecords },
       record: vi.fn(),
       setSettings() {},
       failure: vi.fn().mockResolvedValue(undefined),
@@ -206,6 +217,56 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
+it.each(["at construction", "during navigation", "after DOM is ready"])(
+  "records startup once when the window becomes visible %s",
+  (when) => {
+    const getStartup = () =>
+      diagnosticRecords.mock.calls.filter(
+        ([source, value]) =>
+          source === "desktop" && value.event === "startup.desktop",
+      );
+    if (when === "after DOM is ready") expect(getStartup()).toEqual([]);
+    window.emit("show");
+    window.webContents.emit("dom-ready");
+    const startup = getStartup();
+    expect(startup).toEqual([
+      [
+        "desktop",
+        {
+          event: "startup.desktop",
+          level: "info",
+          appReadyMs: expect.any(Number),
+          proxySettingsDurationMs: expect.any(Number),
+          electronProxyDurationMs: expect.any(Number),
+          serverReadyMs: expect.any(Number),
+          serverSettingsDurationMs: expect.any(Number),
+          windowCreatedMs: expect.any(Number),
+          windowShownMs: expect.any(Number),
+          navigationStartedMs: expect.any(Number),
+          domReadyMs: expect.any(Number),
+          durationMs: expect.any(Number),
+        },
+      ],
+    ]);
+    const timing = startup[0][1];
+    expect(timing.appReadyMs).toBeLessThanOrEqual(timing.serverReadyMs);
+    expect(timing.serverReadyMs).toBeLessThanOrEqual(timing.windowCreatedMs);
+    expect(timing.windowCreatedMs).toBeLessThanOrEqual(timing.windowShownMs);
+    if (when === "at construction")
+      expect(timing.windowShownMs).toBe(timing.windowCreatedMs);
+    else
+      expect(timing.windowShownMs).toBeGreaterThanOrEqual(
+        when === "after DOM is ready"
+          ? timing.domReadyMs
+          : timing.navigationStartedMs,
+      );
+    expect(timing.navigationStartedMs).toBeLessThanOrEqual(timing.domReadyMs);
+    expect(timing.durationMs).toBe(
+      Math.max(timing.domReadyMs, timing.windowShownMs),
+    );
+  },
+);
+
 it("waits for flushed reading data, then copies once despite repeated quit events", async () => {
   let complete!: () => void;
   migrate.mockImplementation(async (_u, _s, _d, _b, shutdown) => {
@@ -231,7 +292,7 @@ it("waits for flushed reading data, then copies once despite repeated quit event
   expect(migrate).toHaveBeenCalledWith(
     "/userdata",
     "/old/library",
-    "/destination/Interleaf Library",
+    join("/destination", "Interleaf Library"),
     expect.any(String),
     expect.any(Function),
   );
@@ -311,6 +372,14 @@ it.each(["normal", "destroyed", "renderer-crash"])(
 );
 
 it("joins the started child after startup failure without killing it", async () => {
+  expect(diagnosticRecords).toHaveBeenCalledWith(
+    "desktop",
+    expect.objectContaining({
+      event: "startup.desktop",
+      level: "error",
+      navigationStartedMs: expect.any(Number),
+    }),
+  );
   expect(serverChild.stdin.writableEnded).toBe(true);
   expect(serverChild.kill).not.toHaveBeenCalled();
   expect(exitCount).toBe(0);

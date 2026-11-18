@@ -40,6 +40,25 @@ afterEach(async () => {
   await rm(directory, { recursive: true, force: true });
 });
 
+it("captures the Windows system proxy resolution interval even on fallback", async () => {
+  let clock = 200;
+  const now = vi.spyOn(performance, "now").mockImplementation(() => clock);
+  try {
+    resolveSystem.mockImplementationOnce(async (env) => {
+      await Promise.resolve();
+      clock += 400;
+      return { env, warning: "无法读取系统代理" };
+    });
+    const service = await ProxySettingsService.open(directory, {}, "win32");
+    expect(service.windowsSystemProxyDurationMs).toBe(400);
+    await service.save({ mode: "direct" });
+    const direct = await ProxySettingsService.open(directory, {}, "win32");
+    expect(direct.windowsSystemProxyDurationMs).toBeUndefined();
+  } finally {
+    now.mockRestore();
+  }
+});
+
 it.each(["win32", "darwin"] as const)(
   "persists manual proxy on %s and applies it only after reopening",
   async (platform) => {

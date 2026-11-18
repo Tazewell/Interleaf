@@ -92,6 +92,7 @@ export class ProxySettingsService {
     readonly activeSettings: ProxySettings,
     readonly activeEnvironment: NodeJS.ProcessEnv,
     private readonly warning?: string,
+    readonly windowsSystemProxyDurationMs?: number,
   ) {
     this.saved = activeSettings;
   }
@@ -113,11 +114,19 @@ export class ProxySettingsService {
       if ((error as NodeJS.ErrnoException).code !== "ENOENT")
         warning = "保存的代理设置无法读取，本次使用系统代理。";
     }
+    const windowsSystemProxyStartedAt =
+      platform === "win32" && settings.mode === "system"
+        ? performance.now()
+        : undefined;
     const resolved = await resolveProxyEnvironment(
       settings,
       inherited,
       platform,
     );
+    const windowsSystemProxyDurationMs =
+      windowsSystemProxyStartedAt === undefined
+        ? undefined
+        : Math.round(performance.now() - windowsSystemProxyStartedAt);
     return new ProxySettingsService(
       directory,
       { ...inherited },
@@ -125,6 +134,7 @@ export class ProxySettingsService {
       settings,
       resolved.env,
       warning ?? resolved.warning,
+      windowsSystemProxyDurationMs,
     );
   }
 

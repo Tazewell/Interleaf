@@ -8,6 +8,8 @@ import { version } from "../../desktop/package.json";
 
 let pending = Promise.resolve();
 let token = "";
+let libraryReadyRecorded = false;
+
 export function reportDiagnostic(event: DiagnosticEvent) {
   const safe = redact(event, [token]) as DiagnosticEvent;
   if (window.interleafDesktop?.recordDiagnostic) {
@@ -29,6 +31,46 @@ export function reportDiagnostic(event: DiagnosticEvent) {
       }
     });
   }
+}
+
+function observeFirstContentfulPaint() {
+  const Observer = window.PerformanceObserver;
+  if (!Observer?.supportedEntryTypes?.includes("paint")) return;
+
+  let recorded = false;
+  let observer: PerformanceObserver | undefined;
+  try {
+    observer = new Observer((entries) => {
+      if (recorded) return;
+      const paint = entries
+        .getEntries()
+        .find((entry) => entry.name === "first-contentful-paint");
+      if (!paint) return;
+      recorded = true;
+      observer?.disconnect();
+      reportDiagnostic({
+        level: "info",
+        event: "renderer.first_contentful_paint",
+        durationMs: paint.startTime,
+      });
+    });
+    observer.observe({ type: "paint", buffered: true });
+    return observer;
+  } catch {
+    observer?.disconnect();
+  }
+}
+
+export function recordLibraryReady() {
+  if (libraryReadyRecorded || document.visibilityState !== "visible") return;
+  const durationMs = window.performance?.now?.();
+  if (durationMs === undefined) return;
+  libraryReadyRecorded = true;
+  reportDiagnostic({
+    level: "info",
+    event: "renderer.library_ready",
+    durationMs,
+  });
 }
 
 export function installDiagnostics(sessionToken: string) {
@@ -53,7 +95,9 @@ export function installDiagnostics(sessionToken: string) {
     event: "renderer.start",
     detail: `Interleaf ${version}`,
   });
+  const paintObserver = observeFirstContentfulPaint();
   return () => {
+    paintObserver?.disconnect();
     window.removeEventListener("error", error);
     window.removeEventListener("unhandledrejection", rejection);
     setDiagnosticReporter(undefined);

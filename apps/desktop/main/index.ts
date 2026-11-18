@@ -39,6 +39,47 @@ import { serverSpawnDiagnostics } from "./server-spawn-diagnostics";
 import { discoverEndNote } from "./endnote-discovery";
 import { commandLineStatus, setCommandLine } from "./command-line";
 import { DesktopImportService } from "./desktop-import";
+
+const startupStartedAt = performance.now();
+type StartupStep =
+  | "proxySettingsDurationMs"
+  | "electronProxyDurationMs"
+  | "serverSettingsDurationMs";
+const startupTimings: Partial<
+  Record<
+    | StartupStep
+    | "appReadyMs"
+    | "windowsSystemProxyDurationMs"
+    | "serverReadyMs"
+    | "windowCreatedMs"
+    | "windowShownMs"
+    | "navigationStartedMs"
+    | "domReadyMs",
+    number
+  >
+> = {};
+let startupRecorded = false;
+const startupElapsed = (since = startupStartedAt) =>
+  Math.round(performance.now() - since);
+async function timeStartupStep<T>(name: StartupStep, step: () => Promise<T>) {
+  const startedAt = performance.now();
+  try {
+    return await step();
+  } finally {
+    startupTimings[name] = startupElapsed(startedAt);
+  }
+}
+function recordStartup(level: "info" | "error", durationMs = startupElapsed()) {
+  if (!diagnostics || startupRecorded) return;
+  startupRecorded = true;
+  diagnostics.logs.record("desktop", {
+    event: "startup.desktop",
+    level,
+    ...startupTimings,
+    durationMs,
+  });
+}
+
 const isolation = devIsolation({
   isPackaged: app.isPackaged,
   env: process.env,
@@ -166,6 +207,7 @@ async function startServer() {
       clearTimeout(timer);
       reject(new Error(`本地服务已退出 (${code})`));
       if (window && !quitting) {
+        recordStartup("error");
         void diagnostics!
           .failure(
             "纸间本地服务已停止",
@@ -182,6 +224,7 @@ async function startServer() {
       try {
         const ready = JSON.parse(line);
         serverURL = ready.url;
+        startupTimings.serverReadyMs = startupElapsed();
         diagnostics?.record("server.ready");
         clearTimeout(timer);
         lines.close();
@@ -274,6 +317,7 @@ app
   .whenReady()
   .then(async () => {
     if (!primary) return;
+    startupTimings.appReadyMs = startupElapsed();
     diagnostics = startDiagnosticService(
       () => window,
       () => activeLibrary,
@@ -295,12 +339,16 @@ app
         ]);
       else app.setAsDefaultProtocolClient(INTERLEAF_SCHEME);
     }
-    proxySettings = await ProxySettingsService.open(
-      app.getPath("userData"),
-      process.env,
+    proxySettings = await timeStartupStep("proxySettingsDurationMs", () =>
+      ProxySettingsService.open(app.getPath("userData"), process.env),
     );
-    await session.defaultSession.setProxy(
-      electronProxyConfiguration(proxySettings.activeSettings),
+    if (proxySettings.windowsSystemProxyDurationMs !== undefined)
+      startupTimings.windowsSystemProxyDurationMs =
+        proxySettings.windowsSystemProxyDurationMs;
+    await timeStartupStep("electronProxyDurationMs", () =>
+      session.defaultSession.setProxy(
+        electronProxyConfiguration(proxySettings.activeSettings),
+      ),
     );
     activeLibrary = await libraryDirectory(app.getPath("userData"));
     const url = await startServer();
@@ -321,11 +369,15 @@ app
         );
       },
     );
-    const preferences: unknown = await fetch(`${url}/api/settings`, {
-      headers: { Authorization: `Bearer ${serverToken}` },
-    })
-      .then((r) => (r.ok ? r.json() : {}))
-      .catch(() => ({}));
+    const preferences: unknown = await timeStartupStep(
+      "serverSettingsDurationMs",
+      () =>
+        fetch(`${url}/api/settings`, {
+          headers: { Authorization: `Bearer ${serverToken}` },
+        })
+          .then((r) => (r.ok ? r.json() : {}))
+          .catch(() => ({})),
+    );
     diagnostics.setSettings(preferences);
     const appearance =
       typeof preferences === "object" &&
@@ -359,8 +411,29 @@ app
         sandbox: true,
       },
     });
+    startupTimings.windowCreatedMs = startupElapsed();
+    let navigationLoaded = false;
+    const recordReadyStartup = () => {
+      const { windowShownMs, domReadyMs } = startupTimings;
+      if (
+        navigationLoaded &&
+        windowShownMs !== undefined &&
+        domReadyMs !== undefined
+      )
+        recordStartup("info", Math.max(windowShownMs, domReadyMs));
+    };
+    // A window shown by the constructor can emit `show` before this code runs.
+    // Visibility tracks the native window. DOM readiness is measured separately.
+    if (window.isVisible())
+      startupTimings.windowShownMs = startupTimings.windowCreatedMs;
+    else
+      window.once("show", () => {
+        startupTimings.windowShownMs = startupElapsed();
+        recordReadyStartup();
+      });
     window.webContents.on("render-process-gone", (_event, details) => {
       void bilingualPDFSave?.stop();
+      if (!quitting) recordStartup("error");
       diagnostics!.logs.record("desktop", {
         level: "error",
         event: "renderer.exited",
@@ -842,7 +915,14 @@ app
         });
       },
     );
+    window.webContents.once("dom-ready", () => {
+      startupTimings.domReadyMs = startupElapsed();
+      recordReadyStartup();
+    });
+    startupTimings.navigationStartedMs = startupElapsed();
     await window.loadURL(`${url}/#token=${serverToken}`);
+    navigationLoaded = true;
+    recordReadyStartup();
     if (pendingFiles.length) await importOpenedFiles(pendingFiles.splice(0));
     updateService = await startUpdateService(window);
     ipcMain.handle("interleaf:check-updates", (event) => {
@@ -855,6 +935,7 @@ app
     });
   })
   .catch(async (error) => {
+    recordStartup("error");
     diagnostics?.record("desktop.start_failed", error);
     if (diagnostics)
       await diagnostics.failure(
