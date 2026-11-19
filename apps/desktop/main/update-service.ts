@@ -147,12 +147,14 @@ export async function startUpdateService(window: BrowserWindow) {
     if (alive()) await offerRestart(update.version);
     return true;
   };
-  const check = (manual = false): Promise<void> => {
+  const check = (trigger: "startup" | "interval" | "manual"): Promise<void> => {
+    const manual = trigger === "manual";
     if (active) {
       wantsFeedback ||= manual;
       return active;
     }
-    if (!alive() || (!manual && !checker.isDue())) return Promise.resolve();
+    if (!alive() || (trigger === "interval" && !checker.isDue()))
+      return Promise.resolve();
     if (!app.isPackaged) {
       return manual
         ? dialog
@@ -266,15 +268,18 @@ export async function startUpdateService(window: BrowserWindow) {
     return active;
   };
   const initial = setTimeout(() => {
-    void check();
-  }, 15_000);
+    void check("startup");
+  }, 5_000);
   const timer = setInterval(() => {
-    void check();
+    void check("interval");
   }, 60_000);
   initial.unref();
   timer.unref();
   return {
-    check: () => check(true),
+    check: () => {
+      clearTimeout(initial);
+      return check("manual");
+    },
     stop: () => {
       stopped = true;
       clearTimeout(initial);

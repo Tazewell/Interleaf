@@ -1,4 +1,5 @@
 import type { BrowserWindow } from "electron";
+import { join } from "node:path";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   read: vi.fn(),
@@ -105,15 +106,34 @@ it("checks on startup, coalesces manual checks, and does not prompt again within
   expect(mocks.fetch).toHaveBeenCalledTimes(4);
   expect(mocks.dialog).toHaveBeenCalledTimes(2);
 });
-it("respects persisted check times and stops scheduled work", async () => {
-  mocks.read.mockResolvedValue(JSON.stringify({ lastChecked: day * 10 }));
+it("offers an update on startup despite a recent check from the previous launch", async () => {
+  vi.stubGlobal("process", { ...process, platform: "win32", arch: "x64" });
+  mocks.read.mockResolvedValue(
+    JSON.stringify({ lastChecked: day * 10, lastAttempt: day * 10 }),
+  );
   const service = await startUpdateService(window);
   stop = service.stop;
-  await vi.advanceTimersByTimeAsync(15_000);
-  expect(mocks.fetch).not.toHaveBeenCalled();
+  await vi.advanceTimersByTimeAsync(5_000);
+  expect(mocks.fetch).toHaveBeenCalledTimes(2);
+  expect(mocks.dialog).toHaveBeenCalledExactlyOnceWith(
+    window,
+    expect.objectContaining({
+      message: "纸间 0.2.0 可用",
+      buttons: ["下载并安装", "稍后"],
+    }),
+  );
+  expect(mocks.download).not.toHaveBeenCalled();
   service.stop();
   await vi.advanceTimersByTimeAsync(day * 2);
-  expect(mocks.fetch).not.toHaveBeenCalled();
+  expect(mocks.fetch).toHaveBeenCalledTimes(2);
+});
+it("allows a manual check to cover the initial startup check", async () => {
+  const service = await startUpdateService(window);
+  stop = service.stop;
+  await service.check();
+  await vi.advanceTimersByTimeAsync(60_000);
+  expect(mocks.fetch).toHaveBeenCalledTimes(2);
+  expect(mocks.dialog).toHaveBeenCalledTimes(1);
 });
 it("opens only verified downloads and reports download failures even after a background prompt", async () => {
   mocks.dialog.mockResolvedValue({ response: 0 });
@@ -264,27 +284,28 @@ it("installs the verified Windows update silently after Interleaf quits", async 
 });
 it("stages a signed Mac update silently and installs it on restart", async () => {
   assets.push("Interleaf-0.2.0-mac-arm64.zip");
-  downloadWithProgress("/test/user-data/updates/x/Interleaf.zip");
+  const updates = join("/test/user-data", "updates");
+  const archive = join(updates, "x", "Interleaf.zip");
+  downloadWithProgress(archive);
   mocks.dialog.mockResolvedValue({ response: 0 });
   const service = await startUpdateService(window);
   stop = service.stop;
   await vi.advanceTimersByTimeAsync(15_000);
-  expect(mocks.inPlace).toHaveBeenCalledWith("/Applications/Interleaf.app");
+  expect(mocks.inPlace).toHaveBeenCalledWith(
+    join("/Applications", "Interleaf.app"),
+  );
   expect(mocks.download).toHaveBeenCalledWith(
     expect.objectContaining({
       installer: "Interleaf-0.2.0-mac-arm64.zip",
       downloadURL:
         "https://github.com/Tazewell/Interleaf/releases/download/v0.2.0/Interleaf-0.2.0-mac-arm64.zip",
     }),
-    "/test/user-data/updates",
+    updates,
     expect.any(Function),
     expect.any(Function),
   );
-  expect(mocks.stage).toHaveBeenCalledWith(
-    expect.anything(),
-    "/test/user-data/updates/x/Interleaf.zip",
-  );
-  expect(mocks.rm).toHaveBeenCalledWith("/test/user-data/updates/x", {
+  expect(mocks.stage).toHaveBeenCalledWith(expect.anything(), archive);
+  expect(mocks.rm).toHaveBeenCalledWith(join(updates, "x"), {
     recursive: true,
     force: true,
   });

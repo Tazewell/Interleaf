@@ -923,7 +923,6 @@ app
     await window.loadURL(`${url}/#token=${serverToken}`);
     navigationLoaded = true;
     recordReadyStartup();
-    if (pendingFiles.length) await importOpenedFiles(pendingFiles.splice(0));
     updateService = await startUpdateService(window);
     ipcMain.handle("interleaf:check-updates", (event) => {
       if (
@@ -933,6 +932,7 @@ app
         throw new Error("Invalid sender");
       return updateService?.check();
     });
+    if (pendingFiles.length) await importOpenedFiles(pendingFiles.splice(0));
   })
   .catch(async (error) => {
     recordStartup("error");
