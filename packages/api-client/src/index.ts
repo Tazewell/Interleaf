@@ -550,7 +550,7 @@ export const api = {
       existing: response.status === 200,
     };
   },
-  /** Import a paper from an arXiv ID, DOI, paper link, PDF link or title. */
+  /** Import a paper from a DOI, PMID, arXiv ID, paper link, PDF link or title. */
   resolveDocument: (
     ref: string,
     options?: {

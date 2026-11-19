@@ -1,5 +1,5 @@
 // Package scholar finds paper PDFs and bibliographic metadata from arXiv,
-// Crossref, Semantic Scholar, OpenReview and publisher pages. Requests go only
+// Crossref, Semantic Scholar, Europe PMC, OpenReview and publisher pages. Requests go only
 // to public http(s) hosts; callers decide when a lookup may leave the machine.
 package scholar
 
@@ -41,9 +41,11 @@ type Metadata struct {
 }
 
 type Identifiers struct {
-	DOI   string
-	ArXiv string
-	Title string
+	DOI        string
+	ArXiv      string
+	PMID       string
+	Title      string
+	ExactTitle bool
 }
 
 type Result struct {
@@ -68,6 +70,7 @@ type Client struct {
 	ArXivPDF        string
 	Crossref        string
 	SemanticScholar string
+	EuropePMC       string
 	OpenReview      string
 	OpenReviewAPI   string
 	DOIResolver     string
@@ -82,6 +85,7 @@ func New(maxPDF int64) *Client {
 		ArXivPDF:        "https://arxiv.org/pdf/",
 		Crossref:        "https://api.crossref.org/v1/works/",
 		SemanticScholar: "https://api.semanticscholar.org/graph/v1/paper/",
+		EuropePMC:       "https://www.ebi.ac.uk/europepmc/webservices/rest/",
 		OpenReview:      "https://openreview.net/",
 		OpenReviewAPI:   "https://api2.openreview.net/notes",
 		DOIResolver:     "https://doi.org/",
@@ -112,7 +116,7 @@ var (
 // arxivMirrors are paper sites whose links carry an arXiv identifier.
 var arxivMirrors = []string{"arxiv.org", "alphaxiv.org", "huggingface.co/papers", "hf.co/papers", "papers.cool/arxiv", "paperswithcode.com", "semanticscholar.org/arxiv", "scholar.archive.org", "chatpaper", "papers.labml.ai"}
 
-// Detect finds an arXiv identifier or DOI in the first pages of a paper.
+// Detect finds arXiv identifiers, DOIs and labeled PMIDs on the first pages.
 func Detect(text string) Identifiers {
 	if len(text) > 8000 {
 		text = text[:8000]
@@ -123,6 +127,9 @@ func Detect(text string) Identifiers {
 	}
 	if m := doiText.FindStringSubmatch(text); m != nil {
 		ids.DOI = m[1]
+	}
+	if m := pmidText.FindStringSubmatch(text); m != nil {
+		ids.PMID = m[1]
 	}
 	return ids
 }

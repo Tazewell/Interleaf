@@ -460,7 +460,7 @@ export function PaperDetail({
                 variant="ghost"
                 className="ml-auto"
                 disabled={lookingUp || doc.metadataOnly}
-                title="按 DOI、arXiv 编号或标题查找"
+                title="按 DOI、arXiv 编号、PMID 或论文标题查找"
                 onClick={() => {
                   setLookingUp(true);
                   void lookupPaper(doc).finally(() => setLookingUp(false));

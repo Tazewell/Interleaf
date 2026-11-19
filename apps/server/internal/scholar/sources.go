@@ -13,6 +13,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode"
 
 	nethtml "golang.org/x/net/html"
 )
@@ -133,39 +134,46 @@ func datePart(parts [][]int) string {
 	return out
 }
 
+type crossrefDate struct {
+	Parts [][]int `json:"date-parts"`
+}
+
+type crossrefWork struct {
+	DOI            string   `json:"DOI"`
+	Type           string   `json:"type"`
+	Title          []string `json:"title"`
+	ContainerTitle []string `json:"container-title"`
+	Publisher      string   `json:"publisher"`
+	Volume         string   `json:"volume"`
+	Issue          string   `json:"issue"`
+	Page           string   `json:"page"`
+	ISBN           []string `json:"ISBN"`
+	Abstract       string   `json:"abstract"`
+	Author         []struct {
+		Given  string `json:"given"`
+		Family string `json:"family"`
+		Name   string `json:"name"`
+	} `json:"author"`
+	Issued          crossrefDate `json:"issued"`
+	PublishedPrint  crossrefDate `json:"published-print"`
+	PublishedOnline crossrefDate `json:"published-online"`
+}
+
 func (c *Client) crossref(ctx context.Context, doi string) (Metadata, error) {
 	data, _, _, err := c.get(ctx, c.Crossref+url.PathEscape(doi), "application/json", 5<<20)
 	if err != nil {
 		return Metadata{}, err
 	}
-	type date struct {
-		Parts [][]int `json:"date-parts"`
-	}
 	var body struct {
-		Message struct {
-			Type           string   `json:"type"`
-			Title          []string `json:"title"`
-			ContainerTitle []string `json:"container-title"`
-			Publisher      string   `json:"publisher"`
-			Volume         string   `json:"volume"`
-			Issue          string   `json:"issue"`
-			Page           string   `json:"page"`
-			ISBN           []string `json:"ISBN"`
-			Abstract       string   `json:"abstract"`
-			Author         []struct {
-				Given  string `json:"given"`
-				Family string `json:"family"`
-				Name   string `json:"name"`
-			} `json:"author"`
-			Issued          date `json:"issued"`
-			PublishedPrint  date `json:"published-print"`
-			PublishedOnline date `json:"published-online"`
-		} `json:"message"`
+		Message crossrefWork `json:"message"`
 	}
 	if json.Unmarshal(data, &body) != nil {
 		return Metadata{}, Error{"Crossref 返回了无法识别的数据"}
 	}
-	r := body.Message
+	return body.Message.metadata(doi)
+}
+
+func (r crossrefWork) metadata(doi string) (Metadata, error) {
 	if len(r.Title) == 0 {
 		return Metadata{}, ErrNotFound
 	}
@@ -179,7 +187,7 @@ func (c *Client) crossref(ctx context.Context, doi string) (Metadata, error) {
 	if len(r.ISBN) > 0 {
 		m.ISBN = r.ISBN[0]
 	}
-	for _, d := range []date{r.Issued, r.PublishedPrint, r.PublishedOnline} {
+	for _, d := range []crossrefDate{r.Issued, r.PublishedPrint, r.PublishedOnline} {
 		if m.Date = datePart(d.Parts); m.Date != "" {
 			break
 		}
@@ -203,6 +211,49 @@ func (c *Client) crossref(ctx context.Context, doi string) (Metadata, error) {
 		}
 	}
 	return m, nil
+}
+
+func normalizedTitle(title string) string {
+	return strings.Join(strings.FieldsFunc(strings.ToLower(title), func(r rune) bool {
+		return !unicode.IsLetter(r) && !unicode.IsDigit(r) && !unicode.IsMark(r)
+	}), " ")
+}
+
+var errAmbiguousTitle = errors.Join(Error{"找到了多篇同名论文，请使用 DOI 或 PMID 查找"}, ErrNotFound)
+
+func (c *Client) crossrefTitle(ctx context.Context, title string) (Metadata, error) {
+	exact := normalizedTitle(title)
+	if exact == "" {
+		return Metadata{}, ErrNotFound
+	}
+	query := url.Values{
+		"query.title": {title},
+		"rows":        {"5"},
+		"select":      {"DOI,type,title,container-title,publisher,volume,issue,page,ISBN,abstract,author,issued,published-print,published-online"},
+	}
+	data, _, _, err := c.get(ctx, strings.TrimRight(c.Crossref, "/")+"?"+query.Encode(), "application/json", 5<<20)
+	if err != nil {
+		return Metadata{}, err
+	}
+	var body struct {
+		Message struct {
+			Items []crossrefWork `json:"items"`
+		} `json:"message"`
+	}
+	if json.Unmarshal(data, &body) != nil {
+		return Metadata{}, Error{"Crossref 返回了无法识别的数据"}
+	}
+	var selected crossrefWork
+	for _, work := range body.Message.Items {
+		if len(work.Title) == 0 || normalizedTitle(PublicText(work.Title[0])) != exact || work.DOI == "" || doiText.FindString(work.DOI) != work.DOI {
+			continue
+		}
+		if selected.DOI != "" && !strings.EqualFold(selected.DOI, work.DOI) {
+			return Metadata{}, errAmbiguousTitle
+		}
+		selected = work
+	}
+	return selected.metadata(selected.DOI)
 }
 
 // ---------- Semantic Scholar ----------
@@ -525,13 +576,41 @@ func (c *Client) titleMatch(ctx context.Context, title string, threshold float64
 	return p, nil
 }
 
+func (c *Client) pubMedResult(ctx context.Context, id string) (Result, error) {
+	article, err := c.pubMed(ctx, id)
+	if err != nil {
+		return Result{}, err
+	}
+	for _, raw := range article.PDFURLs {
+		if pdf, err := c.pdf(ctx, raw); err == nil {
+			return Result{PDF: pdf, Filename: filename(raw, "paper.pdf"), Metadata: article.Metadata}, nil
+		}
+	}
+	if doi := article.Metadata.DOI; doi != "" && ctx.Err() == nil {
+		if result, err := c.doiResult(ctx, doi); err == nil {
+			result.Metadata = overlay(article.Metadata, result.Metadata)
+			return result, nil
+		}
+	}
+	if err := ctx.Err(); err != nil {
+		return Result{}, err
+	}
+	if len(article.PDFURLs) > 0 {
+		return Result{}, Error{fmt.Sprintf("找到了《%s》，但未能下载公开 PDF。可以重试，或下载后拖进来", article.Metadata.Title)}
+	}
+	return Result{}, Error{fmt.Sprintf("找到了《%s》，但没有公开的 PDF。请下载后拖进来", article.Metadata.Title)}
+}
+
 // ---------- entry points ----------
 
-// Resolve downloads a paper from an arXiv ID, DOI, paper link, PDF link or title.
+// Resolve downloads a paper from an identifier, paper link, PDF link or title.
 func (c *Client) Resolve(ctx context.Context, ref string) (Result, error) {
 	ref = strings.Trim(strings.TrimSpace(ref), "<>")
 	if ref == "" {
-		return Result{}, Error{"请填写链接、arXiv 编号、DOI 或论文标题"}
+		return Result{}, Error{"请填写链接、DOI、PMID、arXiv 编号或论文标题"}
+	}
+	if id := pubMedRef(ref); id != "" {
+		return c.pubMedResult(ctx, id)
 	}
 	low := strings.ToLower(ref)
 	isURL := strings.HasPrefix(low, "http://") || strings.HasPrefix(low, "https://")
@@ -543,7 +622,12 @@ func (c *Client) Resolve(ctx context.Context, ref string) (Result, error) {
 			return c.doiResult(ctx, m[1])
 		}
 		if len([]rune(ref)) < 8 {
-			return Result{}, Error{"无法识别。可以填写 arXiv 编号、DOI、论文链接、PDF 链接或完整标题"}
+			return Result{}, Error{"无法识别。可以填写 DOI、PMID、arXiv 编号、论文链接、PDF 链接或完整标题"}
+		}
+		if m, err := c.crossrefTitle(ctx, ref); err == nil {
+			return c.doiResult(ctx, m.DOI)
+		} else if errors.Is(err, errAmbiguousTitle) {
+			return Result{}, err
 		}
 		p, err := c.titleMatch(ctx, ref, 0.5)
 		if err != nil {
@@ -613,10 +697,19 @@ func (c *Client) Lookup(ctx context.Context, ids Identifiers) (Metadata, error) 
 	case ids.DOI != "":
 		m, _, err := c.doiMetadata(ctx, ids.DOI)
 		return m, err
+	case ids.PMID != "":
+		article, err := c.pubMed(ctx, ids.PMID)
+		return article.Metadata, err
 	case ids.Title != "":
+		if m, err := c.crossrefTitle(ctx, ids.Title); err == nil || errors.Is(err, errAmbiguousTitle) {
+			return m, err
+		}
 		p, err := c.titleMatch(ctx, ids.Title, 0.8)
 		if err != nil {
 			return Metadata{}, err
+		}
+		if ids.ExactTitle && normalizedTitle(p.Title) != normalizedTitle(ids.Title) {
+			return Metadata{}, ErrNotFound
 		}
 		if p.ExternalIDs.DOI != "" {
 			if m, _, e := c.doiMetadata(ctx, p.ExternalIDs.DOI); e == nil {

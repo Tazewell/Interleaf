@@ -66,6 +66,25 @@ func TestResolveImportsPaperWithMetadata(t *testing.T) {
 		t.Fatalf("bad reference: %d %s", w.Code, w.Body.String())
 	}
 }
+
+func TestResolveRawPDFStillQueuesMetadataLookup(t *testing.T) {
+	s := testServer(t)
+	service := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/pdf")
+		_, _ = w.Write(testPDF(2))
+	}))
+	t.Cleanup(service.Close)
+	s.scholarClient().AllowPrivateHosts = true
+	pdfURL := service.URL + "/paper.pdf"
+	w := request(t, s, "POST", "/api/documents/resolve", strings.NewReader(`{"ref":"`+pdfURL+`"}`))
+	var doc Document
+	if w.Code != http.StatusCreated || json.Unmarshal(w.Body.Bytes(), &doc) != nil {
+		t.Fatalf("resolved PDF: %d %s", w.Code, w.Body.String())
+	}
+	if doc.Metadata.Lookup != "pending" || doc.Metadata.URL != pdfURL {
+		t.Fatalf("raw PDF bypassed automatic lookup: %+v", doc.Metadata)
+	}
+}
 func TestLookupKeepsManualEdits(t *testing.T) {
 	s := testServer(t)
 	scholarFixture(t, s)
@@ -90,7 +109,7 @@ func TestLookupDetectsIdentifierOnFirstPage(t *testing.T) {
 	w := uploadTo(t, s, "papers", "paper.pdf", testPDF(2))
 	var d Document
 	_ = json.Unmarshal(w.Body.Bytes(), &d)
-	if _, err := s.lookupDocument(context.Background(), d.ID, false); err != errNoIdentifier || hits.Load() != 0 {
+	if _, err := s.lookupDocument(context.Background(), d.ID, withoutTitle); err != errNoIdentifier || hits.Load() != 0 {
 		t.Fatalf("lookup without identifiers: %v hits=%d", err, hits.Load())
 	}
 	dir := s.analysisDir(d.ID)
@@ -101,7 +120,7 @@ func TestLookupDetectsIdentifierOnFirstPage(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, "manifest.json"), []byte(manifest), 0600); err != nil {
 		t.Fatal(err)
 	}
-	got, err := s.lookupDocument(context.Background(), d.ID, false)
+	got, err := s.lookupDocument(context.Background(), d.ID, withoutTitle)
 	if err != nil || got.Title != "Attention Is All You Need" || got.Metadata.ArXiv != "1706.03762v7" {
 		t.Fatalf("detected lookup: %+v %v", got, err)
 	}
@@ -118,14 +137,107 @@ func TestFileTitleOnlyFillsAPlainTitle(t *testing.T) {
 		}
 	}
 }
+
+func TestMetadataLookupUsesEmbeddedFieldsWithoutNetwork(t *testing.T) {
+	s := testServer(t)
+	hits := scholarFixture(t, s)
+	d := queuedMetadataPaper(t, s, 2, "")
+	manifest := `{"pages":2,"metadata":{"Title":"Microsoft Word - paper.docx","XMPTitle":"注意偏向的实验研究","XMPCreators":["王小芳","Anne Marie Smith"]}}`
+	if err := os.WriteFile(filepath.Join(s.analysisDir(d.ID), "manifest.json"), []byte(manifest), 0600); err != nil {
+		t.Fatal(err)
+	}
+	_, _ = s.lookupDocument(context.Background(), d.ID, withoutTitle)
+	got, err := s.Store.Document(d.ID)
+	if err != nil || got.Title != "注意偏向的实验研究" || got.Author != "王小芳, Anne Marie Smith" ||
+		got.Metadata.Sources["title"] != "file" || got.Metadata.Sources["creators"] != "file" || hits.Load() != 0 {
+		t.Fatalf("embedded metadata: title=%q author=%q sources=%v hits=%d err=%v",
+			got.Title, got.Author, got.Metadata.Sources, hits.Load(), err)
+	}
+}
+
+func TestMetadataLookupUsesEmbeddedDOI(t *testing.T) {
+	s := testServer(t)
+	d := queuedMetadataPaper(t, s, 2, "")
+	manifest := `{"pages":2,"metadata":{"Title":"Survey of Social Identity","Author":"Mina Lee","DOI":"https://doi.org/10.1037/pspa0000123"}}`
+	if err := os.WriteFile(filepath.Join(s.analysisDir(d.ID), "manifest.json"), []byte(manifest), 0600); err != nil {
+		t.Fatal(err)
+	}
+	service := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/crossref/10.1037/pspa0000123" {
+			_, _ = w.Write([]byte(`{"message":{"type":"journal-article","title":["Survey of Social Identity"],"container-title":["Journal of Personality and Social Psychology"]}}`))
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	t.Cleanup(service.Close)
+	client := scholar.New(maxImportBytes)
+	client.AllowPrivateHosts = true
+	client.Crossref, client.SemanticScholar = service.URL+"/crossref/", service.URL+"/scholar/"
+	s.scholar = client
+	got, err := s.lookupDocument(context.Background(), d.ID, withoutTitle)
+	if err != nil || got.Metadata.DOI != "10.1037/pspa0000123" ||
+		got.Metadata.Venue != "Journal of Personality and Social Psychology" || got.Author != "Mina Lee" {
+		t.Fatalf("journal lookup: title=%q author=%q metadata=%+v err=%v", got.Title, got.Author, got.Metadata, err)
+	}
+}
+
+func TestMetadataLookupTitleFallbackRequiresOptInAndEmbeddedTitle(t *testing.T) {
+	s := testServer(t)
+	var titleRequests atomic.Int32
+	service := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/scholar/search/match" {
+			titleRequests.Add(1)
+			if query := r.URL.Query().Get("query"); query != "Survey of Social Identity" {
+				t.Errorf("unexpected title query %q", query)
+			}
+			_, _ = w.Write([]byte(`{"data":[{"title":"Survey of Social Identity","venue":"Psychological Review"}]}`))
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	t.Cleanup(service.Close)
+	client := scholar.New(maxImportBytes)
+	client.AllowPrivateHosts = true
+	client.Crossref, client.SemanticScholar = service.URL+"/crossref/", service.URL+"/scholar/"
+	s.scholar = client
+	d := queuedMetadataPaper(t, s, 2, "")
+	manifestPath := filepath.Join(s.analysisDir(d.ID), "manifest.json")
+	manifest := `{"pages":2,"metadata":{"Title":"Survey of Social Identity"},"blocks":[{"id":"p1-b1","page":1,"label":"text","bounds":{"x":0.1,"y":0.1,"width":0.5,"height":0.1},"text":"Unpublished manuscript text."}]}`
+	if err := os.WriteFile(manifestPath, []byte(manifest), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.lookupDocument(t.Context(), d.ID, withoutTitle); err != errNoIdentifier || titleRequests.Load() != 0 {
+		t.Fatalf("title sent without opt-in: %v, requests=%d", err, titleRequests.Load())
+	}
+	request(t, s, "PUT", "/api/preferences/library", strings.NewReader(`{"papers":{"autoLookupByTitle":true}}`))
+	enabled, titleMode := s.metadataLookupOptions()
+	if !enabled || !s.lookupPendingMetadata(t.Context(), d.ID, titleMode) {
+		t.Fatal("opted-in lookup was skipped")
+	}
+	got, err := s.Store.Document(d.ID)
+	if err != nil || got.Metadata.Lookup != "done" || got.Metadata.Venue != "Psychological Review" || titleRequests.Load() != 1 {
+		t.Fatalf("opted-in lookup failed: lookup=%q venue=%q requests=%d err=%v",
+			got.Metadata.Lookup, got.Metadata.Venue, titleRequests.Load(), err)
+	}
+
+	noTitle := queuedMetadataPaper(t, s, 3, "")
+	request(t, s, "PATCH", "/api/documents/"+noTitle.ID, strings.NewReader(`{"title":"Private document title"}`))
+	s.lookupPendingMetadata(t.Context(), noTitle.ID, titleMode)
+	got, err = s.Store.Document(noTitle.ID)
+	if err != nil || got.Metadata.Lookup != "notFound" || titleRequests.Load() != 1 {
+		t.Fatalf("non-embedded title changed lookup: lookup=%q requests=%d err=%v",
+			got.Metadata.Lookup, titleRequests.Load(), err)
+	}
+}
+
 func TestAutoLookupPreference(t *testing.T) {
 	s := testServer(t)
-	if !s.autoLookupEnabled() {
-		t.Fatal("automatic lookup should default on")
+	if enabled, titleMode := s.metadataLookupOptions(); !enabled || titleMode != withoutTitle {
+		t.Fatal("only identifier lookup should default on")
 	}
-	request(t, s, "PUT", "/api/preferences/library", strings.NewReader(`{"papers":{"autoLookup":false}}`))
-	if s.autoLookupEnabled() {
-		t.Fatal("preference ignored")
+	request(t, s, "PUT", "/api/preferences/library", strings.NewReader(`{"papers":{"autoLookup":false,"autoLookupByTitle":true}}`))
+	if enabled, titleMode := s.metadataLookupOptions(); enabled || titleMode != withoutTitle {
+		t.Fatal("disabling automatic lookup must also disable automatic title matching")
 	}
 }
 

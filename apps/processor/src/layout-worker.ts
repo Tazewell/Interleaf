@@ -102,6 +102,22 @@ try {
   if (first > last) throw new Error("页码范围无效");
   stage("pdf_metadata");
   const metadata = await pdf.getMetadata();
+  const info = metadata.info as { Custom?: Map<string, unknown> };
+  const xmp = metadata.metadata;
+  const boundedMetadata = (value: unknown, limit: number) =>
+    typeof value === "string" && value.length <= limit ? value.trim() : "";
+  const creators: unknown = xmp?.get("dc:creator");
+  const doi = [
+    xmp?.get("prism:doi"),
+    info.Custom?.get("DOI"),
+    info.Custom?.get("doi"),
+  ]
+    .map((value) => boundedMetadata(value, 500))
+    .find((value) =>
+      /^(?:https?:\/\/(?:dx\.)?doi\.org\/|doi:\s*)?10\.\d{4,9}\/\S+$/i.test(
+        value,
+      ),
+    );
   for (let number = first; number <= last; number++) {
     const pageStart = performance.now();
     stage("page_load", number);
@@ -218,7 +234,18 @@ try {
           ),
         }
       : {}),
-    metadata: metadata.info,
+    metadata: {
+      ...metadata.info,
+      XMPTitle: boundedMetadata(xmp?.get("dc:title"), 600),
+      XMPCreators: Array.isArray(creators)
+        ? creators
+            .slice(0, 200)
+            .map((value) => boundedMetadata(value, 400))
+            .filter(Boolean)
+        : [],
+      DOI: doi,
+      PublicationName: boundedMetadata(xmp?.get("prism:publicationname"), 500),
+    },
     blocks,
     warnings,
     incompletePages: [],

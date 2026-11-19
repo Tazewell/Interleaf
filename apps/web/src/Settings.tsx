@@ -431,8 +431,28 @@ export function Settings({
                 <span>
                   导入 PDF 后自动补全论文信息
                   <span className="block text-xs text-muted-foreground">
-                    只把文中的 DOI 或 arXiv 编号发送给 arXiv、Crossref 与
-                    Semantic Scholar
+                    将 PDF 中的 DOI、arXiv 编号或 PMID 发送给对应的学术索引。
+                  </span>
+                </span>
+              </label>
+              <label className="mt-3 ml-6 flex items-start gap-2 text-sm">
+                <Checkbox
+                  className="mt-0.5"
+                  checked={paperPreferences.autoLookupByTitle === true}
+                  disabled={paperPreferences.autoLookup === false}
+                  onCheckedChange={(checked) =>
+                    void updateLibraryPreferences({
+                      papers: {
+                        ...paperPreferences,
+                        autoLookupByTitle: !!checked,
+                      },
+                    }).catch((e) => toast.error(e.message))
+                  }
+                />
+                <span>
+                  没有标识时按标题查找
+                  <span className="block text-xs text-muted-foreground">
+                    开启后会将 PDF 内嵌标题发送给 Crossref 或 Semantic Scholar。
                   </span>
                 </span>
               </label>

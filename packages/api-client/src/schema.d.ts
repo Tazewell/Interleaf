@@ -5479,7 +5479,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Download a paper into the paper library from an arXiv ID, DOI, paper or PDF link, or title; metadata comes from arXiv, Crossref, Semantic Scholar, OpenReview or the page's citation tags */
+        /** Download a paper into the paper library from a DOI, PMID, arXiv ID, paper or PDF link, or title; metadata may come from Crossref, Europe PMC, arXiv, Semantic Scholar, OpenReview or the page's citation tags */
         post: {
             parameters: {
                 query?: never;
@@ -5550,7 +5550,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Look up metadata by DOI, arXiv ID (also detected on the first pages) or a close title match; manual fields are kept */
+        /** Look up metadata by DOI, PMID, arXiv ID (also detected on the first pages) or by matching the title; manual fields are kept */
         post: {
             parameters: {
                 query?: never;

@@ -8,6 +8,7 @@ import (
 	"os"
 	"strings"
 	"time"
+	"unicode"
 
 	"interleaf.local/server/internal/scholar"
 )
@@ -89,45 +90,97 @@ func (s *Server) firstPagesText(id string) (string, layoutManifest) {
 
 // fileTitle accepts a PDF's own title only when it looks like a real title.
 func fileTitle(m layoutManifest) string {
-	title, _ := m.Metadata["Title"].(string)
-	title = strings.Join(strings.Fields(title), " ")
-	lower := strings.ToLower(title)
-	if len([]rune(title)) < 8 || !strings.Contains(title, " ") {
-		return ""
-	}
-	for _, bad := range []string{"microsoft word", ".doc", ".tex", ".pdf", "untitled", "slide"} {
-		if strings.Contains(lower, bad) {
-			return ""
+	for _, key := range []string{"Title", "XMPTitle"} {
+		raw, _ := m.Metadata[key].(string)
+		title, err := cleanText(strings.Join(strings.Fields(raw), " "), 300, false)
+		// Chinese, Japanese and Korean titles need no spaces between words.
+		cjk := 0
+		for _, r := range title {
+			if unicode.In(r, unicode.Han, unicode.Hiragana, unicode.Katakana, unicode.Hangul) {
+				cjk++
+			}
 		}
+		if err != nil || (cjk < 4 && (len([]rune(title)) < 8 || !strings.Contains(title, " "))) {
+			continue
+		}
+		lower := strings.ToLower(title)
+		if strings.HasPrefix(lower, "microsoft word") || strings.HasPrefix(lower, "untitled") ||
+			strings.HasSuffix(lower, ".doc") || strings.HasSuffix(lower, ".docx") ||
+			strings.HasSuffix(lower, ".tex") || strings.HasSuffix(lower, ".pdf") {
+			continue
+		}
+		return title
 	}
-	return title
+	return ""
 }
 
-var errNoIdentifier = errors.New("没有找到 DOI 或 arXiv 编号，可以在详情中填写后重试")
+// embeddedPaperMetadata keeps names as written in the PDF. A comma may be a
+// separator within a name, so only split an Info author field on semicolons.
+func embeddedPaperMetadata(m layoutManifest) PaperMetadata {
+	doi, _ := m.Metadata["DOI"].(string)
+	venue, _ := m.Metadata["PublicationName"].(string)
+	found := PaperMetadata{DOI: doi, Venue: venue}
+	addCreator := func(raw string) {
+		name, err := cleanText(strings.Join(strings.Fields(raw), " "), 200, false)
+		if err == nil && name != "" && len(found.Creators) < 200 {
+			found.Creators = append(found.Creators, Creator{Name: name})
+		}
+	}
+	names, _ := m.Metadata["XMPCreators"].([]any)
+	for _, value := range names {
+		if name, ok := value.(string); ok {
+			addCreator(name)
+		}
+	}
+	if len(found.Creators) == 0 {
+		author, _ := m.Metadata["Author"].(string)
+		for name := range strings.SplitSeq(author, ";") {
+			addCreator(name)
+		}
+	}
+	return found
+}
+
+var errNoIdentifier = errors.New("没有找到 DOI、PMID 或 arXiv 编号，可以在详情中核对标题或填写 DOI 后重试")
+
+type metadataTitleLookup uint8
+
+const (
+	withoutTitle metadataTitleLookup = iota
+	withEmbeddedTitle
+	withCurrentTitle
+)
 
 // lookupDocument finds metadata from the paper's identifiers, its first pages
-// or (when asked by the user) a close title match.
-func (s *Server) lookupDocument(ctx context.Context, id string, byTitle bool) (Document, error) {
+// or a title match if enabled by the caller.
+func (s *Server) lookupDocument(ctx context.Context, id string, titleMode metadataTitleLookup) (Document, error) {
 	d, err := s.Store.Document(id)
 	if err != nil {
 		return d, err
 	}
-	ids := scholar.Identifiers{DOI: d.Metadata.DOI, ArXiv: d.Metadata.ArXiv}
 	text, layout := s.firstPagesText(id)
+	title := fileTitle(layout)
+	embedded := embeddedPaperMetadata(layout)
+	if title != "" || embedded.DOI != "" || embedded.Venue != "" || len(embedded.Creators) > 0 {
+		d, err = s.applyFound(id, embedded, title, "file", "")
+		if err != nil {
+			return d, err
+		}
+	}
+	ids := scholar.Identifiers{DOI: d.Metadata.DOI, ArXiv: d.Metadata.ArXiv}
 	if ids.DOI == "" && ids.ArXiv == "" {
 		ids = scholar.Detect(text)
 	}
-	if ids.DOI == "" && ids.ArXiv == "" && byTitle {
-		ids.Title = d.Title
-	}
 	if ids == (scholar.Identifiers{}) {
-		// Without an identifier, a sensible title in the PDF is the best we have.
-		if t := fileTitle(layout); t != "" {
-			if _, err := s.applyFound(id, PaperMetadata{}, t, "file", ""); err != nil {
-				return d, err
-			}
+		switch titleMode {
+		case withEmbeddedTitle:
+			ids.Title, ids.ExactTitle = title, title != ""
+		case withCurrentTitle:
+			ids.Title = d.Title
 		}
-		return d, errNoIdentifier
+		if ids.Title == "" {
+			return d, errNoIdentifier
+		}
 	}
 	found, err := s.scholarClient().Lookup(ctx, ids)
 	if err != nil {
@@ -155,7 +208,7 @@ func (s *Server) lookupMetadata(w http.ResponseWriter, r *http.Request) {
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), 90*time.Second)
 	defer cancel()
-	d, err = s.lookupDocument(ctx, d.ID, true)
+	d, err = s.lookupDocument(ctx, d.ID, withCurrentTitle)
 	if err != nil {
 		status := 502
 		if errors.Is(err, errNoIdentifier) || errors.Is(err, scholar.ErrNotFound) {
@@ -230,31 +283,44 @@ func (s *Server) resolveDocument(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if d.Library == "papers" {
-		if updated, e := s.applyFound(d.ID, fromScholar(result.Metadata), result.Metadata.Title, "lookup", "done"); e == nil {
+		m := result.Metadata
+		// A raw PDF link can download a file without providing bibliographic data.
+		lookup := ""
+		if m.Title != "" || m.DOI != "" || m.ArXiv != "" || m.Venue != "" {
+			lookup = "done"
+		}
+		if updated, e := s.applyFound(d.ID, fromScholar(m), m.Title, "lookup", lookup); e == nil {
 			d = updated
 		}
 	}
 	respond(w, status, d)
 }
 
-func (s *Server) autoLookupEnabled() bool {
+func (s *Server) metadataLookupOptions() (enabled bool, titleMode metadataTitleLookup) {
 	var value string
 	if s.Store.DB.QueryRow("SELECT value FROM settings WHERE key='preferences:library'").Scan(&value) != nil {
-		return true
+		return true, withoutTitle
 	}
 	var prefs struct {
 		Papers struct {
-			AutoLookup *bool `json:"autoLookup"`
+			AutoLookup        *bool `json:"autoLookup"`
+			AutoLookupByTitle bool  `json:"autoLookupByTitle"`
 		} `json:"papers"`
 	}
-	if json.Unmarshal([]byte(value), &prefs) != nil || prefs.Papers.AutoLookup == nil {
-		return true
+	if json.Unmarshal([]byte(value), &prefs) != nil {
+		return true, withoutTitle
 	}
-	return *prefs.Papers.AutoLookup
+	if prefs.Papers.AutoLookup != nil && !*prefs.Papers.AutoLookup {
+		return false, withoutTitle
+	}
+	if prefs.Papers.AutoLookupByTitle {
+		return true, withEmbeddedTitle
+	}
+	return true, withoutTitle
 }
 
 // metadataWorker looks up papers imported from files once their first pages are
-// parsed. It sends only identifiers printed in the paper.
+// parsed. It sends only identifiers unless the user opts in to title matching.
 func (s *Server) metadataWorker(ctx context.Context) {
 	tick := time.NewTicker(3 * time.Second)
 	defer tick.Stop()
@@ -264,7 +330,8 @@ func (s *Server) metadataWorker(ctx context.Context) {
 			return
 		case <-tick.C:
 		}
-		if !s.autoLookupEnabled() {
+		enabled, titleMode := s.metadataLookupOptions()
+		if !enabled {
 			continue
 		}
 		rows, err := s.Store.DB.Query(`SELECT d.id FROM documents d LEFT JOIN document_processing p ON p.document_id=d.id
@@ -283,7 +350,7 @@ func (s *Server) metadataWorker(ctx context.Context) {
 		}
 		rows.Close()
 		for _, id := range pending {
-			if ctx.Err() != nil || s.lookupPendingMetadata(ctx, id) {
+			if ctx.Err() != nil || s.lookupPendingMetadata(ctx, id, titleMode) {
 				break
 			}
 		}
@@ -292,7 +359,7 @@ func (s *Server) metadataWorker(ctx context.Context) {
 
 // Return true only when a lookup was attempted. Unparsed files retain pending
 // without blocking later papers; an explicit identifier needs no PDF layout.
-func (s *Server) lookupPendingMetadata(ctx context.Context, id string) bool {
+func (s *Server) lookupPendingMetadata(ctx context.Context, id string, titleMode metadataTitleLookup) bool {
 	work, finish, err := s.beginDocumentTask(ctx, id)
 	if err != nil {
 		return false
@@ -308,7 +375,7 @@ func (s *Server) lookupPendingMetadata(ctx context.Context, id string) bool {
 		}
 	}
 	lookupCtx, cancel := context.WithTimeout(work, time.Minute)
-	_, err = s.lookupDocument(lookupCtx, id, false)
+	_, err = s.lookupDocument(lookupCtx, id, titleMode)
 	cancel()
 	if ctx.Err() != nil || work.Err() != nil {
 		return true

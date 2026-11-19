@@ -226,8 +226,10 @@ export interface PaperLibraryPreferences {
   columnWidths?: Partial<Record<"title" | PaperColumn, number>>;
   /** Width of the paper detail panel in CSS pixels. */
   detailWidth?: number;
-  /** Look up metadata from the DOI or arXiv ID printed in imported PDFs. */
+  /** Look up metadata from identifiers found in imported PDFs (default on). */
   autoLookup?: boolean;
+  /** Allow automatic lookup by embedded PDF title if no identifier is found. */
+  autoLookupByTitle?: boolean;
   citationStyle?: "gb7714" | "apa" | "bibtex" | "biblatex" | "ris" | "csl-json";
   bibliographyModes?: Record<string, import("./papers").BibliographyMode>;
   citationOrder?: "author" | "year" | "custom";

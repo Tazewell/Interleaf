@@ -197,10 +197,19 @@ it("recognizes pasted identifiers but not arbitrary text", () => {
     "arXiv:2401.01234v2",
     "10.1145/3290605.3300857",
     "doi:10.1000/x",
+    "PMID: 31809170",
+    "PMID 31809170",
+    "PMID：31809170",
+    "https://pubmed.ncbi.nlm.nih.gov/31809170/",
     "https://openreview.net/forum?id=abc",
   ])
     expect(looksLikeReference(ref)).toBe(true);
-  for (const text of ["hello world", "Attention is all you need", "2024"])
+  for (const text of [
+    "hello world",
+    "Attention is all you need",
+    "2024",
+    "PMID: unknown",
+  ])
     expect(looksLikeReference(text)).toBe(false);
 });
 it("imports by reference and shows the new paper", async () => {

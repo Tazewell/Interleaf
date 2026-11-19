@@ -19,7 +19,7 @@ Keep books and papers on your computer, organize references, mark passages, and 
 | Reading task | Interleaf features |
 | --- | --- |
 | Organize books and papers | Separate book and paper libraries; categories, tags, favorites, and reading states; paper metadata, duplicate detection, related documents, and customizable table columns. |
-| Collect references | Import local EPUB/PDF files; find papers by DOI, arXiv ID, URL, or full title; migrate material from Zotero, EndNote, or BibTeX. |
+| Collect references | Import local EPUB/PDF files; find papers by DOI, arXiv ID, PMID, URL, or full title; migrate material from Zotero, EndNote, or BibTeX. |
 | Read with questions in mind | Outlines, full-text search, bookmarks, highlights, underlines, and notes; saved reading positions and links from annotations or valid answer sources back to the original. |
 | Read across languages | Original, side-by-side, and translated PDF views; chapter translation for EPUB; synchronized scrolling, selection translation, and custom translation instructions. Translation requires a configured model service. |
 | Ask about your sources | Attach text or images and keep multiple conversations per document. Models with tool support can search and read the source as needed; image-capable models can inspect PDF pages. Research can also span documents in a category. |
@@ -35,7 +35,7 @@ The interface images are existing repository screenshots captured on **2026-11-0
 
 ### 1. Import your sources
 
-Choose import in the paper library and paste `1706.03762`, a DOI, or a paper URL, or select a local PDF. You can choose a category before importing. Existing Zotero and EndNote libraries can be scanned for a migration preview first.
+Choose import in the paper library and paste `1706.03762`, a DOI, `PMID: 31809170`, or a paper URL, or select a local PDF. You can choose a category before importing. Existing Zotero and EndNote libraries can be scanned for a migration preview first.
 
 <img src="website/assets/screenshots/interleaf-import.jpg" alt="Interleaf paper import dialog, with identifiers and links, local files, library migration, and BibTeX" />
 
@@ -93,7 +93,7 @@ Image and tool support depend on the model and endpoint and can be checked in mo
 
 - **Local storage:** original files, SQLite data, reading history, annotations, translations, notes, and conversations are stored in the library directory. There is no built-in cloud sync.
 - **Model requests:** AI features send the required source text, selections, images, and conversation context to your configured model service. Online research also queries public scholarly sources. Billing and data handling follow the service's policies.
-- **Paper metadata:** PDF imports look up metadata online by default, sending only DOI or arXiv identifiers found in the document. Disable this in **Settings → Paper library → Import settings**.
+- **Paper metadata:** PDF imports look up metadata online by default using a DOI, arXiv ID, or PMID found in the document. In **Settings → Paper library → Import settings**, you can disable automatic lookup or opt in to sending the title embedded in the PDF to Crossref or Semantic Scholar when there is no identifier.
 - **Configuration and backups:** API keys are saved in the library's `ai-connections.json`; saved keys are not returned to the UI. Quit the app before backing up, and remove keys and other private configuration before sharing a library.
 - **Library location:** Windows packaged builds default to `%APPDATA%\Interleaf\library\`, and development desktop builds use `%APPDATA%\Interleaf Dev\library\`. Browser development uses the project's `.interleaf/`. Desktop users can move the entire library in **Settings → Paper library → Library location**; the original directory is retained.
 

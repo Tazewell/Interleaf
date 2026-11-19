@@ -276,8 +276,8 @@ export function revealFile(doc: Document, open = false) {
 }
 
 const referencePattern =
-  /^(?:https?:\/\/\S+|(?:arxiv:\s*)?\d{4}\.\d{4,5}(?:v\d+)?|(?:doi:\s*)?10\.\d{4,9}\/\S+)$/i;
-/** A pasted arXiv ID, DOI or link; plain titles are only imported on request. */
+  /^(?:https?:\/\/\S+|(?:arxiv:\s*)?\d{4}\.\d{4,5}(?:v\d+)?|(?:doi:\s*)?10\.\d{4,9}\/\S+|pmid(?:\s*[:：]\s*|\s+)[1-9]\d{0,9})$/i;
+/** A pasted identifier or link; plain titles are only imported on request. */
 export const looksLikeReference = (text: string) =>
   text.length <= 500 && referencePattern.test(text.trim());
 

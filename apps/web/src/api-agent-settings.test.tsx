@@ -153,6 +153,45 @@ it("does not expose automatic chapter context", async () => {
   expect(host.querySelector('[aria-label="提问时附带本章原文"]')).toBeNull();
 });
 
+it("requires opting in to title lookup and suspends it when metadata lookup is off", async () => {
+  const previous = useReaderStore.getState().libraryPreferences;
+  const autoLookupLabel = "导入 PDF 后自动补全论文信息";
+  const titleLookupLabel = "没有标识时按标题查找";
+  useReaderStore.setState({
+    libraryPreferences: { papers: { autoLookup: true } },
+  });
+  try {
+    await act(async () =>
+      root.render(<Settings open onOpenChange={() => {}} />),
+    );
+    const papers = [
+      ...host.querySelectorAll<HTMLButtonElement>('[role="tab"]'),
+    ].find((tab) => tab.textContent === "论文库")!;
+    await act(async () => papers.click());
+    const checkbox = (label: string) =>
+      [...host.querySelectorAll("label")]
+        .find((node) => node.textContent?.includes(label))
+        ?.querySelector<HTMLButtonElement>('[role="checkbox"]');
+    const titleLookup = checkbox(titleLookupLabel);
+    const autoLookup = checkbox(autoLookupLabel);
+    expect(titleLookup).toBeDefined();
+    expect(titleLookup?.getAttribute("aria-checked")).toBe("false");
+    await act(async () => titleLookup!.click());
+    expect(api.saveLibraryPreferences).toHaveBeenLastCalledWith({
+      papers: { autoLookup: true, autoLookupByTitle: true },
+    });
+    await act(async () => autoLookup!.click());
+    expect(titleLookup?.getAttribute("aria-disabled")).toBe("true");
+    expect(api.saveLibraryPreferences).toHaveBeenLastCalledWith({
+      papers: { autoLookup: false, autoLookupByTitle: true },
+    });
+  } finally {
+    await act(async () =>
+      useReaderStore.setState({ libraryPreferences: previous }),
+    );
+  }
+});
+
 it("switches appearance through its own tabs while keeping display settings selected", async () => {
   const previous = useReaderStore.getState().theme;
   useReaderStore.setState({

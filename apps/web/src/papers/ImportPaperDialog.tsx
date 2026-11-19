@@ -141,7 +141,7 @@ export function ImportPaperDialog({
                   autoComplete="off"
                   aria-label="论文标识或链接"
                   aria-describedby="import-paper-reference-help"
-                  placeholder="例如 2401.01234 或 10.1145/…"
+                  placeholder="例如 10.1145/… 或 PMID: 31809170"
                   value={ref}
                   disabled={busy}
                   onChange={(e) => setRef(e.target.value)}
@@ -150,7 +150,8 @@ export function ImportPaperDialog({
                   className="paper-import-help"
                   id="import-paper-reference-help"
                 >
-                  支持 arXiv 编号、DOI、论文页面、PDF 链接或完整标题。
+                  支持 DOI、arXiv 编号、PMID、PubMed 或其他论文页面、PDF
+                  链接和完整标题。
                 </p>
                 <div className="paper-import-actions">
                   <Button
