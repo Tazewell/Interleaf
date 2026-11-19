@@ -157,6 +157,23 @@ describe("native reading coordinate and anchor boundary", () => {
     });
     expect(uniqueTextOffsets("甲乙甲乙", "甲乙")).toBeUndefined();
   });
+  it("anchors plain inline-variable ink to the raw saved target", () => {
+    const target = "😀时间$t$后";
+    expect(uniqueTextOffsets(target, "间 t 后")).toEqual({ start: 3, end: 8 });
+    expect(uniqueTextOffsets(target, "t")).toEqual({ start: 5, end: 6 });
+    expect(uniqueTextOffsets("甲$t$与 t", "t")).toBeUndefined();
+    expect(uniqueTextOffsets("甲$x^2$乙", "甲x^2乙")).toBeUndefined();
+    expect(uniqueTextOffsets("甲$$t$$乙", "甲t乙")).toBeUndefined();
+    expect(uniqueTextOffsets(String.raw`甲\$t$乙`, "甲t乙")).toBeUndefined();
+    expect(uniqueTextOffsets("甲$t$乙$x^2$丙", "甲t乙")).toBeUndefined();
+    expect(uniqueTextOffsets(target, "间$t$后")).toBeUndefined();
+  });
+  it("keeps the positions of adjacent inline variables in separate sentences", () => {
+    expect(uniqueTextOffsets(["甲$t$", "$h$乙"], "t h")).toEqual({
+      start: 2,
+      end: 6,
+    });
+  });
 });
 it("rejects non-complete blocks even when their stale sentence payload still matches", () => {
   const right = sourceToDisplay(

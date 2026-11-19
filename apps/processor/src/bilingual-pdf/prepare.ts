@@ -41,6 +41,10 @@ const translatable = new Set([
   "paragraph_title",
   "text",
 ]);
+// Slashes in explicitly named model variants or spatial reasoning are prose.
+// All other matches still follow the existing arithmetic and glyph checks.
+const proseSlashes =
+  /\b(?:models?|variants?)\s*\((?:[A-Za-z][A-Za-z0-9.-]*-)?\d+[BMTK](?:-A\d+[BMTK])?(?:\s*\/\s*\d+[BMTK](?:-A\d+[BMTK])?)+\)|\b[23]D\/spatial(?=\s+reasoning\b)/gu;
 export function overlap(a: NativePDFBounds, b: NativePDFBounds) {
   return (
     Math.max(0, Math.min(a.x + a.width, b.x + b.width) - Math.max(a.x, b.x)) *
@@ -335,11 +339,22 @@ export async function prepareNativePDF({
         const mathFont =
           /math|symbol|cmmi|cmsy|cmex|msam|msbm/i.test(family) ||
           (/italic|oblique/i.test(family) && /^[a-zA-Z]$/.test(item.str));
+        const prose =
+          reading && !mathFont && !inlineRegions.length
+            ? [...item.str.matchAll(proseSlashes)]
+            : [];
         const matches = [
           ...item.str.matchAll(
             /[A-Za-z0-9α-ωΑ-Ω]+(?:[._^][A-Za-z0-9α-ωΑ-Ω]+)*\s*[=≤≥≠±×÷+*/−]\s*[A-Za-z0-9α-ωΑ-Ω]+(?:[._^][A-Za-z0-9α-ωΑ-Ω]+)*(?:\s*[+*/−-]\s*[A-Za-z0-9α-ωΑ-Ω]+)*|\S*[=∑∫√∞≤≥≠±×÷∂∇∈∉∀∃α-ωΑ-Ω⁰-⁹₀-₉]\S*/gu,
           ),
-        ];
+        ].filter(
+          (m) =>
+            !prose.some(
+              (span) =>
+                m.index >= span.index &&
+                m.index + m[0].length <= span.index + span[0].length,
+            ),
+        );
         if (!inlineRegions.length && (mathFont || !matches.length)) {
           const span = {
             text: item.str,

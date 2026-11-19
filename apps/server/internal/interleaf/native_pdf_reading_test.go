@@ -327,6 +327,102 @@ func TestNativePDFReadingPersistentCacheAndAuthentication(t *testing.T) {
 		t.Fatal("attachment created")
 	}
 }
+
+func TestNativePDFReadingReusesTranslationDespiteExtractionSpacing(t *testing.T) {
+	s := nativeReadingFixture(t)
+	script := filepath.Join(filepath.Dir(os.Getenv("INTERLEAF_PROCESSOR")), "bilingual-pdf-cli.mjs")
+	raw, err := os.ReadFile(script)
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw = append(raw, []byte(`
+if(args.stage==='prepare') {
+ const prepared=JSON.parse(fs.readFileSync(args.prepared));
+ prepared.pages[0].paragraphs[0].source=prepared.pages[0].paragraphs[0].originalSource='Hello    world .';
+ fs.writeFileSync(args.prepared,JSON.stringify(prepared));
+}
+`)...)
+	if err := os.WriteFile(script, raw, 0600); err != nil {
+		t.Fatal(err)
+	}
+	v := nativeReadingReady(t, s)
+	meta := v["metadata"].(map[string]any)
+	q := meta["pages"].([]any)[0].(map[string]any)["paragraphs"].([]any)[0].(map[string]any)
+	if q["sourceHash"] != translationHash("Hello world.") || q["target"] != "你好世界。" || q["translated"] != true {
+		t.Fatalf("paragraph must keep the stored translation's identity: %v", q)
+	}
+	restarted := NewServer(s.Store, "test-secret", "")
+	t.Cleanup(restarted.Close)
+	cached := request(t, restarted, "POST", "/api/documents/doc/native-pdf-reading", strings.NewReader(`{}`))
+	if cached.Code != 200 {
+		t.Fatalf("spacing-equivalent result must survive cache validation: %d %s", cached.Code, cached.Body.String())
+	}
+}
+
+func TestNativePDFReadingReusePreservesParagraphContent(t *testing.T) {
+	const source = "1. See [Smith] : Qwen3-8B."
+	translation := TranslationBlock{
+		BlockID: "p1-b1", Status: "complete", SourceHash: translationHash(source),
+		Sentences: []TranslationSentence{{Source: source, Target: "1. 见 Smith：Qwen3-8B。"}},
+	}
+	for _, tc := range []struct {
+		name, native string
+		reuse        bool
+	}{
+		{"spacing and list marker", "1. See [Smith]: Qwen3- 8B.", true},
+		{"changed model size", "1. See [Smith]: Qwen3- 4B.", false},
+		{"missing citation", "1. See: Qwen3- 8B.", false},
+		{"changed word boundaries", "1. Se e [Smith]: Qwen3- 8B.", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			p := nativeParagraph{BlockID: translation.BlockID, Source: tc.native, OriginalSource: tc.native}
+			if target := reuseNativeReadingTranslation(p, source, translation); (target != "") != tc.reuse {
+				t.Fatalf("unexpected reuse %q", target)
+			}
+		})
+	}
+	p := nativeParagraph{BlockID: translation.BlockID, Source: source, OriginalSource: source}
+	withoutTail := translation
+	withoutTail.Sentences = []TranslationSentence{{Source: "1. See [Smith]", Target: "1. 见 Smith。"}}
+	if target := reuseNativeReadingTranslation(p, source, withoutTail); target != "" {
+		t.Fatalf("incomplete sentence coverage must be rejected: %q", target)
+	}
+	stale := translation
+	stale.SourceHash = translationHash("1. See another paragraph")
+	if target := reuseNativeReadingTranslation(p, source, stale); target != "" {
+		t.Fatalf("stale translation must be rejected: %q", target)
+	}
+	if target := reuseBilingualTranslation(p, []TranslationBlock{translation}); target != "" {
+		t.Fatalf("reading-only list handling must not change export: %q", target)
+	}
+}
+
+func TestNativePDFReadingReusesSingleLetterVariables(t *testing.T) {
+	const source = "The axes are named t, h and w."
+	p := nativeParagraph{BlockID: "p1-b1", Source: source, OriginalSource: source}
+	translation := TranslationBlock{
+		BlockID: p.BlockID, Status: "complete", SourceHash: translationHash(source),
+		Sentences: []TranslationSentence{{Source: source}},
+	}
+	for _, tc := range []struct {
+		target string
+		reuse  bool
+	}{
+		{"三个轴分别记为 $t$、$h$ 和 $w$。", true},
+		{`三个轴用 $t \times h$ 表示。`, false},
+		{"三个轴用 $$t$$ 表示。", false},
+		{"三个轴用 $θ$ 表示。", false},
+	} {
+		translation.Sentences[0].Target = tc.target
+		if target := reuseNativeReadingTranslation(p, source, translation); (target != "") != tc.reuse || (tc.reuse && target != tc.target) {
+			t.Errorf("unexpected reuse %q from %q", target, tc.target)
+		}
+		if target := reuseBilingualTranslation(p, []TranslationBlock{translation}); target != "" {
+			t.Errorf("export must still reject formula markup: %q", target)
+		}
+	}
+}
+
 func TestNativePDFReadingInvalidationAndCorruption(t *testing.T) {
 	for _, kind := range []string{"pdf", "layout", "translation", "missing-pdf", "corrupt-pdf", "missing-marker", "corrupt-marker"} {
 		t.Run(kind, func(t *testing.T) {

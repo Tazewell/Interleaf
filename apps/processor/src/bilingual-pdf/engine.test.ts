@@ -23,11 +23,12 @@ import { openPDF, loadFont } from "./runtime";
 
 const dirs: string[] = [];
 it("translation-only reading emits one source-sized searchable translation per source page without modifying inputs", async () => {
-  const f = await fixture(),
+  const target = "变量 $t$ 的中文译文",
+    f = await fixture(),
     prepared = await prepareNativePDF(f),
     targets = Object.fromEntries(
       prepared.pages.flatMap((p) =>
-        p.paragraphs.map((v) => [v.id, "中文译文"]),
+        p.paragraphs.map((v) => [v.id, target]),
       ),
     ),
     before = [
@@ -88,12 +89,12 @@ it("translation-only reading emits one source-sized searchable translation per s
       const text = (await page.getTextContent()).items
         .map((i) => ("str" in i ? i.str : ""))
         .join("");
-      expect(text).toContain("中文译文");
+      expect(text.replace(/\s/gu, "")).toContain("变量t的中文译文");
       expect(text).not.toMatch(/Original body|Second body/);
       expect(report.pages[index - 1].paragraphs[0]).toMatchObject({
         id: prepared.pages[index - 1].paragraphs[0].id,
         translated: true,
-        target: "中文译文",
+        target,
       });
     }
   } finally {
@@ -739,7 +740,7 @@ it("reading mode preserves missing, overflowing and unsupported paragraphs and r
     })),
   );
   expect(report.warnings).toHaveLength(3);
-  expect(report.warnings.join(" ")).toMatch(/缺少译文/);
+  expect(report.warnings.join(" ")).toMatch(/缺少可用于原版式的译文/);
   expect(report.warnings.join(" ")).toMatch(/溢出/);
   expect(report.warnings.join(" ")).toMatch(/缺字/);
   const tasks = [await openPDF(f.input), await openPDF(output)];
@@ -892,6 +893,52 @@ it("prepares and renders literal prose braces with real embedded font in both la
 afterEach(async () => {
   vi.restoreAllMocks();
   for (const d of dirs.splice(0)) await rm(d, { recursive: true, force: true });
+});
+it("keeps model parameter lists and 3D/spatial reasoning as prose in original-layout reading", async () => {
+  const f = await fixture(),
+    doc = await PDFDocument.create(),
+    font = await doc.embedFont(StandardFonts.Helvetica),
+    page = doc.addPage([680, 260]);
+  const rows = [
+    "We instantiate four dense models (2B/4B/8B/32B) and two MoE models (30B-A3B / 235B-A22B).",
+    "The dense variants (Qwen3-VL-2B/4B/8B/32B) all use 3D/spatial reasoning.",
+    "Calculate x/y and 2/3, then solve x = y.",
+  ];
+  const blocks = rows.map((row, index) => {
+    const y = 210 - index * 60;
+    page.drawText(row, { x: 24, y, size: 12, font });
+    return {
+      id: `block-${index}`,
+      page: 1,
+      label: "text",
+      bounds: {
+        x: 20 / 680,
+        y: (260 - y - 15) / 260,
+        width: 640 / 680,
+        height: 26 / 260,
+      },
+    };
+  });
+  const bytes = await doc.save();
+  await writeFile(f.input, bytes);
+  await writeFile(
+    f.layout,
+    JSON.stringify({
+      schemaVersion: 1,
+      inputSHA256: createHash("sha256").update(bytes).digest("hex"),
+      pages: 1,
+      blocks,
+    }),
+  );
+
+  const reading = (await prepareNativePDF({ ...f, reading: true })).pages[0]
+    .paragraphs;
+  expect(reading.map((p) => p.formulas.length)).toEqual([0, 0, 3]);
+  expect(reading[0].source).toBe(rows[0]);
+  expect(reading[1].source).toBe(rows[1]);
+
+  const exported = (await prepareNativePDF(f)).pages[0].paragraphs;
+  expect(exported.map((p) => p.formulas.length)).toEqual([2, 2, 3]);
 });
 it("uses per-position TJ/Tc/Tw/Tz geometry for a mixed item's formula crop and restored ink", async () => {
   const f = await fixture(),

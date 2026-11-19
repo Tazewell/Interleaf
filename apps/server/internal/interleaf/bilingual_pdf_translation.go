@@ -22,10 +22,24 @@ func (s *Server) resolveBilingualAPI(ctx context.Context, c nativeAIStored) (API
 // Keep the indexed candidate namespace identical to native formula.ts. Other
 // braces are literal text; even an unclosed/case-modified indexed marker fails.
 var bilingualToken = regexp.MustCompile(`\{[vV][0-9][^{}]*\}?`)
-var bilingualMarkup = regexp.MustCompile("[`$\\\\*_<>]|!\\[|\\]\\(|(?m)^\\s{0,3}(?:#{1,6} |[-+] |[0-9]+\\. )")
+var bilingualMarkup = regexp.MustCompile("[`$\\\\*_<>]|!\\[|\\]\\(|(?m)^\\s{0,3}#{1,6} ")
+var bilingualListMarker = regexp.MustCompile(`(?m)^\s{0,3}(?:[-+] |[0-9]+\. )`)
+var nativeReadingVariable = regexp.MustCompile(`\$([A-Za-z])\$`)
 
 func plainBilingualTarget(value string) bool {
+	return plainNativeReadingText(value) && !bilingualListMarker.MatchString(value)
+}
+
+func plainNativeReadingText(value string) bool {
+	// List numbers and bullets can be drawn as literal text in this view.
 	return validBilingualText(value) && !bilingualMarkup.MatchString(value)
+}
+
+func plainNativeReadingTarget(value string) bool {
+	// A single variable can be drawn as a letter, while the stored target
+	// keeps its exact text and offsets for annotation matching.
+	return !strings.Contains(value, "$$") &&
+		plainNativeReadingText(nativeReadingVariable.ReplaceAllString(value, "$1"))
 }
 func validBilingualText(value string) bool {
 	return strings.TrimSpace(value) != "" && utf8.ValidString(value) && !strings.ContainsFunc(value, func(r rune) bool { return unicode.IsControl(r) && r != '\n' && r != '\t' })
@@ -38,29 +52,72 @@ func reuseBilingualTranslation(p nativeParagraph, reading []TranslationBlock) st
 		if t.BlockID != p.BlockID || t.SourceHash != translationHash(p.OriginalSource) || t.Status != "complete" || t.FormulaMarkdown != "" || len(t.Sentences) == 0 {
 			continue
 		}
-		sources, targets := []string{}, []string{}
-		for _, sentence := range t.Sentences {
-			source := sentence.Source
-			if sentence.Anchor != "" {
-				source = sentence.Anchor
-			}
-			sources = append(sources, source)
-			if !plainBilingualTarget(sentence.Target) {
-				return ""
-			}
-			targets = append(targets, sentence.Target)
-		}
+		sources, target := bilingualSentenceText(t, plainBilingualTarget)
 		// Exact coverage only. Whitespace normalization cannot prove omitted text.
 		if strings.Join(sources, " ") != p.OriginalSource && strings.Join(sources, "") != p.OriginalSource {
-			return ""
-		}
-		target := strings.Join(targets, " ")
-		if bilingualToken.MatchString(target) {
 			return ""
 		}
 		return target
 	}
 	return ""
+}
+
+func bilingualSentenceText(t TranslationBlock, plain func(string) bool) ([]string, string) {
+	sources, targets := make([]string, 0, len(t.Sentences)), make([]string, 0, len(t.Sentences))
+	for _, sentence := range t.Sentences {
+		if !plain(sentence.Target) {
+			return nil, ""
+		}
+		source := sentence.Source
+		if sentence.Anchor != "" {
+			source = sentence.Anchor
+		}
+		sources = append(sources, source)
+		targets = append(targets, sentence.Target)
+	}
+	target := strings.Join(targets, " ")
+	if bilingualToken.MatchString(target) {
+		return nil, ""
+	}
+	return sources, target
+}
+
+// The flow extractor inserts spaces between PDF text items, for example before
+// a citation's closing parenthesis. Only normalize spacing within this block.
+// Keep word boundaries, spelling, case, punctuation, and numbers intact.
+func nativeReadingTextKey(text string) string {
+	const adjacent = "[]():;,.‐‑–—-"
+	var key strings.Builder
+	var end rune
+	for i, word := range strings.Fields(text) {
+		first, _ := utf8.DecodeRuneInString(word)
+		numericSeparator := strings.ContainsRune(".,:", end) && unicode.IsDigit(first) ||
+			strings.ContainsRune(".,:", first) && unicode.IsDigit(end)
+		if i != 0 && (numericSeparator || !strings.ContainsRune(adjacent, end) && !strings.ContainsRune(adjacent, first)) {
+			key.WriteByte(' ')
+		}
+		key.WriteString(word)
+		end, _ = utf8.DecodeLastRuneInString(word)
+	}
+	return key.String()
+}
+
+func reuseNativeReadingTranslation(p nativeParagraph, layoutSource string, t TranslationBlock) string {
+	if len(p.Formulas) > 0 || bilingualToken.MatchString(p.Source) || !plainNativeReadingText(p.OriginalSource) || !plainNativeReadingText(layoutSource) ||
+		t.BlockID != p.BlockID || t.SourceHash != translationHash(layoutSource) ||
+		t.Status != "complete" || t.FormulaMarkdown != "" || len(t.Sentences) == 0 {
+		return ""
+	}
+	key := nativeReadingTextKey(layoutSource)
+	if key == "" || key != nativeReadingTextKey(p.OriginalSource) {
+		return ""
+	}
+	sources, target := bilingualSentenceText(t, plainNativeReadingTarget)
+	if nativeReadingTextKey(strings.Join(sources, " ")) != key &&
+		nativeReadingTextKey(strings.Join(sources, "")) != key {
+		return ""
+	}
+	return target
 }
 func validateBilingualTargets(text string, paragraphs []nativeParagraph) (map[string]string, error) {
 	invalid := func() (map[string]string, error) {

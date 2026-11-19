@@ -63,13 +63,29 @@ export function displayToSource(
     return;
   return { ...rect, x: x / page.width, width: width / page.width };
 }
-function normalized(text: string) {
+function inlineVariableDelimiters(parts: readonly string[]) {
+  const delimiters = new Set<number>();
+  let offset = 0;
+  for (const part of parts) {
+    const matches = [...part.matchAll(/(?<![$\\])\$([A-Za-z])\$(?!\$)/g)];
+    // The PDF strips these delimiters only when every dollar is accounted for.
+    if ((part.match(/\$/g)?.length ?? 0) !== matches.length * 2) return;
+    for (const match of matches) {
+      delimiters.add(offset + match.index);
+      delimiters.add(offset + match.index + 2);
+    }
+    offset += part.length;
+  }
+  return delimiters;
+}
+
+function normalized(text: string, skipped?: Set<number>) {
   let value = "";
   const starts: number[] = [],
     ends: number[] = [];
   for (let offset = 0; offset < text.length;) {
     const char = String.fromCodePoint(text.codePointAt(offset)!);
-    if (!/[\s\u00ad]/u.test(char))
+    if (!skipped?.has(offset) && !/[\s\u00ad]/u.test(char))
       for (let i = 0; i < char.length; i++) {
         value += char[i];
         starts.push(offset + i);
@@ -79,9 +95,13 @@ function normalized(text: string) {
   }
   return { value, starts, ends };
 }
-/** Whitespace is PDF layout; offsets remain in the HTML concatenated UTF-16 text. */
-export function uniqueTextOffsets(target: string, quote: string) {
-  const t = normalized(target),
+/** Match rendered PDF text and keep offsets in the concatenated raw UTF-16 target. */
+export function uniqueTextOffsets(
+  target: string | readonly string[],
+  quote: string,
+) {
+  const parts = typeof target === "string" ? [target] : target,
+    t = normalized(parts.join(""), inlineVariableDelimiters(parts)),
     q = normalized(quote).value;
   if (!q) return;
   const index = t.value.indexOf(q);
@@ -143,8 +163,9 @@ export function nativeSelectionLocation(
   const paragraph = paragraphs[0],
     t = matchingTranslation(paragraph, translations);
   if (!t) return basic;
-  const targetText = t.sentences.map((s) => s.target).join("");
-  const offsets = uniqueTextOffsets(targetText, text);
+  const sentenceTargets = t.sentences.map((s) => s.target);
+  const targetText = sentenceTargets.join("");
+  const offsets = uniqueTextOffsets(sentenceTargets, text);
   if (!offsets) return basic;
   let offset = 0;
   const sentenceIndexes = t.sentences.flatMap((s, i) => {

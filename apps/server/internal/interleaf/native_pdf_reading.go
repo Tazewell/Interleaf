@@ -17,7 +17,7 @@ import (
 	"time"
 )
 
-const nativeReadingVersion = bilingualPDFVersion + ":reading-v2:side-by-side:keep-original"
+const nativeReadingVersion = bilingualPDFVersion + ":reading-v4:side-by-side:keep-original"
 const nativeReadingTerminalLimit = 16
 const nativeReadingSideBySide = "side-by-side"
 const nativeReadingTranslationOnly = "translation-only"
@@ -419,6 +419,15 @@ func (s *Server) runNativeReading(j *nativeReadingJob, v *nativeReadingSnapshot)
 	if json.Unmarshal(raw, &b.prepared) != nil || b.prepared.Version != 1 || b.prepared.OriginalSHA256 != v.originalHash || b.prepared.Revision != v.layoutHash || len(b.prepared.Pages) != v.manifest.Pages {
 		return errors.New("invalid prepared PDF")
 	}
+	blocks := make(map[string]PDFBlock, len(v.manifest.Blocks))
+	for _, block := range v.manifest.Blocks {
+		blocks[block.ID] = block
+	}
+	saved := make(map[string]TranslationBlock, len(b.reading))
+	for _, translation := range b.reading {
+		saved[translation.BlockID] = translation
+	}
+	savedHashes := map[string]string{}
 	ids := map[string]bool{}
 	for i, page := range b.prepared.Pages {
 		if page.Page != i+1 {
@@ -429,8 +438,14 @@ func (s *Server) runNativeReading(j *nativeReadingJob, v *nativeReadingSnapshot)
 				return errors.New("invalid paragraph")
 			}
 			ids[p.ID] = true
-			if target := reuseBilingualTranslation(p, b.reading); target != "" {
+			block, ok := blocks[p.BlockID]
+			if !ok || block.Page != p.Page {
+				return errors.New("invalid reading block")
+			}
+			translation := saved[p.BlockID]
+			if target := reuseNativeReadingTranslation(p, translationSource(block), translation); target != "" {
 				b.targets[p.ID] = target
+				savedHashes[p.ID] = translation.SourceHash
 			}
 		}
 	}
@@ -466,6 +481,15 @@ func (s *Server) runNativeReading(j *nativeReadingJob, v *nativeReadingSnapshot)
 	}
 	if e = validateNativeReadingReport(report, b, v.layoutMode); e != nil {
 		return e
+	}
+	// The processor reports the PDF extraction's identity. After validating it,
+	// bind displayed translations to the saved block so annotations can match it.
+	for _, page := range report.Pages {
+		for i, paragraph := range page.Paragraphs {
+			if paragraph.Translated {
+				page.Paragraphs[i].SourceHash = savedHashes[paragraph.ID]
+			}
+		}
 	}
 	pdf, e := limitedBilingualRead(filepath.Join(b.work, "output.pdf"), bilingualFileLimit)
 	if e != nil || !bytes.HasPrefix(pdf, []byte("%PDF-")) {
@@ -672,7 +696,9 @@ func validateCachedNativeReadingReport(report nativeReadingReport, v *nativeRead
 				continue
 			}
 			t, ok := reading[q.BlockID+":"+q.SourceHash]
-			if !ok || !matchesNativeReadingTarget(q, t) {
+			source := translationSource(b)
+			prepared := nativeParagraph{BlockID: q.BlockID, Source: source, OriginalSource: source}
+			if !ok || reuseNativeReadingTranslation(prepared, source, t) != q.Target || q.Target == "" {
 				return invalid()
 			}
 			translated++
@@ -690,25 +716,4 @@ func nativeReadingSHA256(s string) bool {
 	}
 	_, e := hex.DecodeString(s)
 	return e == nil && strings.ToLower(s) == s
-}
-func matchesNativeReadingTarget(q nativeReadingParagraph, t TranslationBlock) bool {
-	sources := make([]string, 0, len(t.Sentences))
-	for _, sentence := range t.Sentences {
-		source := sentence.Source
-		if sentence.Anchor != "" {
-			source = sentence.Anchor
-		}
-		sources = append(sources, source)
-	}
-	// Reconstruct the two exact coverage forms accepted by the shared reuse gate.
-	for _, source := range []string{strings.Join(sources, " "), strings.Join(sources, "")} {
-		if translationHash(source) != q.SourceHash {
-			continue
-		}
-		p := nativeParagraph{BlockID: q.BlockID, Source: source, OriginalSource: source}
-		if target := reuseBilingualTranslation(p, []TranslationBlock{t}); target != "" && target == q.Target {
-			return true
-		}
-	}
-	return false
 }

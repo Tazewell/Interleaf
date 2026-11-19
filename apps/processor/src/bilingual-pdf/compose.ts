@@ -246,12 +246,19 @@ export async function renderNativePDF(
           const target = targets[paragraph.id];
           if (options.reading && target === undefined) {
             report.warnings.push(
-              `第 ${p.page} 页段落 ${paragraph.id} 缺少译文，保留原文`,
+              `第 ${p.page} 页段落 ${paragraph.id} 缺少可用于原版式的译文，保留原文`,
             );
             continue;
           }
           try {
-            fits.set(paragraph.id, fitParagraph(paragraph, target, font));
+            // The report keeps the saved target verbatim for selection anchors.
+            const plain = options.reading
+              ? target.replace(/(?<![$\\])\$([A-Za-z])\$(?!\$)/g, "$1")
+              : target;
+            fits.set(
+              paragraph.id,
+              fitParagraph(paragraph, plain.includes("$") ? target : plain, font),
+            );
           } catch (error) {
             if (!options.reading) throw error;
             report.warnings.push(
