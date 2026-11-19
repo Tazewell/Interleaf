@@ -510,7 +510,10 @@ const settleSelection = () =>
   act(async () => {
     await new Promise((resolve) => setTimeout(resolve, 400));
   });
-it("keeps selection translation manual by default and shows it below actions without sending chat", async () => {
+it("keeps selection translation manual when disabled and shows it below actions without sending chat", async () => {
+  await act(async () =>
+    useReaderStore.getState().setTheme({ autoTranslateSelection: false }),
+  );
   await act(async () => readerEvents.selection(selectedPassage));
   await settleSelection();
   expect(api.translateSelection).not.toHaveBeenCalled();
@@ -526,10 +529,7 @@ it("keeps selection translation manual by default and shows it below actions wit
   expect(adapter.clearSelection).not.toHaveBeenCalled();
   expect(requests).toEqual([]);
 });
-it("automatically translates settled selected text only when enabled", async () => {
-  await act(async () =>
-    useReaderStore.getState().setTheme({ autoTranslateSelection: true }),
-  );
+it("automatically translates settled selected text by default", async () => {
   await act(async () => readerEvents.selection(selectedPassage));
   await settleSelection();
   expect(api.translateSelection).toHaveBeenCalledExactlyOnceWith(
@@ -552,6 +552,9 @@ it("cancels the automatic debounce when the preference is disabled", async () =>
   expect(host.querySelector("[data-selection-translation]")).toBeNull();
 });
 it("enables automatic translation from the selected-text menu and preserves its selected source", async () => {
+  await act(async () =>
+    useReaderStore.getState().setTheme({ autoTranslateSelection: false }),
+  );
   await act(async () => readerEvents.selection(selectedPassage));
   await click("更多文字操作");
   const automatic = [
@@ -587,7 +590,7 @@ it("does not restart translation for an equivalent selection or a moved viewport
 });
 it("keeps the source snapshot for quoting after interacting inside its translation card", async () => {
   await act(async () => readerEvents.selection(selectedPassage));
-  await click("划词翻译");
+  await settleSelection();
   const card = host.querySelector("[data-selection-translation]")!;
   expect(card).not.toBeNull();
   await act(async () => {
@@ -607,7 +610,7 @@ it("aborts an inline request when the engine clears selection outside the card",
     () => new Promise(() => {}),
   );
   await act(async () => readerEvents.selection(selectedPassage));
-  await click("划词翻译");
+  await settleSelection();
   const signal = vi.mocked(api.translateSelection).mock.calls[0][1];
   await act(async () => readerEvents.selection(null));
   expect(signal.aborted).toBe(true);
@@ -615,7 +618,7 @@ it("aborts an inline request when the engine clears selection outside the card",
 });
 it("highlights the original source after card interaction and closes the translation", async () => {
   await act(async () => readerEvents.selection(selectedPassage));
-  await click("划词翻译");
+  await settleSelection();
   const card = host.querySelector("[data-selection-translation]")!;
   await act(async () => {
     card.querySelector<HTMLButtonElement>("button")!.focus();
@@ -635,7 +638,7 @@ it("highlights the original source after card interaction and closes the transla
 it("keeps translation through repeated progress at the same reading location and closes on navigation", async () => {
   await act(async () => readerEvents.location({ type: "pdf", page: 2 }, 0.2));
   await act(async () => readerEvents.selection(selectedPassage));
-  await click("划词翻译");
+  await settleSelection();
   await act(async () => readerEvents.location({ type: "pdf", page: 2 }, 0.2));
   expect(host.querySelector("[data-selection-translation]")).not.toBeNull();
   await act(async () => {

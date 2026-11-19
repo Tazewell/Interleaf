@@ -384,7 +384,7 @@ export interface HighlightColor {
 }
 export const defaultTheme: ReaderTheme = {
   autoCopySelection: false,
-  autoTranslateSelection: false,
+  autoTranslateSelection: true,
   autoTranslatePDF: true,
   pdfDarkImageMode: "adaptive",
   pdfDarkContrast: "soft",
