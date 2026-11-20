@@ -66,8 +66,9 @@ const proseSlashes = new RegExp(
   "gu",
 );
 const mathBeforeProse =
-  /(?:[=≤≥≠±×÷+*/−^]\s*\(*|\s-\s*\(*|-\s*\(+|[\p{L}\p{N}_]\(+)\s*$/u;
-const mathAfterProse = /^\s*\)*\s*(?:[=≤≥≠±×÷+*/−^]|-(?=\s|\())/u;
+  /(?:[=≤≥≠±×÷+*/−^]\s*\(*|\s-\s*\(*|-\s*\(+|[\p{L}\p{N}_]\(+|\b(?:ratio|quotient)(?:\s+of)?\s+(?:\(\s*)*)\s*$/iu;
+const mathAfterProse =
+  /^\s*\)*(?:\s*(?:[=≤≥≠±×÷+*/−^]|-(?=\s|\())|\s+(?:ratio|quotient)\b)/iu;
 export function overlap(a: NativePDFBounds, b: NativePDFBounds) {
   return (
     Math.max(0, Math.min(a.x + a.width, b.x + b.width) - Math.max(a.x, b.x)) *

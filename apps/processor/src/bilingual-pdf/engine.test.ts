@@ -898,7 +898,7 @@ it("distinguishes slash-separated prose from division in original-layout reading
   const f = await fixture(),
     doc = await PDFDocument.create(),
     font = await doc.embedFont(StandardFonts.Helvetica),
-    page = doc.addPage([680, 540]);
+    page = doc.addPage([680, 600]);
   const rows = [
     "We instantiate four dense models (2B/4B/8B/32B) and two MoE models (30B-A3B / 235B-A22B).",
     "The dense variants (Qwen3-VL-2B/4B/8B/32B) all use 3D/spatial reasoning.",
@@ -908,9 +908,10 @@ it("distinguishes slash-separated prose from division in original-layout reading
     "We compare ChatGPT/GPT-4 on the CNN/DM dataset. Creativity/innovation/research: examples follow.",
     "Compute x/y first. Use 2/3 for the scale. Then use 4B/8B. Finally z = (2B/4B/8B).",
     "Compute log(RMSE/MAE) and 2 - (2B/4B/8B). Also use log(loss/scale/weight).",
+    "The ratio ATP/Glucose was calculated for each sample. The Glucose/ATP ratio was also recorded.",
   ];
   const blocks = rows.map((row, index) => {
-    const y = 490 - index * 60;
+    const y = 550 - index * 60;
     page.drawText(row, { x: 24, y, size: 12, lineHeight: 14, font });
     return {
       id: `block-${index}`,
@@ -918,9 +919,9 @@ it("distinguishes slash-separated prose from division in original-layout reading
       label: "text",
       bounds: {
         x: 20 / 680,
-        y: (540 - y - 15) / 540,
+        y: (600 - y - 15) / 600,
         width: 640 / 680,
-        height: 40 / 540,
+        height: 40 / 600,
       },
     };
   });
@@ -939,7 +940,7 @@ it("distinguishes slash-separated prose from division in original-layout reading
   const reading = (await prepareNativePDF({ ...f, reading: true })).pages[0]
     .paragraphs;
   expect(reading.map((p) => p.formulas.length)).toEqual([
-    0, 0, 0, 0, 0, 0, 4, 3,
+    0, 0, 0, 0, 0, 0, 4, 3, 2,
   ]);
   expect(reading.slice(0, 6).map((p) => p.source)).toEqual(
     rows.slice(0, 6).map((row) => row.replace("\n", " ")),
@@ -947,7 +948,7 @@ it("distinguishes slash-separated prose from division in original-layout reading
 
   const exported = (await prepareNativePDF(f)).pages[0].paragraphs;
   expect(exported.map((p) => p.formulas.length)).toEqual([
-    2, 2, 2, 1, 2, 3, 4, 3,
+    2, 2, 2, 1, 2, 3, 4, 3, 2,
   ]);
 });
 it("uses per-position TJ/Tc/Tw/Tz geometry for a mixed item's formula crop and restored ink", async () => {
