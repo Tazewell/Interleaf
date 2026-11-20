@@ -495,6 +495,36 @@ it("strict page-range preparation ignores malformed captions outside the selecte
   await expect(prepareNativePDF({ ...f, fromPage: 2, toPage: 2 }))
     .rejects.toThrow(/第 2 页图题数据无效/);
 });
+it("retains a page with an unlocatable figure caption and translates the other pages", async () => {
+  const f = await fixture();
+  const manifest = JSON.parse(await readFile(f.layout, "utf8"));
+  manifest.blocks.push({
+    id: "table",
+    page: 1,
+    label: "table",
+    caption: "Table 3. Caption assigned to the wrong table",
+    bounds: { x: 0.1, y: 0.55, width: 0.8, height: 0.4 },
+  });
+  await writeFile(f.layout, JSON.stringify(manifest));
+  await expect(prepareNativePDF(f)).rejects.toThrow(/第 1 页图题 table 无法唯一定位/);
+
+  const prepared = await prepareNativePDF({ ...f, reading: true });
+  expect(prepared.pages[0].paragraphs[0].preserveOriginalReason).toContain(
+    "图题 table 无法唯一定位",
+  );
+  const report = await renderNativePDF({
+    ...f,
+    prepared,
+    targets: { "p1.body": "原页应保留", "p2.body2": "第二页的译文" },
+    output: join(f.dir, "retained-caption.pdf"),
+    layout: "translation-only",
+    reading: true,
+  });
+  expect(report.pages.map((page) => page.paragraphs[0].translated)).toEqual([
+    false, true,
+  ]);
+  expect(report.warnings).toContain("第 1 页图题 table 无法唯一定位，整页保留原文");
+});
 it("CLI accepts reading prepare but still rejects reading metadata during prepare", async () => {
   const f = await ambiguousFormulaFixture(),
     built = join(
