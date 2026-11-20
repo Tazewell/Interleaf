@@ -17,7 +17,7 @@ import (
 	"time"
 )
 
-const nativeReadingVersion = bilingualPDFVersion + ":reading-v4:side-by-side:keep-original"
+const nativeReadingVersion = bilingualPDFVersion + ":reading-v5:side-by-side:keep-original"
 const nativeReadingTerminalLimit = 16
 const nativeReadingSideBySide = "side-by-side"
 const nativeReadingTranslationOnly = "translation-only"

@@ -894,28 +894,33 @@ afterEach(async () => {
   vi.restoreAllMocks();
   for (const d of dirs.splice(0)) await rm(d, { recursive: true, force: true });
 });
-it("keeps model parameter lists and 3D/spatial reasoning as prose in original-layout reading", async () => {
+it("distinguishes slash-separated prose from division in original-layout reading", async () => {
   const f = await fixture(),
     doc = await PDFDocument.create(),
     font = await doc.embedFont(StandardFonts.Helvetica),
-    page = doc.addPage([680, 260]);
+    page = doc.addPage([680, 540]);
   const rows = [
     "We instantiate four dense models (2B/4B/8B/32B) and two MoE models (30B-A3B / 235B-A22B).",
     "The dense variants (Qwen3-VL-2B/4B/8B/32B) all use 3D/spatial reasoning.",
-    "Calculate x/y and 2/3, then solve x = y.",
+    "The family includes dense (2B/4B/8B/32B) and mixture-of-experts (30B-\nA3B/235B-A22B) variants.",
+    "These configurations (1.5B/3B/7B) have different memory requirements.",
+    "The 32B / 30B-A3B configurations support 2D/3D grounding.",
+    "We compare ChatGPT/GPT-4 on the CNN/DM dataset. Creativity/innovation/research: examples follow.",
+    "Compute x/y first. Use 2/3 for the scale. Then use 4B/8B. Finally z = (2B/4B/8B).",
+    "Compute log(RMSE/MAE) and 2 - (2B/4B/8B). Also use log(loss/scale/weight).",
   ];
   const blocks = rows.map((row, index) => {
-    const y = 210 - index * 60;
-    page.drawText(row, { x: 24, y, size: 12, font });
+    const y = 490 - index * 60;
+    page.drawText(row, { x: 24, y, size: 12, lineHeight: 14, font });
     return {
       id: `block-${index}`,
       page: 1,
       label: "text",
       bounds: {
         x: 20 / 680,
-        y: (260 - y - 15) / 260,
+        y: (540 - y - 15) / 540,
         width: 640 / 680,
-        height: 26 / 260,
+        height: 40 / 540,
       },
     };
   });
@@ -933,12 +938,17 @@ it("keeps model parameter lists and 3D/spatial reasoning as prose in original-la
 
   const reading = (await prepareNativePDF({ ...f, reading: true })).pages[0]
     .paragraphs;
-  expect(reading.map((p) => p.formulas.length)).toEqual([0, 0, 3]);
-  expect(reading[0].source).toBe(rows[0]);
-  expect(reading[1].source).toBe(rows[1]);
+  expect(reading.map((p) => p.formulas.length)).toEqual([
+    0, 0, 0, 0, 0, 0, 4, 3,
+  ]);
+  expect(reading.slice(0, 6).map((p) => p.source)).toEqual(
+    rows.slice(0, 6).map((row) => row.replace("\n", " ")),
+  );
 
   const exported = (await prepareNativePDF(f)).pages[0].paragraphs;
-  expect(exported.map((p) => p.formulas.length)).toEqual([2, 2, 3]);
+  expect(exported.map((p) => p.formulas.length)).toEqual([
+    2, 2, 2, 1, 2, 3, 4, 3,
+  ]);
 });
 it("uses per-position TJ/Tc/Tw/Tz geometry for a mixed item's formula crop and restored ink", async () => {
   const f = await fixture(),

@@ -41,10 +41,33 @@ const translatable = new Set([
   "paragraph_title",
   "text",
 ]);
-// Slashes in explicitly named model variants or spatial reasoning are prose.
-// All other matches still follow the existing arithmetic and glyph checks.
-const proseSlashes =
-  /\b(?:models?|variants?)\s*\((?:[A-Za-z][A-Za-z0-9.-]*-)?\d+[BMTK](?:-A\d+[BMTK])?(?:\s*\/\s*\d+[BMTK](?:-A\d+[BMTK])?)+\)|\b[23]D\/spatial(?=\s+reasoning\b)/gu;
+// Parameter lists can continue on a new PDF text item without their label.
+// A bare pair of counts is ambiguous unless marked as total/active sizes.
+const parameterCount = String.raw`\d+(?:\.\d+)?[BMTK]`;
+const activeCount = String.raw`A${parameterCount}`;
+const moeSize = String.raw`${parameterCount}-${activeCount}`;
+const modelSize = String.raw`${parameterCount}(?:-${activeCount})?`;
+const slash = String.raw`\s*\/\s*`;
+const sizeListEnd = String.raw`(?![A-Za-z0-9_/^-]|\.\d)`;
+const label = String.raw`[A-Z][A-Za-z]+(?:-\d+)?`;
+const mixedCaseLabel = String.raw`[A-Z](?=[A-Za-z]*[a-z])[A-Za-z]+`;
+const proseSlashes = new RegExp(
+  [
+    String.raw`\b(?:models?|variants?)\s*\((?:[A-Za-z][A-Za-z0-9.-]*-)?${modelSize}(?:${slash}${modelSize})+\)`,
+    String.raw`\b${modelSize}(?:${slash}${modelSize}){2,}${sizeListEnd}`,
+    String.raw`\b(?:${parameterCount}-)?${activeCount}${slash}${modelSize}${sizeListEnd}`,
+    String.raw`\b${parameterCount}${slash}${moeSize}${sizeListEnd}`,
+    String.raw`\b[23]D\/(?:spatial(?=\s+reasoning\b)|[23]D(?=\s+[A-Za-z]{3,}\b))`,
+    // Compact names, named datasets and category headings.
+    String.raw`\b(?:${mixedCaseLabel}/${label}|${label}/${mixedCaseLabel})\b`,
+    String.raw`\b[A-Z]{2,}/[A-Z]{2,}(?=\s+(?:data ?sets?|benchmarks?|corpus|corpora)\b)`,
+    String.raw`\b(?:[A-Za-z]{3,}/){2,}[A-Za-z]{3,}(?=\s*:)`,
+  ].join("|"),
+  "gu",
+);
+const mathBeforeProse =
+  /(?:[=≤≥≠±×÷+*/−^]\s*\(*|\s-\s*\(*|-\s*\(+|[\p{L}\p{N}_]\(+)\s*$/u;
+const mathAfterProse = /^\s*\)*\s*(?:[=≤≥≠±×÷+*/−^]|-(?=\s|\())/u;
 export function overlap(a: NativePDFBounds, b: NativePDFBounds) {
   return (
     Math.max(0, Math.min(a.x + a.width, b.x + b.width) - Math.max(a.x, b.x)) *
@@ -341,7 +364,13 @@ export async function prepareNativePDF({
           (/italic|oblique/i.test(family) && /^[a-zA-Z]$/.test(item.str));
         const prose =
           reading && !mathFont && !inlineRegions.length
-            ? [...item.str.matchAll(proseSlashes)]
+            ? [...item.str.matchAll(proseSlashes)].filter(
+                (span) =>
+                  !mathBeforeProse.test(item.str.slice(0, span.index)) &&
+                  !mathAfterProse.test(
+                    item.str.slice(span.index + span[0].length),
+                  ),
+              )
             : [];
         const matches = [
           ...item.str.matchAll(
