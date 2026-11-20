@@ -517,6 +517,8 @@ func (s *Server) StartProcessing(parent context.Context) func() {
 	go func() { defer workers.Done(); s.classificationWorker(ctx) }()
 	workers.Add(1)
 	go func() { defer workers.Done(); s.metadataWorker(ctx) }()
+	workers.Add(1)
+	go func() { defer workers.Done(); s.backfillLocalPaperTitles(ctx) }()
 	return func() { cancel(); workers.Wait() }
 }
 func (s *Server) wakeProcessing() {
@@ -591,6 +593,11 @@ func (s *Server) learnPDF(ctx context.Context, p *Processing) error {
 	}
 	if e != nil {
 		return e
+	}
+	if d.Library == "papers" {
+		if _, err := s.applyLocalPaperMetadata(d.ID, m); err != nil && ctx.Err() == nil {
+			s.diagnosticEvent(slog.LevelWarn, "paper.local_metadata_failed", "documentId", d.ID)
+		}
 	}
 	// Publish searchable original passages as part of parsing, before the
 	// translation lane. Index failure must not invalidate a successful parse.

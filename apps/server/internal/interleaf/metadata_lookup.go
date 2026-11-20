@@ -1,11 +1,14 @@
 package interleaf
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
 	"os"
+	"regexp"
+	"slices"
 	"strings"
 	"time"
 	"unicode"
@@ -29,6 +32,11 @@ func fromScholar(m scholar.Metadata) PaperMetadata {
 	}
 	return out
 }
+
+const localMetadataOwner = `library='papers' AND deleted_at='' AND EXISTS (
+	SELECT 1 FROM paper_attachments a JOIN paper_items p ON p.id=a.paper_id
+	WHERE a.document_id=documents.id AND a.role='original' AND p.primary_document_id=documents.id
+)`
 
 // applyFound merges found metadata into a document unless the user edited the
 // same fields. The write is conditional so a concurrent manual edit wins.
@@ -60,12 +68,26 @@ func (s *Server) applyFound(id string, found PaperMetadata, title, source, looku
 			m.Lookup, m.LookedUpAt = lookup, now()
 		}
 		after, _ := json.Marshal(m)
-		result, err := s.Store.DB.Exec("UPDATE documents SET title=?,author=?,metadata=? WHERE id=? AND metadata=?", nextTitle, author, string(after), id, string(before))
+		if source == "file" && nextTitle == d.Title && author == d.Author && string(before) == string(after) {
+			return d, nil
+		}
+		result, err := s.Store.DB.Exec("UPDATE documents SET title=?,author=?,metadata=? WHERE id=? AND metadata=? AND (?!='file' OR ("+localMetadataOwner+"))",
+			nextTitle, author, string(after), id, string(before), source)
 		if err != nil {
 			return d, err
 		}
 		if n, _ := result.RowsAffected(); n == 1 {
+			if nextTitle != d.Title {
+				s.connectorRevision.Add(1)
+			}
 			return s.Store.Document(id)
+		}
+		if source == "file" {
+			var owner bool
+			err := s.Store.DB.QueryRow("SELECT ("+localMetadataOwner+") FROM documents WHERE id=?", id).Scan(&owner)
+			if err != nil || !owner {
+				return d, err
+			}
 		}
 	}
 	return Document{}, errors.New("论文信息正在被修改，请重试")
@@ -92,26 +114,119 @@ func (s *Server) firstPagesText(id string) (string, layoutManifest) {
 func fileTitle(m layoutManifest) string {
 	for _, key := range []string{"Title", "XMPTitle"} {
 		raw, _ := m.Metadata[key].(string)
-		title, err := cleanText(strings.Join(strings.Fields(raw), " "), 300, false)
-		// Chinese, Japanese and Korean titles need no spaces between words.
-		cjk := 0
-		for _, r := range title {
-			if unicode.In(r, unicode.Han, unicode.Hiragana, unicode.Katakana, unicode.Hangul) {
-				cjk++
-			}
+		if title := cleanPaperTitle(raw); title != "" {
+			return title
 		}
-		if err != nil || (cjk < 4 && (len([]rune(title)) < 8 || !strings.Contains(title, " "))) {
-			continue
-		}
-		lower := strings.ToLower(title)
-		if strings.HasPrefix(lower, "microsoft word") || strings.HasPrefix(lower, "untitled") ||
-			strings.HasSuffix(lower, ".doc") || strings.HasSuffix(lower, ".docx") ||
-			strings.HasSuffix(lower, ".tex") || strings.HasSuffix(lower, ".pdf") {
-			continue
-		}
-		return title
 	}
 	return ""
+}
+
+func cleanPaperTitle(raw string) string {
+	title, err := cleanText(strings.Join(strings.Fields(raw), " "), 300, false)
+	if err != nil {
+		return ""
+	}
+	// Chinese, Japanese and Korean titles need no spaces between words.
+	cjk := 0
+	for _, r := range title {
+		if unicode.In(r, unicode.Han, unicode.Hiragana, unicode.Katakana, unicode.Hangul) {
+			cjk++
+		}
+	}
+	if cjk < 4 && (len([]rune(title)) < 8 || !strings.Contains(title, " ")) {
+		return ""
+	}
+	lower := strings.ToLower(title)
+	if strings.HasPrefix(lower, "microsoft word") || strings.HasPrefix(lower, "untitled") ||
+		strings.HasSuffix(lower, ".doc") || strings.HasSuffix(lower, ".docx") ||
+		strings.HasSuffix(lower, ".tex") || strings.HasSuffix(lower, ".pdf") {
+		return ""
+	}
+	return title
+}
+
+var (
+	journalIssueHeader = regexp.MustCompile(`(?i)\bvol(?:ume)?\.?\s*\d+`)
+	journalMasthead    = regexp.MustCompile(`(?i)\b(journal|review|bulletin|transactions|annals|proceedings|quarterly|letters|magazine|communications)\b`)
+	paperNote          = regexp.MustCompile(`(?i)^[1-9]\s+(this (paper|article|work|research)\b|correspondence\b|author note\b)`)
+)
+
+// A publication masthead is often larger than the article title in back issues.
+// Use the block under it only when the title and byline geometry support it.
+func parsedPaperTitle(m layoutManifest) string {
+	var page []PDFBlock
+	for _, block := range m.Blocks {
+		if block.Page == 1 && block.Bounds.Y < .4 && strings.TrimSpace(block.Text) != "" {
+			page = append(page, block)
+		}
+	}
+	slices.SortStableFunc(page, func(a, b PDFBlock) int { return cmp.Compare(a.Bounds.Y, b.Bounds.Y) })
+	var title string
+	var issue bool
+	venue, _ := m.Metadata["PublicationName"].(string)
+	for i, block := range page {
+		if block.Label == "header" {
+			issue = issue || journalIssueHeader.MatchString(block.Text)
+			continue
+		}
+		if block.Label != "doc_title" {
+			continue
+		}
+		candidate := cleanPaperTitle(block.Text)
+		if candidate == "" {
+			continue
+		}
+		if strings.EqualFold(candidate, strings.Join(strings.Fields(venue), " ")) ||
+			(issue && len(strings.Fields(candidate)) <= 6 && journalMasthead.MatchString(candidate)) {
+			if article := articleBelowMasthead(page[i:]); article != "" {
+				return stripPaperTitleNote(article, m.Blocks)
+			}
+			continue
+		}
+		if title != "" && title != candidate {
+			return ""
+		}
+		title = candidate
+	}
+	return title
+}
+
+func articleBelowMasthead(page []PDFBlock) string {
+	if len(page) < 3 {
+		return ""
+	}
+	masthead, article, byline := page[0], page[1], page[2]
+	title := cleanPaperTitle(article.Text)
+	if title == "" || (article.Label != "text" && article.Label != "paragraph_title" && article.Label != "doc_title") ||
+		len(strings.Fields(title)) < 6 || article.Bounds.Width < .45 || article.Bounds.Height < .025 ||
+		article.Bounds.Y-masthead.Bounds.Y-masthead.Bounds.Height > .1 ||
+		byline.Label != "text" || len(strings.Fields(byline.Text)) < 2 || len(strings.Fields(byline.Text)) > 10 ||
+		byline.Bounds.Width >= .4 || byline.Bounds.Y-article.Bounds.Y-article.Bounds.Height > .065 {
+		return ""
+	}
+	for _, block := range []PDFBlock{article, byline} {
+		center := block.Bounds.X + block.Bounds.Width/2
+		if center < .4 || center > .6 {
+			return ""
+		}
+	}
+	return title
+}
+
+func stripPaperTitleNote(title string, blocks []PDFBlock) string {
+	space := strings.LastIndexByte(title, ' ')
+	if space < 0 || len(title[space+1:]) != 1 || title[space+1] < '1' || title[space+1] > '9' {
+		return title
+	}
+	for _, block := range blocks {
+		if block.Page == 1 && block.Label == "footnote" {
+			note := strings.TrimSpace(block.Text)
+			if strings.HasPrefix(note, title[space+1:]) && paperNote.MatchString(note) {
+				return title[:space]
+			}
+		}
+	}
+	return title
 }
 
 // embeddedPaperMetadata keeps names as written in the PDF. A comma may be a
@@ -141,6 +256,23 @@ func embeddedPaperMetadata(m layoutManifest) PaperMetadata {
 	return found
 }
 
+// Local extraction is independent of preferences for external bibliography lookup.
+func (s *Server) applyLocalPaperMetadata(id string, m layoutManifest) (Document, error) {
+	title := fileTitle(m)
+	if title == "" {
+		title = parsedPaperTitle(m)
+	}
+	if title == "" {
+		raw, _ := m.Metadata["ScannedPageTitle"].(string)
+		title = cleanPaperTitle(raw)
+	}
+	embedded := embeddedPaperMetadata(m)
+	if title == "" && embedded.DOI == "" && embedded.Venue == "" && len(embedded.Creators) == 0 {
+		return s.Store.Document(id)
+	}
+	return s.applyFound(id, embedded, title, "file", "")
+}
+
 var errNoIdentifier = errors.New("没有找到 DOI、PMID 或 arXiv 编号，可以在详情中核对标题或填写 DOI 后重试")
 
 type metadataTitleLookup uint8
@@ -154,18 +286,10 @@ const (
 // lookupDocument finds metadata from the paper's identifiers, its first pages
 // or a title match if enabled by the caller.
 func (s *Server) lookupDocument(ctx context.Context, id string, titleMode metadataTitleLookup) (Document, error) {
-	d, err := s.Store.Document(id)
+	text, layout := s.firstPagesText(id)
+	d, err := s.applyLocalPaperMetadata(id, layout)
 	if err != nil {
 		return d, err
-	}
-	text, layout := s.firstPagesText(id)
-	title := fileTitle(layout)
-	embedded := embeddedPaperMetadata(layout)
-	if title != "" || embedded.DOI != "" || embedded.Venue != "" || len(embedded.Creators) > 0 {
-		d, err = s.applyFound(id, embedded, title, "file", "")
-		if err != nil {
-			return d, err
-		}
 	}
 	ids := scholar.Identifiers{DOI: d.Metadata.DOI, ArXiv: d.Metadata.ArXiv}
 	if ids.DOI == "" && ids.ArXiv == "" {
@@ -174,6 +298,7 @@ func (s *Server) lookupDocument(ctx context.Context, id string, titleMode metada
 	if ids == (scholar.Identifiers{}) {
 		switch titleMode {
 		case withEmbeddedTitle:
+			title := fileTitle(layout)
 			ids.Title, ids.ExactTitle = title, title != ""
 		case withCurrentTitle:
 			ids.Title = d.Title

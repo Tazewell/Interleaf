@@ -127,7 +127,7 @@ For releases, maintainers must synchronize the root and desktop package versions
 
 ## Current limitations
 
-- No local OCR for scanned pages. Search and translation that depend on a text layer cannot fully process image-only PDFs.
+- On Windows, Interleaf can use system OCR to recognize a paper title on an image-only first page. Body-text search and translation require a PDF text layer.
 - EPUB bilingual processing does not support fixed layouts, vertical text, or right-to-left books.
 - Text extraction, reading order, and translated layouts in complex PDFs may need manual review.
 - Imports are limited to **512 MB per file**. PDFs exceeding **100 pages or 100 MB** require extra confirmation when added to the paper library.

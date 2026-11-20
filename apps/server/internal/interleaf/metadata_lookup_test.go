@@ -155,6 +155,95 @@ func TestMetadataLookupUsesEmbeddedFieldsWithoutNetwork(t *testing.T) {
 	}
 }
 
+func TestLocalMetadataRecoversArticleTitleBelowJournalMasthead(t *testing.T) {
+	const title = "THE MAGICAL NUMBER SEVEN, PLUS OR MINUS TWO: SOME LIMITS ON OUR CAPACITY FOR PROCESSING INFORMATION"
+	manifest := `{"pages":17,"blocks":[
+		{"id":"p1-b1","page":1,"label":"header","bounds":{"x":0.096,"y":0.072,"width":0.196,"height":0.021},"text":"VOL. 63, No. 1"},
+		{"id":"p1-b2","page":1,"label":"header","bounds":{"x":0.722,"y":0.072,"width":0.168,"height":0.022},"text":"MARCH, 1956"},
+		{"id":"p1-b3","page":1,"label":"doc_title","bounds":{"x":0.173,"y":0.144,"width":0.633,"height":0.039},"text":"THE PSYCHOLOGICAL REVIEW"},
+		{"id":"p1-b4","page":1,"label":"text","bounds":{"x":0.129,"y":0.222,"width":0.721,"height":0.062},"text":"` + title + ` 1"},
+		{"id":"p1-b5","page":1,"label":"text","bounds":{"x":0.391,"y":0.300,"width":0.203,"height":0.017},"text":"GEORGE A. MILLER"},
+		{"id":"p1-b6","page":1,"label":"text","bounds":{"x":0.408,"y":0.323,"width":0.169,"height":0.016},"text":"Harvard University"},
+		{"id":"p1-b7","page":1,"label":"abstract","bounds":{"x":0.093,"y":0.355,"width":0.391,"height":0.295},"text":"Body text follows."},
+		{"id":"p1-b13","page":1,"label":"footnote","bounds":{"x":0.094,"y":0.775,"width":0.391,"height":0.136},"text":"1 This paper was first read as an invited address."}
+	]}`
+	for _, tt := range []struct {
+		name, raw, want string
+	}{
+		{"footnote", manifest, title},
+		{"trailing digit without corresponding footnote", strings.Replace(manifest, `"text":"1 This paper`, `"text":"2 This paper`, 1), title + " 1"},
+		{"insufficient article evidence", strings.Replace(manifest, `"label":"text","bounds":{"x":0.391`, `"label":"table","bounds":{"x":0.391`, 1), "paper"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			s := testServer(t)
+			hits := scholarFixture(t, s)
+			d := queuedMetadataPaper(t, s, 17, "")
+			if err := os.WriteFile(filepath.Join(s.analysisDir(d.ID), "manifest.json"), []byte(tt.raw), 0600); err != nil {
+				t.Fatal(err)
+			}
+			before := s.connectorRevision.Load()
+			for range 2 {
+				if _, err := s.lookupDocument(t.Context(), d.ID, withEmbeddedTitle); err != errNoIdentifier {
+					t.Fatalf("layout-derived title attempted online lookup: %v", err)
+				}
+			}
+			got, err := s.Store.Document(d.ID)
+			wantRev := before
+			if tt.want != "paper" {
+				wantRev++
+			}
+			if err != nil || got.Title != tt.want || hits.Load() != 0 || s.connectorRevision.Load() != wantRev {
+				t.Fatalf("local title=%q want %q; online hits=%d; revision=%d want %d; err=%v", got.Title, tt.want, hits.Load(), s.connectorRevision.Load(), wantRev, err)
+			}
+			items, err := s.Store.PaperItems()
+			if err != nil || len(items) != 1 || items[0].Title != tt.want {
+				t.Fatalf("paper item did not reflect local title: %+v %v", items, err)
+			}
+		})
+	}
+}
+
+func TestMetadataLookupReadsScannedTitleLocallyAndPreservesManualTitle(t *testing.T) {
+	const title = "Judgment under Uncertainty: Heuristics and Biases"
+	s := testServer(t)
+	hits := scholarFixture(t, s)
+	d := queuedMetadataPaper(t, s, 9, "")
+	manifest := `{"pages":9,"metadata":{"ScannedPageTitle":"` + title + `"}}`
+	if err := os.WriteFile(filepath.Join(s.analysisDir(d.ID), "manifest.json"), []byte(manifest), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.lookupDocument(t.Context(), d.ID, withEmbeddedTitle); err != errNoIdentifier || hits.Load() != 0 {
+		t.Fatalf("scan should not be sent online: %v", err)
+	}
+	got, err := s.Store.Document(d.ID)
+	if err != nil || got.Title != title || got.Metadata.Sources["title"] != "file" {
+		t.Fatalf("scan title=%q sources=%v err=%v", got.Title, got.Metadata.Sources, err)
+	}
+	if w := request(t, s, "PATCH", "/api/documents/"+d.ID, strings.NewReader(`{"title":"My preferred title"}`)); w.Code != 200 {
+		t.Fatal(w.Body.String())
+	}
+	_, _ = s.lookupDocument(t.Context(), d.ID, withoutTitle)
+	got, err = s.Store.Document(d.ID)
+	if err != nil || got.Title != "My preferred title" || got.Metadata.Sources["title"] != "manual" {
+		t.Fatalf("manual title was changed: title=%q sources=%v err=%v", got.Title, got.Metadata.Sources, err)
+	}
+}
+
+func TestLocalMetadataDoesNotUseSupplementTitle(t *testing.T) {
+	s := testServer(t)
+	d := queuedMetadataPaper(t, s, 2, "")
+	if _, err := s.Store.DB.Exec(`UPDATE paper_attachments SET role='supplement' WHERE document_id=?`, d.ID); err != nil {
+		t.Fatal(err)
+	}
+	before := s.connectorRevision.Load()
+	got, err := s.applyLocalPaperMetadata(d.ID, layoutManifest{
+		Metadata: map[string]any{"Title": "Supplementary Materials for the Study"},
+	})
+	if err != nil || got.Title != d.Title || s.connectorRevision.Load() != before {
+		t.Fatalf("supplement changed the title: title=%q want %q err=%v", got.Title, d.Title, err)
+	}
+}
+
 func TestMetadataLookupUsesEmbeddedDOI(t *testing.T) {
 	s := testServer(t)
 	d := queuedMetadataPaper(t, s, 2, "")

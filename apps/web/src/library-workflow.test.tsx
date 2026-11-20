@@ -158,6 +158,15 @@ const drop = (files: File[]) => {
   host.querySelector(".app")!.dispatchEvent(event);
 };
 
+it("refreshes the library when local titles have changed before the first revision poll", async () => {
+  vi.mocked(api.documents)
+    .mockResolvedValueOnce([book({ id: "first", title: "paper (1)" })])
+    .mockResolvedValue([book({ id: "first", title: "Recognized title" })]);
+  vi.mocked(api.connectorRevision).mockResolvedValue({ revision: 1 });
+  await render();
+  expect(host.textContent).toContain("Recognized title");
+});
+
 it("shows a usable library while saved shortcut preferences are pending", async () => {
   vi.mocked(api.documents).mockResolvedValue([
     book({ id: "first", title: "Ready to read" }),

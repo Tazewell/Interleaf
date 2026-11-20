@@ -10,6 +10,7 @@ import { assignText, readingRegions, isAsset, type Region } from "./layout";
 import { extractTextSpans } from "./text";
 import { digest, model, resolveModel } from "./model";
 import { blockCropBounds, renderPage } from "./render-page";
+import { scanPaperTitle } from "./paper-title-ocr";
 
 Object.assign(globalThis, { DOMMatrix, ImageData, Path2D });
 stage("pdfjs_load");
@@ -107,6 +108,8 @@ try {
   const boundedMetadata = (value: unknown, limit: number) =>
     typeof value === "string" && value.length <= limit ? value.trim() : "";
   const creators: unknown = xmp?.get("dc:creator");
+  const xmpTitle = boundedMetadata(xmp?.get("dc:title"), 600);
+  let scannedPageTitle: string | undefined;
   const doi = [
     xmp?.get("prism:doi"),
     info.Custom?.get("DOI"),
@@ -130,6 +133,9 @@ try {
     stage("page_text", number);
     const spans = await extractTextSpans(page, scale);
     const composed = readingRegions(regions, spans);
+    if (number === 1 && !spans.length) {
+      scannedPageTitle = await scanPaperTitle(canvas, composed, output);
+    }
     const assigned = assignText(composed, spans);
     const pageBlocks: Block[] = composed.map((region, i) => ({
       ...region,
@@ -236,7 +242,8 @@ try {
       : {}),
     metadata: {
       ...metadata.info,
-      XMPTitle: boundedMetadata(xmp?.get("dc:title"), 600),
+      XMPTitle: xmpTitle,
+      ScannedPageTitle: scannedPageTitle,
       XMPCreators: Array.isArray(creators)
         ? creators
             .slice(0, 200)

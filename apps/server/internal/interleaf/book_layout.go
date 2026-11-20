@@ -25,7 +25,7 @@ type PageRange struct {
 }
 
 // runLayout parses the PDF into work. from and to bound a book chapter; zero
-// parses the whole document.
+// parses the whole document. A nil p leaves the document's job state alone.
 func (s *Server) runLayout(ctx context.Context, d Document, work string, from, to int, p *Processing) (result error) {
 	runID := id()
 	started := time.Now()
@@ -105,6 +105,9 @@ func (s *Server) runLayout(ctx context.Context, d Document, work string, from, t
 				"totalMemoryBytes", event.TotalMemoryBytes)
 			continue
 		case "page":
+			if p == nil {
+				continue
+			}
 			p.PagesDone, p.PagesTotal = event.Page, event.Total
 			p.Detail = fmt.Sprintf("已解析 %d / %d 页", event.Page, event.Total)
 			if from > 0 {

@@ -66,6 +66,50 @@ func TestLearningWithoutTextCompletesWithoutAttachmentWork(t *testing.T) {
 	}
 }
 
+func TestLearningPublishesLocalPaperTitleWithOnlineLookupDisabled(t *testing.T) {
+	s, p := processingFixture(t)
+	_, err := s.Store.DB.Exec(`INSERT INTO settings(key,value) VALUES('preferences:library','{"papers":{"autoLookup":false}}')`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	manifest := `{"pages":2,"blocks":[{"id":"p1-b1","page":1,"label":"doc_title","bounds":{"x":0.2,"y":0.15,"width":0.6,"height":0.04},"text":"Judgment and Decision Making in Everyday Life"}]}`
+	if err := os.WriteFile(filepath.Join(s.analysisDir("doc"), "manifest.json"), []byte(manifest), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.learnPDF(t.Context(), &p); err != nil {
+		t.Fatal(err)
+	}
+	doc, err := s.Store.Document("doc")
+	if err != nil || doc.Title != "Judgment and Decision Making in Everyday Life" || s.connectorRevision.Load() == 0 {
+		t.Fatalf("local title did not publish: %+v %v", doc, err)
+	}
+}
+
+func TestBackfillLocalPaperTitlesPreservesExistingAnalysisAndLookupState(t *testing.T) {
+	s, _ := processingFixture(t)
+	s.Token = "test-secret"
+	doc := queuedMetadataPaper(t, s, 3, "")
+	path := filepath.Join(s.analysisDir(doc.ID), "manifest.json")
+	manifest := `{"pages":3,"metadata":{"Title":"Recognition in Classroom Settings"},"blocks":[]}`
+	if err := os.WriteFile(path, []byte(manifest), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Store.DB.Exec("UPDATE documents SET metadata=? WHERE id=?", `{"lookup":"notFound"}`, doc.ID); err != nil {
+		t.Fatal(err)
+	}
+
+	s.backfillLocalPaperTitles(t.Context())
+
+	got, err := s.Store.Document(doc.ID)
+	if err != nil || got.Title != "Recognition in Classroom Settings" || got.Metadata.Lookup != "notFound" {
+		t.Fatalf("previously parsed paper did not acquire a local title: %+v %v", got, err)
+	}
+	after, err := os.ReadFile(path)
+	if err != nil || string(after) != manifest {
+		t.Fatalf("backfill replaced cached analysis: %s %v", after, err)
+	}
+}
+
 // Image consolidation was removed: attachments never reach the vision provider,
 // and transcripts saved by earlier versions stay untouched on disk.
 func TestProcessingTranslatesWithoutConsolidatingAttachments(t *testing.T) {

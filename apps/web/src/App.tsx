@@ -310,12 +310,12 @@ export function App() {
   );
   useEffect(() => {
     let active = true;
-    let revision: number | null = null;
+    let revision = 0;
     const check = async () => {
       try {
         const latest = (await api.connectorRevision()).revision;
         if (!active) return;
-        if (revision !== null && latest !== revision) await refreshLibrary();
+        if (latest !== revision) await refreshLibrary();
         revision = latest;
       } catch {
         /* Reader shutdown is handled by the desktop shell. */
