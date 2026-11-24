@@ -70,6 +70,7 @@ type nativeReadingParagraph struct {
 }
 type nativeReadingManifest struct {
 	nativeReadingReport
+	Engine              string `json:"engine,omitempty"`
 	Layout              string `json:"layout,omitempty"`
 	Version             int    `json:"version"`
 	DocumentID          string `json:"documentId"`
@@ -97,6 +98,7 @@ type nativeReadingJob struct {
 	state      nativeReadingStatus
 	documentID string
 	layout     string
+	engine     string
 	source     *bilingualJob
 	cancel     context.CancelFunc
 	done       chan struct{}
@@ -193,20 +195,26 @@ type nativeReadingSnapshot struct {
 	original, layout                                                    []byte
 	manifest                                                            layoutManifest
 	reading                                                             []TranslationBlock
+	babeldoc                                                            *babeldocReadingConfig
 }
 
-func (s *Server) nativeReadingSnapshot(documentID string, layouts ...string) (*nativeReadingSnapshot, error) {
+func (s *Server) nativeReadingSource(documentID string) (Document, []byte, error) {
 	d, e := s.Store.Document(documentID)
 	if e != nil || d.DeletedAt != "" || d.Type != "pdf" {
-		return nil, errors.New("PDF 文档不存在或已删除")
+		return Document{}, nil, errors.New("PDF 文档不存在或已删除")
 	}
 	if d.PaperID != "" {
 		p, e := s.Store.PaperItem(d.PaperID)
 		if e != nil || p.DeletedAt != "" {
-			return nil, errors.New("所属文献已删除")
+			return Document{}, nil, errors.New("所属文献已删除")
 		}
 	}
 	original, e := limitedBilingualRead(s.Store.File(d), bilingualFileLimit)
+	return d, original, e
+}
+
+func (s *Server) nativeReadingSnapshot(documentID string, layouts ...string) (*nativeReadingSnapshot, error) {
+	d, original, e := s.nativeReadingSource(documentID)
 	if e != nil {
 		return nil, e
 	}
@@ -261,6 +269,9 @@ func (v *nativeReadingSnapshot) setLayout(layout string) {
 
 // Identify the requested cache from a fresh source snapshot, never untrusted metadata.
 func (s *Server) nativeReadingSnapshotForKey(documentID, key string) (*nativeReadingSnapshot, error) {
+	if suffix, ok := strings.CutPrefix(key, babeldocReadingKeyPrefix); ok && nativeReadingSHA256(suffix) {
+		return s.babeldocReadingSnapshot(documentID)
+	}
 	v, e := s.nativeReadingSnapshot(documentID)
 	if e != nil {
 		return nil, e
@@ -300,6 +311,7 @@ func (s *Server) readNativeReading(v *nativeReadingSnapshot) (*nativeReadingMani
 	// Omission is the only legacy default; explicit null/empty/unknown layouts are invalid.
 	var identity struct {
 		Layout json.RawMessage `json:"layout"`
+		Engine json.RawMessage `json:"engine"`
 	}
 	if json.Unmarshal(raw, &identity) != nil {
 		return nil, nil, errors.New("阅读缓存布局无效")
@@ -310,8 +322,14 @@ func (s *Server) readNativeReading(v *nativeReadingSnapshot) (*nativeReadingMani
 			return nil, nil, errors.New("阅读缓存布局无效")
 		}
 	}
+	if len(identity.Engine) > 0 {
+		var engine string
+		if json.Unmarshal(identity.Engine, &engine) != nil || engine != nativeReadingBabelDOC {
+			return nil, nil, errors.New("阅读缓存引擎无效")
+		}
+	}
 	var m nativeReadingManifest
-	if json.Unmarshal(raw, &m) != nil || m.Version != 1 || m.DocumentID != v.documentID || m.CacheKey != v.key || m.OriginalSHA256 != v.originalHash || m.LayoutRevision != v.layoutHash || m.TranslationRevision != v.translationHash || m.RendererVersion != nativeReadingRenderer(v.layoutMode) || nativeReadingLayout(m.Layout) != nativeReadingLayout(v.layoutMode) {
+	if json.Unmarshal(raw, &m) != nil || m.Version != 1 || m.DocumentID != v.documentID || m.CacheKey != v.key || m.OriginalSHA256 != v.originalHash || m.LayoutRevision != v.layoutHash || m.TranslationRevision != v.translationHash || m.RendererVersion != v.renderer() || m.Engine != v.engine() || nativeReadingLayout(m.Layout) != nativeReadingLayout(v.layoutMode) {
 		return nil, nil, errors.New("阅读缓存修订无效")
 	}
 	if e := validateCachedNativeReadingReport(m.nativeReadingReport, v); e != nil {
@@ -329,6 +347,7 @@ func (s *Server) readNativeReading(v *nativeReadingSnapshot) (*nativeReadingMani
 func (s *Server) createNativeReading(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		Layout json.RawMessage `json:"layout"`
+		Engine json.RawMessage `json:"engine"`
 	}
 	if !decode(w, r, &body) {
 		return
@@ -337,6 +356,13 @@ func (s *Server) createNativeReading(w http.ResponseWriter, r *http.Request) {
 	if len(body.Layout) > 0 {
 		if json.Unmarshal(body.Layout, &layout) != nil || string(body.Layout) == "null" || (layout != nativeReadingSideBySide && layout != nativeReadingTranslationOnly) {
 			fail(w, 400, "无效的阅读布局")
+			return
+		}
+	}
+	var engine string
+	if len(body.Engine) > 0 {
+		if json.Unmarshal(body.Engine, &engine) != nil || engine != nativeReadingBabelDOC || layout != nativeReadingTranslationOnly {
+			fail(w, 400, "无效的原版式翻译引擎或布局")
 			return
 		}
 	}
@@ -354,9 +380,17 @@ func (s *Server) createNativeReading(w http.ResponseWriter, r *http.Request) {
 	s.nativeReadingMu.Lock()
 	defer s.nativeReadingMu.Unlock()
 	s.pruneNativeReadingJobsLocked()
-	v, e := s.nativeReadingSnapshot(r.PathValue("id"), layout)
+	v, e := s.nativeReadingSnapshotForEngine(r.PathValue("id"), layout, engine)
 	if e != nil {
-		fail(w, 409, "请先完成原文和版面解析后重试")
+		var public *bilingualError
+		message := "请先完成原文和版面解析后重试"
+		if engine == nativeReadingBabelDOC {
+			message = "无法读取用于 BabelDOC 翻译的 PDF"
+			if errors.As(e, &public) {
+				message = public.message
+			}
+		}
+		fail(w, 409, message)
 		return
 	}
 	if m, _, e := s.readNativeReading(v); e == nil {
@@ -385,7 +419,7 @@ func (s *Server) createNativeReading(w http.ResponseWriter, r *http.Request) {
 	}
 	child, cancel := context.WithTimeout(ctx, bilingualPDFTTL)
 	source := &bilingualJob{documentID: v.documentID, paperID: v.paperID, work: work, originalHash: v.originalHash, layoutHash: v.layoutHash, reading: v.reading, ctx: child, targets: map[string]string{}}
-	j := &nativeReadingJob{state: nativeReadingStatus{ID: id(), CacheKey: v.key, Status: "preparing", Stage: "prepare"}, documentID: v.documentID, layout: v.layoutMode, source: source, cancel: cancel, done: make(chan struct{})}
+	j := &nativeReadingJob{state: nativeReadingStatus{ID: id(), CacheKey: v.key, Status: "preparing", Stage: "prepare"}, documentID: v.documentID, layout: v.layoutMode, engine: engine, source: source, cancel: cancel, done: make(chan struct{})}
 	if s.nativeReadingJobs == nil {
 		s.nativeReadingJobs = map[string]*nativeReadingJob{}
 	}
@@ -402,6 +436,9 @@ func (s *Server) createNativeReading(w http.ResponseWriter, r *http.Request) {
 	respond(w, 202, initial)
 }
 func (s *Server) runNativeReading(j *nativeReadingJob, v *nativeReadingSnapshot) error {
+	if v.babeldoc != nil {
+		return s.runBabelDOCReading(j, v)
+	}
 	b := j.source
 	for name, data := range map[string][]byte{"original.pdf": v.original, "layout.json": v.layout} {
 		if e := os.WriteFile(filepath.Join(b.work, name), data, 0600); e != nil {
@@ -495,37 +532,51 @@ func (s *Server) runNativeReading(j *nativeReadingJob, v *nativeReadingSnapshot)
 	if e != nil || !bytes.HasPrefix(pdf, []byte("%PDF-")) {
 		return errors.New("invalid PDF")
 	}
-	m := &nativeReadingManifest{nativeReadingReport: report, Layout: v.layoutMode, Version: 1, DocumentID: v.documentID, CacheKey: v.key, OriginalSHA256: v.originalHash, LayoutRevision: v.layoutHash, TranslationRevision: v.translationHash, RendererVersion: nativeReadingRenderer(v.layoutMode), PDFSHA256: sourceKey(string(pdf)), PDFBytes: len(pdf)}
-	m.ReportSHA256 = nativeReadingReportHash(report)
-	if e = validateCachedNativeReadingReport(report, v); e != nil {
-		return e
-	}
-	raw, _ = json.Marshal(m)
-	if e = os.WriteFile(filepath.Join(b.work, "reading.pdf"), pdf, 0600); e != nil {
-		return e
-	}
-	if e = os.WriteFile(filepath.Join(b.work, "metadata.json"), raw, 0600); e != nil {
-		return e
-	}
 	// Publish only the derived PDF and completion marker, not frozen source/targets.
 	for _, name := range []string{"original.pdf", "layout.json", "prepared.json", "targets.json", "output.pdf", "report.json"} {
 		if e = os.Remove(filepath.Join(b.work, name)); e != nil {
 			return e
 		}
 	}
+	return s.publishNativeReading(j, v, report, pdf)
+}
+
+func (s *Server) publishNativeReading(j *nativeReadingJob, v *nativeReadingSnapshot, report nativeReadingReport, pdf []byte) error {
+	if err := validateCachedNativeReadingReport(report, v); err != nil {
+		return err
+	}
+	m := nativeReadingManifest{
+		nativeReadingReport: report,
+		Engine:              v.engine(), Layout: v.layoutMode, Version: 1,
+		DocumentID: v.documentID, CacheKey: v.key, OriginalSHA256: v.originalHash,
+		LayoutRevision: v.layoutHash, TranslationRevision: v.translationHash,
+		RendererVersion: v.renderer(), PDFSHA256: sourceKey(string(pdf)), PDFBytes: len(pdf),
+		ReportSHA256: nativeReadingReportHash(report),
+	}
+	raw, err := json.Marshal(m)
+	if err != nil {
+		return err
+	}
+	b := j.source
+	if err = os.WriteFile(filepath.Join(b.work, "reading.pdf"), pdf, 0600); err != nil {
+		return err
+	}
+	if err = os.WriteFile(filepath.Join(b.work, "metadata.json"), raw, 0600); err != nil {
+		return err
+	}
 	s.nativeReadingMu.Lock()
 	defer s.nativeReadingMu.Unlock()
-	current, e := s.nativeReadingSnapshot(v.documentID, v.layoutMode)
-	if e != nil || current.key != v.key || b.ctx.Err() != nil {
+	current, err := s.nativeReadingSnapshotForEngine(v.documentID, v.layoutMode, v.engine())
+	if err != nil || current.key != v.key || b.ctx.Err() != nil {
 		return errors.New("stale reading task")
 	}
 	dir := s.nativeReadingDir(v.documentID, v.key)
 	// Only a verified, complete directory becomes visible. Metadata is the completion marker.
-	if e = os.RemoveAll(dir); e != nil {
-		return e
+	if err = os.RemoveAll(dir); err != nil {
+		return err
 	}
-	if e = os.Rename(b.work, dir); e != nil {
-		return e
+	if err = os.Rename(b.work, dir); err != nil {
+		return err
 	}
 	j.mu.Lock()
 	j.state.Status = "ready"
@@ -593,7 +644,7 @@ func (s *Server) nativeReadingStatus(w http.ResponseWriter, r *http.Request) {
 	}
 	defer finish()
 	state := j.snapshot()
-	v, e := s.nativeReadingSnapshot(r.PathValue("id"), j.layout)
+	v, e := s.nativeReadingSnapshotForEngine(r.PathValue("id"), j.layout, j.engine)
 	if e != nil || v.key != state.CacheKey {
 		j.cancelWork()
 		fail(w, 409, "原文或译文已变化，请重新生成")
@@ -663,6 +714,9 @@ func nativeReadingReportHash(report nativeReadingReport) string {
 	return sourceKey(string(raw))
 }
 func validateCachedNativeReadingReport(report nativeReadingReport, v *nativeReadingSnapshot) error {
+	if v.babeldoc != nil {
+		return validateBabelDOCReadingReport(report)
+	}
 	invalid := func() error { return errors.New("阅读缓存报告结构或译文身份无效") }
 	if report.Pages == nil || len(report.Pages) != v.manifest.Pages || report.Warnings == nil || report.Translated < 0 || report.Original < 0 {
 		return invalid()

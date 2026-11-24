@@ -46,3 +46,19 @@ it("sends explicit translation-only layout while preserving legacy default paylo
   });
   expect(fetcher.mock.calls[1][1]).toMatchObject({ body: "{}" });
 });
+
+it("sends BabelDOC only when the engine is explicitly selected", async () => {
+  const fetcher = vi.fn(async (_url: string, _init?: RequestInit) =>
+    Response.json({ status: "ready" }),
+  );
+  vi.stubGlobal("fetch", fetcher);
+  await api.createNativePDFReading(
+    "doc",
+    undefined,
+    "translation-only",
+    "babeldoc",
+  );
+  expect(fetcher.mock.calls[0][1]).toMatchObject({
+    body: JSON.stringify({ layout: "translation-only", engine: "babeldoc" }),
+  });
+});

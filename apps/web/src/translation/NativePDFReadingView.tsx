@@ -16,6 +16,7 @@ import type {
   ReaderTheme,
   TOCItem,
   TranslationBlock,
+  NativePDFReadingEngine,
   NativePDFReadingLayout,
 } from "@interleaf/core";
 import { api } from "@interleaf/api";
@@ -41,6 +42,7 @@ export function NativePDFReadingView({
   pageNavigation,
   split,
   layout = "side-by-side",
+  engine,
   syncEnabled = true,
 }: {
   document: Document;
@@ -56,39 +58,43 @@ export function NativePDFReadingView({
   pageNavigation?: ReactNode;
   split: TranslationSplit;
   layout?: NativePDFReadingLayout;
+  engine?: NativePDFReadingEngine;
   syncEnabled?: boolean;
 }) {
-  // Only completed text affects the derived PDF; queue updates should leave the viewport alone.
-  const revision = useMemo(
-    () =>
-      JSON.stringify(
-        translations
-          .filter((block) => block.status === "complete")
-          .sort((a, b) => a.blockId.localeCompare(b.blockId))
-          .map((block) => [
-            block.blockId,
-            block.sourceHash,
-            block.sentences,
-            block.formulaMarkdown,
-          ]),
-      ),
-    [translations],
-  );
+  // Only completed Interleaf text affects its rendered PDF. BabelDOC translates independently.
+  const revision = useMemo(() => {
+    if (engine) return "";
+    return JSON.stringify(
+      translations
+        .filter((block) => block.status === "complete")
+        .sort((a, b) => a.blockId.localeCompare(b.blockId))
+        .map((block) => [
+          block.blockId,
+          block.sourceHash,
+          block.sentences,
+          block.formulaMarkdown,
+        ]),
+    );
+  }, [engine, translations]);
   // Both views read the same translated pages. Comparison opens the original in its own pane.
   const { job, busy, error, retry, cancel, cancelling } = useNativePDFReading(
     doc.id,
     revision,
     "translation-only",
+    engine,
   );
+  const readyMetadata = job?.status === "ready" ? job.metadata : undefined;
+  const engineMismatch = readyMetadata && readyMetadata.engine !== engine;
   const metadata =
-    job?.status === "ready" &&
-    job.metadata?.documentId === doc.id &&
-    job.metadata.layout === "translation-only"
-      ? job.metadata
+    readyMetadata?.documentId === doc.id &&
+    readyMetadata.layout === "translation-only" &&
+    !engineMismatch
+      ? readyMetadata
       : undefined;
   const single = layout === "translation-only";
   const View = single ? InterleafView : NativePDFPanes;
-  const label = single ? "原版式译文" : "原版式对照";
+  const layoutLabel = single ? "原版式译文" : "原版式对照";
+  const label = engine ? `BabelDOC ${layoutLabel}` : layoutLabel;
   const flowLabel = single ? "流式译文" : "流式对照";
   const identity = `${doc.id}:${metadata?.cacheKey ?? "loading"}`;
   const currentIdentity = useRef(identity);
@@ -172,7 +178,7 @@ export function NativePDFReadingView({
             nativeReading={{
               metadata,
               fileURL: api.nativePDFReadingFileURL(doc.id, metadata.cacheKey),
-              translations,
+              translations: engine ? [] : translations,
               alongsideOriginal: !single,
             }}
             onReady={ready}
@@ -200,12 +206,18 @@ export function NativePDFReadingView({
               aria-hidden="true"
             />
           )}
-          <p>{error || (busy ? `正在生成${label}` : `${label}暂不可用`)}</p>
+          <p>
+            {error ||
+              (engineMismatch ? "缓存的译文与所选引擎不匹配，请重试" : "") ||
+              (busy ? `正在生成${label}` : `${label}暂不可用`)}
+          </p>
           {busy && (
             <p className="native-pdf-progress">
-              {job?.total
-                ? `${job.done} / ${job.total} 页`
-                : "首次生成需要一点时间，完成后会保存在本机"}
+              {engine && job?.stage === "layout"
+                ? "正在翻译并排版"
+                : !engine && job?.total
+                  ? `${job.done} / ${job.total} 页`
+                  : "首次生成需要一点时间，完成后会保存在本机"}
             </p>
           )}
           <div className="native-pdf-state-actions">

@@ -6,6 +6,7 @@ import {
   defaultTheme,
   type Document,
   type NativePDFReadingManifest,
+  type NativePDFReadingEngine,
   type NativePDFReadingLayout,
   type ReaderAdapter,
   type TranslationBlock,
@@ -26,7 +27,7 @@ const fixture = vi.hoisted(() => ({
   translationLocation: vi.fn(() => ({ type: "pdf", page: 7, y: 0.65 })),
 }));
 vi.mock("./useNativePDFReading", () => ({
-  useNativePDFReading: () => fixture.state,
+  useNativePDFReading: vi.fn(() => fixture.state),
 }));
 vi.mock("@interleaf/api", () => ({
   api: {
@@ -77,6 +78,7 @@ vi.mock("../InterleafView", () => ({
   },
 }));
 import { NativePDFReadingView } from "./NativePDFReadingView";
+import { useNativePDFReading } from "./useNativePDFReading";
 import { useTranslationSplit } from "./TranslationPanes";
 let root: Root, host: HTMLDivElement;
 const onFlow = vi.fn(),
@@ -97,10 +99,12 @@ function Harness({
   layout,
   translations,
   syncEnabled,
+  engine,
 }: {
   layout?: NativePDFReadingLayout;
   translations: TranslationBlock[];
   syncEnabled?: boolean;
+  engine?: NativePDFReadingEngine;
 }) {
   const split = useTranslationSplit();
   return (
@@ -108,6 +112,7 @@ function Harness({
       split={split}
       layout={layout}
       syncEnabled={syncEnabled}
+      engine={engine}
       document={{ id: "doc", type: "pdf" } as Document}
       theme={defaultTheme}
       blocks={[]}
@@ -126,6 +131,7 @@ async function render(
   layout?: NativePDFReadingLayout,
   translations: TranslationBlock[] = [],
   syncEnabled?: boolean,
+  engine?: NativePDFReadingEngine,
 ) {
   await act(async () =>
     root.render(
@@ -133,6 +139,7 @@ async function render(
         layout={layout}
         translations={translations}
         syncEnabled={syncEnabled}
+        engine={engine}
       />,
     ),
   );
@@ -346,4 +353,47 @@ it("waits for the matching single-column artifact and offers a single-column flo
   expect(host.textContent).toContain("可在流式译文中查看译文");
   expect(host.querySelector('[aria-label="原版式译文"]')).not.toBeNull();
   expect(host.querySelector('[role="separator"]')).toBeNull();
+});
+
+it("does not mount a ready cache from the wrong engine", async () => {
+  fixture.state.busy = false;
+  fixture.state.job = { status: "ready", metadata };
+  await render("translation-only", [], true, "babeldoc");
+  expect(fixture.props).toBeUndefined();
+  expect(host.textContent).toContain("缓存的译文与所选引擎不匹配");
+});
+
+it("keeps saved translation updates out of the BabelDOC request and reader descriptor", async () => {
+  fixture.state.busy = false;
+  fixture.state.job = {
+    status: "ready",
+    metadata: { ...metadata, cacheKey: "babeldoc", engine: "babeldoc" },
+  };
+  await render("translation-only", [], true, "babeldoc");
+  expect(fixture.props?.nativeReading).toMatchObject({
+    fileURL: "/cached/doc/babeldoc",
+    translations: [],
+  });
+  const request = vi.mocked(useNativePDFReading).mock.lastCall;
+  await render(
+    "translation-only",
+    [
+      {
+        blockId: "p7",
+        sourceHash: "h",
+        status: "complete",
+        sentences: [{ source: "Later", target: "之后" }],
+      },
+    ],
+    true,
+    "babeldoc",
+  );
+  expect(vi.mocked(useNativePDFReading).mock.lastCall).toEqual(request);
+  expect(request).toEqual([
+    "doc",
+    expect.any(String),
+    "translation-only",
+    "babeldoc",
+  ]);
+  expect(onRegenerate).not.toHaveBeenCalled();
 });

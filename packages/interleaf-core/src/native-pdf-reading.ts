@@ -1,5 +1,7 @@
 import type { NativePDFBounds } from "./bilingual-pdf";
 
+export type NativePDFReadingEngine = "babeldoc";
+
 export type NativePDFReadingLayout = "side-by-side" | "translation-only";
 
 /** Geometry and identity of one paragraph in the derived PDF, never a new translation. */
@@ -29,6 +31,8 @@ export interface NativePDFReadingReport {
   warnings: string[];
 }
 export interface NativePDFReadingManifest extends NativePDFReadingReport {
+  /** Omitted for the Interleaf renderer. */
+  engine?: NativePDFReadingEngine;
   /** Omitted by historical manifests; defaults to side-by-side. */
   layout?: NativePDFReadingLayout;
   version: 1;

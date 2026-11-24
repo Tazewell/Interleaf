@@ -366,12 +366,16 @@ export const api = {
     id: string,
     signal?: AbortSignal,
     layout?: import("@interleaf/core").NativePDFReadingLayout,
+    engine?: import("@interleaf/core").NativePDFReadingEngine,
   ) =>
     request<import("@interleaf/core").NativePDFReadingJob>(
       `/api/documents/${encodeURIComponent(id)}/native-pdf-reading`,
       {
         method: "POST",
-        body: JSON.stringify(layout === "translation-only" ? { layout } : {}),
+        body: JSON.stringify({
+          layout: layout === "translation-only" ? layout : undefined,
+          engine,
+        }),
         signal,
       },
     ),

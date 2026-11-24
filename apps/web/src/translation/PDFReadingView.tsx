@@ -73,6 +73,7 @@ function readingFormat(
   content: PDFReadingContent,
   preference?: PDFReadingFormat,
 ): PDFReadingFormat {
+  if (content === "source" && preference === "babeldoc") return "native";
   return preference ?? (content === "source" ? "native" : "flow");
 }
 function readingMode(
@@ -129,10 +130,14 @@ export function PDFReadingView({
   events: ReaderEvents;
 }) {
   const [content, setContent] = useState<PDFReadingContent>("source"),
-    [preferredFormat, setPreferredFormat] = useState<PDFReadingFormat>(),
+    [preferredFormat, setPreferredFormat] =
+      useState<Exclude<PDFReadingFormat, "babeldoc">>(),
+    [babelDOCDocument, setBabelDOCDocument] = useState<string>(),
     [syncEnabled, setSyncEnabled] = useState(true);
   const split = useTranslationSplit();
-  const format = readingFormat(content, preferredFormat);
+  const preference = babelDOCDocument === doc.id ? "babeldoc" : preferredFormat;
+  const format = readingFormat(content, preference);
+  const engineChoice = format === "babeldoc" ? format : undefined;
   const mode = readingMode(content, format);
   const { translations, error } = useTranslations(doc.id);
   const [translationPromptHost, setTranslationPromptHost] =
@@ -1224,12 +1229,21 @@ export function PDFReadingView({
     nextFormat?: PDFReadingFormat,
     fromBlock?: PDFBlock,
   ) => {
-    const value = readingMode(
+    const nextReadingFormat = readingFormat(
       nextContent,
-      readingFormat(nextContent, nextFormat ?? preferredFormat),
+      nextFormat ?? preference,
     );
-    if (nextFormat !== undefined) setPreferredFormat(nextFormat);
-    if (mode === value) {
+    const value = readingMode(nextContent, nextReadingFormat);
+    if (nextFormat === "babeldoc") {
+      setBabelDOCDocument(doc.id);
+    } else if (nextFormat !== undefined) {
+      setBabelDOCDocument(undefined);
+      setPreferredFormat(nextFormat);
+    }
+    if (
+      mode === value &&
+      (!isNativeMode(value) || format === nextReadingFormat)
+    ) {
       if (fromBlock) {
         setPopup(undefined);
         void focusBlock(fromBlock, "source");
@@ -1428,7 +1442,7 @@ export function PDFReadingView({
           processing={processing}
           library={doc.library}
           promptHost={
-            content !== "source" && doc.library === "papers"
+            content !== "source" && !engineChoice && doc.library === "papers"
               ? translationPromptHost
               : null
           }
@@ -1486,7 +1500,8 @@ export function PDFReadingView({
       )}
       {isNativeMode(mode) ? (
         <NativePDFReadingView
-          key={`${doc.id}:${mode}`}
+          key={`${doc.id}:${mode}:${engineChoice ?? "interleaf"}`}
+          engine={engineChoice}
           split={split}
           syncEnabled={syncEnabled}
           layout={

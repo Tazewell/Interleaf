@@ -6968,6 +6968,12 @@
                               "additionalProperties": false,
                               "properties":
                                 {
+                                  "engine":
+                                    {
+                                      "type": "string",
+                                      "const": "babeldoc",
+                                      "description": "Opt in to BabelDOC with translation-only layout. Omit to use the Interleaf renderer with saved translations.",
+                                    },
                                   "layout":
                                     {
                                       "$ref": "#/components/schemas/NativePDFReadingLayout",
@@ -10376,6 +10382,12 @@
               "type": "object",
               "properties":
                 {
+                  "engine":
+                    {
+                      "type": "string",
+                      "const": "babeldoc",
+                      "description": "Omitted for the Interleaf renderer.",
+                    },
                   "layout":
                     {
                       "$ref": "#/components/schemas/NativePDFReadingLayout",

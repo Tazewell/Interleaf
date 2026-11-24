@@ -170,6 +170,28 @@ it("separates three reading contents from the layout choice", async () => {
     "原版式",
   );
 });
+it("opts into BabelDOC in translated views and preserves the native viewport", async () => {
+  await clickPDFContent(host, "对照");
+  expect(fixture.nativeProps).toBeUndefined();
+  await choosePDFFormat(host, "原版式");
+  expect(fixture.nativeProps?.engine).toBeUndefined();
+  const viewport = { type: "pdf", page: 6, y: 0.4 } as const;
+  fixture.native.getLocation.mockReturnValue(viewport);
+  await choosePDFFormat(host, "BabelDOC 原版式");
+  expect(fixture.nativeProps?.engine).toBe("babeldoc");
+  expect(fixture.nativeProps?.initialLocation).toEqual(viewport);
+  await clickPDFContent(host, "原文");
+  expect(host.querySelector("[data-native-reader]")).toBeNull();
+  await clickPDFContent(host, "译文");
+  expect(fixture.nativeProps?.engine).toBe("babeldoc");
+  expect(fixture.nativeProps?.layout).toBe("translation-only");
+  await choosePDFFormat(host, "流式");
+  expect(host.querySelector("[data-native-reader]")).toBeNull();
+  await choosePDFFormat(host, "BabelDOC 原版式");
+  expect(fixture.nativeProps?.engine).toBe("babeldoc");
+  await render("another-doc");
+  expect(host.querySelector("[data-native-reader]")).toBeNull();
+});
 const untranslated: Processing = {
   documentId: "doc",
   phase: "translating",

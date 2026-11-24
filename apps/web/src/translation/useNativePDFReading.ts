@@ -1,5 +1,6 @@
 import { useEffect, useReducer, useRef, useState } from "react";
 import type {
+  NativePDFReadingEngine,
   NativePDFReadingJob,
   NativePDFReadingLayout,
 } from "@interleaf/core";
@@ -20,6 +21,7 @@ export function useNativePDFReading(
   documentId: string,
   revision: string,
   layout: NativePDFReadingLayout = "side-by-side",
+  engine?: NativePDFReadingEngine,
 ) {
   const [attempt, retry] = useReducer((value: number) => value + 1, 0);
   const [job, setJob] = useState<NativePDFReadingJob>();
@@ -70,15 +72,17 @@ export function useNativePDFReading(
         failed(reason);
       }
     };
-    void api
-      .createNativePDFReading(documentId, current.controller.signal, layout)
-      .then(accept, failed);
+    const signal = current.controller.signal;
+    const creation = engine
+      ? api.createNativePDFReading(documentId, signal, layout, engine)
+      : api.createNativePDFReading(documentId, signal, layout);
+    void creation.then(accept, failed);
     return () => {
       current.active = false;
       current.controller.abort();
       clearTimeout(current.timer);
     };
-  }, [documentId, revision, layout, attempt]);
+  }, [documentId, revision, layout, engine, attempt]);
   const cancel = async () => {
     const current = session.current;
     if (!current?.active || !current.job || cancelling) return;

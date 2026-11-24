@@ -10,10 +10,14 @@ import {
 import { SlidingTabsList } from "../controls/SlidingTabsList";
 
 export type PDFReadingContent = "source" | "parallel" | "translation";
-export type PDFReadingFormat = "native" | "flow";
+export type PDFReadingFormat = "native" | "flow" | "babeldoc";
 const formats = [
   { value: "native", label: "原版式", icon: FileText },
   { value: "flow", label: "流式", icon: TextAlignLeft },
+] as const;
+const translatedFormats = [
+  ...formats,
+  { value: "babeldoc", label: "BabelDOC 原版式", icon: FileText },
 ] as const;
 
 /** Content and layout are independent, so switching either keeps the other choice. */
@@ -28,7 +32,8 @@ export function PDFReadingControls({
   onContentChange: (value: PDFReadingContent) => void;
   onFormatChange: (value: PDFReadingFormat) => void;
 }) {
-  const FormatIcon = format === "native" ? FileText : TextAlignLeft;
+  const availableFormats = content === "source" ? formats : translatedFormats;
+  const FormatIcon = format === "flow" ? TextAlignLeft : FileText;
   return (
     <div
       className="pdf-reading-mode-controls"
@@ -47,7 +52,8 @@ export function PDFReadingControls({
         </SlidingTabsList>
       </Tabs>
       <Select
-        items={formats}
+        key={content === "source" ? "source" : "translated"}
+        items={availableFormats}
         value={format}
         onValueChange={(value) => {
           if (value) onFormatChange(value as PDFReadingFormat);
@@ -64,8 +70,12 @@ export function PDFReadingControls({
           />
           <SelectValue />
         </SelectTrigger>
-        <SelectContent align="end" alignItemWithTrigger={false}>
-          {formats.map((item) => (
+        <SelectContent
+          align="end"
+          alignItemWithTrigger={false}
+          className={content === "source" ? undefined : "min-w-44"}
+        >
+          {availableFormats.map((item) => (
             <SelectItem key={item.value} value={item.value}>
               <item.icon
                 aria-hidden="true"

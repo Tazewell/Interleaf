@@ -6737,6 +6737,11 @@ export interface paths {
             requestBody: {
                 content: {
                     "application/json": {
+                        /**
+                         * @description Opt in to BabelDOC with translation-only layout. Omit to use the Interleaf renderer with saved translations.
+                         * @constant
+                         */
+                        engine?: "babeldoc";
                         layout?: components["schemas"]["NativePDFReadingLayout"];
                     };
                 };
@@ -8189,6 +8194,11 @@ export interface components {
          */
         NativePDFReadingLayout: "side-by-side" | "translation-only";
         NativePDFReadingManifest: {
+            /**
+             * @description Omitted for the Interleaf renderer.
+             * @constant
+             */
+            engine?: "babeldoc";
             /** @description Omitted by historical metadata; defaults to side-by-side. */
             layout?: components["schemas"]["NativePDFReadingLayout"];
             /** @constant */
