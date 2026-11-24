@@ -9,7 +9,7 @@ import {
   type UpdateState,
 } from "./updates";
 import { downloadUpdate, type DownloadProgress } from "./update-download";
-import type { UpdateProgress } from "../../../packages/interleaf-core/src/update-progress";
+import type { UpdateOffer, UpdateProgress } from "../../../packages/interleaf-core/src/update-progress";
 
 export async function startUpdateService(window: BrowserWindow) {
   const directory = app.getPath("userData");
@@ -47,6 +47,10 @@ export async function startUpdateService(window: BrowserWindow) {
   let wantsFeedback = false;
   let staged: string | undefined;
   let installer: string | undefined;
+  let nextOfferId = 0;
+  let pendingOffer:
+    | { offer: UpdateOffer; decide: (accepted: boolean) => void }
+    | undefined;
   // NSIS kills whatever still runs from the install folder, so the installer
   // starts only after the reading flush and server shutdown have finished.
   const runInstaller = () => {
@@ -69,6 +73,23 @@ export async function startUpdateService(window: BrowserWindow) {
     }
   };
   const alive = () => !stopped && !window.isDestroyed();
+  const offerDownload = (version: string, windows: boolean) =>
+    new Promise<boolean>((decide) => {
+      const offer: UpdateOffer = {
+        id: ++nextOfferId,
+        version,
+        currentVersion: app.getVersion(),
+        actionLabel: windows ? "下载并安装" : "下载安装包",
+      };
+      window.webContents.send("interleaf:update-offer", offer);
+      pendingOffer = { offer, decide };
+    });
+  const respondToOffer = (id: number, accepted: boolean) => {
+    if (id !== pendingOffer?.offer.id) return;
+    const { decide } = pendingOffer;
+    pendingOffer = undefined;
+    decide(accepted);
+  };
   // Mirrors visible update work in the taskbar or Dock and the in-app toast.
   const report = (progress: UpdateProgress | null) => {
     if (window.isDestroyed()) return;
@@ -192,19 +213,8 @@ export async function startUpdateService(window: BrowserWindow) {
           return;
         if (!alive()) return;
         const windows = process.platform === "win32";
-        const selected = await dialog.showMessageBox(window, {
-          type: "info",
-          message: `纸间 ${result.update.version} 可用`,
-          detail: `${
-            windows
-              ? `当前版本：${app.getVersion()}。下载并校验后，纸间会保存阅读数据并退出，自动安装后重新打开。`
-              : `当前版本：${app.getVersion()}。下载并校验后将打开 DMG，请将纸间拖入 Applications 完成更新。安装前请退出当前纸间。`
-          }\n\n安装包从 GitHub 下载，速度较慢时可开启代理加速。`,
-          buttons: [windows ? "下载并安装" : "下载安装包", "稍后"],
-          defaultId: 0,
-          cancelId: 1,
-        });
-        if (selected.response !== 0 || !alive()) return;
+        if (!(await offerDownload(result.update.version, windows)) || !alive())
+          return;
         downloading = true;
         // The user asked for this download, so its progress is shown.
         wantsFeedback = true;
@@ -276,12 +286,15 @@ export async function startUpdateService(window: BrowserWindow) {
   initial.unref();
   timer.unref();
   return {
+    getOffer: () => pendingOffer?.offer,
+    respondToOffer,
     check: () => {
       clearTimeout(initial);
       return check("manual");
     },
     stop: () => {
       stopped = true;
+      if (pendingOffer) respondToOffer(pendingOffer.offer.id, false);
       clearTimeout(initial);
       clearInterval(timer);
     },

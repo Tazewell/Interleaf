@@ -1,5 +1,13 @@
 import { useShortcut, loadBindings, isMac } from "./shortcuts/shortcuts";
-import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
+import {
+  lazy,
+  Suspense,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   BookOpen,
   UploadSimple,
@@ -73,6 +81,7 @@ import { libraryModes } from "./LibraryModeSwitcher";
 import type { SettingsTarget } from "./Settings";
 import { useProcessing } from "./ProcessingStatus";
 import { useUpdateProgress } from "./update-progress";
+import { UpdateOfferHost } from "./UpdateOfferHost";
 import { useResolvedTheme } from "./appearance";
 import { DocumentEditor, LibraryFilterBar } from "./DocumentManagement";
 import { TagBoards } from "./TagBoards";
@@ -186,6 +195,7 @@ export function App() {
   };
   const [checkingUpdates, setCheckingUpdates] = useState(false);
   const [about, setAbout] = useState(false);
+  const closeAbout = useCallback(() => setAbout(false), []);
   const [filter, setFilter] = useState("all");
   const [filters, setFilters] = useState(initialFilters);
   const [libraryView, setLibraryView] = useState<"grid" | "list">("grid");
@@ -1023,6 +1033,7 @@ export function App() {
             </div>
           </DialogContent>
         </Dialog>
+        <UpdateOfferHost onOffer={closeAbout} />
         <LibrarySearchDialog
           open={command}
           onOpenChange={setCommand}

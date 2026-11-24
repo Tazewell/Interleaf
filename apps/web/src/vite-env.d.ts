@@ -22,6 +22,10 @@ interface Window {
     ) => void;
     diagnosticSettings?: (settings: unknown) => void;
     checkForUpdates: () => Promise<void>;
+    onUpdateOffer?: (
+      callback: (offer: import("@interleaf/core").UpdateOffer) => void,
+    ) => () => void;
+    respondToUpdateOffer?: (id: number, accepted: boolean) => Promise<void>;
     onUpdateProgress?: (
       callback: (
         progress: import("@interleaf/core").UpdateProgress | null,

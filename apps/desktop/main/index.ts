@@ -919,17 +919,30 @@ app
       startupTimings.domReadyMs = startupElapsed();
       recordReadyStartup();
     });
+    ipcMain.handle("interleaf:get-update-offer", (event) => {
+      settingsSender(event);
+      return updateService?.getOffer();
+    });
+    ipcMain.handle(
+      "interleaf:respond-update-offer",
+      (event, id: unknown, accepted: unknown) => {
+        settingsSender(event);
+        if (
+          typeof id !== "number" ||
+          !Number.isSafeInteger(id) ||
+          typeof accepted !== "boolean"
+        )
+          throw new Error("无效的更新选择");
+        updateService?.respondToOffer(id, accepted);
+      },
+    );
     startupTimings.navigationStartedMs = startupElapsed();
     await window.loadURL(`${url}/#token=${serverToken}`);
     navigationLoaded = true;
     recordReadyStartup();
     updateService = await startUpdateService(window);
     ipcMain.handle("interleaf:check-updates", (event) => {
-      if (
-        event.sender !== window?.webContents ||
-        event.senderFrame !== window.webContents.mainFrame
-      )
-        throw new Error("Invalid sender");
+      settingsSender(event);
       return updateService?.check();
     });
     if (pendingFiles.length) await importOpenedFiles(pendingFiles.splice(0));

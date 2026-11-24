@@ -24,6 +24,7 @@ let showOpenDialog: ReturnType<typeof vi.fn>;
 let showErrorBox: ReturnType<typeof vi.fn>;
 let execute: ReturnType<typeof vi.fn>;
 let diagnosticRecords: ReturnType<typeof vi.fn>;
+let recordUpdateDecision: ReturnType<typeof vi.fn>;
 let serverChild: any;
 let exitCount = 0;
 const event = () => ({
@@ -68,6 +69,7 @@ beforeEach(async (context) => {
   showErrorBox = vi.fn();
   execute = vi.fn();
   diagnosticRecords = vi.fn();
+  recordUpdateDecision = vi.fn();
   vi.doMock("electron", () => ({
     app,
     ipcMain: ipc,
@@ -178,7 +180,10 @@ beforeEach(async (context) => {
     electronProxyConfiguration: () => ({}),
   }));
   vi.doMock("./update-service", () => ({
-    startUpdateService: async () => ({ stop() {} }),
+    startUpdateService: async () => ({
+      stop() {},
+      respondToOffer: recordUpdateDecision,
+    }),
   }));
   vi.doMock("./diagnostic-service", () => ({
     startDiagnosticService: () => ({
@@ -215,6 +220,18 @@ afterEach(() => {
   vi.useRealTimers();
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
+});
+
+it("accepts an update decision only from the app main frame with a valid payload", () => {
+  const respond = handlers.get("interleaf:respond-update-offer")!;
+  expect(() => respond({ ...event(), senderFrame: {} }, 1, true)).toThrow(
+    "Invalid sender",
+  );
+  expect(() => respond(event(), 1, "true")).toThrow("无效的更新选择");
+  expect(() => respond(event(), 1.5, true)).toThrow("无效的更新选择");
+  expect(recordUpdateDecision).not.toHaveBeenCalled();
+  respond(event(), 1, true);
+  expect(recordUpdateDecision).toHaveBeenCalledExactlyOnceWith(1, true);
 });
 
 it.each(["at construction", "during navigation", "after DOM is ready"])(

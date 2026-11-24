@@ -6,3 +6,11 @@ export interface UpdateProgress {
   /** Undefined when the download size is unknown. */
   total?: number;
 }
+
+/** One pending desktop update choice, with no installer path or download URL. */
+export interface UpdateOffer {
+  id: number;
+  currentVersion: string;
+  version: string;
+  actionLabel: "下载并安装" | "下载安装包";
+}

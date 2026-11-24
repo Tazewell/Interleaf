@@ -47,6 +47,20 @@ vi.mock("./mac-squirrel", () => ({
 }));
 import { startUpdateService } from "./update-service";
 import { day } from "./updates";
+type UpdateService = Awaited<ReturnType<typeof startUpdateService>>;
+function answerOffer(service: UpdateService, accepted: boolean) {
+  const offer = service.getOffer();
+  if (!offer) throw new Error("Expected an available update");
+  service.respondToOffer(offer.id, accepted);
+}
+async function checkAndAnswer(service: UpdateService, accepted: boolean) {
+  const checking = service.check();
+  await vi.advanceTimersByTimeAsync(0);
+  answerOffer(service, accepted);
+  await checking;
+}
+const offers = () =>
+  send.mock.calls.filter(([channel]) => channel === "interleaf:update-offer");
 let stop: (() => void) | undefined;
 let assets: string[];
 const send = vi.fn();
@@ -98,13 +112,19 @@ it("checks on startup, coalesces manual checks, and does not prompt again within
   const service = await startUpdateService(window);
   stop = service.stop;
   await vi.advanceTimersByTimeAsync(15_000);
-  expect(mocks.dialog).toHaveBeenCalledTimes(1);
+  expect(offers()).toHaveLength(1);
+  answerOffer(service, false);
   expect(mocks.download).not.toHaveBeenCalled();
   await vi.advanceTimersByTimeAsync(day - 60_000);
   expect(mocks.fetch).toHaveBeenCalledTimes(2);
-  await Promise.all([service.check(), service.check()]);
+  const first = service.check();
+  const second = service.check();
+  expect(second).toBe(first);
+  await vi.advanceTimersByTimeAsync(0);
+  answerOffer(service, false);
+  await first;
   expect(mocks.fetch).toHaveBeenCalledTimes(4);
-  expect(mocks.dialog).toHaveBeenCalledTimes(2);
+  expect(offers()).toHaveLength(2);
 });
 it("offers an update on startup despite a recent check from the previous launch", async () => {
   vi.stubGlobal("process", { ...process, platform: "win32", arch: "x64" });
@@ -115,11 +135,13 @@ it("offers an update on startup despite a recent check from the previous launch"
   stop = service.stop;
   await vi.advanceTimersByTimeAsync(5_000);
   expect(mocks.fetch).toHaveBeenCalledTimes(2);
-  expect(mocks.dialog).toHaveBeenCalledExactlyOnceWith(
-    window,
+  expect(mocks.dialog).not.toHaveBeenCalled();
+  expect(send).toHaveBeenCalledWith(
+    "interleaf:update-offer",
     expect.objectContaining({
-      message: "纸间 0.2.0 可用",
-      buttons: ["下载并安装", "稍后"],
+      version: "0.2.0",
+      currentVersion: "0.1.0",
+      actionLabel: "下载并安装",
     }),
   );
   expect(mocks.download).not.toHaveBeenCalled();
@@ -127,20 +149,50 @@ it("offers an update on startup despite a recent check from the previous launch"
   await vi.advanceTimersByTimeAsync(day * 2);
   expect(mocks.fetch).toHaveBeenCalledTimes(2);
 });
+it("replays the pending offer and rejects a stale decision before downloading", async () => {
+  vi.stubGlobal("process", { ...process, platform: "win32", arch: "x64" });
+  mocks.download.mockResolvedValue("C:\\test\\verified.exe");
+  const service = await startUpdateService(window);
+  stop = service.stop;
+  const checking = service.check();
+  await vi.advanceTimersByTimeAsync(0);
+  const offer = service.getOffer()!;
+  expect(offer).toMatchObject({ version: "0.2.0", actionLabel: "下载并安装" });
+  service.respondToOffer(offer.id + 1, true);
+  expect(service.getOffer()).toEqual(offer);
+  expect(mocks.download).not.toHaveBeenCalled();
+  service.respondToOffer(offer.id, true);
+  service.respondToOffer(offer.id, true);
+  await checking;
+  expect(service.getOffer()).toBeUndefined();
+  expect(mocks.download).toHaveBeenCalledTimes(1);
+});
+it("settles a pending offer when the updater stops", async () => {
+  const service = await startUpdateService(window);
+  stop = service.stop;
+  const checking = service.check();
+  await vi.advanceTimersByTimeAsync(0);
+  expect(service.getOffer()).toBeDefined();
+  service.stop();
+  await checking;
+  expect(service.getOffer()).toBeUndefined();
+  expect(mocks.download).not.toHaveBeenCalled();
+});
 it("allows a manual check to cover the initial startup check", async () => {
   const service = await startUpdateService(window);
   stop = service.stop;
-  await service.check();
+  await checkAndAnswer(service, false);
   await vi.advanceTimersByTimeAsync(60_000);
   expect(mocks.fetch).toHaveBeenCalledTimes(2);
-  expect(mocks.dialog).toHaveBeenCalledTimes(1);
+  expect(offers()).toHaveLength(1);
 });
 it("opens only verified downloads and reports download failures even after a background prompt", async () => {
-  mocks.dialog.mockResolvedValue({ response: 0 });
   mocks.download.mockRejectedValueOnce(new Error("安装包完整性校验失败"));
   const service = await startUpdateService(window);
   stop = service.stop;
-  await vi.advanceTimersByTimeAsync(15_000);
+  await vi.advanceTimersByTimeAsync(5_000);
+  answerOffer(service, true);
+  await vi.advanceTimersByTimeAsync(0);
   expect(mocks.open).not.toHaveBeenCalled();
   expect(mocks.dialog).toHaveBeenLastCalledWith(
     window,
@@ -148,28 +200,28 @@ it("opens only verified downloads and reports download failures even after a bac
   );
   mocks.download.mockResolvedValue("/test/verified.dmg");
   mocks.open.mockResolvedValue("");
-  await service.check();
+  await checkAndAnswer(service, true);
   expect(mocks.open).toHaveBeenCalledWith("/test/verified.dmg");
   expect(window.setProgressBar).toHaveBeenLastCalledWith(-1);
 });
 it("keeps a Mac running after opening the DMG", async () => {
-  mocks.dialog.mockResolvedValue({ response: 0 });
   mocks.download.mockResolvedValue("/test/verified.dmg");
   mocks.open.mockResolvedValue("");
   const service = await startUpdateService(window);
   stop = service.stop;
-  await service.check();
+  await checkAndAnswer(service, true);
   expect(mocks.open).toHaveBeenCalledWith("/test/verified.dmg");
   expect(mocks.app.quit).not.toHaveBeenCalled();
 });
 it("shows download progress in the taskbar and the app, then clears it", async () => {
   vi.stubGlobal("process", { ...process, platform: "win32", arch: "x64" });
   mocks.spawn.mockReturnValue({ on: vi.fn().mockReturnThis(), unref: vi.fn() });
-  mocks.dialog.mockResolvedValue({ response: 0 });
   downloadWithProgress("C:\\test\\Interleaf-0.2.0-win-x64.exe");
   const service = await startUpdateService(window);
   stop = service.stop;
-  await vi.advanceTimersByTimeAsync(15_000);
+  await vi.advanceTimersByTimeAsync(5_000);
+  answerOffer(service, true);
+  await vi.advanceTimersByTimeAsync(0);
   expect(window.setProgressBar).toHaveBeenCalledWith(0.25);
   const reports = send.mock.calls
     .filter(([channel]) => channel === "interleaf:update-progress")
@@ -222,7 +274,7 @@ it("clears download progress before showing a download error", async () => {
   });
   const service = await startUpdateService(window);
   stop = service.stop;
-  await service.check();
+  await checkAndAnswer(service, true);
   expect(mocks.dialog).toHaveBeenLastCalledWith(
     window,
     expect.objectContaining({ type: "error", detail: "connection lost" }),
@@ -232,7 +284,6 @@ it("clears download progress before showing a download error", async () => {
 it("caps the taskbar progress when more bytes arrive than announced", async () => {
   vi.stubGlobal("process", { ...process, platform: "win32", arch: "x64" });
   mocks.spawn.mockReturnValue({ on: vi.fn().mockReturnThis(), unref: vi.fn() });
-  mocks.dialog.mockResolvedValue({ response: 0 });
   mocks.download.mockImplementationOnce(
     async (
       _update: unknown,
@@ -246,7 +297,7 @@ it("caps the taskbar progress when more bytes arrive than announced", async () =
   );
   const service = await startUpdateService(window);
   stop = service.stop;
-  await service.check();
+  await checkAndAnswer(service, true);
   expect(window.setProgressBar).toHaveBeenCalledWith(1);
   expect(window.setProgressBar).not.toHaveBeenCalledWith(1.5);
 });
@@ -255,11 +306,10 @@ it("installs the verified Windows update silently after Interleaf quits", async 
   const child = { on: vi.fn(), unref: vi.fn() };
   child.on.mockReturnValue(child);
   mocks.spawn.mockReturnValue(child);
-  mocks.dialog.mockResolvedValue({ response: 0 });
   mocks.download.mockResolvedValue("C:\\test\\Interleaf-0.2.0-win-x64.exe");
   const service = await startUpdateService(window);
   stop = service.stop;
-  await service.check();
+  await checkAndAnswer(service, true);
   expect(mocks.download).toHaveBeenCalledWith(
     expect.objectContaining({ installer: "Interleaf-0.2.0-win-x64.exe" }),
     expect.any(String),
@@ -272,7 +322,7 @@ it("installs the verified Windows update silently after Interleaf quits", async 
   expect(mocks.spawn).not.toHaveBeenCalled();
   expect(mocks.app.once).toHaveBeenCalledWith("quit", expect.any(Function));
   // A quit cancelled to keep reading arms the same installer only once.
-  await service.check();
+  await checkAndAnswer(service, true);
   expect(mocks.app.once).toHaveBeenCalledTimes(1);
   mocks.app.once.mock.calls[0][1]();
   expect(mocks.spawn).toHaveBeenCalledWith(
@@ -332,23 +382,23 @@ it("falls back to the DMG when the app cannot replace itself", async () => {
   mocks.inPlace.mockResolvedValue(false);
   const service = await startUpdateService(window);
   stop = service.stop;
-  await service.check();
+  await checkAndAnswer(service, false);
   expect(mocks.download).not.toHaveBeenCalled();
-  expect(mocks.dialog).toHaveBeenCalledWith(
-    window,
-    expect.objectContaining({ buttons: ["下载安装包", "稍后"] }),
+  expect(send).toHaveBeenCalledWith(
+    "interleaf:update-offer",
+    expect.objectContaining({ actionLabel: "下载安装包" }),
   );
   mocks.inPlace.mockResolvedValue(true);
   mocks.download.mockResolvedValue("/test/user-data/updates/x/Interleaf.zip");
   mocks.stage.mockRejectedValue(
     new Error("Code signature did not pass validation"),
   );
-  await service.check();
+  await checkAndAnswer(service, false);
   expect(mocks.rm).toHaveBeenCalled();
   expect(mocks.quitAndInstall).not.toHaveBeenCalled();
-  expect(mocks.dialog).toHaveBeenLastCalledWith(
-    window,
-    expect.objectContaining({ buttons: ["下载安装包", "稍后"] }),
+  expect(offers()).toHaveLength(2);
+  expect(offers().at(-1)?.[1]).toEqual(
+    expect.objectContaining({ actionLabel: "下载安装包" }),
   );
 });
 it("does not contact GitHub in development mode", async () => {

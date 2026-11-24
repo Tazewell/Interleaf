@@ -1,6 +1,6 @@
 import { contextBridge, ipcRenderer } from "electron";
 import type { ProxySettings } from "../../../packages/interleaf-core/src/proxy-settings";
-import type { UpdateProgress } from "../../../packages/interleaf-core/src/update-progress";
+import type { UpdateOffer, UpdateProgress } from "../../../packages/interleaf-core/src/update-progress";
 async function proxyRequest(channel: string, ...args: unknown[]) {
   try {
     return await ipcRenderer.invoke(channel, ...args);
@@ -29,6 +29,28 @@ contextBridge.exposeInMainWorld("interleafDesktop", {
   diagnosticSettings: (settings: unknown) =>
     ipcRenderer.send("interleaf:diagnostic-settings", settings),
   checkForUpdates: () => ipcRenderer.invoke("interleaf:check-updates"),
+  onUpdateOffer: (callback: (offer: UpdateOffer) => void) => {
+    let active = true;
+    let latest = 0;
+    const show = (offer: UpdateOffer | undefined) => {
+      if (!active || !offer || offer.id <= latest) return;
+      latest = offer.id;
+      callback(offer);
+    };
+    const listener = (_event: unknown, offer: UpdateOffer) => show(offer);
+    ipcRenderer.on("interleaf:update-offer", listener);
+    // A new renderer may attach after the offer was sent.
+    void ipcRenderer
+      .invoke("interleaf:get-update-offer")
+      .then(show)
+      .catch(() => {});
+    return () => {
+      active = false;
+      ipcRenderer.removeListener("interleaf:update-offer", listener);
+    };
+  },
+  respondToUpdateOffer: (id: number, accepted: boolean) =>
+    proxyRequest("interleaf:respond-update-offer", id, accepted),
   onUpdateProgress: (callback: (progress: UpdateProgress | null) => void) => {
     const listener = (_event: unknown, progress: UpdateProgress | null) =>
       callback(progress);
