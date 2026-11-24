@@ -9,6 +9,7 @@ import {
   type ReaderEvents,
   type PDFBlock,
   type PDFLocation,
+  type Processing,
 } from "@interleaf/core";
 const fixture = vi.hoisted(() => ({
   nativeProps: undefined as Record<string, unknown> | undefined,
@@ -38,6 +39,7 @@ const fixture = vi.hoisted(() => ({
 vi.mock("@interleaf/api", () => ({
   api: {
     assistance: vi.fn(async () => undefined),
+    setAssistance: vi.fn(),
     translationStream: vi.fn(async () => {}),
   },
   blockImageURL: () => "",
@@ -78,17 +80,25 @@ vi.mock("./NativePDFReadingView", () => ({
   },
 }));
 import { PDFReadingView } from "./PDFReadingView";
+import { api } from "@interleaf/api";
 import { choosePDFFormat, clickPDFContent } from "./pdf-reading-test-helpers";
 let root: Root, host: HTMLDivElement;
 let facade: ReaderAdapter;
-async function render(id = "doc", blocks: PDFBlock[] = []) {
+async function render(
+  id = "doc",
+  blocks: PDFBlock[] = [],
+  processing?: Processing,
+  translationSetup?: Parameters<typeof PDFReadingView>[0]["translationSetup"],
+) {
   await act(async () =>
     root.render(
       <PDFReadingView
-        document={{ id, type: "pdf" } as Document}
+        document={{ id, type: "pdf", library: "papers" } as Document}
         theme={defaultTheme}
         annotations={[]}
         blocks={blocks}
+        processing={processing}
+        translationSetup={translationSetup}
         events={{ location: vi.fn(), selection: vi.fn() }}
         onReady={(adapter) => {
           facade = adapter;
@@ -160,13 +170,107 @@ it("separates three reading contents from the layout choice", async () => {
     "原版式",
   );
 });
+const untranslated: Processing = {
+  documentId: "doc",
+  phase: "translating",
+  status: "paused",
+  enabled: false,
+  pagesDone: 4,
+  pagesTotal: 4,
+  translationsDone: 0,
+  translationsTotal: 8,
+  detail: "等待手动翻译",
+  updatedAt: "2026-11-24T07:00:00Z",
+};
+it("offers to start a fresh paper in flow, and starts only after clicking", async () => {
+  await render("doc", [], untranslated);
+  expect(host.querySelector(".translation-prompt")).toBeNull();
+  await clickPDFContent(host, "对照");
+  const prompt = host.querySelector(".translation-prompt");
+  expect(prompt?.textContent).toContain("这篇论文还没有译文");
+  expect(prompt?.querySelector("button")?.textContent).toBe("开始翻译");
+  expect(api.setAssistance).not.toHaveBeenCalled();
+  vi.mocked(api.setAssistance).mockResolvedValueOnce({
+    ...untranslated,
+    enabled: true,
+    status: "running",
+    updatedAt: "2026-11-24T07:00:01Z",
+  });
+  await act(async () => prompt!.querySelector("button")!.click());
+  expect(api.setAssistance).toHaveBeenCalledExactlyOnceWith("doc", "start");
+  expect(host.querySelector(".translation-prompt")).toBeNull();
+});
+it("shows the remaining work in native comparison and reuses resume", async () => {
+  await render("doc", [], {
+    ...untranslated,
+    startedAt: untranslated.updatedAt,
+    translationsDone: 3,
+  });
+  await click("对照");
+  expect(host.querySelector("[data-native-reader]")).not.toBeNull();
+  const prompt = host.querySelector(".translation-prompt");
+  expect(prompt?.textContent).toContain("已翻译 3 / 8 段");
+  expect(prompt?.querySelector("button")?.textContent).toBe("继续翻译");
+  await act(async () => prompt!.querySelector("button")!.click());
+  expect(api.setAssistance).toHaveBeenCalledExactlyOnceWith("doc", "resume");
+});
+it("does not prompt for a finished paper whose whole-document job is paused", async () => {
+  await render("doc", [], {
+    ...untranslated,
+    phase: "ready",
+    translating: { status: "complete", detail: "翻译完成" },
+    translationsDone: 8,
+  });
+  await clickPDFContent(host, "对照");
+  expect(host.querySelector(".translation-prompt")).toBeNull();
+});
+it("opens AI setup from the comparison prompt when configuration is missing", async () => {
+  const open = vi.fn();
+  await render("doc", [], untranslated, { connectionRequired: true, open });
+  await clickPDFContent(host, "对照");
+  const button = host.querySelector<HTMLButtonElement>(
+    ".translation-prompt button",
+  );
+  expect(button?.textContent).toBe("配置 AI 连接");
+  await act(async () => button!.click());
+  expect(open).toHaveBeenCalledExactlyOnceWith("connection", button);
+  expect(api.setAssistance).not.toHaveBeenCalled();
+});
+it("offers model setup once an enabled translation waits for configuration", async () => {
+  const open = vi.fn();
+  await render("doc", [], untranslated, { connectionRequired: false, open });
+  await clickPDFContent(host, "对照");
+  expect(host.querySelector(".translation-prompt button")?.textContent).toBe(
+    "开始翻译",
+  );
+  await render(
+    "doc",
+    [],
+    {
+      ...untranslated,
+      enabled: true,
+      status: "waiting",
+      translating: {
+        status: "waiting",
+        detail: "请配置 API 翻译模型后继续翻译",
+      },
+    },
+    { connectionRequired: false, open },
+  );
+  const setup = host.querySelector<HTMLButtonElement>(
+    ".translation-prompt button",
+  );
+  expect(setup?.textContent).toBe("配置翻译模型");
+  await act(async () => setup!.click());
+  expect(open).toHaveBeenCalledExactlyOnceWith("models", setup);
+});
 it.each(["对照", "译文"] as const)(
   "opens %s in flow on the first visit without an explicit format selection",
   async (content) => {
     await clickPDFContent(host, content);
-    expect(host.querySelector('[aria-label="排版方式"]')?.textContent).toContain(
-      "流式",
-    );
+    expect(
+      host.querySelector('[aria-label="排版方式"]')?.textContent,
+    ).toContain("流式");
     expect(host.querySelector(".translation-document")).not.toBeNull();
     expect(host.querySelector("[data-native-reader]")).toBeNull();
   },

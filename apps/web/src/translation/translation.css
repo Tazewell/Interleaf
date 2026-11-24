@@ -59,6 +59,47 @@
   outline: 2px solid var(--ring);
   outline-offset: -2px;
 }
+.translation-prompt-host {
+  flex: none;
+  min-width: 0;
+}
+.translation-prompt-host:empty {
+  display: none;
+}
+.translation-prompt {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+  margin: 0 12px 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--ui-accent-soft);
+}
+.translation-prompt-copy {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  font-size: 12px;
+  color: var(--ink-muted);
+}
+.translation-prompt-copy strong {
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 600;
+}
+.translation-prompt-action[data-slot="button"] {
+  min-height: 32px;
+  padding-inline: 10px;
+  border-radius: 10px;
+  background: var(--ui-accent);
+  color: var(--ui-accent-foreground);
+}
+.translation-prompt-action[data-slot="button"]:hover {
+  background: color-mix(in srgb, var(--ui-accent) 90%, var(--ui-panel));
+}
 .native-pdf-reading {
   position: relative;
   display: flex;

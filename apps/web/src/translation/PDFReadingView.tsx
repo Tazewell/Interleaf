@@ -54,7 +54,7 @@ import { installCitationHover } from "../engines/citation-hover";
 import { numberedReference } from "../engines/pdf-citations";
 import "./translation.css";
 
-import { AssistanceControls } from "./AssistanceControls";
+import { AssistanceControls, type TranslationSetup } from "./AssistanceControls";
 import { NativePDFReadingView } from "./NativePDFReadingView";
 import { chapterRange, headingPages } from "./chapters";
 import { searchPDFBlocks } from "./pdf-search";
@@ -100,6 +100,7 @@ export function PDFReadingView({
   annotations,
   blocks,
   processing,
+  translationSetup,
   toolbarHost,
   pageNavigation,
   sidebarsOpen,
@@ -115,6 +116,7 @@ export function PDFReadingView({
   annotations: Annotation[];
   blocks: PDFBlock[];
   processing?: Processing;
+  translationSetup?: TranslationSetup;
   toolbarHost?: HTMLElement | null;
   autoCenterHost?: HTMLElement | null;
   pageNavigation?: ReactNode;
@@ -133,6 +135,8 @@ export function PDFReadingView({
   const format = readingFormat(content, preferredFormat);
   const mode = readingMode(content, format);
   const { translations, error } = useTranslations(doc.id);
+  const [translationPromptHost, setTranslationPromptHost] =
+    useState<HTMLDivElement | null>(null);
   const [popup, setPopup] = useState<{ block: PDFBlock; rect: DOMRect }>();
   const [engine, setEngine] = useState<ReaderAdapter>();
   const [engineDocument, setEngineDocument] = useState<string>();
@@ -1423,6 +1427,12 @@ export function PDFReadingView({
           documentId={doc.id}
           processing={processing}
           library={doc.library}
+          promptHost={
+            content !== "source" && doc.library === "papers"
+              ? translationPromptHost
+              : null
+          }
+          translationSetup={translationSetup}
           chapter={() => {
             const location = facade.current?.getLocation();
             if (location?.type !== "pdf") return undefined;
@@ -1465,6 +1475,10 @@ export function PDFReadingView({
       data-dark-contrast={theme.pdfDarkContrast ?? "soft"}
     >
       {toolbarHost ? createPortal(toolbar, toolbarHost) : toolbar}
+      <div
+        className="translation-prompt-host"
+        ref={setTranslationPromptHost}
+      />
       {mode === "translation" && (
         <div className="pdf-reading-controls">
           <div className="pdf-page-navigation">{pageNavigation}</div>

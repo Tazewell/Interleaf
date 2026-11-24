@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import {
   Check,
   FileMagnifyingGlass as FileSearch,
@@ -23,6 +24,10 @@ import { toast } from "sonner";
 import type { PageRange } from "./chapters";
 
 type Action = "start" | "pause" | "resume" | "chapter";
+export type TranslationSetup = {
+  connectionRequired: boolean;
+  open: (section: "connection" | "models", trigger: HTMLButtonElement) => void;
+};
 
 /**
  * Papers translate the whole document with start, pause and resume. Books
@@ -34,6 +39,8 @@ export function AssistanceControls({
   library = "papers",
   chapter,
   epubChapter,
+  promptHost,
+  translationSetup,
 }: {
   documentId: string;
   processing?: Processing;
@@ -41,6 +48,8 @@ export function AssistanceControls({
   /** The chapter at the reading position, read when the button is pressed. */
   chapter?: () => PageRange | undefined;
   epubChapter?: () => EPUBLocation | undefined;
+  promptHost?: HTMLElement | null;
+  translationSetup?: TranslationSetup;
 }) {
   const [saved, setSaved] = useState<Processing>();
   const [busy, setBusy] = useState(false);
@@ -121,47 +130,77 @@ export function AssistanceControls({
     if (result.parsing) toast("正在解析本章，完成后开始翻译");
     return api.assistance(documentId);
   };
+  const runAction = async () => {
+    const operation = ++serial.current;
+    setBusy(true);
+    try {
+      const next = await run();
+      if (next && operation === serial.current) setSaved(next);
+    } catch (e) {
+      if (operation === serial.current) toast.error((e as Error).message);
+    } finally {
+      if (operation === serial.current) setBusy(false);
+    }
+  };
+  const done = job?.translationsDone ?? 0;
+  const total = job?.translationsTotal ?? 0;
+  const translated =
+    !job?.retranslating &&
+    (job?.phase === "ready" ||
+      job?.translating?.status === "complete" ||
+      (total > 0 && done >= total));
+  const needsPrompt =
+    promptHost && job && !complete && !paperParsing && !translated;
+  const moveAction = needsPrompt && action !== "pause" && action !== "chapter";
+  const waitingForSetup =
+    needsPrompt &&
+    job.enabled &&
+    (job.translating?.status ?? job.status) === "waiting";
+  const setupSection =
+    translationSetup &&
+    (translationSetup.connectionRequired && (moveAction || waitingForSetup)
+      ? "connection"
+      : waitingForSetup
+        ? "models"
+        : undefined);
+  const promptDetail =
+    done > 0 && done < total
+      ? `已翻译 ${done} / ${total} 段`
+      : setupSection
+        ? "完成配置后即可翻译全文。"
+        : undefined;
   return (
     <div className="assistance-controls">
-      <Button
-        variant="ghost"
-        size="sm"
-        disabled={busy || !job || finished || parsingPending}
-        title={
-          action === "chapter"
-            ? "翻译当前完整章节，复用已完成译文"
-            : job?.enabled
-              ? job.detail
-              : epubChapter
-                ? "继续已请求章节的翻译"
-                : "使用当前 AI 连接翻译全文与公式"
-        }
-        onClick={async () => {
-          const operation = ++serial.current;
-          setBusy(true);
-          try {
-            const next = await run();
-            if (next && operation === serial.current) setSaved(next);
-          } catch (e) {
-            if (operation === serial.current) toast.error((e as Error).message);
-          } finally {
-            if (operation === serial.current) setBusy(false);
+      {!moveAction && (
+        <Button
+          variant="ghost"
+          size="sm"
+          disabled={busy || !job || finished || parsingPending}
+          title={
+            action === "chapter"
+              ? "翻译当前完整章节，复用已完成译文"
+              : job?.enabled
+                ? job.detail
+                : epubChapter
+                  ? "继续已请求章节的翻译"
+                  : "使用当前 AI 连接翻译全文与公式"
           }
-        }}
-      >
-        {parsingPending ? (
-          <FileSearch />
-        ) : finished ? (
-          <Check />
-        ) : action === "pause" ? (
-          <Pause />
-        ) : action === "resume" && job?.status === "failed" ? (
-          <RotateCcw />
-        ) : (
-          <Languages />
-        )}
-        {actionLabel}
-      </Button>
+          onClick={runAction}
+        >
+          {parsingPending ? (
+            <FileSearch />
+          ) : finished ? (
+            <Check />
+          ) : action === "pause" ? (
+            <Pause />
+          ) : action === "resume" && job?.status === "failed" ? (
+            <RotateCcw />
+          ) : (
+            <Languages />
+          )}
+          {actionLabel}
+        </Button>
+      )}
       {finished && library === "papers" && !epubChapter && (
         <AlertDialog open={confirming} onOpenChange={setConfirming}>
           <AlertDialogTrigger
@@ -215,6 +254,45 @@ export function AssistanceControls({
           </AlertDialogContent>
         </AlertDialog>
       )}
+      {promptHost &&
+        job &&
+        (moveAction || setupSection) &&
+        createPortal(
+          <div className="translation-prompt">
+            <div className="translation-prompt-copy" role="status">
+              <strong>
+                {job.retranslating
+                  ? "重译尚未完成"
+                  : done > 0
+                    ? "译文尚未完成"
+                    : "这篇论文还没有译文"}
+              </strong>
+              {promptDetail && <span>{promptDetail}</span>}
+            </div>
+            <Button
+              className="translation-prompt-action"
+              size="sm"
+              disabled={busy}
+              onClick={(event) => {
+                if (setupSection)
+                  translationSetup?.open(setupSection, event.currentTarget);
+                else void runAction();
+              }}
+            >
+              <Languages aria-hidden="true" />
+              {setupSection === "connection"
+                ? "配置 AI 连接"
+                : setupSection === "models"
+                  ? "配置翻译模型"
+                  : busy
+                    ? "正在提交…"
+                    : actionLabel === "翻译"
+                      ? "开始翻译"
+                      : actionLabel}
+            </Button>
+          </div>,
+          promptHost,
+        )}
     </div>
   );
 }

@@ -1776,6 +1776,13 @@ export function Workspace({
                   annotations={annotations}
                   blocks={blocks}
                   processing={processing}
+                  translationSetup={
+                    aiConfig && {
+                      connectionRequired: !provider,
+                      open: (section, returnFocus) =>
+                        onSettings({ section, returnFocus }),
+                    }
+                  }
                   toolbarHost={readingToolbar}
                   autoCenterHost={sourceAutoCenterToolbar}
                   pageNavigation={pageNavigation}
