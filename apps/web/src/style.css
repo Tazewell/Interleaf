@@ -1262,13 +1262,17 @@ kbd {
      those layers inside the reader, below app dialogs and popovers. */
   isolation: isolate;
   overflow: auto;
-  scrollbar-width: none;
-  scrollbar-gutter: auto;
 }
-.interleaf-engine.pdf-container::-webkit-scrollbar {
+.translation-panes[data-mode="source"] .interleaf-engine.pdf-container {
+  scrollbar-gutter: stable;
+}
+.interleaf-engine.pdf-container:not(.translation-panes[data-mode="source"] *) {
+  scrollbar-width: none;
+}
+.interleaf-engine.pdf-container:not(
+    .translation-panes[data-mode="source"] *
+  )::-webkit-scrollbar {
   display: none;
-  width: 0;
-  height: 0;
 }
 .pdfViewer .page {
   margin: 20px auto !important;

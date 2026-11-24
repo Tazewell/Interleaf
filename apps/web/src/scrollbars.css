@@ -3,7 +3,8 @@
   scrollbar-width: thin;
   scrollbar-color: transparent transparent;
 }
-[data-interleaf-scrolling] {
+[data-interleaf-scrolling],
+.translation-panes[data-mode="source"] .interleaf-engine.pdf-container {
   scrollbar-color: color-mix(in srgb, var(--ink, #17181c) 32%, transparent)
     transparent;
 }
@@ -21,7 +22,9 @@
   border-radius: 8px;
   background-clip: padding-box;
 }
-[data-interleaf-scrolling]::-webkit-scrollbar-thumb {
+[data-interleaf-scrolling]::-webkit-scrollbar-thumb,
+.translation-panes[data-mode="source"]
+  .interleaf-engine.pdf-container::-webkit-scrollbar-thumb {
   background-color: color-mix(in srgb, var(--ink, #17181c) 32%, transparent);
 }
 [data-slot="scroll-area-scrollbar"] {

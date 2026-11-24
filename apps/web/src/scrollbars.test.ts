@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { readFileSync } from "node:fs";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { installScrollbars } from "./scrollbars";
 
@@ -68,7 +69,7 @@ it("keeps one wakeup through a scroll burst instead of scheduling per event", ()
   expect(vi.getTimerCount()).toBe(1);
 });
 
-it("skips the PDF host whose native scrollbar is hidden, while keeping nested scrollbars active", () => {
+it("skips scrollbar fade timers on PDF hosts while keeping nested scrollbars active", () => {
   const host = container();
   host.className = "interleaf-engine pdf-container";
   const nested = document.createElement("div");
@@ -85,6 +86,28 @@ it("skips the PDF host whose native scrollbar is hidden, while keeping nested sc
   expect(nested.hasAttribute(scrolling)).toBe(true);
   expect(host.hasAttribute(scrolling)).toBe(false);
   expect(vi.getTimerCount()).toBe(1);
+});
+
+it("allows native scrollbars on both axes of the original PDF reader", () => {
+  const style = document.createElement("style");
+  const scrollbarStyles = readFileSync("apps/web/src/scrollbars.css", "utf8");
+  const readerStyles = readFileSync("apps/web/src/style.css", "utf8").replace(
+    /^@import .*$/gm,
+    "",
+  );
+  style.textContent = `${scrollbarStyles}\n${readerStyles}`;
+  document.body.append(style);
+  const panes = container();
+  panes.className = "translation-panes";
+  panes.dataset.mode = "source";
+  const host = document.createElement("div");
+  host.className = "interleaf-engine pdf-container";
+  panes.append(host);
+
+  const computed = getComputedStyle(host);
+  expect(computed.overflow).toBe("auto");
+  expect(computed.getPropertyValue("scrollbar-width")).toBe("thin");
+  expect(computed.getPropertyValue("scrollbar-color")).toContain("var(--ink");
 });
 
 it("hides exactly one second after the last event even across a pending wakeup", () => {

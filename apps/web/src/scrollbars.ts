@@ -14,8 +14,8 @@ export function installScrollbars(doc: Document) {
     // Avoid instanceof: EPUB elements belong to a different Window.
     if (!target || !("nodeType" in target) || target.nodeType !== 1) return;
     const element = target as Element;
-    // This host hides native scrollbars in style.css. Toggling their inherited
-    // color would still invalidate the PDF text layer despite being invisible.
+    // PDF scrollbar visibility is static. Avoid inherited color changes that
+    // would invalidate the PDF text layer during scrolling.
     if (element.matches(".interleaf-engine.pdf-container")) return;
     const deadline = performance.now() + 1000;
     const current = active.get(element);
