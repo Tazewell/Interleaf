@@ -78,7 +78,7 @@ vi.mock("./NativePDFReadingView", () => ({
   },
 }));
 import { PDFReadingView } from "./PDFReadingView";
-import { choosePDFFormat } from "./pdf-reading-test-helpers";
+import { choosePDFFormat, clickPDFContent } from "./pdf-reading-test-helpers";
 let root: Root, host: HTMLDivElement;
 let facade: ReaderAdapter;
 async function render(id = "doc", blocks: PDFBlock[] = []) {
@@ -160,7 +160,19 @@ it("separates three reading contents from the layout choice", async () => {
     "原版式",
   );
 });
+it.each(["对照", "译文"] as const)(
+  "opens %s in flow on the first visit without an explicit format selection",
+  async (content) => {
+    await clickPDFContent(host, content);
+    expect(host.querySelector('[aria-label="排版方式"]')?.textContent).toContain(
+      "流式",
+    );
+    expect(host.querySelector(".translation-document")).not.toBeNull();
+    expect(host.querySelector("[data-native-reader]")).toBeNull();
+  },
+);
 it("identifies native single-translation search results as translated text", async () => {
+  await choosePDFFormat(host, "原版式");
   await click("译文");
   expect(await facade.search("译文")).toEqual([
     { id: "native-only", side: "translation" },
@@ -181,9 +193,13 @@ it("shows the same sync switch only in comparisons and retains its setting acros
   await click("译文");
   expect(sync()).toBeUndefined();
 });
-it.each(["原版式", "流式"] as const)(
-  "opens paragraph comparison in the reader's chosen %s format",
-  async (format) => {
+it.each([
+  { selection: undefined, expected: "流式" },
+  { selection: "原版式", expected: "原版式" },
+  { selection: "流式", expected: "流式" },
+] as const)(
+  "opens paragraph comparison in $expected with format selection $selection",
+  async ({ selection, expected }) => {
     const block: PDFBlock = {
       id: "p3",
       page: 3,
@@ -192,7 +208,7 @@ it.each(["原版式", "流式"] as const)(
       bounds: { x: 0.15, y: 0.55, width: 0.7, height: 0.2 },
     };
     await render("doc", [block]);
-    await choosePDFFormat(host, format);
+    if (selection) await choosePDFFormat(host, selection);
     await act(async () =>
       fixture.sourceEvents!.blockAction!(block, "translate"),
     );
@@ -203,11 +219,11 @@ it.each(["原版式", "流式"] as const)(
     await act(async () => enter!.click());
     expect(
       host.querySelector('[aria-label="排版方式"]')?.textContent,
-    ).toContain(format);
+    ).toContain(expected);
     expect(
       host.querySelector('[role="tab"][aria-selected="true"]')?.textContent,
     ).toBe("对照");
-    if (format === "原版式")
+    if (expected === "原版式")
       expect(fixture.nativeProps?.initialLocation).toEqual({
         type: "pdf",
         page: 3,
@@ -231,6 +247,7 @@ it("offers one native translated page and preserves the logical position across 
   });
 });
 it("keeps the chosen content when switching between native and flowing layouts", async () => {
+  await choosePDFFormat(host, "原版式");
   await click("译文");
   expect(fixture.nativeProps?.layout).toBe("translation-only");
   await choosePDFFormat(host, "流式");
@@ -240,10 +257,12 @@ it("keeps the chosen content when switching between native and flowing layouts",
   ).toBe("译文");
   await choosePDFFormat(host, "原版式");
   expect(fixture.nativeProps?.layout).toBe("translation-only");
-  await click("对照");
+  await clickPDFContent(host, "原文");
+  await clickPDFContent(host, "对照");
   expect(fixture.nativeProps?.layout).toBe("side-by-side");
 });
 it("returns to the original for an explicit source reference from a native single translation", async () => {
+  await choosePDFFormat(host, "原版式");
   await click("译文");
   let pending: Promise<boolean> | undefined;
   const location = {
@@ -265,6 +284,7 @@ it("returns to the original for an explicit source reference from a native singl
   ).toBe("原文");
 });
 it("keeps a page jump in the translated PDF and opens source rectangles in the original", async () => {
+  await choosePDFFormat(host, "原版式");
   await click("译文");
   await facade.goTo({ type: "pdf", page: 2 });
   expect(fixture.native.goTo).toHaveBeenCalledWith({ type: "pdf", page: 2 });
@@ -284,6 +304,7 @@ it("keeps a page jump in the translated PDF and opens source rectangles in the o
   ).toBe("原文");
 });
 it("settles pending source navigation when the original fails to open or the document changes", async () => {
+  await choosePDFFormat(host, "原版式");
   await click("译文");
   fixture.holdSource = true;
   let pending: Promise<boolean> | undefined;
@@ -362,6 +383,7 @@ it("opens the native layout at the independent flow pane the reader last scrolle
   });
 });
 it("can change native layouts while the current one is regenerating without reading a disposed viewport", async () => {
+  await choosePDFFormat(host, "原版式");
   await click("译文");
   const snapshot: PDFLocation = { type: "pdf", page: 8, y: 0.65 };
   await act(async () =>

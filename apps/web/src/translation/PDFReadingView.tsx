@@ -69,6 +69,12 @@ type Mode =
   "source" | "parallel" | "native" | "translation" | "native-translation";
 const isNativeMode = (value: Mode): value is "native" | "native-translation" =>
   value === "native" || value === "native-translation";
+function readingFormat(
+  content: PDFReadingContent,
+  preference?: PDFReadingFormat,
+): PDFReadingFormat {
+  return preference ?? (content === "source" ? "native" : "flow");
+}
 function readingMode(
   content: PDFReadingContent,
   format: PDFReadingFormat,
@@ -121,9 +127,10 @@ export function PDFReadingView({
   events: ReaderEvents;
 }) {
   const [content, setContent] = useState<PDFReadingContent>("source"),
-    [format, setFormat] = useState<PDFReadingFormat>("native"),
+    [preferredFormat, setPreferredFormat] = useState<PDFReadingFormat>(),
     [syncEnabled, setSyncEnabled] = useState(true);
   const split = useTranslationSplit();
+  const format = readingFormat(content, preferredFormat);
   const mode = readingMode(content, format);
   const { translations, error } = useTranslations(doc.id);
   const [popup, setPopup] = useState<{ block: PDFBlock; rect: DOMRect }>();
@@ -1210,11 +1217,14 @@ export function PDFReadingView({
   };
   const changeMode = (
     nextContent: PDFReadingContent,
-    nextFormat = format,
+    nextFormat?: PDFReadingFormat,
     fromBlock?: PDFBlock,
   ) => {
-    const value = readingMode(nextContent, nextFormat);
-    setFormat(nextFormat);
+    const value = readingMode(
+      nextContent,
+      readingFormat(nextContent, nextFormat ?? preferredFormat),
+    );
+    if (nextFormat !== undefined) setPreferredFormat(nextFormat);
     if (mode === value) {
       if (fromBlock) {
         setPopup(undefined);
@@ -1695,7 +1705,7 @@ export function PDFReadingView({
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={() => changeMode("parallel", format, popup.block)}
+                onClick={() => changeMode("parallel", undefined, popup.block)}
               >
                 进入双栏对照
               </Button>

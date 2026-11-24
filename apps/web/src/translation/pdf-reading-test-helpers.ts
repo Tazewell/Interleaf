@@ -9,7 +9,6 @@ export async function choosePDFFormat(
     '[aria-label="排版方式"]',
   );
   expect(trigger).not.toBeNull();
-  if (trigger!.textContent?.includes(label)) return;
   await act(async () => trigger!.click());
   const option = [
     ...document.querySelectorAll<HTMLElement>('[role="option"]'),
