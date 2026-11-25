@@ -8225,8 +8225,17 @@ export interface components {
             stage: "prepare" | "layout" | "composing" | "ready";
             done: number;
             total: number;
+            progress?: components["schemas"]["NativePDFReadingProgress"];
             error?: string;
             metadata?: components["schemas"]["NativePDFReadingManifest"];
+        };
+        /** @description Live engine progress when available. An absent percentage indicates indeterminate progress. */
+        NativePDFReadingProgress: {
+            /** @enum {string} */
+            phase?: "preparing" | "layout" | "terminology" | "translation" | "typesetting" | "saving";
+            percent?: number;
+            elapsedSeconds: number;
+            remainingSeconds?: number;
         };
     };
     responses: never;

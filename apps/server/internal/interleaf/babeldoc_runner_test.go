@@ -100,7 +100,7 @@ printf '%%PDF-1.7 translation\n%%%%EOF\n' > "$7/original.no_watermark.zh.mono.pd
 		t.Fatal(err)
 	}
 	connection := APIConnection{Protocol: "openai", URL: "http://127.0.0.1:1234/custom/v1/chat/completions", Key: "fixture-key", Model: "wrong model"}
-	result, err := engine.translate(t.Context(), work, connection, "model with spaces", "Use precise terms.")
+	result, err := engine.translate(t.Context(), work, connection, "model with spaces", "Use precise terms.", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -121,7 +121,7 @@ func TestBabelDOCRejectsIncompleteOrFailedOutput(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			engine, work := setupBabelDOCExecutable(t, body)
 			conn := APIConnection{Protocol: "openai", URL: "http://localhost:1234/v1", Key: "fixture-key"}
-			result, err := engine.translate(t.Context(), work, conn, "chosen-model", "")
+			result, err := engine.translate(t.Context(), work, conn, "chosen-model", "", nil)
 			if err == nil || len(result) > 0 || strings.Contains(err.Error(), conn.Key) {
 				t.Fatalf("expected safe output failure, got %v and %d bytes", err, len(result))
 			}
@@ -135,7 +135,7 @@ func TestBabelDOCStopsOnCanceledContext(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), 80*time.Millisecond)
 	defer cancel()
 	start := time.Now()
-	if result, err := engine.translate(ctx, work, conn, "chosen-model", ""); err == nil || len(result) > 0 {
+	if result, err := engine.translate(ctx, work, conn, "chosen-model", "", nil); err == nil || len(result) > 0 {
 		t.Fatalf("expected canceled translation, got %v and %d bytes", err, len(result))
 	}
 	if time.Since(start) > 3*time.Second {

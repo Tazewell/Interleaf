@@ -92,6 +92,7 @@ type nativeReadingStatus struct {
 	Total    int                    `json:"total"`
 	Error    string                 `json:"error,omitempty"`
 	Metadata *nativeReadingManifest `json:"metadata,omitempty"`
+	Progress *nativeReadingProgress `json:"progress,omitempty"`
 }
 type nativeReadingJob struct {
 	mu         sync.Mutex
@@ -103,6 +104,7 @@ type nativeReadingJob struct {
 	cancel     context.CancelFunc
 	done       chan struct{}
 	finishedAt time.Time
+	progress   babeldocReadingProgress
 }
 
 // Child progress has its own lock because it is also used by PDF exports.
@@ -110,6 +112,13 @@ type nativeReadingJob struct {
 // still describes a composing pass with a different page total.
 func (j *nativeReadingJob) snapshotLocked() nativeReadingStatus {
 	state := j.state
+	if !j.progress.startedAt.IsZero() {
+		now := j.finishedAt
+		if now.IsZero() {
+			now = time.Now()
+		}
+		state.Progress = j.progress.snapshot(now, state.Status)
+	}
 	if j.source != nil && (state.Status == "preparing" || state.Status == "running") {
 		j.source.mu.Lock()
 		progress := j.source.state
@@ -420,11 +429,14 @@ func (s *Server) createNativeReading(w http.ResponseWriter, r *http.Request) {
 	child, cancel := context.WithTimeout(ctx, bilingualPDFTTL)
 	source := &bilingualJob{documentID: v.documentID, paperID: v.paperID, work: work, originalHash: v.originalHash, layoutHash: v.layoutHash, reading: v.reading, ctx: child, targets: map[string]string{}}
 	j := &nativeReadingJob{state: nativeReadingStatus{ID: id(), CacheKey: v.key, Status: "preparing", Stage: "prepare"}, documentID: v.documentID, layout: v.layoutMode, engine: engine, source: source, cancel: cancel, done: make(chan struct{})}
+	if v.babeldoc != nil {
+		j.progress.start(time.Now())
+	}
 	if s.nativeReadingJobs == nil {
 		s.nativeReadingJobs = map[string]*nativeReadingJob{}
 	}
 	s.nativeReadingJobs[j.state.ID] = j
-	initial := j.state
+	initial := j.snapshotLocked()
 	accepted = true
 	go func() {
 		defer finish()

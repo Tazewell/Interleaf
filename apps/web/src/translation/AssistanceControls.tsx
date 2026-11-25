@@ -21,6 +21,7 @@ import {
   AlertDialogCancel,
 } from "@interleaf/ui/components/alert-dialog";
 import { toast } from "sonner";
+import { ReadingTranslationProgress } from "./ReadingTranslationProgress";
 import type { PageRange } from "./chapters";
 
 type Action = "start" | "pause" | "resume" | "chapter";
@@ -41,6 +42,7 @@ export function AssistanceControls({
   epubChapter,
   promptHost,
   translationSetup,
+  showProgress = false,
 }: {
   documentId: string;
   processing?: Processing;
@@ -50,6 +52,7 @@ export function AssistanceControls({
   epubChapter?: () => EPUBLocation | undefined;
   promptHost?: HTMLElement | null;
   translationSetup?: TranslationSetup;
+  showProgress?: boolean;
 }) {
   const [saved, setSaved] = useState<Processing>();
   const [busy, setBusy] = useState(false);
@@ -171,6 +174,19 @@ export function AssistanceControls({
         : undefined;
   return (
     <div className="assistance-controls">
+      {showProgress &&
+        !paperParsing &&
+        action === "pause" &&
+        (job?.translating?.status ?? job?.status) === "running" &&
+        total > 0 &&
+        done < total && (
+          <ReadingTranslationProgress
+            label="正在翻译"
+            detail={`${done} / ${total} 段`}
+            percent={(done / total) * 100}
+            compact
+          />
+        )}
       {!moveAction && (
         <Button
           variant="ghost"

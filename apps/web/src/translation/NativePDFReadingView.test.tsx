@@ -9,9 +9,13 @@ import {
   type NativePDFReadingEngine,
   type NativePDFReadingLayout,
   type ReaderAdapter,
+  type ReaderEvents,
   type TranslationBlock,
 } from "@interleaf/core";
 const fixture = vi.hoisted(() => ({
+  useRealJob: false,
+  createNativePDFReading: vi.fn(),
+  nativePDFReading: vi.fn(),
   state: {
     busy: true,
     cancelling: false,
@@ -26,11 +30,19 @@ const fixture = vi.hoisted(() => ({
   getLocation: vi.fn(() => ({ type: "pdf", page: 7, y: 0.65 })),
   translationLocation: vi.fn(() => ({ type: "pdf", page: 7, y: 0.65 })),
 }));
-vi.mock("./useNativePDFReading", () => ({
-  useNativePDFReading: vi.fn(() => fixture.state),
-}));
+vi.mock("./useNativePDFReading", async (load) => {
+  const real = await load<typeof import("./useNativePDFReading")>();
+  return {
+    useNativePDFReading: vi.fn(
+      (...args: Parameters<typeof real.useNativePDFReading>) =>
+        fixture.useRealJob ? real.useNativePDFReading(...args) : fixture.state,
+    ),
+  };
+});
 vi.mock("@interleaf/api", () => ({
   api: {
+    createNativePDFReading: fixture.createNativePDFReading,
+    nativePDFReading: fixture.nativePDFReading,
     nativePDFReadingFileURL: (id: string, key: string) =>
       `/cached/${id}/${key}`,
   },
@@ -80,7 +92,7 @@ vi.mock("../InterleafView", () => ({
 import { NativePDFReadingView } from "./NativePDFReadingView";
 import { useNativePDFReading } from "./useNativePDFReading";
 import { useTranslationSplit } from "./TranslationPanes";
-let root: Root, host: HTMLDivElement;
+let root: Root, host: HTMLDivElement, progressHost: HTMLDivElement;
 const onFlow = vi.fn(),
   onReady = vi.fn(),
   onRegenerate = vi.fn(),
@@ -113,6 +125,7 @@ function Harness({
       layout={layout}
       syncEnabled={syncEnabled}
       engine={engine}
+      progressHost={progressHost}
       document={{ id: "doc", type: "pdf" } as Document}
       theme={defaultTheme}
       blocks={[]}
@@ -168,14 +181,17 @@ beforeEach(() => {
     retry: vi.fn(),
     cancel: vi.fn(),
   };
+  fixture.useRealJob = false;
   fixture.props = undefined;
   host = document.createElement("div");
-  document.body.append(host);
+  progressHost = document.createElement("div");
+  document.body.append(host, progressHost);
   root = createRoot(host);
 });
 afterEach(async () => {
   await act(async () => root.unmount());
   host.remove();
+  progressHost.remove();
   vi.unstubAllGlobals();
 });
 it("shows generation state without mounting another reader", async () => {
@@ -396,4 +412,179 @@ it("keeps saved translation updates out of the BabelDOC request and reader descr
     "babeldoc",
   ]);
   expect(onRegenerate).not.toHaveBeenCalled();
+});
+
+it("shows the same honest progress in the reader and its toolbar", async () => {
+  fixture.state.job = { status: "running", stage: "layout" };
+  await render("side-by-side", [], true, "babeldoc");
+  const bar = (container: HTMLElement) =>
+    container.querySelector('[role="progressbar"]');
+  expect(bar(host)).not.toBeNull();
+  expect(bar(progressHost)).not.toBeNull();
+  expect(bar(progressHost)?.closest('[aria-hidden="true"]')).not.toBeNull();
+  expect(bar(host)?.closest('[aria-hidden="true"]')).toBeNull();
+  expect(bar(host)?.hasAttribute("aria-valuenow")).toBe(false);
+  expect(bar(progressHost)?.hasAttribute("aria-valuenow")).toBe(false);
+  fixture.state.job = {
+    status: "running",
+    stage: "layout",
+    progress: {
+      phase: "translation",
+      percent: 42,
+      elapsedSeconds: 15,
+      remainingSeconds: 21,
+    },
+  };
+  await render("translation-only", [], true, "babeldoc");
+  for (const container of [host, progressHost]) {
+    expect(bar(container)?.getAttribute("aria-valuenow")).toBe("42");
+    expect(container.textContent).toContain("正在翻译");
+    expect(container.textContent).toContain("已用 15 秒");
+    expect(container.textContent).toContain("预计剩余 21 秒");
+  }
+  fixture.state.job = { status: "failed", stage: "layout" };
+  fixture.state.busy = false;
+  fixture.state.error = "原版翻译失败";
+  await render("translation-only", [], true, "babeldoc");
+  expect(bar(host)).toBeNull();
+  expect(bar(progressHost)).toBeNull();
+  expect(progressHost.textContent).toContain("原版翻译失败");
+});
+
+it("keeps one subscription across both progress surfaces and translated tabs", async () => {
+  fixture.useRealJob = true;
+  vi.useFakeTimers();
+  try {
+    const running = {
+      id: "job",
+      status: "running",
+      stage: "layout",
+      done: 0,
+      total: 0,
+    };
+    fixture.createNativePDFReading.mockResolvedValueOnce(running);
+    fixture.nativePDFReading.mockResolvedValueOnce({
+      ...running,
+      progress: { phase: "typesetting", percent: 74, elapsedSeconds: 25 },
+    });
+    await render("side-by-side", [], true, "babeldoc");
+    await act(async () => vi.advanceTimersByTimeAsync(750));
+    await render("translation-only", [], true, "babeldoc");
+    expect(fixture.createNativePDFReading).toHaveBeenCalledExactlyOnceWith(
+      "doc",
+      expect.any(AbortSignal),
+      "translation-only",
+      "babeldoc",
+    );
+    expect(fixture.nativePDFReading).toHaveBeenCalledTimes(1);
+    for (const container of [host, progressHost]) {
+      expect(
+        container
+          .querySelector('[role="progressbar"]')
+          ?.getAttribute("aria-valuenow"),
+      ).toBe("74");
+    }
+    let finish!: (value: unknown) => void;
+    fixture.nativePDFReading.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve;
+        }),
+    );
+    await act(async () => vi.advanceTimersByTimeAsync(750));
+    await act(async () => root.render(null));
+    await act(async () => finish(running));
+    expect(progressHost.children).toHaveLength(0);
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+it("discards a delayed comparison adapter after switching away and back", async () => {
+  fixture.useRealJob = true;
+  fixture.createNativePDFReading.mockResolvedValueOnce({
+    status: "ready",
+    metadata: { ...metadata, engine: "babeldoc" },
+  });
+  let finishOld!: () => void;
+  let finishCurrent!: () => void;
+  fixture.goTo.mockImplementationOnce(
+    () =>
+      new Promise<void>((resolve) => {
+        finishOld = resolve;
+      }),
+  );
+  await render("side-by-side", [], true, "babeldoc");
+  const oldEvents = fixture.props?.events as ReaderEvents;
+  expect(finishOld).toBeTypeOf("function");
+  expect(onReady).not.toHaveBeenCalled();
+
+  await render("translation-only", [], true, "babeldoc");
+  const oldSingleEvents = fixture.props?.events as ReaderEvents;
+  expect(onReady).toHaveBeenCalledTimes(1);
+  fixture.goTo.mockImplementationOnce(
+    () =>
+      new Promise<void>((resolve) => {
+        finishCurrent = resolve;
+      }),
+  );
+  await render("side-by-side", [], true, "babeldoc");
+  expect(finishCurrent).toBeTypeOf("function");
+  const pageNavigation = () => host.querySelector(".pdf-page-navigation");
+  expect(pageNavigation()).toBeNull();
+
+  await act(async () => finishOld());
+  expect(onReady).toHaveBeenCalledTimes(1);
+  expect(pageNavigation()).toBeNull();
+  await act(async () => oldEvents.location({ type: "pdf", page: 9 }, 0.8));
+  expect(onLocation).not.toHaveBeenCalled();
+
+  await act(async () => finishCurrent());
+  expect(onReady).toHaveBeenCalledTimes(2);
+  expect(pageNavigation()).not.toBeNull();
+
+  await render("translation-only", [], true, "babeldoc");
+  await act(async () =>
+    oldSingleEvents.location({ type: "pdf", page: 9 }, 0.8),
+  );
+  expect(onLocation).not.toHaveBeenCalled();
+  const currentSingleEvents = fixture.props?.events as ReaderEvents;
+  await act(async () =>
+    currentSingleEvents.location({ type: "pdf", page: 10 }, 0.9),
+  );
+  expect(onLocation).toHaveBeenCalledExactlyOnceWith(
+    { type: "pdf", page: 10 },
+    0.9,
+  );
+  expect(fixture.createNativePDFReading).toHaveBeenCalledTimes(1);
+});
+
+it("offers to reconnect when polling fails during translation", async () => {
+  fixture.useRealJob = true;
+  vi.useFakeTimers();
+  try {
+    const running = {
+      id: "job",
+      status: "running",
+      stage: "layout",
+      done: 0,
+      total: 0,
+    };
+    fixture.createNativePDFReading.mockResolvedValue(running);
+    fixture.nativePDFReading.mockRejectedValueOnce(new Error("连接暂时中断"));
+    await render("side-by-side", [], true, "babeldoc");
+    await act(async () => vi.advanceTimersByTimeAsync(750));
+    expect(host.textContent).toContain("暂无法获取进度");
+    expect(progressHost.textContent).toContain("暂无法获取进度");
+    expect(progressHost.textContent).not.toContain("原版翻译失败");
+    const retry = [...host.querySelectorAll("button")].find(
+      (button) => button.textContent === "重试",
+    );
+    await act(async () => retry!.click());
+    expect(fixture.createNativePDFReading).toHaveBeenCalledTimes(2);
+    expect(progressHost.querySelector('[role="progressbar"]')).not.toBeNull();
+  } finally {
+    fixture.createNativePDFReading.mockReset();
+    vi.useRealTimers();
+  }
 });

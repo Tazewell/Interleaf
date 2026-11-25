@@ -118,7 +118,6 @@ vi.mock("../InterleafView", () => ({
   },
 }));
 import { PDFReadingView } from "./PDFReadingView";
-import { choosePDFFormat } from "./pdf-reading-test-helpers";
 let root: Root, host: HTMLDivElement;
 const events = { location: vi.fn(), selection: vi.fn() };
 beforeEach(async () => {
@@ -335,7 +334,6 @@ it("notifies when a flow content switch changes search scope without changing th
     onSearchScopeChanged: onScopeChanged,
   });
   const reader = fixture.ready;
-  await choosePDFFormat(host, "流式");
   expect(onScopeChanged).not.toHaveBeenCalled();
   await click("流式对照");
   expect(fixture.ready).toBe(reader);
@@ -363,7 +361,6 @@ afterEach(async () => {
 });
 async function click(label: string) {
   const flow = label === "流式对照";
-  if (flow || label === "译文") await choosePDFFormat(host, "流式");
   if (flow) label = "对照";
   if (label === "原页") label = "原文";
   const button = Array.from(

@@ -71,10 +71,10 @@ const isNativeMode = (value: Mode): value is "native" | "native-translation" =>
   value === "native" || value === "native-translation";
 function readingFormat(
   content: PDFReadingContent,
-  preference?: PDFReadingFormat,
+  babelDOC: boolean,
+  sourceFormat: "native" | "flow",
 ): PDFReadingFormat {
-  if (content === "source" && preference === "babeldoc") return "native";
-  return preference ?? (content === "source" ? "native" : "flow");
+  return content === "source" ? sourceFormat : babelDOC ? "babeldoc" : "flow";
 }
 function readingMode(
   content: PDFReadingContent,
@@ -130,16 +130,17 @@ export function PDFReadingView({
   events: ReaderEvents;
 }) {
   const [content, setContent] = useState<PDFReadingContent>("source"),
-    [preferredFormat, setPreferredFormat] =
-      useState<Exclude<PDFReadingFormat, "babeldoc">>(),
+    [sourceFormat, setSourceFormat] = useState<"native" | "flow">("native"),
     [babelDOCDocument, setBabelDOCDocument] = useState<string>(),
     [syncEnabled, setSyncEnabled] = useState(true);
   const split = useTranslationSplit();
-  const preference = babelDOCDocument === doc.id ? "babeldoc" : preferredFormat;
-  const format = readingFormat(content, preference);
+  const babelDOC = babelDOCDocument === doc.id;
+  const format = readingFormat(content, babelDOC, sourceFormat);
   const engineChoice = format === "babeldoc" ? format : undefined;
   const mode = readingMode(content, format);
   const { translations, error } = useTranslations(doc.id);
+  const [nativeProgressHost, setNativeProgressHost] =
+    useState<HTMLDivElement | null>(null);
   const [translationPromptHost, setTranslationPromptHost] =
     useState<HTMLDivElement | null>(null);
   const [popup, setPopup] = useState<{ block: PDFBlock; rect: DOMRect }>();
@@ -1229,17 +1230,21 @@ export function PDFReadingView({
     nextFormat?: PDFReadingFormat,
     fromBlock?: PDFBlock,
   ) => {
+    const nextBabelDOC =
+      nextFormat === undefined ? babelDOC : nextFormat === "babeldoc";
     const nextReadingFormat = readingFormat(
       nextContent,
-      nextFormat ?? preference,
+      nextBabelDOC,
+      sourceFormat,
     );
     const value = readingMode(nextContent, nextReadingFormat);
-    if (nextFormat === "babeldoc") {
-      setBabelDOCDocument(doc.id);
-    } else if (nextFormat !== undefined) {
-      setBabelDOCDocument(undefined);
-      setPreferredFormat(nextFormat);
-    }
+    if (
+      nextContent === "source" &&
+      (nextFormat === "native" || nextFormat === "flow")
+    )
+      setSourceFormat(nextFormat);
+    else if (nextContent !== "source" && nextFormat !== undefined)
+      setBabelDOCDocument(nextBabelDOC ? doc.id : undefined);
     if (
       mode === value &&
       (!isNativeMode(value) || format === nextReadingFormat)
@@ -1437,28 +1442,36 @@ export function PDFReadingView({
   const toolbar = (
     <div className="translation-toolbar pdf-reading-toolbar">
       <div className="reading-translation-actions">
-        <AssistanceControls
-          documentId={doc.id}
-          processing={processing}
-          library={doc.library}
-          promptHost={
-            content !== "source" && !engineChoice && doc.library === "papers"
-              ? translationPromptHost
-              : null
-          }
-          translationSetup={translationSetup}
-          chapter={() => {
-            const location = facade.current?.getLocation();
-            if (location?.type !== "pdf") return undefined;
-            return chapterRange(
-              outline.current,
-              location.page,
-              engine?.getPageCount?.() ||
-                Math.max(1, ...blocks.map((b) => b.page)),
-              headingPages(blocks),
-            );
-          }}
-        />
+        {engineChoice ? (
+          <div
+            className="native-pdf-toolbar-progress"
+            ref={setNativeProgressHost}
+          />
+        ) : (
+          <AssistanceControls
+            showProgress={content !== "source"}
+            documentId={doc.id}
+            processing={processing}
+            library={doc.library}
+            promptHost={
+              content !== "source" && doc.library === "papers"
+                ? translationPromptHost
+                : null
+            }
+            translationSetup={translationSetup}
+            chapter={() => {
+              const location = facade.current?.getLocation();
+              if (location?.type !== "pdf") return undefined;
+              return chapterRange(
+                outline.current,
+                location.page,
+                engine?.getPageCount?.() ||
+                  Math.max(1, ...blocks.map((b) => b.page)),
+                headingPages(blocks),
+              );
+            }}
+          />
+        )}
       </div>
       <PDFReadingControls
         content={content}
@@ -1500,7 +1513,9 @@ export function PDFReadingView({
       )}
       {isNativeMode(mode) ? (
         <NativePDFReadingView
-          key={`${doc.id}:${mode}:${engineChoice ?? "interleaf"}`}
+          key={doc.id}
+          progressHost={nativeProgressHost}
+          translationSetup={translationSetup}
           engine={engineChoice}
           split={split}
           syncEnabled={syncEnabled}

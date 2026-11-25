@@ -130,6 +130,80 @@
   color: var(--muted-foreground);
   font-size: 13px;
 }
+.reading-translation-progress {
+  display: grid;
+  gap: 5px;
+  width: min(100%, 320px);
+  text-align: start;
+  color: var(--muted-foreground);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+.reading-translation-progress.is-compact {
+  width: min(100%, 138px);
+  min-width: 0;
+  gap: 3px;
+  font-size: 11px;
+  line-height: 1.2;
+}
+.native-pdf-toolbar-progress {
+  width: min(100%, 138px);
+  min-width: 0;
+}
+.is-compact
+  :is(
+    .reading-translation-progress-label > span:first-child,
+    .reading-translation-progress-detail
+  ) {
+  overflow-wrap: anywhere;
+}
+.reading-translation-progress-label {
+  display: flex;
+  justify-content: space-between;
+  gap: 6px;
+}
+.reading-translation-progress-bar [data-slot="progress-track"] {
+  height: 5px;
+}
+.is-compact .reading-translation-progress-bar [data-slot="progress-track"] {
+  height: 3px;
+}
+.reading-translation-progress-bar [data-slot="progress-indicator"] {
+  border-radius: inherit;
+  background: var(--muted-foreground);
+  transition: none;
+}
+.reading-translation-progress-bar[data-indeterminate]
+  [data-slot="progress-indicator"] {
+  width: 30%;
+  transform: translateX(115%);
+  animation: reading-translation-progress 1.4s ease-in-out infinite;
+}
+@keyframes reading-translation-progress {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(335%);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .reading-translation-progress-bar[data-indeterminate]
+    [data-slot="progress-indicator"] {
+    animation: none;
+  }
+}
+.reading-translation-progress-detail {
+  margin: 0;
+}
+.native-pdf-toolbar-status {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  color: var(--muted-foreground);
+}
 .native-pdf-state-actions,
 .native-pdf-notice {
   display: flex;
@@ -477,6 +551,11 @@
   align-items: center;
   gap: 2px;
   flex-shrink: 0;
+}
+.pdf-reading-toolbar .assistance-controls:has(.reading-translation-progress) {
+  min-width: 0;
+  flex-shrink: 1;
+  flex-wrap: wrap;
 }
 .translation-formula-source {
   margin-top: 0.5em;

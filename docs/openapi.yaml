@@ -10449,12 +10449,39 @@
                     },
                   "done": { "type": "integer" },
                   "total": { "type": "integer" },
+                  "progress":
+                    { "$ref": "#/components/schemas/NativePDFReadingProgress" },
                   "error": { "type": "string" },
                   "metadata":
                     { "$ref": "#/components/schemas/NativePDFReadingManifest" },
                 },
               "required":
                 ["id", "cacheKey", "status", "stage", "done", "total"],
+            },
+          "NativePDFReadingProgress":
+            {
+              "type": "object",
+              "description": "Live engine progress when available. An absent percentage indicates indeterminate progress.",
+              "properties":
+                {
+                  "phase":
+                    {
+                      "type": "string",
+                      "enum":
+                        [
+                          "preparing",
+                          "layout",
+                          "terminology",
+                          "translation",
+                          "typesetting",
+                          "saving",
+                        ],
+                    },
+                  "percent": { "type": "integer", "minimum": 0, "maximum": 100 },
+                  "elapsedSeconds": { "type": "integer", "minimum": 0 },
+                  "remainingSeconds": { "type": "integer", "minimum": 0 },
+                },
+              "required": ["elapsedSeconds"],
             },
         },
     },

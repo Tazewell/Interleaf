@@ -75,7 +75,7 @@ func babeldocPackageRevision(executable string) string {
 
 // translate runs the local engine in work, which contains the frozen original.pdf.
 // The caller owns work and removes its intermediate files after the job.
-func (e babeldocEngine) translate(ctx context.Context, work string, conn APIConnection, model, prompt string) ([]byte, error) {
+func (e babeldocEngine) translate(ctx context.Context, work string, conn APIConnection, model, prompt string, report func(babeldocProgressSample)) ([]byte, error) {
 	endpoint := resolveAPIEndpoint(conn)
 	model = strings.TrimSpace(model)
 	base := strings.TrimSuffix(endpoint.Base, "/chat/completions")
@@ -137,8 +137,15 @@ func (e babeldocEngine) translate(ctx context.Context, work string, conn APIConn
 		"PDF2ZH_OPENAI_MODEL="+model,
 		"PDF2ZH_CUSTOM_SYSTEM_PROMPT="+prompt,
 	)
-	// The CLI can print text, provider response bodies, paths, or credentials.
-	// Leave its stdout and stderr detached from public job state and logs.
+	if report != nil {
+		// Force Rich to advance its terminal display on the pipe, including on
+		// Windows. The reader discards all but known phase names and counters.
+		cmd.Env = append(cmd.Env, "TTY_COMPATIBLE=1", "TTY_INTERACTIVE=1", "TERM=xterm-256color",
+			"COLUMNS=160", "LINES=60", "NO_COLOR=1", "PYTHONIOENCODING=utf-8")
+		cmd.Stdout = &babeldocProgressConsole{report: report}
+	}
+	// Never put raw console text in job state or logs. It can include private
+	// provider responses, files, and keys. Stderr goes to the null device.
 	runErr := cmd.Run()
 	if err := ctx.Err(); err != nil {
 		return nil, err

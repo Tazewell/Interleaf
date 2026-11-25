@@ -16,8 +16,8 @@ const formats = [
   { value: "flow", label: "流式", icon: TextAlignLeft },
 ] as const;
 const translatedFormats = [
-  ...formats,
-  { value: "babeldoc", label: "BabelDOC 原版式", icon: FileText },
+  { value: "babeldoc", label: "原版翻译排版", icon: FileText },
+  { value: "flow", label: "流式翻译排版", icon: TextAlignLeft },
 ] as const;
 
 /** Content and layout are independent, so switching either keeps the other choice. */

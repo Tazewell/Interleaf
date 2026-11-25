@@ -2,15 +2,65 @@ package interleaf
 
 import (
 	"bytes"
+	"fmt"
 	"net/http"
 	"os"
 	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
+	"time"
 )
 
 const babeldocTestRequest = `{"layout":"translation-only","engine":"babeldoc"}`
+
+func TestBabelDOCReadingPublishesMeasuredProgressWhileDetached(t *testing.T) {
+	s := testServer(t)
+	original := testPDF(1)
+	mono := bytes.Replace(original, []byte("%PDF-1.4"), []byte("%PDF-1.5"), 1)
+	seedBabelDOCReading(t, s, original, mono)
+	bilingualConfig(t, s, "https://example.test/v1", "fixture-key", "openai")
+	gate := filepath.Join(t.TempDir(), "release")
+	t.Setenv("BABELDOC_READING_FIXTURE_PROGRESS", gate)
+	const route = "/api/documents/doc/native-pdf-reading"
+	w := request(t, s, "POST", route, strings.NewReader(babeldocTestRequest))
+	if w.Code != http.StatusAccepted {
+		t.Fatalf("create: %d %s", w.Code, w.Body.String())
+	}
+	accepted := bilingualJSON(t, w)
+	progress, _ := accepted["progress"].(map[string]any)
+	if progress["phase"] != "preparing" || progress["percent"] != nil || progress["remainingSeconds"] != nil {
+		t.Fatalf("initial status reports progress the engine did not supply: %v", progress)
+	}
+	job := accepted["id"].(string)
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		w = request(t, s, "GET", route+"/"+job, nil)
+		state := bilingualJSON(t, w)
+		progress, _ = state["progress"].(map[string]any)
+		if state["status"] == "failed" || time.Now().After(deadline) {
+			t.Fatalf("missing child progress after initial request completed: %v", state)
+		}
+		if progress["phase"] == "translation" && progress["percent"] == 53.0 {
+			if w.Code != 200 || state["status"] != "running" || state["stage"] != "layout" ||
+				progress["remainingSeconds"] == nil || strings.Contains(w.Body.String(), "private diagnostic") {
+				t.Fatalf("progress or compatibility fields invalid: %v", state)
+			}
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if err := os.WriteFile(gate, nil, 0600); err != nil {
+		t.Fatal(err)
+	}
+	nativeReadingWaitJob(t, nativeReadingTestJob(t, s, job))
+	w = request(t, s, "GET", route+"/"+job, nil)
+	state := bilingualJSON(t, w)
+	progress, _ = state["progress"].(map[string]any)
+	if w.Code != 200 || state["status"] != "ready" || progress["percent"] != 100.0 || progress["remainingSeconds"] != nil {
+		t.Fatalf("finished progress was not tied to publication: %v", state)
+	}
+}
 
 func TestBabelDOCReadingWithoutInterleafAnalysis(t *testing.T) {
 	s := testServer(t)
@@ -124,6 +174,24 @@ func runBabelDOCReadingFixture(output string) int {
 		os.Getenv("PDF2ZH_OPENAI_MODEL") != "frozen-model" ||
 		os.Getenv("INTERLEAF_TOKEN") != "" {
 		return 91
+	}
+	if gate := os.Getenv("BABELDOC_READING_FIXTURE_PROGRESS"); gate != "" {
+		if os.Getenv("TTY_COMPATIBLE") != "1" || os.Getenv("TTY_INTERACTIVE") != "1" {
+			return 96
+		}
+		fmt.Fprint(os.Stdout, "INFO private diagnostic: not a progress event\n",
+			"Translate Paragraphs (1/1) ------ 12/26 0:00:08 0:00:20\r\n",
+			"translate --------------------- 53/100 0:00:17 0:00:21\r\n")
+		deadline := time.Now().Add(6 * time.Second)
+		for {
+			if _, err := os.Stat(gate); err == nil {
+				break
+			}
+			if time.Now().After(deadline) {
+				return 97
+			}
+			time.Sleep(10 * time.Millisecond)
+		}
 	}
 	outIndex, langIndex := slices.Index(os.Args, "--output"), slices.Index(os.Args, "--lang-out")
 	if outIndex < 0 || langIndex < 0 || outIndex+1 == len(os.Args) || langIndex+1 == len(os.Args) {

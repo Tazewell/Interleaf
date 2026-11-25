@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 )
 
 const nativeReadingBabelDOC = "babeldoc"
@@ -94,10 +95,18 @@ func (s *Server) runBabelDOCReading(j *nativeReadingJob, v *nativeReadingSnapsho
 	j.state.Status, j.state.Stage = "running", "layout"
 	j.mu.Unlock()
 	cfg := v.babeldoc
-	pdf, err := cfg.engine.translate(b.ctx, work, cfg.connection, cfg.model, cfg.prompt)
+	pdf, err := cfg.engine.translate(b.ctx, work, cfg.connection, cfg.model, cfg.prompt, func(sample babeldocProgressSample) {
+		j.mu.Lock()
+		j.progress.record(time.Now(), sample)
+		j.mu.Unlock()
+	})
 	if err != nil {
 		return err
 	}
+	j.mu.Lock()
+	j.progress.phase = "saving"
+	j.progress.remainingTo = time.Time{}
+	j.mu.Unlock()
 	report, err := babeldocReadingReport(b.ctx, v.original, pdf)
 	if err != nil {
 		return bilingualFailure("BabelDOC 译文无法验证为与原文逐页对齐的 PDF，请重试或切换排版")

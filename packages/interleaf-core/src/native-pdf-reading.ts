@@ -52,6 +52,21 @@ export interface NativePDFReadingJob {
   stage: "prepare" | "layout" | "composing" | "ready";
   done: number;
   total: number;
+  progress?: NativePDFReadingProgress;
   error?: string;
   metadata?: NativePDFReadingManifest;
+}
+
+export interface NativePDFReadingProgress {
+  phase?:
+    | "preparing"
+    | "layout"
+    | "terminology"
+    | "translation"
+    | "typesetting"
+    | "saving";
+  /** Measured engine progress while the verified PDF is being generated. */
+  percent?: number;
+  elapsedSeconds: number;
+  remainingSeconds?: number;
 }

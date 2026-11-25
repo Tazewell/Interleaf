@@ -1,7 +1,6 @@
 import {
   useMemo,
   useRef,
-  useEffect,
   useLayoutEffect,
   useState,
   type ReactNode,
@@ -21,12 +20,30 @@ import type {
 } from "@interleaf/core";
 import { api } from "@interleaf/api";
 import { Button } from "@interleaf/ui/components/button";
+import { createPortal } from "react-dom";
 import { CircleNotch } from "@phosphor-icons/react";
 import { toast } from "sonner";
 import { InterleafView } from "../InterleafView";
 import { NativePDFPanes } from "./NativePDFPanes";
 import type { TranslationSplit } from "./TranslationPanes";
+import type { TranslationSetup } from "./AssistanceControls";
+import { ReadingTranslationProgress } from "./ReadingTranslationProgress";
 import { useNativePDFReading } from "./useNativePDFReading";
+
+const nativePhases = {
+  preparing: "正在准备 PDF",
+  layout: "正在分析版面",
+  terminology: "正在提取术语",
+  translation: "正在翻译",
+  typesetting: "正在排版",
+  saving: "正在保存译文",
+};
+
+function duration(seconds: number) {
+  const whole = Math.max(0, Math.round(seconds));
+  const rest = `${whole % 60} 秒`;
+  return whole >= 60 ? `${Math.floor(whole / 60)} 分 ${rest}` : rest;
+}
 
 export function NativePDFReadingView({
   document: doc,
@@ -40,6 +57,8 @@ export function NativePDFReadingView({
   events,
   onUseFlow,
   pageNavigation,
+  progressHost,
+  translationSetup,
   split,
   layout = "side-by-side",
   engine,
@@ -56,6 +75,8 @@ export function NativePDFReadingView({
   events: ReaderEvents;
   onUseFlow: () => void;
   pageNavigation?: ReactNode;
+  progressHost?: HTMLElement | null;
+  translationSetup?: TranslationSetup;
   split: TranslationSplit;
   layout?: NativePDFReadingLayout;
   engine?: NativePDFReadingEngine;
@@ -94,51 +115,121 @@ export function NativePDFReadingView({
   const single = layout === "translation-only";
   const View = single ? InterleafView : NativePDFPanes;
   const layoutLabel = single ? "原版式译文" : "原版式对照";
-  const label = engine ? `BabelDOC ${layoutLabel}` : layoutLabel;
+  const label = engine ? (single ? "原版译文" : "原版对照") : layoutLabel;
   const flowLabel = single ? "流式译文" : "流式对照";
-  const identity = `${doc.id}:${metadata?.cacheKey ?? "loading"}`;
-  const currentIdentity = useRef(identity);
-  currentIdentity.current = identity;
-  const initialized = useRef<string | undefined>(undefined);
+  const cacheKey = metadata?.cacheKey;
+  const viewToken = useMemo(() => Symbol(), [doc.id, layout, cacheKey]);
+  const activeView = useRef<symbol | undefined>(undefined);
+  const initialized = useRef<symbol | undefined>(undefined);
   const liveAdapter = useRef<ReaderAdapter | undefined>(undefined);
+  const priorLayout = useRef(layout);
+  const nextLocation = useRef(initialLocation);
+  nextLocation.current = initialLocation;
   const location = useRef(initialLocation);
-  const mounted = useRef(true);
-  const [readyIdentity, setReadyIdentity] = useState<string>();
+  const [readyView, setReadyView] = useState<symbol>();
   const latest = useRef({ events, onReady, onRegenerate });
   latest.current = { events, onReady, onRegenerate };
+  // This token belongs to the committed reader instance, even when a later
+  // layout mounts the same cache again while the earlier restore is pending.
   useLayoutEffect(() => {
+    activeView.current = viewToken;
+    return () => {
+      activeView.current = undefined;
+    };
+  }, [viewToken]);
+  useLayoutEffect(() => {
+    if (priorLayout.current !== layout) {
+      priorLayout.current = layout;
+      liveAdapter.current = undefined;
+      initialized.current = undefined;
+      setReadyView(undefined);
+      location.current = nextLocation.current ?? location.current;
+      return;
+    }
     // Page events alone cannot capture a scroll within a page. The job hook
     // detaches in a passive effect, so the old viewport can still be measured here.
     if (!liveAdapter.current) return;
     const snapshot = liveAdapter.current.getLocation();
     liveAdapter.current = undefined;
     initialized.current = undefined;
-    setReadyIdentity(undefined);
+    setReadyView(undefined);
     location.current = snapshot;
     latest.current.onRegenerate?.(snapshot);
-  }, [revision]);
-  useEffect(() => {
-    mounted.current = true;
-    return () => {
-      mounted.current = false;
-    };
-  }, []);
+  }, [revision, layout]);
   const ready = async (adapter: ReaderAdapter, toc: TOCItem[]) => {
-    const expected = identity;
+    if (activeView.current !== viewToken) return;
     try {
       if (location.current) await adapter.goTo(location.current);
     } catch {
-      if (mounted.current && currentIdentity.current === expected)
-        toast.error("无法恢复此前阅读位置");
+      if (activeView.current === viewToken) toast.error("无法恢复此前阅读位置");
     }
-    if (!mounted.current || currentIdentity.current !== expected) return;
+    if (activeView.current !== viewToken) return;
     liveAdapter.current = adapter;
-    initialized.current = expected;
-    setReadyIdentity(expected);
+    initialized.current = viewToken;
+    setReadyView(viewToken);
     latest.current.onReady(adapter, toc);
   };
+  const progress = job?.progress;
+  const phase = cancelling
+    ? "正在取消…"
+    : progress?.phase
+      ? nativePhases[progress.phase]
+      : job?.stage === "layout"
+        ? "正在翻译并排版"
+        : nativePhases.preparing;
+  const elapsed = progress?.elapsedSeconds;
+  const remaining = progress?.remainingSeconds;
+  const detail = [
+    elapsed !== undefined && Number.isFinite(elapsed)
+      ? `已用 ${duration(elapsed)}`
+      : "",
+    remaining !== undefined && Number.isFinite(remaining) && remaining > 0
+      ? `预计剩余 ${duration(remaining)}`
+      : "",
+  ]
+    .filter(Boolean)
+    .join(" · ");
+  const progressUnavailable =
+    !busy &&
+    !!error &&
+    (job?.status === "running" || job?.status === "preparing");
+  const stateLabel =
+    (progressUnavailable ? "暂无法获取进度" : error) ||
+    (engineMismatch ? "缓存的译文与所选引擎不匹配，请重试" : "") ||
+    (busy ? `正在生成${label}` : `${label}暂不可用`);
+  const setupSection =
+    engine &&
+    !busy &&
+    (error.includes("AI 设置") || error.includes("OpenAI 兼容"))
+      ? translationSetup?.connectionRequired || error.includes("OpenAI 兼容")
+        ? "connection"
+        : "models"
+      : undefined;
+  const toolbarFeedback = busy ? (
+    <ReadingTranslationProgress
+      label={phase}
+      detail={detail}
+      percent={progress?.percent}
+      compact
+      decorative
+    />
+  ) : (
+    <span
+      className="native-pdf-toolbar-status"
+      title={metadata ? undefined : error || stateLabel}
+    >
+      {metadata
+        ? "原版翻译完成"
+        : progressUnavailable || error === "已取消生成"
+          ? stateLabel
+          : job?.status === "failed"
+            ? "原版翻译失败"
+            : "原版翻译暂不可用"}
+    </span>
+  );
   return (
     <div className="native-pdf-reading" aria-label={label}>
+      {engine && progressHost && createPortal(toolbarFeedback, progressHost)}
       {metadata ? (
         <>
           {(metadata.originalParagraphs > 0 ||
@@ -185,42 +276,62 @@ export function NativePDFReadingView({
             events={{
               ...events,
               location: (next, percentage) => {
-                if (initialized.current !== identity) return;
+                if (
+                  activeView.current !== viewToken ||
+                  initialized.current !== viewToken
+                )
+                  return;
                 location.current = next;
                 latest.current.events.location(next, percentage);
               },
             }}
           />
-          {readyIdentity === identity && pageNavigation && (
+          {readyView === viewToken && pageNavigation && (
             <div className="pdf-reading-controls">
               <div className="pdf-page-navigation">{pageNavigation}</div>
             </div>
           )}
         </>
       ) : (
-        <div className="native-pdf-state" role="status">
-          {busy && (
+        <div className="native-pdf-state">
+          {busy && !engine && (
             <CircleNotch
               size={22}
               className="animate-spin motion-reduce:animate-none"
               aria-hidden="true"
             />
           )}
-          <p>
-            {error ||
-              (engineMismatch ? "缓存的译文与所选引擎不匹配，请重试" : "") ||
-              (busy ? `正在生成${label}` : `${label}暂不可用`)}
+          <p role="status" title={progressUnavailable ? error : undefined}>
+            {stateLabel}
           </p>
-          {busy && (
-            <p className="native-pdf-progress">
-              {engine && job?.stage === "layout"
-                ? "正在翻译并排版"
-                : !engine && job?.total
+          {busy &&
+            (engine ? (
+              <ReadingTranslationProgress
+                label={phase}
+                detail={detail}
+                percent={progress?.percent}
+              />
+            ) : (
+              <p className="native-pdf-progress">
+                {job?.total
                   ? `${job.done} / ${job.total} 页`
                   : "首次生成需要一点时间，完成后会保存在本机"}
-            </p>
-          )}
+              </p>
+            ))}
           <div className="native-pdf-state-actions">
+            {setupSection && translationSetup && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={(event) =>
+                  translationSetup.open(setupSection, event.currentTarget)
+                }
+              >
+                {setupSection === "connection"
+                  ? "配置 AI 连接"
+                  : "配置翻译模型"}
+              </Button>
+            )}
             {!busy && (
               <Button variant="outline" size="sm" onClick={retry}>
                 重试

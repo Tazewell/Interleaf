@@ -3,7 +3,7 @@ import { expect } from "vitest";
 
 export async function choosePDFFormat(
   host: HTMLElement,
-  label: "原版式" | "流式" | "BabelDOC 原版式",
+  label: "原版式" | "流式" | "原版翻译排版" | "流式翻译排版",
 ) {
   const trigger = host.querySelector<HTMLButtonElement>(
     '[aria-label="排版方式"]',
