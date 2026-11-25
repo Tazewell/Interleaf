@@ -21,11 +21,13 @@ export function PDFReadingControls({
   format,
   onContentChange,
   onFormatChange,
+  showFormat = true,
 }: {
   content: PDFReadingContent;
   format: PDFReadingFormat;
   onContentChange: (value: PDFReadingContent) => void;
   onFormatChange: (value: PDFReadingFormat) => void;
+  showFormat?: boolean;
 }) {
   const FormatIcon = format === "flow" ? TextAlignLeft : FileText;
   return (
@@ -45,7 +47,7 @@ export function PDFReadingControls({
           <TabsTrigger value="translation">译文</TabsTrigger>
         </SlidingTabsList>
       </Tabs>
-      {content !== "source" && (
+      {content !== "source" && showFormat && (
         <Select
           items={translatedFormats}
           value={format}

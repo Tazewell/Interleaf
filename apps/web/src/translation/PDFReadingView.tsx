@@ -56,6 +56,17 @@ import "./translation.css";
 
 import { AssistanceControls, type TranslationSetup } from "./AssistanceControls";
 import { NativePDFReadingView } from "./NativePDFReadingView";
+import {
+  showOriginalTranslationInReader,
+  useBabelDOCReading,
+} from "./useBabelDOCReading";
+import {
+  PDFOriginalConfirmation,
+  PDFOriginalPending,
+  PDFTranslationChooser,
+  PDFTranslationTasks,
+} from "./PDFTranslationControls";
+import { ReadingTranslationProgress } from "./ReadingTranslationProgress";
 import { chapterRange, headingPages } from "./chapters";
 import { searchPDFBlocks } from "./pdf-search";
 
@@ -95,6 +106,8 @@ export function PDFReadingView({
   blocks,
   processing,
   translationSetup,
+  originalTranslationRequest,
+  onOriginalTranslationOpened,
   toolbarHost,
   pageNavigation,
   sidebarsOpen,
@@ -111,6 +124,8 @@ export function PDFReadingView({
   blocks: PDFBlock[];
   processing?: Processing;
   translationSetup?: TranslationSetup;
+  originalTranslationRequest?: number;
+  onOriginalTranslationOpened?: (sequence: number) => void;
   toolbarHost?: HTMLElement | null;
   autoCenterHost?: HTMLElement | null;
   pageNavigation?: ReactNode;
@@ -127,9 +142,52 @@ export function PDFReadingView({
     [syncEnabled, setSyncEnabled] = useState(true);
   const split = useTranslationSplit();
   const format = babelDOCDocument === doc.id ? "babeldoc" : "flow";
-  const mode = readingMode(content, format);
+  const original = useBabelDOCReading(doc.id);
+  const originalReady =
+    original.job?.status === "ready" &&
+    original.job.metadata?.documentId === doc.id &&
+    original.job.metadata.layout === "translation-only" &&
+    original.job.metadata.engine === "babeldoc";
+  const [nativeKey, setNativeKey] = useState<string>();
+  const mode = readingMode(
+    content,
+    originalReady && nativeKey === original.job?.cacheKey ? format : "flow",
+  );
   const engineChoice = isNativeMode(mode) ? "babeldoc" : undefined;
   const { translations, error } = useTranslations(doc.id);
+  const paper = doc.library === "papers";
+  const [observedFlow, setObservedFlow] = useState<Processing>();
+  const flowJob =
+    observedFlow?.documentId === doc.id ? observedFlow : processing;
+  const flowPhase = flowJob?.translating?.status ?? flowJob?.status;
+  const flowRunning = Boolean(
+    flowJob?.enabled &&
+    (flowJob.translationOrigin === "manual" || flowJob.translating) &&
+    (flowPhase === "queued" || flowPhase === "running"),
+  );
+  const flowExists = Boolean(
+    flowRunning ||
+    flowJob?.translationOrigin === "manual" ||
+    flowJob?.translationsDone ||
+    (flowJob &&
+      !flowJob.manualTranslation &&
+      (flowJob.translating || flowJob.translationOrigin === "automatic")) ||
+    translations.some((block) => block.status === "complete"),
+  );
+  const originalExists =
+    originalReady || original.busy || !!original.job || original.requested;
+  const [tasksHost, setTasksHost] = useState<HTMLDivElement | null>(null);
+  const [confirmOriginalOpen, setConfirmOriginalOpen] = useState(false);
+  const originalReturnFocus = useRef<HTMLElement | null>(null);
+  const flowEntry = useRef<(trigger: HTMLButtonElement) => void>(null);
+  const originalSelected = content !== "source" && format === "babeldoc";
+  const offerChoice =
+    paper && content !== "source" && !originalSelected && !flowExists;
+  useLayoutEffect(() => {
+    if (!originalSelected) return;
+    toast.dismiss(`babeldoc:${doc.id}`);
+    return showOriginalTranslationInReader(doc.id);
+  }, [doc.id, originalSelected]);
   const [translationPromptHost, setTranslationPromptHost] =
     useState<HTMLDivElement | null>(null);
   const [popup, setPopup] = useState<{ block: PDFBlock; rect: DOMRect }>();
@@ -1219,9 +1277,15 @@ export function PDFReadingView({
     nextFormat?: PDFReadingFormat,
     fromBlock?: PDFBlock,
   ) => {
-    const value = readingMode(nextContent, nextFormat ?? format);
+    const requestedFormat = nextFormat ?? format;
+    const useNative = requestedFormat === "babeldoc" && originalReady;
+    const value = readingMode(
+      nextContent,
+      useNative ? requestedFormat : "flow",
+    );
     if (nextContent !== "source" && nextFormat !== undefined)
       setBabelDOCDocument(nextFormat === "babeldoc" ? doc.id : undefined);
+    if (isNativeMode(value)) setNativeKey(original.job?.cacheKey);
     if (mode === value) {
       if (fromBlock) {
         setPopup(undefined);
@@ -1291,6 +1355,51 @@ export function PDFReadingView({
     // A half-width source pane needs fit-width; a 100% page would be clipped.
     if (value === "parallel" || value === "native") events.zoom?.("width");
   };
+  const openOriginal = (trigger?: HTMLElement) => {
+    if (originalExists) {
+      changeMode(content === "source" ? "parallel" : content, "babeldoc");
+      return;
+    }
+    originalReturnFocus.current =
+      trigger ??
+      (toolbarHost ?? root.current)?.querySelector<HTMLButtonElement>(
+        ".pdf-reading-format",
+      ) ??
+      null;
+    setConfirmOriginalOpen(true);
+  };
+  const startOriginal = () => {
+    setConfirmOriginalOpen(false);
+    if (originalReady) {
+      changeMode(content, "babeldoc");
+      return;
+    }
+    if (!flowExists) changeMode(content, "babeldoc");
+    void original.start();
+  };
+  const showFlow = (trigger: HTMLButtonElement) => {
+    changeMode(content === "source" ? "parallel" : content, "flow");
+    if (paper && !flowExists) flowEntry.current?.(trigger);
+  };
+  const cancelOriginal = () => {
+    if (originalSelected) changeMode(content, "flow");
+    else if (format === "babeldoc") setBabelDOCDocument(undefined);
+    void original.cancel();
+  };
+  useLayoutEffect(() => {
+    if (originalTranslationRequest !== undefined && originalReady) {
+      changeMode(content === "source" ? "parallel" : content, "babeldoc");
+      onOriginalTranslationOpened?.(originalTranslationRequest);
+    } else if (originalSelected && originalReady && !isNativeMode(mode)) {
+      changeMode(content, "babeldoc");
+    }
+  }, [
+    content,
+    originalSelected,
+    originalReady,
+    originalTranslationRequest,
+    mode,
+  ]);
   const activePopup = popup && byId.get(popup.block.id);
   const toggleSync = (enabled: boolean) => {
     syncEnabledRef.current = enabled;
@@ -1417,13 +1526,16 @@ export function PDFReadingView({
     <div className="translation-toolbar pdf-reading-toolbar">
       <div className="reading-translation-actions">
         <AssistanceControls
-          hidden={!!engineChoice}
+          hidden={!paper && !!engineChoice}
           showProgress
           documentId={doc.id}
           processing={processing}
           library={doc.library}
+          actionsHost={paper ? tasksHost : undefined}
+          flowEntry={paper ? flowEntry : undefined}
+          onJobChange={paper ? setObservedFlow : undefined}
           promptHost={
-            content !== "source" && doc.library === "papers"
+            content !== "source" && paper && !originalSelected && !offerChoice
               ? translationPromptHost
               : null
           }
@@ -1440,12 +1552,83 @@ export function PDFReadingView({
             );
           }}
         />
+        {(originalExists || (paper && flowExists)) && (
+          <PDFTranslationTasks
+            running={Number(original.busy) + Number(paper && flowRunning)}
+          >
+            {(close) => (
+              <>
+                {paper && flowExists && (
+                  <div className="pdf-translation-task">
+                    <h3>流式翻译</h3>
+                    <div ref={setTasksHost} />
+                    {content !== "source" && format === "flow" ? null : (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={(event) => {
+                          showFlow(event.currentTarget);
+                          close();
+                        }}
+                      >
+                        查看流式译文
+                      </Button>
+                    )}
+                  </div>
+                )}
+                {originalExists && (
+                  <div className="pdf-translation-task">
+                    <h3>原版译文</h3>
+                    {original.busy && (
+                      <ReadingTranslationProgress
+                        label="原版翻译进度"
+                        percent={original.job?.progress?.percent}
+                        compact
+                      />
+                    )}
+                    {original.error && <p role="status">{original.error}</p>}
+                    <div className="flex flex-wrap gap-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={(event) => {
+                          openOriginal(event.currentTarget);
+                          close();
+                        }}
+                      >
+                        {originalReady ? "查看原版译文" : "查看生成状态"}
+                      </Button>
+                      {original.busy && original.job && (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          disabled={original.cancelling}
+                          onClick={cancelOriginal}
+                        >
+                          {original.cancelling ? "正在取消…" : "取消生成"}
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
+          </PDFTranslationTasks>
+        )}
       </div>
       <PDFReadingControls
         content={content}
         format={format}
-        onContentChange={changeMode}
-        onFormatChange={(next) => changeMode(content, next)}
+        showFormat={!paper || flowExists || originalExists}
+        onContentChange={(next) =>
+          changeMode(
+            next,
+            !flowExists && originalReady ? "babeldoc" : undefined,
+          )
+        }
+        onFormatChange={(next) =>
+          next === "babeldoc" ? openOriginal() : changeMode(content, next)
+        }
       />
       {content === "parallel" && (
         <Toggle
@@ -1470,9 +1653,11 @@ export function PDFReadingView({
       data-dark-contrast={theme.pdfDarkContrast ?? "soft"}
     >
       {toolbarHost ? createPortal(toolbar, toolbarHost) : toolbar}
-      <div
-        className="translation-prompt-host"
-        ref={setTranslationPromptHost}
+      <PDFOriginalConfirmation
+        open={confirmOriginalOpen}
+        onOpenChange={setConfirmOriginalOpen}
+        onConfirm={startOriginal}
+        returnFocus={originalReturnFocus.current}
       />
       {mode === "translation" && (
         <div className="pdf-reading-controls">
@@ -1484,6 +1669,7 @@ export function PDFReadingView({
           key={doc.id}
           translationSetup={translationSetup}
           engine={engineChoice}
+          generation={original}
           split={split}
           syncEnabled={syncEnabled}
           layout={
@@ -1606,7 +1792,8 @@ export function PDFReadingView({
                 role="region"
                 aria-label="译文阅读区"
                 onFocusCapture={() => {
-                  if (mode === "parallel" && side.current !== "translation") input("translation", true);
+                  if (mode === "parallel" && side.current !== "translation")
+                    input("translation", true);
                 }}
                 onScroll={() => {
                   hover("translation");
@@ -1664,23 +1851,65 @@ export function PDFReadingView({
                   lineHeight: theme.lineHeight,
                 }}
               >
-                <TranslationJobStatus
-                  processing={processing}
-                  error={error}
-                  retry={() =>
-                    void api
-                      .process(doc.id)
-                      .catch((e) => toast.error(e.message))
-                  }
-                />
-                {!visibleBlocks.length && (
-                  <p role="status">
-                    {doc.library === "books"
-                      ? "尚未翻译任何章节，可在工具栏翻译本章。"
-                      : "正文仍在解析中，完成的段落会在这里显示。"}
-                  </p>
+                {originalSelected ? (
+                  <PDFOriginalPending
+                    job={original.job}
+                    busy={original.busy || original.checking || !!originalReady}
+                    error={original.error}
+                    cancelling={original.cancelling}
+                    onRetry={() =>
+                      originalExists ? void original.retry() : openOriginal()
+                    }
+                    onCancel={cancelOriginal}
+                    onUseFlow={showFlow}
+                    flowActionLabel={
+                      paper && !flowExists ? "先开始流式翻译" : "查看流式译文"
+                    }
+                    onViewSource={
+                      content === "translation"
+                        ? () => changeMode("source")
+                        : undefined
+                    }
+                    translationSetup={translationSetup}
+                  />
+                ) : offerChoice ? (
+                  <PDFTranslationChooser
+                    onFlow={showFlow}
+                    onOriginal={openOriginal}
+                    flowNeedsConnection={translationSetup?.connectionRequired}
+                    originalLabel={
+                      originalReady
+                        ? "查看原版译文"
+                        : originalExists
+                          ? "查看原版翻译状态"
+                          : undefined
+                    }
+                  />
+                ) : (
+                  <>
+                    <div
+                      className="translation-prompt-host"
+                      ref={setTranslationPromptHost}
+                    />
+                    <TranslationJobStatus
+                      processing={processing}
+                      error={error}
+                      retry={() =>
+                        void api
+                          .process(doc.id)
+                          .catch((e) => toast.error(e.message))
+                      }
+                    />
+                    {!visibleBlocks.length && (
+                      <p role="status">
+                        {doc.library === "books"
+                          ? "尚未翻译任何章节，可在工具栏翻译本章。"
+                          : "正文仍在解析中，完成的段落会在这里显示。"}
+                      </p>
+                    )}
+                    {translatedBlocks}
+                  </>
                 )}
-                {translatedBlocks}
               </div>
             )
           }

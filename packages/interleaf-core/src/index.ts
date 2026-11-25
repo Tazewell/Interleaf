@@ -580,7 +580,7 @@ export interface Message {
 }
 
 export interface ProcessingStage {
-  status: "queued" | "running" | "waiting" | "failed" | "complete";
+  status: "queued" | "running" | "waiting" | "failed" | "complete" | "paused";
   detail: string;
   warning?: string;
 }

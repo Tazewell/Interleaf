@@ -362,6 +362,11 @@ export const api = {
     request<import("@interleaf/core").TranslationBlock[]>(
       `/api/documents/${id}/translations`,
     ),
+  findNativePDFReading: (id: string, signal?: AbortSignal) =>
+    request<import("@interleaf/core").NativePDFReadingJob | null>(
+      `/api/documents/${encodeURIComponent(id)}/native-pdf-reading`,
+      { signal },
+    ),
   createNativePDFReading: (
     id: string,
     signal?: AbortSignal,
@@ -500,7 +505,7 @@ export const api = {
     request<Processing>(`/api/documents/${id}/assistance`),
   setAssistance: (
     id: string,
-    action: "start" | "pause" | "resume" | "retranslate",
+    action: "start" | "start-flow" | "pause" | "resume" | "retranslate",
   ) =>
     request<Processing>(`/api/documents/${id}/assistance`, {
       method: "POST",

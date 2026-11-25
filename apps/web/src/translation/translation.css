@@ -62,6 +62,116 @@
   outline: 2px solid var(--ring);
   outline-offset: -2px;
 }
+.pdf-translation-empty {
+  display: grid;
+  flex: 1;
+  min-height: 100%;
+  width: 100%;
+  align-items: safe center;
+  justify-items: center;
+  overflow: auto;
+  padding: clamp(10px, 2.5vw, 26px);
+  font: 13px/1.5 var(--ui-font, system-ui);
+}
+.pdf-translation-chooser {
+  width: min(100%, 365px);
+  min-width: 0;
+}
+.pdf-translation-chooser h2 {
+  margin: 0 0 4px;
+  color: var(--foreground);
+  font-size: 18px;
+  font-weight: 650;
+}
+.pdf-translation-chooser p {
+  margin: 0;
+  color: var(--muted-foreground);
+}
+.pdf-translation-options {
+  display: grid;
+  gap: 8px;
+  margin-top: 16px;
+}
+.pdf-translation-option[data-slot="button"] {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  min-width: 0;
+  height: auto;
+  align-items: start;
+  gap: 10px;
+  padding: 10px 11px;
+  text-align: start;
+  white-space: normal;
+}
+.pdf-translation-option:first-child {
+  background: var(--ui-accent-soft);
+}
+.pdf-translation-option:first-child:hover {
+  background: color-mix(in srgb, var(--ui-accent) 13%, var(--ui-panel));
+}
+.pdf-translation-option > svg:first-child {
+  margin-top: 3px;
+  color: var(--ui-accent);
+}
+.pdf-translation-option > svg:last-child {
+  align-self: center;
+  color: var(--muted-foreground);
+}
+.pdf-translation-option :is(strong, small) {
+  display: block;
+}
+.pdf-translation-option strong {
+  font-weight: 600;
+}
+.pdf-translation-option small {
+  margin-top: 2px;
+  color: var(--muted-foreground);
+  font-size: 12px;
+}
+.pdf-translation-task-count {
+  display: inline-grid;
+  min-width: 17px;
+  min-height: 16px;
+  padding-inline: 3px;
+  place-items: center;
+  border-radius: 5px;
+  background: var(--ui-accent-soft);
+  color: var(--ui-accent);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+.pdf-translation-task-list {
+  width: min(290px, calc(100vw - 24px));
+  max-height: min(var(--available-height, 80vh), 80vh);
+  overflow: auto;
+  scrollbar-width: none;
+}
+.pdf-translation-task-list-header {
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+}
+.pdf-translation-task {
+  display: grid;
+  justify-items: start;
+  gap: 5px;
+  padding: 8px 2px 3px;
+  border-top: 1px solid var(--border);
+}
+.pdf-translation-task h3 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+}
+.pdf-translation-task .reading-translation-progress {
+  width: 100%;
+}
+.pdf-original-pending {
+  min-height: 100%;
+}
+.pdf-original-pending .native-pdf-state-actions {
+  justify-content: center;
+}
 .translation-prompt-host {
   flex: none;
   min-width: 0;

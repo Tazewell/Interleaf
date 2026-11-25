@@ -3816,11 +3816,12 @@
                                       "enum":
                                         [
                                           "start",
+                                          "start-flow",
                                           "pause",
                                           "resume",
                                           "retranslate",
                                         ],
-                                      "description": "retranslate restarts completed paper text with saved current translation choices, retaining previous translations until replacement succeeds. Books keep chapter translation controls.",
+                                      "description": "start-flow explicitly requests whole-paper PDF flow translation, even during initial parsing. retranslate restarts completed paper text with saved current translation choices, retaining previous translations until replacement succeeds. Books keep chapter translation controls.",
                                     },
                                 },
                             },
@@ -6944,6 +6945,41 @@
         },
       "/api/documents/{id}/native-pdf-reading":
         {
+          "get":
+            {
+              "description": "Find the current BabelDOC translation-only cache or task without creating work. Null when none is available for the current configuration.",
+              "parameters":
+                [
+                  {
+                    "name": "id",
+                    "in": "path",
+                    "required": true,
+                    "schema": { "type": "string" },
+                  },
+                ],
+              "responses":
+                {
+                  "200":
+                    {
+                      "description": "Current result or task, or null",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                {
+                                  "oneOf":
+                                    [
+                                      { "$ref": "#/components/schemas/NativePDFReadingJob" },
+                                      { "type": "null" },
+                                    ],
+                                },
+                            },
+                        },
+                    },
+                  "409": { "description": "Document unavailable" },
+                },
+            },
           "post":
             {
               "parameters":
@@ -8390,7 +8426,7 @@
                   "status":
                     {
                       "enum":
-                        ["queued", "running", "waiting", "failed", "complete"],
+                        ["queued", "running", "waiting", "failed", "complete", "paused"],
                     },
                   "detail": { "type": "string" },
                   "warning": { "type": "string" },

@@ -407,6 +407,7 @@ it("keeps saved translation updates out of the BabelDOC request and reader descr
     expect.any(String),
     "translation-only",
     "babeldoc",
+    true,
   ]);
   expect(onRegenerate).not.toHaveBeenCalled();
 });

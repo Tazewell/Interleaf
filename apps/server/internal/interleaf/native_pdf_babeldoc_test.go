@@ -34,6 +34,10 @@ func TestBabelDOCReadingPublishesMeasuredProgressWhileDetached(t *testing.T) {
 		t.Fatalf("initial status reports progress the engine did not supply: %v", progress)
 	}
 	job := accepted["id"].(string)
+	found := request(t, s, "GET", route, nil)
+	if found.Code != http.StatusOK || bilingualJSON(t, found)["id"] != job {
+		t.Fatalf("lookup did not find the accepted background job: %d %s", found.Code, found.Body.String())
+	}
 	deadline := time.Now().Add(5 * time.Second)
 	for {
 		w = request(t, s, "GET", route+"/"+job, nil)
@@ -71,6 +75,7 @@ func TestBabelDOCReadingWithoutInterleafAnalysis(t *testing.T) {
 	bilingualConfig(t, s, "https://example.test/v1", "fixture-key", "openai")
 
 	const route = "/api/documents/doc/native-pdf-reading"
+	assertNoBabelDOCReading(t, s, route)
 	w := request(t, s, "POST", route, strings.NewReader(babeldocTestRequest))
 	if w.Code != http.StatusAccepted {
 		t.Fatalf("create without layout or translations: %d %s", w.Code, w.Body.String())
@@ -88,6 +93,11 @@ func TestBabelDOCReadingWithoutInterleafAnalysis(t *testing.T) {
 		t.Fatalf("incorrect page geometry or fabricated paragraph mappings: %v", pages)
 	}
 	key := state["cacheKey"].(string)
+	found := request(t, s, "GET", route, nil)
+	foundState := bilingualJSON(t, found)
+	if found.Code != http.StatusOK || foundState["status"] != "ready" || foundState["cacheKey"] != key || foundState["metadata"] == nil {
+		t.Fatalf("lookup did not find the verified cache: %d %s", found.Code, found.Body.String())
+	}
 	cached := request(t, s, "POST", route, strings.NewReader(babeldocTestRequest))
 	if cached.Code != 200 || bilingualJSON(t, cached)["cacheKey"] != key {
 		t.Fatalf("expected identical cached job: %d %s", cached.Code, cached.Body.String())
@@ -104,6 +114,7 @@ func TestBabelDOCReadingWithoutInterleafAnalysis(t *testing.T) {
 		t.Fatal("reader changed the original PDF")
 	}
 	bilingualConfig(t, s, "https://example.test/changed", "fixture-key", "openai")
+	assertNoBabelDOCReading(t, s, route)
 	if w = request(t, s, "GET", file, nil); w.Code != 409 {
 		t.Fatalf("wrong endpoint reused a cached translation: %d", w.Code)
 	}
@@ -125,6 +136,15 @@ func TestBabelDOCReadingInvalidOutputsNeverBecomeReadable(t *testing.T) {
 	if w.Code != 200 || status["status"] != "failed" || status["metadata"] != nil {
 		t.Fatalf("page-mismatched PDF was accepted: %d %v", w.Code, status)
 	}
+	found := request(t, s, "GET", route, nil)
+	foundState := bilingualJSON(t, found)
+	if found.Code != http.StatusOK || foundState["status"] != "failed" || foundState["id"] != job {
+		t.Fatalf("lookup did not preserve the failed task: %d %s", found.Code, found.Body.String())
+	}
+	if removed := request(t, s, "DELETE", route+"/"+job, nil); removed.Code != http.StatusNoContent {
+		t.Fatalf("delete task: %d %s", removed.Code, removed.Body.String())
+	}
+	assertNoBabelDOCReading(t, s, route)
 }
 
 func TestBabelDOCReadingRechecksLegacyCache(t *testing.T) {
@@ -143,6 +163,7 @@ func TestBabelDOCReadingRechecksLegacyCache(t *testing.T) {
 				legacy = mono
 			}
 			key := seedLegacyBabelDOCReading(t, s, legacy)
+			assertNoBabelDOCReading(t, s, "/api/documents/doc/native-pdf-reading")
 			file := "/pub/test-secret/doc/native-pdf-reading/" + key + "/file"
 			if w := request(t, s, "GET", file, nil); w.Code != 409 {
 				t.Fatalf("legacy PDF was served without a content check: %d", w.Code)
@@ -204,6 +225,14 @@ func TestBabelDOCReadingRejectsAmbiguousEngines(t *testing.T) {
 		if w.Code != 400 {
 			t.Errorf("%s: %d %s", body, w.Code, w.Body.String())
 		}
+	}
+}
+
+func assertNoBabelDOCReading(t *testing.T, s *Server, route string) {
+	t.Helper()
+	w := request(t, s, "GET", route, nil)
+	if w.Code != http.StatusOK || strings.TrimSpace(w.Body.String()) != "null" {
+		t.Fatalf("expected empty passive lookup: %d %s", w.Code, w.Body.String())
 	}
 }
 

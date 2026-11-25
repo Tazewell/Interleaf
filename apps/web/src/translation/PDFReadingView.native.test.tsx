@@ -5,6 +5,7 @@ import { beforeEach, afterEach, expect, it, vi } from "vitest";
 import {
   defaultTheme,
   type Document,
+  type NativePDFReadingJob,
   type ReaderAdapter,
   type ReaderEvents,
   type PDFBlock,
@@ -41,6 +42,10 @@ vi.mock("@interleaf/api", () => ({
     assistance: vi.fn(async () => undefined),
     setAssistance: vi.fn(),
     translationStream: vi.fn(async () => {}),
+    findNativePDFReading: vi.fn(async () => null),
+    createNativePDFReading: vi.fn(),
+    nativePDFReading: vi.fn(),
+    cancelNativePDFReading: vi.fn(),
   },
   blockImageURL: () => "",
 }));
@@ -84,10 +89,59 @@ import { api } from "@interleaf/api";
 import { choosePDFFormat, clickPDFContent } from "./pdf-reading-test-helpers";
 let root: Root, host: HTMLDivElement;
 let facade: ReaderAdapter;
+let sequence = 0;
+let cachedId: string;
+let freshId: string;
+const untranslated: Processing = {
+  documentId: "doc",
+  phase: "translating",
+  status: "paused",
+  enabled: false,
+  pagesDone: 4,
+  pagesTotal: 4,
+  translationsDone: 0,
+  translationsTotal: 8,
+  detail: "等待手动翻译",
+  updatedAt: "2026-11-24T07:00:00Z",
+};
+const completedFlow: Processing = {
+  ...untranslated,
+  phase: "ready",
+  status: "complete",
+  enabled: true,
+  translationsDone: 8,
+};
+function readyOriginal(documentId: string): NativePDFReadingJob {
+  return {
+    id: "original-job",
+    cacheKey: "original-cache",
+    status: "ready",
+    stage: "ready",
+    done: 1,
+    total: 1,
+    metadata: {
+      version: 1,
+      engine: "babeldoc",
+      layout: "translation-only",
+      documentId,
+      cacheKey: "original-cache",
+      originalSha256: "source",
+      layoutRevision: "layout",
+      translationRevision: "translation",
+      rendererVersion: "engine",
+      pdfSha256: "pdf",
+      pdfBytes: 100,
+      pages: [],
+      translatedParagraphs: 0,
+      originalParagraphs: 0,
+      warnings: [],
+    },
+  };
+}
 async function render(
-  id = "doc",
+  id = cachedId,
   blocks: PDFBlock[] = [],
-  processing?: Processing,
+  processing = completedFlow,
   translationSetup?: Parameters<typeof PDFReadingView>[0]["translationSetup"],
 ) {
   await act(async () =>
@@ -97,7 +151,7 @@ async function render(
         theme={defaultTheme}
         annotations={[]}
         blocks={blocks}
-        processing={processing}
+        processing={{ ...processing, documentId: id }}
         translationSetup={translationSetup}
         events={{ location: vi.fn(), selection: vi.fn() }}
         onReady={(adapter) => {
@@ -107,6 +161,28 @@ async function render(
     ),
   );
 }
+function findButton(label: string | RegExp, scope: ParentNode = document) {
+  return [...scope.querySelectorAll<HTMLButtonElement>("button")].find(
+    (button) => {
+      const text =
+        button.getAttribute("aria-label") ?? button.textContent ?? "";
+      return typeof label === "string"
+        ? text.trim() === label
+        : label.test(text);
+    },
+  );
+}
+async function openTasks() {
+  const trigger = findButton(/^翻译任务/, host);
+  expect(trigger).toBeDefined();
+  if (trigger?.getAttribute("aria-expanded") !== "true")
+    await act(async () => trigger?.click());
+  return document.querySelector(".pdf-translation-task-list")!;
+}
+const flowProgress = () =>
+  document.querySelector(
+    '[role="progressbar"][aria-label="翻译进度"], [role="progressbar"][aria-label="正在准备翻译"], [role="progressbar"][aria-label="等待翻译"]',
+  );
 async function click(label: "原页" | "流式对照" | "对照" | "译文") {
   await clickPDFContent(
     host,
@@ -130,6 +206,15 @@ beforeEach(async () => {
     removeEventListener() {},
   }));
   vi.clearAllMocks();
+  sequence += 1;
+  cachedId = `cached-${sequence}`;
+  freshId = `fresh-${sequence}`;
+  vi.mocked(api.findNativePDFReading).mockImplementation(async (id) =>
+    id === cachedId ? readyOriginal(id) : null,
+  );
+  vi.mocked(api.createNativePDFReading).mockImplementation(async (id) =>
+    readyOriginal(id),
+  );
   fixture.native.getLocation.mockReturnValue({ type: "pdf", page: 5 });
   fixture.nativeProps = undefined;
   fixture.holdSource = false;
@@ -165,6 +250,16 @@ it("opens the original PDF with three content tabs and no layout choice", () => 
   expect(host.querySelector('[aria-label="排版方式"]')).toBeNull();
   expect(host.querySelector("[data-source-reader]")).not.toBeNull();
 });
+it("keeps the existing flow retranslation confirmation available from translation tasks", async () => {
+  const tasks = await openTasks();
+  const restart = findButton("重新翻译", tasks);
+  expect(restart).toBeDefined();
+  await act(async () => restart?.click());
+  expect(document.querySelector('[role="alertdialog"]')?.textContent).toContain(
+    "重新翻译全文？",
+  );
+  expect(api.setAssistance).not.toHaveBeenCalled();
+});
 it.each(["对照", "译文"] as const)(
   "offers exactly the two translation layouts in %s",
   async (content) => {
@@ -181,51 +276,156 @@ it.each(["对照", "译文"] as const)(
     ).toEqual(["原版翻译排版", "流式翻译排版"]);
   },
 );
-const untranslated: Processing = {
-  documentId: "doc",
-  phase: "translating",
-  status: "paused",
-  enabled: false,
-  pagesDone: 4,
-  pagesTotal: 4,
-  translationsDone: 0,
-  translationsTotal: 8,
-  detail: "等待手动翻译",
-  updatedAt: "2026-11-24T07:00:00Z",
-};
 it("offers to start a fresh paper in flow, and starts only after clicking", async () => {
-  await render("doc", [], untranslated);
-  expect(host.querySelector(".translation-prompt")).toBeNull();
+  await render(freshId, [], {
+    ...untranslated,
+    manualTranslation: true,
+    translating: { status: "paused", detail: "等待手动翻译" },
+  });
+  expect(host.querySelector(".pdf-translation-chooser")).toBeNull();
   await clickPDFContent(host, "对照");
-  const prompt = host.querySelector(".translation-prompt");
+  const prompt = host.querySelector(".pdf-translation-chooser")!;
   expect(prompt?.textContent).toContain("这篇论文还没有译文");
-  expect(prompt?.querySelector("button")?.textContent).toBe("开始翻译");
+  const flow = findButton(/^开始流式翻译/, prompt);
+  expect(flow).toBeDefined();
+  expect(prompt.closest('[aria-label="译文阅读区"]')).not.toBeNull();
   expect(api.setAssistance).not.toHaveBeenCalled();
+  expect(api.createNativePDFReading).not.toHaveBeenCalled();
   vi.mocked(api.setAssistance).mockResolvedValueOnce({
     ...untranslated,
+    documentId: freshId,
     enabled: true,
     status: "running",
+    translationOrigin: "manual",
     updatedAt: "2026-11-24T07:00:01Z",
   });
-  await act(async () => prompt!.querySelector("button")!.click());
-  expect(api.setAssistance).toHaveBeenCalledExactlyOnceWith("doc", "start");
-  expect(host.querySelector(".translation-prompt")).toBeNull();
+  await act(async () => flow?.click());
+  expect(api.setAssistance).toHaveBeenCalledExactlyOnceWith(
+    freshId,
+    "start-flow",
+  );
+  expect(host.querySelector(".pdf-translation-chooser")).toBeNull();
 });
-it("shows the remaining work in flow comparison and reuses resume", async () => {
-  await render("doc", [], {
+it("starts an original-layout translation only after confirmation", async () => {
+  await render(freshId, [], untranslated);
+  await clickPDFContent(host, "对照");
+  const original = findButton(/^生成原版译文/, host);
+  expect(original).toBeDefined();
+  await act(async () => original?.click());
+  expect(document.querySelector('[role="alertdialog"]')?.textContent).toContain(
+    "可能需要等几分钟",
+  );
+  expect(api.createNativePDFReading).not.toHaveBeenCalled();
+  await act(async () => findButton("暂不生成")?.click());
+  expect(api.createNativePDFReading).not.toHaveBeenCalled();
+  await act(async () => original?.click());
+  await act(async () => findButton("开始生成")?.click());
+  expect(api.createNativePDFReading).toHaveBeenCalledExactlyOnceWith(
+    freshId,
+    expect.any(AbortSignal),
+    "translation-only",
+    "babeldoc",
+  );
+  expect(api.setAssistance).not.toHaveBeenCalled();
+  expect(host.querySelector("[data-native-reader]")).not.toBeNull();
+});
+it("requests flow start while mandatory parsing is still running", async () => {
+  const parsing: Processing = {
+    ...untranslated,
+    phase: "learning",
+    status: "running",
+    enabled: true,
+    manualTranslation: undefined,
+    translating: undefined,
+    startedAt: "2026-11-24T07:00:00Z",
+  };
+  await render(freshId, [], parsing);
+  vi.mocked(api.setAssistance).mockResolvedValueOnce({
+    ...parsing,
+    documentId: freshId,
+    translationOrigin: "manual",
+    updatedAt: "2026-11-24T07:00:01Z",
+  });
+  await clickPDFContent(host, "对照");
+  const flow = findButton(/^开始流式翻译/, host);
+  expect(flow).toBeDefined();
+  await act(async () => flow?.click());
+  expect(api.setAssistance).toHaveBeenCalledExactlyOnceWith(
+    freshId,
+    "start-flow",
+  );
+  expect(host.querySelector(".pdf-translation-chooser")).toBeNull();
+});
+it("returns to the initial choices after cancelling original generation from the source view", async () => {
+  await render(freshId, [], untranslated);
+  vi.mocked(api.createNativePDFReading).mockResolvedValueOnce({
+    ...readyOriginal(freshId),
+    metadata: undefined,
+    status: "preparing",
+    stage: "prepare",
+  });
+  await clickPDFContent(host, "对照");
+  await act(async () => findButton(/^生成原版译文/, host)?.click());
+  await act(async () => findButton("开始生成")?.click());
+  await clickPDFContent(host, "原文");
+  const tasks = await openTasks();
+  const cancel = findButton("取消生成", tasks);
+  expect(cancel).toBeDefined();
+  await act(async () => cancel?.click());
+  await clickPDFContent(host, "对照");
+  expect(host.querySelector(".pdf-translation-chooser")).not.toBeNull();
+  expect(api.cancelNativePDFReading).toHaveBeenCalledWith(freshId, "original-job");
+});
+it("keeps flow visible while original translation completes in the background", async () => {
+  await render(freshId, [], completedFlow);
+  const ready = readyOriginal(freshId);
+  vi.mocked(api.createNativePDFReading).mockResolvedValueOnce({
+    ...ready,
+    metadata: undefined,
+    status: "running",
+    stage: "layout",
+    done: 0,
+    progress: { percent: 42, elapsedSeconds: 5 },
+  });
+  vi.mocked(api.nativePDFReading).mockResolvedValueOnce(ready);
+  await clickPDFContent(host, "对照");
+  const flowPane = host.querySelector(".translation-document");
+  await choosePDFFormat(host, "原版翻译排版");
+  expect(api.createNativePDFReading).not.toHaveBeenCalled();
+  await act(async () => findButton("开始生成")?.click());
+  expect(api.createNativePDFReading).toHaveBeenCalledOnce();
+  expect(api.setAssistance).not.toHaveBeenCalled();
+  expect(host.querySelector(".translation-document")).toBe(flowPane);
+  expect(host.querySelector("[data-source-reader]")).not.toBeNull();
+  expect(host.querySelector("[data-native-reader]")).toBeNull();
+
+  await act(async () =>
+    vi.waitFor(() => expect(api.nativePDFReading).toHaveBeenCalledOnce()),
+  );
+  expect(host.querySelector(".translation-document")).toBe(flowPane);
+  expect(host.querySelector("[data-native-reader]")).toBeNull();
+  const taskList = await openTasks();
+  const view = findButton("查看原版译文", taskList);
+  expect(view).toBeDefined();
+  await act(async () => view?.click());
+  expect(host.querySelector("[data-native-reader]")).not.toBeNull();
+  expect(api.createNativePDFReading).toHaveBeenCalledOnce();
+});
+it("reuses resume for a partially translated paper", async () => {
+  await render(freshId, [], {
     ...untranslated,
     startedAt: untranslated.updatedAt,
     translationsDone: 3,
   });
   await click("流式对照");
   expect(host.querySelector("[data-native-reader]")).toBeNull();
-  const prompt = host.querySelector(".translation-prompt");
-  expect(prompt?.textContent).toContain("已翻译 3 / 8 段");
-  expect(prompt?.querySelector("button")?.textContent).toBe("继续翻译");
-  await act(async () => prompt!.querySelector("button")!.click());
-  expect(api.setAssistance).toHaveBeenCalledExactlyOnceWith("doc", "resume");
+  expect(host.querySelector(".pdf-translation-chooser")).toBeNull();
+  const resume = findButton("继续翻译", host);
+  expect(resume).toBeDefined();
+  await act(async () => resume?.click());
+  expect(api.setAssistance).toHaveBeenCalledExactlyOnceWith(freshId, "resume");
 });
-it("shows compact progress after opting into flow translation and hides it on pause", async () => {
+it("shows manual flow progress in the task list and hides it on pause", async () => {
   const running: Processing = {
     ...untranslated,
     enabled: true,
@@ -234,51 +434,41 @@ it("shows compact progress after opting into flow translation and hides it on pa
     translationsDone: 3,
     updatedAt: "2026-11-24T07:00:03Z",
   };
-  const bar = () => host.querySelector('[role="progressbar"]');
-  await render("doc", [], untranslated);
+  await render(freshId, [], untranslated);
   await clickPDFContent(host, "对照");
-  expect(bar()).toBeNull();
+  expect(flowProgress()).toBeNull();
   vi.mocked(api.setAssistance).mockResolvedValueOnce({
     ...running,
+    documentId: freshId,
     phase: "learning",
     status: "queued",
     translationsDone: 0,
     updatedAt: "2026-11-24T07:00:01Z",
   });
-  await act(async () =>
-    host
-      .querySelector<HTMLButtonElement>(".translation-prompt button")!
-      .click(),
-  );
-  expect(api.setAssistance).toHaveBeenLastCalledWith("doc", "start");
-  expect(bar()).not.toBeNull();
-  expect(bar()?.hasAttribute("aria-valuenow")).toBe(false);
-  expect(host.textContent).not.toContain("等待解析");
-  await render("doc", [], running);
-  expect(bar()?.getAttribute("aria-valuenow")).toBe("37.5");
-  expect(host.querySelector(".reading-translation-progress-detail")).toBeNull();
-  expect(host.textContent).not.toContain("3 / 8 段");
-  expect(host.querySelector(".reading-translation-progress-label")).toBeNull();
-  expect(host.textContent).not.toContain("暂停翻译");
-  await choosePDFFormat(host, "原版翻译排版");
-  expect(bar()).toBeNull();
-  await choosePDFFormat(host, "流式翻译排版");
-  expect(bar()?.getAttribute("aria-valuenow")).toBe("37.5");
-  const pause = host.querySelector<HTMLButtonElement>(
-    'button[aria-label="暂停翻译"]',
-  );
+  const flow = findButton(/^开始流式翻译/, host);
+  expect(flow).toBeDefined();
+  await act(async () => flow?.click());
+  expect(api.setAssistance).toHaveBeenLastCalledWith(freshId, "start-flow");
+  expect(host.querySelector('[role="progressbar"]')).toBeNull();
+  const list = await openTasks();
+  expect(flowProgress()).not.toBeNull();
+  expect(flowProgress()?.hasAttribute("aria-valuenow")).toBe(false);
+  await render(freshId, [], running);
+  expect(flowProgress()?.getAttribute("aria-valuenow")).toBe("37.5");
+  const pause = findButton("暂停翻译", list);
   expect(pause?.title).toBe("暂停翻译");
   vi.mocked(api.setAssistance).mockResolvedValueOnce({
     ...running,
+    documentId: freshId,
     enabled: false,
     status: "paused",
     startedAt: running.updatedAt,
     updatedAt: "2026-11-24T07:00:04Z",
   });
   await act(async () => pause!.click());
-  expect(api.setAssistance).toHaveBeenLastCalledWith("doc", "pause");
-  expect(bar()).toBeNull();
-  expect(host.textContent).toContain("继续翻译");
+  expect(api.setAssistance).toHaveBeenLastCalledWith(freshId, "pause");
+  expect(flowProgress()).toBeNull();
+  expect(findButton("继续翻译", host)).toBeDefined();
 });
 
 it("shows persisted manual translation after closing and reopening without starting another job", async () => {
@@ -289,24 +479,29 @@ it("shows persisted manual translation after closing and reopening without start
     status: "running",
     translationsDone: 3,
   };
-  await render("doc", [], running);
+  await render(cachedId, [], running);
   await clickPDFContent(host, "对照");
-  const bar = () => host.querySelector('[role="progressbar"]');
-  expect(bar()?.getAttribute("aria-valuenow")).toBe("37.5");
+  await openTasks();
+  expect(flowProgress()?.getAttribute("aria-valuenow")).toBe("37.5");
 
   await act(async () => root.render(null));
-  vi.mocked(api.assistance).mockResolvedValueOnce(running);
-  await render();
-  const group = host.querySelector(".translation-task-progress");
-  expect(group?.contains(bar())).toBe(true);
-  expect(group?.querySelector('button[aria-label="暂停翻译"]')).not.toBeNull();
-  expect(bar()?.getAttribute("aria-valuenow")).toBe("37.5");
+  vi.mocked(api.assistance).mockResolvedValueOnce({
+    ...running,
+    documentId: cachedId,
+  });
+  await render(cachedId, [], running);
+  const group = await openTasks();
+  expect(group.contains(flowProgress())).toBe(true);
+  expect(findButton("暂停翻译", group)).toBeDefined();
+  expect(flowProgress()?.getAttribute("aria-valuenow")).toBe("37.5");
   expect(api.setAssistance).not.toHaveBeenCalled();
 
+  await act(async () => findButton("关闭翻译任务", group)?.click());
   await clickPDFContent(host, "对照");
   await choosePDFFormat(host, "原版翻译排版");
-  expect(bar()).toBeNull();
-  expect(host.querySelector(".translation-task-progress")).toBeNull();
+  expect(host.querySelector('[role="progressbar"]')).toBeNull();
+  await openTasks();
+  expect(flowProgress()?.getAttribute("aria-valuenow")).toBe("37.5");
   expect(api.setAssistance).not.toHaveBeenCalled();
 });
 
@@ -318,26 +513,26 @@ it("omits progress for automatic work and paused or completed manual translation
     status: "running",
     translationsDone: 3,
   };
-  await render("doc", [], running);
+  await render(cachedId, [], running);
   await clickPDFContent(host, "对照");
-  const bar = () => host.querySelector('[role="progressbar"]');
-  expect(bar()).toBeNull();
+  await openTasks();
+  expect(flowProgress()).toBeNull();
 
-  await render("doc", [], {
+  await render(cachedId, [], {
     ...running,
     translationOrigin: "manual",
     enabled: false,
     status: "paused",
   });
-  expect(bar()).toBeNull();
-  await render("doc", [], {
+  expect(flowProgress()).toBeNull();
+  await render(cachedId, [], {
     ...running,
     translationOrigin: "manual",
     phase: "ready",
     status: "complete",
     translationsDone: 8,
   });
-  expect(bar()).toBeNull();
+  expect(flowProgress()).toBeNull();
   expect(api.setAssistance).not.toHaveBeenCalled();
 });
 
@@ -349,11 +544,15 @@ it("keeps the progress bar below 100 until the manual job finishes", async () =>
     status: "running",
     translationsDone: 8,
   };
-  await render("doc", [], finishing);
-  const bar = () => host.querySelector('[role="progressbar"]');
-  expect(bar()?.getAttribute("aria-valuenow")).toBe("99");
-  await render("doc", [], { ...finishing, status: "complete", phase: "ready" });
-  expect(bar()).toBeNull();
+  await render(cachedId, [], finishing);
+  await openTasks();
+  expect(flowProgress()?.getAttribute("aria-valuenow")).toBe("99");
+  await render(cachedId, [], {
+    ...finishing,
+    status: "complete",
+    phase: "ready",
+  });
+  expect(flowProgress()).toBeNull();
 });
 
 it("uses actual legacy translation activity without counting initial parsing as translation", async () => {
@@ -364,76 +563,60 @@ it("uses actual legacy translation activity without counting initial parsing as 
     status: "running",
     translationsDone: 3,
   };
-  await render("doc", [], legacy);
-  const bar = () => host.querySelector('[role="progressbar"]');
-  expect(bar()).toBeNull();
+  await render(cachedId, [], legacy);
+  await openTasks();
+  expect(flowProgress()).toBeNull();
 
-  await render("doc", [], {
+  await render(cachedId, [], {
     ...legacy,
     phase: "translating",
     status: "queued",
   });
-  expect(bar()).not.toBeNull();
-  expect(bar()?.hasAttribute("aria-valuenow")).toBe(false);
-  await render("doc", [], {
+  expect(flowProgress()).not.toBeNull();
+  expect(flowProgress()?.hasAttribute("aria-valuenow")).toBe(false);
+  await render(cachedId, [], {
     ...legacy,
     translating: { status: "running", detail: "正在翻译" },
   });
-  expect(bar()?.getAttribute("aria-valuenow")).toBe("37.5");
+  expect(flowProgress()?.getAttribute("aria-valuenow")).toBe("37.5");
   expect(api.setAssistance).not.toHaveBeenCalled();
 });
 
-it("leaves translation status and flow controls out of the original-layout toolbar", async () => {
-  await render("doc", [], {
-    ...untranslated,
-    enabled: true,
-    status: "complete",
-    translationsDone: 8,
-  });
+it("keeps completed flow controls in the task list when opening cached original pages", async () => {
   await clickPDFContent(host, "对照");
-  expect(
-    host.querySelector(".reading-translation-actions")?.textContent,
-  ).toContain("翻译完成");
   await choosePDFFormat(host, "原版翻译排版");
-  expect(
-    host.querySelector(".reading-translation-actions")?.childElementCount ?? 0,
-  ).toBe(0);
   expect(host.querySelector(".assistance-controls")).toBeNull();
   expect(host.querySelector('[role="progressbar"]')).toBeNull();
   expect(host.querySelector("[data-native-reader]")).not.toBeNull();
+  const list = await openTasks();
+  expect(list.textContent).toContain("翻译完成");
+  expect(api.createNativePDFReading).not.toHaveBeenCalled();
 });
 
 it("does not prompt for a finished paper whose whole-document job is paused", async () => {
-  await render("doc", [], {
+  await render(freshId, [], {
     ...untranslated,
     phase: "ready",
     translating: { status: "complete", detail: "翻译完成" },
     translationsDone: 8,
   });
   await clickPDFContent(host, "对照");
-  expect(host.querySelector(".translation-prompt")).toBeNull();
+  expect(host.querySelector(".pdf-translation-chooser")).toBeNull();
 });
 it("opens AI setup from the comparison prompt when configuration is missing", async () => {
   const open = vi.fn();
-  await render("doc", [], untranslated, { connectionRequired: true, open });
+  await render(freshId, [], untranslated, { connectionRequired: true, open });
   await clickPDFContent(host, "对照");
-  const button = host.querySelector<HTMLButtonElement>(
-    ".translation-prompt button",
-  );
-  expect(button?.textContent).toBe("配置 AI 连接");
+  const button = findButton(/^配置 AI 连接/, host);
+  expect(button).toBeDefined();
   await act(async () => button!.click());
   expect(open).toHaveBeenCalledExactlyOnceWith("connection", button);
   expect(api.setAssistance).not.toHaveBeenCalled();
 });
 it("offers model setup once an enabled translation waits for configuration", async () => {
   const open = vi.fn();
-  await render("doc", [], untranslated, { connectionRequired: false, open });
-  await clickPDFContent(host, "对照");
-  expect(host.querySelector(".translation-prompt button")?.textContent).toBe(
-    "开始翻译",
-  );
   await render(
-    "doc",
+    freshId,
     [],
     {
       ...untranslated,
@@ -446,15 +629,15 @@ it("offers model setup once an enabled translation waits for configuration", asy
     },
     { connectionRequired: false, open },
   );
-  const setup = host.querySelector<HTMLButtonElement>(
-    ".translation-prompt button",
-  );
-  expect(setup?.textContent).toBe("配置翻译模型");
+  await clickPDFContent(host, "对照");
+  await openTasks();
+  const setup = findButton("配置翻译模型");
+  expect(setup).toBeDefined();
   await act(async () => setup!.click());
   expect(open).toHaveBeenCalledExactlyOnceWith("models", setup);
 });
 it.each(["对照", "译文"] as const)(
-  "opens %s in flow on the first visit without an explicit format selection",
+  "opens %s in flow when its translation is available",
   async (content) => {
     await clickPDFContent(host, content);
     expect(
@@ -500,7 +683,7 @@ it.each([
       text: "Selected paragraph.",
       bounds: { x: 0.15, y: 0.55, width: 0.7, height: 0.2 },
     };
-    await render("doc", [block]);
+    await render(cachedId, [block]);
     if (selection) {
       await clickPDFContent(host, "对照");
       await choosePDFFormat(host, selection);
@@ -622,7 +805,7 @@ it("settles pending source navigation when the original fails to open or the doc
   expect(await old.focusReference?.(page, "stale")).toBe(false);
   expect(fixture.source.focusReference).not.toHaveBeenCalled();
 });
-it("preserves the last live page when switching through a native layout that is still generating", async () => {
+it("preserves the last live page while the next native viewport is loading", async () => {
   await click("对照");
   fixture.native.getLocation.mockReturnValue({ type: "pdf", page: 8, y: 0.6 });
   fixture.holdNative = true;
@@ -645,7 +828,7 @@ it("keeps the existing two-pane flow and standalone HTML translation available",
   expect(host.querySelector(".translation-document")).not.toBeNull();
 });
 it("opens the native layout at the independent flow pane the reader last scrolled", async () => {
-  await render("doc", [
+  await render(cachedId, [
     {
       id: "right7",
       page: 7,
@@ -711,7 +894,7 @@ it("returns from the derived reader at the original logical page", async () => {
   });
 });
 it("returns to the HTML translation at the current native paragraph", async () => {
-  await render("doc", [
+  await render(cachedId, [
     {
       id: "p7-b1",
       page: 7,

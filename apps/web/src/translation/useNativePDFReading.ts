@@ -22,6 +22,7 @@ export function useNativePDFReading(
   revision: string,
   layout: NativePDFReadingLayout = "side-by-side",
   engine?: NativePDFReadingEngine,
+  enabled = true,
 ) {
   const [attempt, nextAttempt] = useReducer((value: number) => value + 1, 0);
   const retryFor = useRef<
@@ -34,6 +35,7 @@ export function useNativePDFReading(
   const [cancelling, setCancelling] = useState(false);
   const session = useRef<Session | undefined>(undefined);
   useEffect(() => {
+    if (!enabled) return;
     const current: Session = {
       documentId,
       active: true,
@@ -104,7 +106,7 @@ export function useNativePDFReading(
       current.controller.abort();
       clearTimeout(current.timer);
     };
-  }, [documentId, revision, layout, engine, attempt]);
+  }, [documentId, revision, layout, engine, attempt, enabled]);
   const retry = () => {
     if (engine === "babeldoc")
       retryFor.current = { documentId, revision, layout };

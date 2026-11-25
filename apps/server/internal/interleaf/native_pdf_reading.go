@@ -296,6 +296,7 @@ func (s *Server) nativeReadingSnapshotForKey(documentID, key string) (*nativeRea
 }
 func (s *Server) registerNativePDFReadingRoutes(m *http.ServeMux) {
 	m.HandleFunc("POST /api/documents/{id}/native-pdf-reading", s.createNativeReading)
+	m.HandleFunc("GET /api/documents/{id}/native-pdf-reading", s.findNativeReading)
 	m.HandleFunc("GET /api/documents/{id}/native-pdf-reading/{job}", s.nativeReadingStatus)
 	m.HandleFunc("DELETE /api/documents/{id}/native-pdf-reading/{job}", s.cancelNativeReading)
 	m.HandleFunc("GET /api/documents/{id}/native-pdf-reading/cache/{key}/metadata", s.nativeReadingMetadata)
@@ -353,6 +354,64 @@ func (s *Server) readNativeReading(v *nativeReadingSnapshot) (*nativeReadingMani
 	}
 	return &m, pdf, nil
 }
+
+func (s *Server) cachedNativeReadingStatus(v *nativeReadingSnapshot) *nativeReadingStatus {
+	m, _, err := s.readNativeReading(v)
+	if err != nil {
+		return nil
+	}
+	return &nativeReadingStatus{ID: v.key, CacheKey: v.key, Status: "ready", Stage: "ready", Done: len(m.Pages), Total: len(m.Pages), Metadata: m}
+}
+
+// Looking up an original-layout translation never starts a model call or
+// migrates a legacy cache. The POST remains the only way to request that work.
+func (s *Server) findNativeReading(w http.ResponseWriter, r *http.Request) {
+	documentID := r.PathValue("id")
+	ctx, finish, err := s.beginDocumentTask(r.Context(), documentID)
+	if err != nil {
+		fail(w, http.StatusConflict, "文档不可用")
+		return
+	}
+	defer finish()
+	v, err := s.babeldocReadingSnapshot(documentID)
+	if err != nil {
+		respond(w, http.StatusOK, nil)
+		return
+	}
+
+	var result *nativeReadingStatus
+	var latestFailure time.Time
+	s.nativeReadingMu.Lock()
+	s.pruneNativeReadingJobsLocked()
+	for _, job := range s.nativeReadingJobs {
+		if job.documentID != documentID || job.engine != nativeReadingBabelDOC {
+			continue
+		}
+		job.mu.Lock()
+		state, finishedAt := job.snapshotLocked(), job.finishedAt
+		job.mu.Unlock()
+		if state.CacheKey != v.key {
+			continue
+		}
+		if state.Status == "preparing" || state.Status == "running" {
+			result = &state
+			break
+		}
+		if state.Status == "failed" && finishedAt.After(latestFailure) {
+			result, latestFailure = &state, finishedAt
+		}
+	}
+	s.nativeReadingMu.Unlock()
+	if cached := s.cachedNativeReadingStatus(v); cached != nil {
+		result = cached
+	}
+	if ctx.Err() != nil {
+		fail(w, http.StatusConflict, "文档已变化")
+		return
+	}
+	respond(w, http.StatusOK, result)
+}
+
 func (s *Server) createNativeReading(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		Layout json.RawMessage `json:"layout"`
@@ -408,8 +467,8 @@ func (s *Server) createNativeReading(w http.ResponseWriter, r *http.Request) {
 		fail(w, 409, message)
 		return
 	}
-	if m, _, e := s.readNativeReading(v); e == nil {
-		respond(w, 200, nativeReadingStatus{ID: v.key, CacheKey: v.key, Status: "ready", Stage: "ready", Done: len(m.Pages), Total: len(m.Pages), Metadata: m})
+	if cached := s.cachedNativeReadingStatus(v); cached != nil {
+		respond(w, 200, cached)
 		return
 	}
 	for _, j := range s.nativeReadingJobs {

@@ -93,6 +93,7 @@ import { LibrarySearchDialog } from "./LibrarySearchDialog";
 import { ImportResultsDialog } from "./ImportResultsDialog";
 import { useLibraryImport, type ImportTarget } from "./library-import";
 import { recordLibraryReady } from "./diagnostics";
+import { observeOriginalTranslationReady } from "./translation/useBabelDOCReading";
 
 const Workspace = lazy(() =>
   import("./Workspace").then(({ Workspace }) => ({ default: Workspace })),
@@ -120,6 +121,44 @@ export function App() {
     trash,
   } = useReaderStore();
   const mode = libraryMode(libraryPreferences);
+  const [originalRequest, setOriginalRequest] = useState<{
+    documentId: string;
+    sequence: number;
+  }>();
+  useEffect(
+    () =>
+      observeOriginalTranslationReady((documentId) => {
+        const id = `babeldoc:${documentId}`;
+        const { documents } = useReaderStore.getState();
+        if (!documents.some((document) => document.id === documentId)) return;
+        toast.success("原版译文已就绪", {
+          id,
+          duration: 8000,
+          closeButton: true,
+          action: {
+            label: "查看译文",
+            onClick: () => {
+              const reader = useReaderStore.getState();
+              const document = reader.documents.find(
+                (item) => item.id === documentId,
+              );
+              if (!document || document.metadataOnly) return;
+              setOriginalRequest((current) => ({
+                documentId,
+                sequence: (current?.sequence ?? 0) + 1,
+              }));
+              if (reader.active?.id !== documentId) reader.open(document);
+            },
+          },
+        });
+      }),
+    [],
+  );
+  const clearOriginalRequest = useCallback((sequence: number) => {
+    setOriginalRequest((request) =>
+      request?.sequence === sequence ? undefined : request,
+    );
+  }, []);
   const papers = mode === "papers";
   const researchTopicId = usePaperUI((s) => s.researchTopicId);
   const researchOpening = useRef<number | null>(null);
@@ -487,6 +526,12 @@ export function App() {
               document={active}
               theme={resolvedTheme}
               processing={jobs.find((job) => job.documentId === active.id)}
+              originalTranslationRequest={
+                originalRequest?.documentId === active.id
+                  ? originalRequest.sequence
+                  : undefined
+              }
+              onOriginalTranslationOpened={clearOriginalRequest}
               onBack={() => {
                 open(null);
                 void refreshLibrary();

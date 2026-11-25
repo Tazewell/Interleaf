@@ -3945,10 +3945,10 @@ export interface paths {
                 content: {
                     "application/json": {
                         /**
-                         * @description retranslate restarts completed paper text with saved current translation choices, retaining previous translations until replacement succeeds. Books keep chapter translation controls.
+                         * @description start-flow explicitly requests whole-paper PDF flow translation, even during initial parsing. retranslate restarts completed paper text with saved current translation choices, retaining previous translations until replacement succeeds. Books keep chapter translation controls.
                          * @enum {string}
                          */
-                        action: "start" | "pause" | "resume" | "retranslate";
+                        action: "start" | "start-flow" | "pause" | "resume" | "retranslate";
                     };
                 };
             };
@@ -6723,7 +6723,36 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /** @description Find the current BabelDOC translation-only cache or task without creating work. Null when none is available for the current configuration. */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Current result or task, or null */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["NativePDFReadingJob"] | null;
+                    };
+                };
+                /** @description Document unavailable */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
         put?: never;
         post: {
             parameters: {
@@ -7412,7 +7441,7 @@ export interface components {
         };
         ProcessingStage: {
             /** @enum {unknown} */
-            status: "queued" | "running" | "waiting" | "failed" | "complete";
+            status: "queued" | "running" | "waiting" | "failed" | "complete" | "paused";
             detail: string;
             warning?: string;
         };

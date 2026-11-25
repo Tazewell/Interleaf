@@ -28,6 +28,7 @@ import type { TranslationSplit } from "./TranslationPanes";
 import type { TranslationSetup } from "./AssistanceControls";
 import { ReadingTranslationProgress } from "./ReadingTranslationProgress";
 import { useNativePDFReading } from "./useNativePDFReading";
+import type { useBabelDOCReading } from "./useBabelDOCReading";
 
 export function NativePDFReadingView({
   document: doc,
@@ -46,6 +47,7 @@ export function NativePDFReadingView({
   layout = "side-by-side",
   engine,
   syncEnabled = true,
+  generation,
 }: {
   document: Document;
   theme: ReaderTheme;
@@ -63,6 +65,7 @@ export function NativePDFReadingView({
   layout?: NativePDFReadingLayout;
   engine?: NativePDFReadingEngine;
   syncEnabled?: boolean;
+  generation?: ReturnType<typeof useBabelDOCReading>;
 }) {
   // Only completed Interleaf text affects its rendered PDF. BabelDOC translates independently.
   const revision = useMemo(() => {
@@ -80,12 +83,15 @@ export function NativePDFReadingView({
     );
   }, [engine, translations]);
   // Both views read the same translated pages. Comparison opens the original in its own pane.
-  const { job, busy, error, retry, cancel, cancelling } = useNativePDFReading(
+  const localGeneration = useNativePDFReading(
     doc.id,
     revision,
     "translation-only",
     engine,
+    !generation,
   );
+  const { job, busy, error, retry, cancel, cancelling } =
+    generation ?? localGeneration;
   const readyMetadata = job?.status === "ready" ? job.metadata : undefined;
   const engineMismatch = readyMetadata && readyMetadata.engine !== engine;
   const metadata =

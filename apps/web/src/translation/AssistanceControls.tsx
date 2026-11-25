@@ -1,4 +1,10 @@
-import { useEffect, useRef, useState } from "react";
+import {
+  useEffect,
+  useImperativeHandle,
+  useRef,
+  useState,
+  type Ref,
+} from "react";
 import { createPortal } from "react-dom";
 import {
   Check,
@@ -24,7 +30,7 @@ import { toast } from "sonner";
 import { ReadingTranslationProgress } from "./ReadingTranslationProgress";
 import type { PageRange } from "./chapters";
 
-type Action = "start" | "pause" | "resume" | "chapter";
+type Action = "start" | "start-flow" | "pause" | "resume" | "chapter";
 export type TranslationSetup = {
   connectionRequired: boolean;
   open: (section: "connection" | "models", trigger: HTMLButtonElement) => void;
@@ -44,6 +50,9 @@ export function AssistanceControls({
   translationSetup,
   showProgress = false,
   hidden = false,
+  actionsHost,
+  flowEntry,
+  onJobChange,
 }: {
   documentId: string;
   processing?: Processing;
@@ -55,17 +64,23 @@ export function AssistanceControls({
   translationSetup?: TranslationSetup;
   showProgress?: boolean;
   hidden?: boolean;
+  actionsHost?: HTMLElement | null;
+  flowEntry?: Ref<(trigger: HTMLButtonElement) => void>;
+  onJobChange?: (job: Processing | undefined) => void;
 }) {
   const [saved, setSaved] = useState<Processing>();
   const [busy, setBusy] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const serial = useRef(0);
   const job =
-    saved &&
+    saved?.documentId === documentId &&
     (!processing ||
       Date.parse(saved.updatedAt) > Date.parse(processing.updatedAt))
       ? saved
       : processing;
+  useEffect(() => {
+    onJobChange?.(job);
+  }, [job, onJobChange]);
   useEffect(() => {
     let alive = true;
     setSaved(undefined);
@@ -117,8 +132,9 @@ export function AssistanceControls({
         ? "暂停重译"
         : "继续重译"
       : label;
-  const run = async () => {
-    if (action !== "chapter") return api.setAssistance(documentId, action);
+  const run = async (requestedAction: Action) => {
+    if (requestedAction !== "chapter")
+      return api.setAssistance(documentId, requestedAction);
     if (epubChapter) {
       const location = epubChapter();
       if (!location?.href) throw new Error("正文仍在加载，请稍后再试");
@@ -135,11 +151,12 @@ export function AssistanceControls({
     if (result.parsing) toast("正在解析本章，完成后开始翻译");
     return api.assistance(documentId);
   };
-  const runAction = async () => {
+  const runAction = async (requestedAction: Action = action) => {
+    if (busy) return;
     const operation = ++serial.current;
     setBusy(true);
     try {
-      const next = await run();
+      const next = await run(requestedAction);
       if (next && operation === serial.current) setSaved(next);
     } catch (e) {
       if (operation === serial.current) toast.error((e as Error).message);
@@ -147,6 +164,13 @@ export function AssistanceControls({
       if (operation === serial.current) setBusy(false);
     }
   };
+  useImperativeHandle(flowEntry, () => (trigger) => {
+    if (translationSetup?.connectionRequired) {
+      translationSetup.open("connection", trigger);
+    } else {
+      void runAction("start-flow");
+    }
+  });
   const done = job?.translationsDone ?? 0;
   const total = job?.translationsTotal ?? 0;
   const translated =
@@ -204,7 +228,7 @@ export function AssistanceControls({
                   ? "继续已请求章节的翻译"
                   : "使用当前 AI 连接翻译全文与公式"
         }
-        onClick={runAction}
+        onClick={() => void runAction()}
       >
         {parsingPending ? (
           <FileSearch />
@@ -220,7 +244,7 @@ export function AssistanceControls({
         {!showTranslationProgress && actionLabel}
       </Button>
     );
-  return (
+  const actions = (
     <div className="assistance-controls">
       {showTranslationProgress ? (
         <div className="translation-task-progress">
@@ -295,6 +319,13 @@ export function AssistanceControls({
           </AlertDialogContent>
         </AlertDialog>
       )}
+    </div>
+  );
+  return (
+    <>
+      {actionsHost === undefined
+        ? actions
+        : actionsHost && createPortal(actions, actionsHost)}
       {promptHost &&
         job &&
         (moveAction || setupSection) &&
@@ -334,6 +365,6 @@ export function AssistanceControls({
           </div>,
           promptHost,
         )}
-    </div>
+    </>
   );
 }

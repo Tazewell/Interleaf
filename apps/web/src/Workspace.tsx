@@ -249,12 +249,16 @@ export function Workspace({
   theme,
   processing,
   onBack,
+  originalTranslationRequest,
+  onOriginalTranslationOpened,
   backLabel = "返回书库",
   onSettings,
 }: {
   document: ReaderDocument;
   theme: ReaderTheme;
   processing?: Processing;
+  originalTranslationRequest?: number;
+  onOriginalTranslationOpened?: (sequence: number) => void;
   onBack: () => void;
   backLabel?: string;
   onSettings: (target?: SettingsTarget) => void;
@@ -1776,6 +1780,10 @@ export function Workspace({
                   annotations={annotations}
                   blocks={blocks}
                   processing={processing}
+                  {...(doc.type === "pdf" && {
+                    originalTranslationRequest,
+                    onOriginalTranslationOpened,
+                  })}
                   translationSetup={
                     aiConfig && {
                       connectionRequired: !provider,

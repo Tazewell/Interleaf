@@ -32,6 +32,26 @@ it("uses authenticated native reading transport, escaped identities and cancella
   );
 });
 
+it("finds existing original-layout jobs without submitting a request body", async () => {
+  configureAPI("reading/token");
+  const fetcher = vi.fn(async (_url: string, _init?: RequestInit) =>
+    Response.json(null),
+  );
+  vi.stubGlobal("fetch", fetcher);
+  const signal = new AbortController().signal;
+  await expect(api.findNativePDFReading("doc/one", signal)).resolves.toBeNull();
+  expect(fetcher).toHaveBeenCalledExactlyOnceWith(
+    "/api/documents/doc%2Fone/native-pdf-reading",
+    expect.objectContaining({
+      signal,
+      headers: expect.objectContaining({ Authorization: "Bearer reading/token" }),
+    }),
+  );
+  const init = fetcher.mock.calls[0][1];
+  expect(init?.method ?? "GET").toBe("GET");
+  expect(init?.body).toBeUndefined();
+});
+
 it("sends explicit translation-only layout while preserving legacy default payload", async () => {
   const fetcher = vi.fn(async (_url: string, _init?: RequestInit) =>
     Response.json({ status: "ready" }),
