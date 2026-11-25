@@ -1958,7 +1958,7 @@ export function Workspace({
           collapsible
           collapsedSize={0}
           style={{ overflow: "hidden" }}
-          defaultSize="31%"
+          defaultSize="27%"
           minSize="280px"
           maxSize="45%"
         >
