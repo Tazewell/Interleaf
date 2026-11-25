@@ -10,17 +10,12 @@ import {
 import { SlidingTabsList } from "../controls/SlidingTabsList";
 
 export type PDFReadingContent = "source" | "parallel" | "translation";
-export type PDFReadingFormat = "native" | "flow" | "babeldoc";
-const formats = [
-  { value: "native", label: "原版式", icon: FileText },
-  { value: "flow", label: "流式", icon: TextAlignLeft },
-] as const;
+export type PDFReadingFormat = "flow" | "babeldoc";
 const translatedFormats = [
   { value: "babeldoc", label: "原版翻译排版", icon: FileText },
   { value: "flow", label: "流式翻译排版", icon: TextAlignLeft },
 ] as const;
 
-/** Content and layout are independent, so switching either keeps the other choice. */
 export function PDFReadingControls({
   content,
   format,
@@ -32,7 +27,6 @@ export function PDFReadingControls({
   onContentChange: (value: PDFReadingContent) => void;
   onFormatChange: (value: PDFReadingFormat) => void;
 }) {
-  const availableFormats = content === "source" ? formats : translatedFormats;
   const FormatIcon = format === "flow" ? TextAlignLeft : FileText;
   return (
     <div
@@ -51,41 +45,42 @@ export function PDFReadingControls({
           <TabsTrigger value="translation">译文</TabsTrigger>
         </SlidingTabsList>
       </Tabs>
-      <Select
-        key={content === "source" ? "source" : "translated"}
-        items={availableFormats}
-        value={format}
-        onValueChange={(value) => {
-          if (value) onFormatChange(value as PDFReadingFormat);
-        }}
-      >
-        <SelectTrigger
-          className="pdf-reading-format"
-          aria-label="排版方式"
-          size="sm"
+      {content !== "source" && (
+        <Select
+          items={translatedFormats}
+          value={format}
+          onValueChange={(value) => {
+            if (value) onFormatChange(value);
+          }}
         >
-          <FormatIcon
-            aria-hidden="true"
-            className="size-3.5 text-muted-foreground"
-          />
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent
-          align="end"
-          alignItemWithTrigger={false}
-          className={content === "source" ? undefined : "min-w-44"}
-        >
-          {availableFormats.map((item) => (
-            <SelectItem key={item.value} value={item.value}>
-              <item.icon
-                aria-hidden="true"
-                className="size-4 text-muted-foreground"
-              />
-              {item.label}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
+          <SelectTrigger
+            className="pdf-reading-format"
+            aria-label="排版方式"
+            size="sm"
+          >
+            <FormatIcon
+              aria-hidden="true"
+              className="size-3.5 text-muted-foreground"
+            />
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent
+            align="end"
+            alignItemWithTrigger={false}
+            className="min-w-44"
+          >
+            {translatedFormats.map((item) => (
+              <SelectItem key={item.value} value={item.value}>
+                <item.icon
+                  aria-hidden="true"
+                  className="size-4 text-muted-foreground"
+                />
+                {item.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      )}
     </div>
   );
 }

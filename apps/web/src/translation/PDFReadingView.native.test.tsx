@@ -158,27 +158,29 @@ it("opens native 对照 and delegates its search and annotation preparation", as
   expect(fixture.native.search).toHaveBeenCalledWith("中文");
   expect(facade.prepareAnnotation).toBe(fixture.native.prepareAnnotation);
 });
-it("separates three reading contents from the layout choice", async () => {
+it("opens the original PDF with three content tabs and no layout choice", () => {
   expect(
     [...host.querySelectorAll('[role="tab"]')].map((tab) => tab.textContent),
   ).toEqual(["原文", "对照", "译文"]);
-  expect(host.querySelector('[aria-label="排版方式"]')?.textContent).toContain(
-    "原版式",
-  );
-});
-it("offers only the requested translated layouts and keeps original PDF independent", async () => {
-  await choosePDFFormat(host, "流式");
+  expect(host.querySelector('[aria-label="排版方式"]')).toBeNull();
   expect(host.querySelector("[data-source-reader]")).not.toBeNull();
-  await clickPDFContent(host, "对照");
-  const trigger = host.querySelector<HTMLButtonElement>(
-    '[aria-label="排版方式"]',
-  )!;
-  expect(trigger.textContent).toContain("流式翻译排版");
-  await act(async () => trigger.click());
-  expect(
-    [...document.querySelectorAll('[role="option"]')].map((n) => n.textContent),
-  ).toEqual(["原版翻译排版", "流式翻译排版"]);
 });
+it.each(["对照", "译文"] as const)(
+  "offers exactly the two translation layouts in %s",
+  async (content) => {
+    await clickPDFContent(host, content);
+    const trigger = host.querySelector<HTMLButtonElement>(
+      '[aria-label="排版方式"]',
+    )!;
+    expect(trigger.textContent).toContain("流式翻译排版");
+    await act(async () => trigger.click());
+    expect(
+      [...document.querySelectorAll('[role="option"]')].map(
+        (n) => n.textContent,
+      ),
+    ).toEqual(["原版翻译排版", "流式翻译排版"]);
+  },
+);
 const untranslated: Processing = {
   documentId: "doc",
   phase: "translating",
@@ -553,6 +555,7 @@ it("keeps the chosen content when switching between native and flowing layouts",
   await choosePDFFormat(host, "原版翻译排版");
   expect(fixture.nativeProps?.layout).toBe("translation-only");
   await clickPDFContent(host, "原文");
+  expect(host.querySelector('[aria-label="排版方式"]')).toBeNull();
   await clickPDFContent(host, "对照");
   expect(fixture.nativeProps?.layout).toBe("side-by-side");
 });

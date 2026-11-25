@@ -69,13 +69,6 @@ type Mode =
   "source" | "parallel" | "native" | "translation" | "native-translation";
 const isNativeMode = (value: Mode): value is "native" | "native-translation" =>
   value === "native" || value === "native-translation";
-function readingFormat(
-  content: PDFReadingContent,
-  babelDOC: boolean,
-  sourceFormat: "native" | "flow",
-): PDFReadingFormat {
-  return content === "source" ? sourceFormat : babelDOC ? "babeldoc" : "flow";
-}
 function readingMode(
   content: PDFReadingContent,
   format: PDFReadingFormat,
@@ -130,14 +123,12 @@ export function PDFReadingView({
   events: ReaderEvents;
 }) {
   const [content, setContent] = useState<PDFReadingContent>("source"),
-    [sourceFormat, setSourceFormat] = useState<"native" | "flow">("native"),
     [babelDOCDocument, setBabelDOCDocument] = useState<string>(),
     [syncEnabled, setSyncEnabled] = useState(true);
   const split = useTranslationSplit();
-  const babelDOC = babelDOCDocument === doc.id;
-  const format = readingFormat(content, babelDOC, sourceFormat);
-  const engineChoice = format === "babeldoc" ? format : undefined;
+  const format = babelDOCDocument === doc.id ? "babeldoc" : "flow";
   const mode = readingMode(content, format);
+  const engineChoice = isNativeMode(mode) ? "babeldoc" : undefined;
   const { translations, error } = useTranslations(doc.id);
   const [translationPromptHost, setTranslationPromptHost] =
     useState<HTMLDivElement | null>(null);
@@ -1228,25 +1219,10 @@ export function PDFReadingView({
     nextFormat?: PDFReadingFormat,
     fromBlock?: PDFBlock,
   ) => {
-    const nextBabelDOC =
-      nextFormat === undefined ? babelDOC : nextFormat === "babeldoc";
-    const nextReadingFormat = readingFormat(
-      nextContent,
-      nextBabelDOC,
-      sourceFormat,
-    );
-    const value = readingMode(nextContent, nextReadingFormat);
-    if (
-      nextContent === "source" &&
-      (nextFormat === "native" || nextFormat === "flow")
-    )
-      setSourceFormat(nextFormat);
-    else if (nextContent !== "source" && nextFormat !== undefined)
-      setBabelDOCDocument(nextBabelDOC ? doc.id : undefined);
-    if (
-      mode === value &&
-      (!isNativeMode(value) || format === nextReadingFormat)
-    ) {
+    const value = readingMode(nextContent, nextFormat ?? format);
+    if (nextContent !== "source" && nextFormat !== undefined)
+      setBabelDOCDocument(nextFormat === "babeldoc" ? doc.id : undefined);
+    if (mode === value) {
       if (fromBlock) {
         setPopup(undefined);
         void focusBlock(fromBlock, "source");
