@@ -133,56 +133,85 @@
   color: var(--muted-foreground);
   font-size: 13px;
 }
+.native-pdf-state:has(.reading-translation-progress) {
+  gap: 18px;
+}
 .reading-translation-progress {
-  display: flex;
+  --track-height: 6px;
+  --track-color: color-mix(in srgb, var(--ui-accent) 17%, var(--ui-panel));
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 4ch;
   align-items: center;
-  gap: 10px;
-  width: min(100%, 240px);
-  color: var(--muted-foreground);
-  font-size: 13px;
+  column-gap: 12px;
+  width: min(100%, 228px);
+  min-height: 16px;
+  color: var(--ink-muted);
+  font-size: 12px;
+  font-weight: 500;
   font-variant-numeric: tabular-nums;
+  line-height: 16px;
 }
 .reading-translation-progress.is-compact {
-  width: 76px;
+  --track-height: 3px;
+  --track-color: color-mix(
+    in srgb,
+    var(--ui-accent) 22%,
+    var(--ui-accent-soft)
+  );
+  flex: 1;
+  display: block;
   min-width: 0;
+  min-height: 0;
+  width: auto;
 }
 .reading-translation-progress-bar {
-  flex: 1;
   min-width: 0;
 }
 .reading-translation-progress-percent {
-  min-width: 4ch;
   text-align: end;
 }
 .reading-translation-progress-bar [data-slot="progress-track"] {
-  height: 5px;
-}
-.is-compact .reading-translation-progress-bar [data-slot="progress-track"] {
-  height: 3px;
+  height: var(--track-height);
+  background: var(--track-color);
 }
 .reading-translation-progress-bar [data-slot="progress-indicator"] {
   border-radius: inherit;
-  background: var(--muted-foreground);
-  transition: none;
+  background: var(--ui-accent);
+  transition: width 220ms ease-out;
 }
 .reading-translation-progress-bar[data-indeterminate]
   [data-slot="progress-indicator"] {
-  width: 30%;
-  transform: translateX(115%);
-  animation: reading-translation-progress 1.4s ease-in-out infinite;
+  width: 28%;
+  transition: none;
+  animation: reading-translation-progress 1.65s cubic-bezier(0.4, 0, 0.2, 1)
+    infinite;
 }
 @keyframes reading-translation-progress {
   from {
     transform: translateX(-100%);
   }
   to {
-    transform: translateX(335%);
+    transform: translateX(360%);
   }
 }
 @media (prefers-reduced-motion: reduce) {
+  .reading-translation-progress-bar [data-slot="progress-indicator"] {
+    transition: none;
+  }
   .reading-translation-progress-bar[data-indeterminate]
     [data-slot="progress-indicator"] {
     animation: none;
+    transform: translateX(128.5%);
+  }
+}
+@media (forced-colors: active) {
+  .reading-translation-progress-bar [data-slot="progress-track"] {
+    forced-color-adjust: none;
+    background: Canvas;
+    outline: 1px solid GrayText;
+  }
+  .reading-translation-progress-bar [data-slot="progress-indicator"] {
+    background: Highlight;
   }
 }
 .native-pdf-state-actions,
@@ -533,10 +562,34 @@
   gap: 2px;
   flex-shrink: 0;
 }
-.pdf-reading-toolbar .assistance-controls:has(.reading-translation-progress) {
+.pdf-reading-toolbar .assistance-controls:has(.translation-task-progress) {
   min-width: 0;
   flex-shrink: 1;
+}
+.translation-task-progress {
+  display: flex;
+  align-items: center;
   gap: 6px;
+  width: 92px;
+  min-width: 0;
+  min-height: 28px;
+  padding-inline: 9px 2px;
+  border-radius: 999px;
+  background: var(--ui-accent-soft);
+  color: var(--ui-accent);
+}
+.translation-task-progress:not(:has(button)) {
+  padding-inline-end: 9px;
+}
+.workspace
+  .translation-toolbar
+  .translation-task-progress
+  [data-slot="button"] {
+  flex: none;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  color: inherit;
 }
 .translation-formula-source {
   margin-top: 0.5em;

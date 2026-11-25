@@ -57,10 +57,6 @@ export function AssistanceControls({
   hidden?: boolean;
 }) {
   const [saved, setSaved] = useState<Processing>();
-  // Processing snapshots also describe automatic jobs, so only reader actions
-  // can opt this toolbar into displaying manual progress.
-  const [manualProgressDocument, setManualProgressDocument] =
-    useState<string>();
   const [busy, setBusy] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const serial = useRef(0);
@@ -144,13 +140,7 @@ export function AssistanceControls({
     setBusy(true);
     try {
       const next = await run();
-      if (next && operation === serial.current) {
-        setSaved(next);
-        if (showProgress)
-          setManualProgressDocument(
-            action === "pause" ? undefined : documentId,
-          );
-      }
+      if (next && operation === serial.current) setSaved(next);
     } catch (e) {
       if (operation === serial.current) toast.error((e as Error).message);
     } finally {
@@ -183,55 +173,74 @@ export function AssistanceControls({
       : setupSection
         ? "完成配置后即可翻译全文。"
         : undefined;
-  const showManualProgress =
+  // Jobs created before origin was persisted can still report their translation
+  // stage. Plain legacy PDF parsing does not imply a pending translation.
+  const hasTranslationStage =
+    job?.phase === "translating" || job?.translating !== undefined;
+  const showTranslationProgress =
     showProgress &&
-    manualProgressDocument === documentId &&
     action === "pause" &&
+    (job?.translationOrigin === "manual" ||
+      (job?.translationOrigin === undefined && hasTranslationStage)) &&
     (translationStatus === "queued" || translationStatus === "running");
   const measuredProgress =
-    !paperParsing && translationStatus === "running" && total > 0;
+    hasTranslationStage && translationStatus === "running" && total > 0;
   if (hidden) return null;
+  const actionButton = !moveAction &&
+    !(showTranslationProgress && parsingPending) && (
+      <Button
+        variant="ghost"
+        size={showTranslationProgress ? "icon-sm" : "sm"}
+        aria-label={showTranslationProgress ? actionLabel : undefined}
+        disabled={busy || !job || finished || parsingPending}
+        title={
+          showTranslationProgress
+            ? actionLabel
+            : action === "chapter"
+              ? "翻译当前完整章节，复用已完成译文"
+              : job?.enabled
+                ? job.detail
+                : epubChapter
+                  ? "继续已请求章节的翻译"
+                  : "使用当前 AI 连接翻译全文与公式"
+        }
+        onClick={runAction}
+      >
+        {parsingPending ? (
+          <FileSearch />
+        ) : finished ? (
+          <Check />
+        ) : action === "pause" ? (
+          <Pause />
+        ) : action === "resume" && job?.status === "failed" ? (
+          <RotateCcw />
+        ) : (
+          <Languages />
+        )}
+        {!showTranslationProgress && actionLabel}
+      </Button>
+    );
   return (
     <div className="assistance-controls">
-      {showManualProgress && (
-        <ReadingTranslationProgress
-          label="正在翻译"
-          percent={measuredProgress ? (done / total) * 100 : undefined}
-          compact
-        />
-      )}
-      {!moveAction && !(showManualProgress && parsingPending) && (
-        <Button
-          variant="ghost"
-          size={showManualProgress ? "icon-sm" : "sm"}
-          aria-label={showManualProgress ? actionLabel : undefined}
-          disabled={busy || !job || finished || parsingPending}
-          title={
-            showManualProgress
-              ? actionLabel
-              : action === "chapter"
-                ? "翻译当前完整章节，复用已完成译文"
-                : job?.enabled
-                  ? job.detail
-                  : epubChapter
-                    ? "继续已请求章节的翻译"
-                    : "使用当前 AI 连接翻译全文与公式"
-          }
-          onClick={runAction}
-        >
-          {parsingPending ? (
-            <FileSearch />
-          ) : finished ? (
-            <Check />
-          ) : action === "pause" ? (
-            <Pause />
-          ) : action === "resume" && job?.status === "failed" ? (
-            <RotateCcw />
-          ) : (
-            <Languages />
-          )}
-          {!showManualProgress && actionLabel}
-        </Button>
+      {showTranslationProgress ? (
+        <div className="translation-task-progress">
+          <ReadingTranslationProgress
+            label={
+              paperParsing
+                ? "正在准备翻译"
+                : translationStatus === "queued"
+                  ? "等待翻译"
+                  : "翻译进度"
+            }
+            percent={
+              measuredProgress ? Math.min(99, (done / total) * 100) : undefined
+            }
+            compact
+          />
+          {actionButton}
+        </div>
+      ) : (
+        actionButton
       )}
       {finished && library === "papers" && !epubChapter && (
         <AlertDialog open={confirming} onOpenChange={setConfirming}>
@@ -271,7 +280,6 @@ export function AssistanceControls({
                     if (operation === serial.current) {
                       setConfirming(false);
                       setSaved(next);
-                      if (showProgress) setManualProgressDocument(documentId);
                     }
                   } catch (e) {
                     if (operation === serial.current)

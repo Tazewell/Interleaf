@@ -9,6 +9,9 @@ import (
 // The translation lane owns its counters and state. Serialize read/merge/write in
 // Store so lane progress and queue requests never overwrite each other.
 func mergeProcessing(current, update Processing) Processing {
+	if update.markManualTranslation {
+		current.TranslationOrigin = translationOriginManual
+	}
 	if update.enable {
 		current.Enabled = true
 	}

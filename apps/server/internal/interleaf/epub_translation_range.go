@@ -275,7 +275,7 @@ func (s *Server) requestEPUBTranslationChapter(w http.ResponseWriter, r *http.Re
 	defer s.processingControlMu.Unlock()
 	s.processingMu.Lock()
 	defer s.processingMu.Unlock()
-	result, err := s.queueTranslationInput(d, blocks[from:to])
+	result, err := s.queueTranslationInput(d, blocks[from:to], false)
 	if err != nil {
 		fail(w, 500, "无法安排翻译任务")
 		return

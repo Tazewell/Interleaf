@@ -227,16 +227,15 @@ it("shows compact progress after opting into flow translation and hides it on pa
   const running: Processing = {
     ...untranslated,
     enabled: true,
+    translationOrigin: "manual",
     status: "running",
     translationsDone: 3,
     updatedAt: "2026-11-24T07:00:03Z",
   };
   const bar = () => host.querySelector('[role="progressbar"]');
-  await render("doc", [], running);
+  await render("doc", [], untranslated);
   await clickPDFContent(host, "对照");
   expect(bar()).toBeNull();
-
-  await render("doc", [], untranslated);
   vi.mocked(api.setAssistance).mockResolvedValueOnce({
     ...running,
     phase: "learning",
@@ -278,6 +277,108 @@ it("shows compact progress after opting into flow translation and hides it on pa
   expect(api.setAssistance).toHaveBeenLastCalledWith("doc", "pause");
   expect(bar()).toBeNull();
   expect(host.textContent).toContain("继续翻译");
+});
+
+it("shows persisted manual translation after closing and reopening without starting another job", async () => {
+  const running: Processing = {
+    ...untranslated,
+    enabled: true,
+    translationOrigin: "manual",
+    status: "running",
+    translationsDone: 3,
+  };
+  await render("doc", [], running);
+  await clickPDFContent(host, "对照");
+  const bar = () => host.querySelector('[role="progressbar"]');
+  expect(bar()?.getAttribute("aria-valuenow")).toBe("37.5");
+
+  await act(async () => root.render(null));
+  vi.mocked(api.assistance).mockResolvedValueOnce(running);
+  await render();
+  const group = host.querySelector(".translation-task-progress");
+  expect(group?.contains(bar())).toBe(true);
+  expect(group?.querySelector('button[aria-label="暂停翻译"]')).not.toBeNull();
+  expect(bar()?.getAttribute("aria-valuenow")).toBe("37.5");
+  expect(api.setAssistance).not.toHaveBeenCalled();
+
+  await clickPDFContent(host, "对照");
+  await choosePDFFormat(host, "原版翻译排版");
+  expect(bar()).toBeNull();
+  expect(host.querySelector(".translation-task-progress")).toBeNull();
+  expect(api.setAssistance).not.toHaveBeenCalled();
+});
+
+it("omits progress for automatic work and paused or completed manual translation", async () => {
+  const running: Processing = {
+    ...untranslated,
+    enabled: true,
+    translationOrigin: "automatic",
+    status: "running",
+    translationsDone: 3,
+  };
+  await render("doc", [], running);
+  await clickPDFContent(host, "对照");
+  const bar = () => host.querySelector('[role="progressbar"]');
+  expect(bar()).toBeNull();
+
+  await render("doc", [], {
+    ...running,
+    translationOrigin: "manual",
+    enabled: false,
+    status: "paused",
+  });
+  expect(bar()).toBeNull();
+  await render("doc", [], {
+    ...running,
+    translationOrigin: "manual",
+    phase: "ready",
+    status: "complete",
+    translationsDone: 8,
+  });
+  expect(bar()).toBeNull();
+  expect(api.setAssistance).not.toHaveBeenCalled();
+});
+
+it("keeps the progress bar below 100 until the manual job finishes", async () => {
+  const finishing: Processing = {
+    ...untranslated,
+    enabled: true,
+    translationOrigin: "manual",
+    status: "running",
+    translationsDone: 8,
+  };
+  await render("doc", [], finishing);
+  const bar = () => host.querySelector('[role="progressbar"]');
+  expect(bar()?.getAttribute("aria-valuenow")).toBe("99");
+  await render("doc", [], { ...finishing, status: "complete", phase: "ready" });
+  expect(bar()).toBeNull();
+});
+
+it("uses actual legacy translation activity without counting initial parsing as translation", async () => {
+  const legacy: Processing = {
+    ...untranslated,
+    enabled: true,
+    phase: "learning",
+    status: "running",
+    translationsDone: 3,
+  };
+  await render("doc", [], legacy);
+  const bar = () => host.querySelector('[role="progressbar"]');
+  expect(bar()).toBeNull();
+
+  await render("doc", [], {
+    ...legacy,
+    phase: "translating",
+    status: "queued",
+  });
+  expect(bar()).not.toBeNull();
+  expect(bar()?.hasAttribute("aria-valuenow")).toBe(false);
+  await render("doc", [], {
+    ...legacy,
+    translating: { status: "running", detail: "正在翻译" },
+  });
+  expect(bar()?.getAttribute("aria-valuenow")).toBe("37.5");
+  expect(api.setAssistance).not.toHaveBeenCalled();
 });
 
 it("leaves translation status and flow controls out of the original-layout toolbar", async () => {

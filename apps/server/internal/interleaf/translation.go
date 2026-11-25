@@ -224,6 +224,7 @@ func (s *Server) requestTranslation(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	found := req.BlockID == ""
+	queued := false
 	for _, t := range items {
 		if req.BlockID != "" && t.BlockID != req.BlockID {
 			continue
@@ -238,6 +239,7 @@ func (s *Server) requestTranslation(w http.ResponseWriter, r *http.Request) {
 			fail(w, 500, "无法保存翻译任务")
 			return
 		}
+		queued = true
 	}
 	if !found {
 		fail(w, 404, "没有可翻译的段落")
@@ -250,6 +252,9 @@ func (s *Server) requestTranslation(w http.ResponseWriter, r *http.Request) {
 		p.Status = "queued"
 		p.Detail = "等待继续处理"
 		p.queueTranslation = true
+	}
+	p.markManualTranslation = d.Type == "pdf" && queued
+	if p.queueTranslation || p.markManualTranslation {
 		if err = s.Store.saveProcessing(p); err != nil {
 			fail(w, 500, "无法安排翻译任务")
 			return

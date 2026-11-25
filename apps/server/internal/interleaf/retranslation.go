@@ -216,6 +216,7 @@ ON CONFLICT(document_id,block_id,source_hash) DO UPDATE SET body=excluded.body`,
 		return err
 	}
 	p.Enabled, p.Retranslating = true, true
+	p.TranslationOrigin = translationOriginManual
 	p.AutoTranslateMaxPages, p.ManualTranslation = nil, false
 	p.Phase, p.Status, p.Detail = "translating", "queued", "等待重新解析版面"
 	p.CompletedAt, p.Warning = "", ""

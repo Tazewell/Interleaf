@@ -8424,6 +8424,13 @@
                     },
                   "enabled": { "type": "boolean" },
                   "manualTranslation": { "type": "boolean", "readOnly": true },
+                  "translationOrigin":
+                    {
+                      "type": "string",
+                      "enum": ["manual", "automatic"],
+                      "readOnly": true,
+                      "description": "Origin of the PDF translation job. Older jobs may omit this field.",
+                    },
                   "retranslating": { "type": "boolean", "readOnly": true },
                   "layoutRevision": { "type": "string", "readOnly": true },
                   "autoTranslateMaxPages":

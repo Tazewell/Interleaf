@@ -112,6 +112,9 @@ func (s *Server) setAssistance(w http.ResponseWriter, r *http.Request) {
 	p.Enabled = req.Action != "pause"
 	p.CompletedAt = ""
 	if p.Enabled {
+		if d.Type == "pdf" {
+			p.TranslationOrigin = translationOriginManual
+		}
 		p.AutoTranslateMaxPages = nil
 		p.ManualTranslation = false
 		p.Status, p.Detail = "queued", "等待继续处理"

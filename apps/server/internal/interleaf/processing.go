@@ -21,6 +21,11 @@ type ProcessingStage struct {
 	Warning string `json:"warning,omitempty"`
 }
 
+const (
+	translationOriginManual    = "manual"
+	translationOriginAutomatic = "automatic"
+)
+
 // Text availability belongs to the response, not the persisted processing job.
 // The independent text and layout workers must not overwrite each other's state.
 type PDFTextIndex struct {
@@ -56,6 +61,7 @@ func pdfTextIndex(body, status string) *PDFTextIndex {
 type Processing struct {
 	AutoTranslateMaxPages *int   `json:"autoTranslateMaxPages,omitempty"`
 	ManualTranslation     bool   `json:"manualTranslation,omitempty"`
+	TranslationOrigin     string `json:"translationOrigin,omitempty"`
 	Enabled               bool   `json:"enabled"`
 	EPUBManual            bool   `json:"epubManual,omitempty"`
 	Retranslating         bool   `json:"retranslating,omitempty"`
@@ -83,6 +89,8 @@ type Processing struct {
 	Detail            string `json:"detail"`
 	Warning           string `json:"warning,omitempty"`
 	UpdatedAt         string `json:"updatedAt"`
+
+	markManualTranslation bool
 }
 type PDFBlock struct {
 	ID     string `json:"id"`
@@ -144,7 +152,7 @@ func (s *Store) processing(id string) (Processing, error) {
 func (s *Store) saveProcessing(p Processing) error {
 	s.processingWriteMu.Lock()
 	defer s.processingWriteMu.Unlock()
-	if p.lane != "" || p.resetStages || p.wakeStages || p.recoverStages || p.queueTranslation || p.enable {
+	if p.lane != "" || p.resetStages || p.wakeStages || p.recoverStages || p.queueTranslation || p.markManualTranslation || p.enable {
 		current, err := s.processing(p.DocumentID)
 		if err != nil {
 			return err
@@ -157,7 +165,17 @@ func (s *Store) saveProcessing(p Processing) error {
 	if e != nil {
 		return e
 	}
-	_, e = s.DB.Exec("INSERT INTO document_processing(document_id,phase,status,body) VALUES(?,?,?,?) ON CONFLICT(document_id) DO UPDATE SET phase=excluded.phase,status=excluded.status,body=excluded.body", p.DocumentID, p.Phase, p.Status, b)
+	// Initial PDF layout also saves full snapshots. A stale layout save must
+	// preserve a newer manual request, and originless writes preserve known origin.
+	_, e = s.DB.Exec(`INSERT INTO document_processing(document_id,phase,status,body) VALUES(?,?,?,?)
+ON CONFLICT(document_id) DO UPDATE SET phase=excluded.phase,status=excluded.status,body=
+ CASE
+  WHEN json_extract(document_processing.body,'$.translationOrigin') = 'manual'
+   THEN json_set(excluded.body,'$.translationOrigin','manual')
+  WHEN json_extract(document_processing.body,'$.translationOrigin') = 'automatic'
+   AND json_extract(excluded.body,'$.translationOrigin') IS NULL
+   THEN json_set(excluded.body,'$.translationOrigin','automatic')
+  ELSE excluded.body END`, p.DocumentID, p.Phase, p.Status, b)
 	return e
 }
 func initialProcessing(id string) Processing {
@@ -622,6 +640,9 @@ func (s *Server) learnPDF(ctx context.Context, p *Processing) error {
 		p.Phase, p.Status, p.Detail = "translating", "paused", "解析完成，等待手动翻译"
 		p.Translating = &ProcessingStage{Status: "paused", Detail: "等待手动翻译"}
 		return s.Store.saveProcessing(*p)
+	}
+	if p.AutoTranslateMaxPages != nil && p.TranslationOrigin == "" && p.TranslationsDone < p.TranslationsTotal {
+		p.TranslationOrigin = translationOriginAutomatic
 	}
 	p.AutoTranslateMaxPages = nil
 	p.Translating = &ProcessingStage{Status: "queued", Detail: "等待翻译正文与公式"}

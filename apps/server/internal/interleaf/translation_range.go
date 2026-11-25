@@ -20,7 +20,7 @@ type translationRange struct {
 
 // queueTranslationRange selects a chapter as the input to the shared queue.
 // Callers hold processingMu.
-func (s *Server) queueTranslationRange(d Document, m layoutManifest, from, to int) (translationRange, error) {
+func (s *Server) queueTranslationRange(d Document, m layoutManifest, from, to int, manual bool) (translationRange, error) {
 	chapter := m
 	chapter.Blocks = nil
 	for _, b := range m.Blocks {
@@ -28,13 +28,13 @@ func (s *Server) queueTranslationRange(d Document, m layoutManifest, from, to in
 			chapter.Blocks = append(chapter.Blocks, b)
 		}
 	}
-	return s.queueTranslationInput(d, chapter)
+	return s.queueTranslationInput(d, chapter, manual)
 }
 
 // Queue every unfinished unit in the selected input. PDF and EPUB chapters use
 // the same pending records and translation workers as papers; idle units outside
 // this input remain untouched. Callers hold processingMu.
-func (s *Server) queueTranslationInput(d Document, input translationInput) (translationRange, error) {
+func (s *Server) queueTranslationInput(d Document, input translationInput, manual bool) (translationRange, error) {
 	result := translationRange{}
 	items, err := s.translations(d.ID, input)
 	if err != nil {
@@ -70,6 +70,7 @@ func (s *Server) queueTranslationInput(d Document, input translationInput) (tran
 			return result, err
 		}
 		p.enable, p.queueTranslation = true, true
+		p.markManualTranslation = manual
 		err = s.Store.saveProcessing(p)
 		return result, err
 	}
@@ -133,6 +134,7 @@ func (s *Server) requestTranslationRange(w http.ResponseWriter, r *http.Request)
 			p = initialProcessing(d.ID)
 		}
 		p.Enabled, p.Chapter = true, &PageRange{req.FromPage, req.ToPage}
+		p.TranslationOrigin = translationOriginManual
 		p.Phase, p.Status, p.Detail = "learning", "queued", "等待解析本章"
 		p.Translating, p.CompletedAt = nil, ""
 		if err = s.Store.saveProcessing(p); err != nil {
@@ -142,7 +144,7 @@ func (s *Server) requestTranslationRange(w http.ResponseWriter, r *http.Request)
 		respond(w, 202, translationRange{Parsing: true})
 		return
 	}
-	result, err := s.queueTranslationRange(d, m, req.FromPage, req.ToPage)
+	result, err := s.queueTranslationRange(d, m, req.FromPage, req.ToPage, true)
 	if err != nil {
 		fail(w, 500, "无法安排翻译任务")
 		return

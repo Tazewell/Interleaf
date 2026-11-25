@@ -7424,6 +7424,11 @@ export interface components {
             };
             enabled?: boolean;
             readonly manualTranslation?: boolean;
+            /**
+             * @description Origin of the PDF translation job. Older jobs may omit this field.
+             * @enum {string}
+             */
+            readonly translationOrigin?: "manual" | "automatic";
             readonly retranslating?: boolean;
             readonly layoutRevision?: string;
             readonly autoTranslateMaxPages?: number;

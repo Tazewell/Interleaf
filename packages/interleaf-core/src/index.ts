@@ -596,6 +596,7 @@ export interface Processing {
   layoutRevision?: string;
   autoTranslateMaxPages?: number;
   manualTranslation?: boolean;
+  translationOrigin?: "manual" | "automatic";
   enabled?: boolean;
   translating?: ProcessingStage;
   usageTracked?: boolean;
