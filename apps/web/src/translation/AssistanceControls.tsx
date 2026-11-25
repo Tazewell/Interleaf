@@ -43,6 +43,7 @@ export function AssistanceControls({
   promptHost,
   translationSetup,
   showProgress = false,
+  hidden = false,
 }: {
   documentId: string;
   processing?: Processing;
@@ -53,8 +54,13 @@ export function AssistanceControls({
   promptHost?: HTMLElement | null;
   translationSetup?: TranslationSetup;
   showProgress?: boolean;
+  hidden?: boolean;
 }) {
   const [saved, setSaved] = useState<Processing>();
+  // Processing snapshots also describe automatic jobs, so only reader actions
+  // can opt this toolbar into displaying manual progress.
+  const [manualProgressDocument, setManualProgressDocument] =
+    useState<string>();
   const [busy, setBusy] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const serial = useRef(0);
@@ -138,7 +144,13 @@ export function AssistanceControls({
     setBusy(true);
     try {
       const next = await run();
-      if (next && operation === serial.current) setSaved(next);
+      if (next && operation === serial.current) {
+        setSaved(next);
+        if (showProgress)
+          setManualProgressDocument(
+            action === "pause" ? undefined : documentId,
+          );
+      }
     } catch (e) {
       if (operation === serial.current) toast.error((e as Error).message);
     } finally {
@@ -155,10 +167,9 @@ export function AssistanceControls({
   const needsPrompt =
     promptHost && job && !complete && !paperParsing && !translated;
   const moveAction = needsPrompt && action !== "pause" && action !== "chapter";
+  const translationStatus = job?.translating?.status ?? job?.status;
   const waitingForSetup =
-    needsPrompt &&
-    job.enabled &&
-    (job.translating?.status ?? job.status) === "waiting";
+    needsPrompt && job.enabled && translationStatus === "waiting";
   const setupSection =
     translationSetup &&
     (translationSetup.connectionRequired && (moveAction || waitingForSetup)
@@ -172,34 +183,39 @@ export function AssistanceControls({
       : setupSection
         ? "完成配置后即可翻译全文。"
         : undefined;
+  const showManualProgress =
+    showProgress &&
+    manualProgressDocument === documentId &&
+    action === "pause" &&
+    (translationStatus === "queued" || translationStatus === "running");
+  const measuredProgress =
+    !paperParsing && translationStatus === "running" && total > 0;
+  if (hidden) return null;
   return (
     <div className="assistance-controls">
-      {showProgress &&
-        !paperParsing &&
-        action === "pause" &&
-        (job?.translating?.status ?? job?.status) === "running" &&
-        total > 0 &&
-        done < total && (
-          <ReadingTranslationProgress
-            label="正在翻译"
-            detail={`${done} / ${total} 段`}
-            percent={(done / total) * 100}
-            compact
-          />
-        )}
-      {!moveAction && (
+      {showManualProgress && (
+        <ReadingTranslationProgress
+          label="正在翻译"
+          percent={measuredProgress ? (done / total) * 100 : undefined}
+          compact
+        />
+      )}
+      {!moveAction && !(showManualProgress && parsingPending) && (
         <Button
           variant="ghost"
-          size="sm"
+          size={showManualProgress ? "icon-sm" : "sm"}
+          aria-label={showManualProgress ? actionLabel : undefined}
           disabled={busy || !job || finished || parsingPending}
           title={
-            action === "chapter"
-              ? "翻译当前完整章节，复用已完成译文"
-              : job?.enabled
-                ? job.detail
-                : epubChapter
-                  ? "继续已请求章节的翻译"
-                  : "使用当前 AI 连接翻译全文与公式"
+            showManualProgress
+              ? actionLabel
+              : action === "chapter"
+                ? "翻译当前完整章节，复用已完成译文"
+                : job?.enabled
+                  ? job.detail
+                  : epubChapter
+                    ? "继续已请求章节的翻译"
+                    : "使用当前 AI 连接翻译全文与公式"
           }
           onClick={runAction}
         >
@@ -214,7 +230,7 @@ export function AssistanceControls({
           ) : (
             <Languages />
           )}
-          {actionLabel}
+          {!showManualProgress && actionLabel}
         </Button>
       )}
       {finished && library === "papers" && !epubChapter && (
@@ -255,6 +271,7 @@ export function AssistanceControls({
                     if (operation === serial.current) {
                       setConfirming(false);
                       setSaved(next);
+                      if (showProgress) setManualProgressDocument(documentId);
                     }
                   } catch (e) {
                     if (operation === serial.current)

@@ -20,7 +20,6 @@ import type {
 } from "@interleaf/core";
 import { api } from "@interleaf/api";
 import { Button } from "@interleaf/ui/components/button";
-import { createPortal } from "react-dom";
 import { CircleNotch } from "@phosphor-icons/react";
 import { toast } from "sonner";
 import { InterleafView } from "../InterleafView";
@@ -29,21 +28,6 @@ import type { TranslationSplit } from "./TranslationPanes";
 import type { TranslationSetup } from "./AssistanceControls";
 import { ReadingTranslationProgress } from "./ReadingTranslationProgress";
 import { useNativePDFReading } from "./useNativePDFReading";
-
-const nativePhases = {
-  preparing: "正在准备 PDF",
-  layout: "正在分析版面",
-  terminology: "正在提取术语",
-  translation: "正在翻译",
-  typesetting: "正在排版",
-  saving: "正在保存译文",
-};
-
-function duration(seconds: number) {
-  const whole = Math.max(0, Math.round(seconds));
-  const rest = `${whole % 60} 秒`;
-  return whole >= 60 ? `${Math.floor(whole / 60)} 分 ${rest}` : rest;
-}
 
 export function NativePDFReadingView({
   document: doc,
@@ -57,7 +41,6 @@ export function NativePDFReadingView({
   events,
   onUseFlow,
   pageNavigation,
-  progressHost,
   translationSetup,
   split,
   layout = "side-by-side",
@@ -75,7 +58,6 @@ export function NativePDFReadingView({
   events: ReaderEvents;
   onUseFlow: () => void;
   pageNavigation?: ReactNode;
-  progressHost?: HTMLElement | null;
   translationSetup?: TranslationSetup;
   split: TranslationSplit;
   layout?: NativePDFReadingLayout;
@@ -169,26 +151,6 @@ export function NativePDFReadingView({
     setReadyView(viewToken);
     latest.current.onReady(adapter, toc);
   };
-  const progress = job?.progress;
-  const phase = cancelling
-    ? "正在取消…"
-    : progress?.phase
-      ? nativePhases[progress.phase]
-      : job?.stage === "layout"
-        ? "正在翻译并排版"
-        : nativePhases.preparing;
-  const elapsed = progress?.elapsedSeconds;
-  const remaining = progress?.remainingSeconds;
-  const detail = [
-    elapsed !== undefined && Number.isFinite(elapsed)
-      ? `已用 ${duration(elapsed)}`
-      : "",
-    remaining !== undefined && Number.isFinite(remaining) && remaining > 0
-      ? `预计剩余 ${duration(remaining)}`
-      : "",
-  ]
-    .filter(Boolean)
-    .join(" · ");
   const progressUnavailable =
     !busy &&
     !!error &&
@@ -205,31 +167,8 @@ export function NativePDFReadingView({
         ? "connection"
         : "models"
       : undefined;
-  const toolbarFeedback = busy ? (
-    <ReadingTranslationProgress
-      label={phase}
-      detail={detail}
-      percent={progress?.percent}
-      compact
-      decorative
-    />
-  ) : (
-    <span
-      className="native-pdf-toolbar-status"
-      title={metadata ? undefined : error || stateLabel}
-    >
-      {metadata
-        ? "原版翻译完成"
-        : progressUnavailable || error === "已取消生成"
-          ? stateLabel
-          : job?.status === "failed"
-            ? "原版翻译失败"
-            : "原版翻译暂不可用"}
-    </span>
-  );
   return (
     <div className="native-pdf-reading" aria-label={label}>
-      {engine && progressHost && createPortal(toolbarFeedback, progressHost)}
       {metadata ? (
         <>
           {(metadata.originalParagraphs > 0 ||
@@ -301,15 +240,16 @@ export function NativePDFReadingView({
               aria-hidden="true"
             />
           )}
-          <p role="status" title={progressUnavailable ? error : undefined}>
-            {stateLabel}
-          </p>
+          {(!busy || !engine || error) && (
+            <p role="status" title={progressUnavailable ? error : undefined}>
+              {stateLabel}
+            </p>
+          )}
           {busy &&
             (engine ? (
               <ReadingTranslationProgress
-                label={phase}
-                detail={detail}
-                percent={progress?.percent}
+                label="原版翻译进度"
+                percent={job?.progress?.percent}
               />
             ) : (
               <p className="native-pdf-progress">

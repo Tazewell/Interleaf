@@ -92,7 +92,7 @@ vi.mock("../InterleafView", () => ({
 import { NativePDFReadingView } from "./NativePDFReadingView";
 import { useNativePDFReading } from "./useNativePDFReading";
 import { useTranslationSplit } from "./TranslationPanes";
-let root: Root, host: HTMLDivElement, progressHost: HTMLDivElement;
+let root: Root, host: HTMLDivElement;
 const onFlow = vi.fn(),
   onReady = vi.fn(),
   onRegenerate = vi.fn(),
@@ -125,7 +125,6 @@ function Harness({
       layout={layout}
       syncEnabled={syncEnabled}
       engine={engine}
-      progressHost={progressHost}
       document={{ id: "doc", type: "pdf" } as Document}
       theme={defaultTheme}
       blocks={[]}
@@ -184,14 +183,12 @@ beforeEach(() => {
   fixture.useRealJob = false;
   fixture.props = undefined;
   host = document.createElement("div");
-  progressHost = document.createElement("div");
-  document.body.append(host, progressHost);
+  document.body.append(host);
   root = createRoot(host);
 });
 afterEach(async () => {
   await act(async () => root.unmount());
   host.remove();
-  progressHost.remove();
   vi.unstubAllGlobals();
 });
 it("shows generation state without mounting another reader", async () => {
@@ -414,17 +411,16 @@ it("keeps saved translation updates out of the BabelDOC request and reader descr
   expect(onRegenerate).not.toHaveBeenCalled();
 });
 
-it("shows the same honest progress in the reader and its toolbar", async () => {
+it("shows only the measured percentage beside the reader progress bar", async () => {
   fixture.state.job = { status: "running", stage: "layout" };
   await render("side-by-side", [], true, "babeldoc");
-  const bar = (container: HTMLElement) =>
-    container.querySelector('[role="progressbar"]');
-  expect(bar(host)).not.toBeNull();
-  expect(bar(progressHost)).not.toBeNull();
-  expect(bar(progressHost)?.closest('[aria-hidden="true"]')).not.toBeNull();
-  expect(bar(host)?.closest('[aria-hidden="true"]')).toBeNull();
-  expect(bar(host)?.hasAttribute("aria-valuenow")).toBe(false);
-  expect(bar(progressHost)?.hasAttribute("aria-valuenow")).toBe(false);
+  const bar = () => host.querySelector('[role="progressbar"]');
+  const percent = () =>
+    host.querySelector(".reading-translation-progress-percent");
+  expect(bar()).not.toBeNull();
+  expect(bar()?.hasAttribute("aria-valuenow")).toBe(false);
+  expect(percent()).toBeNull();
+  expect(host.textContent).not.toContain("正在生成");
   fixture.state.job = {
     status: "running",
     stage: "layout",
@@ -436,22 +432,20 @@ it("shows the same honest progress in the reader and its toolbar", async () => {
     },
   };
   await render("translation-only", [], true, "babeldoc");
-  for (const container of [host, progressHost]) {
-    expect(bar(container)?.getAttribute("aria-valuenow")).toBe("42");
-    expect(container.textContent).toContain("正在翻译");
-    expect(container.textContent).toContain("已用 15 秒");
-    expect(container.textContent).toContain("预计剩余 21 秒");
-  }
+  expect(bar()?.getAttribute("aria-valuenow")).toBe("42");
+  expect(bar()?.getAttribute("aria-label")).toBe("原版翻译进度");
+  expect(percent()?.textContent).toBe("42%");
+  expect(host.textContent).not.toMatch(/正在生成|正在翻译|已用|预计剩余/);
+  expect(host.textContent).toContain("使用流式译文");
   fixture.state.job = { status: "failed", stage: "layout" };
   fixture.state.busy = false;
   fixture.state.error = "原版翻译失败";
   await render("translation-only", [], true, "babeldoc");
-  expect(bar(host)).toBeNull();
-  expect(bar(progressHost)).toBeNull();
-  expect(progressHost.textContent).toContain("原版翻译失败");
+  expect(bar()).toBeNull();
+  expect(host.textContent).toContain("原版翻译失败");
 });
 
-it("keeps one subscription across both progress surfaces and translated tabs", async () => {
+it("keeps one progress subscription across translated tabs", async () => {
   fixture.useRealJob = true;
   vi.useFakeTimers();
   try {
@@ -477,13 +471,9 @@ it("keeps one subscription across both progress surfaces and translated tabs", a
       "babeldoc",
     );
     expect(fixture.nativePDFReading).toHaveBeenCalledTimes(1);
-    for (const container of [host, progressHost]) {
-      expect(
-        container
-          .querySelector('[role="progressbar"]')
-          ?.getAttribute("aria-valuenow"),
-      ).toBe("74");
-    }
+    expect(
+      host.querySelector('[role="progressbar"]')?.getAttribute("aria-valuenow"),
+    ).toBe("74");
     let finish!: (value: unknown) => void;
     fixture.nativePDFReading.mockImplementationOnce(
       () =>
@@ -494,7 +484,7 @@ it("keeps one subscription across both progress surfaces and translated tabs", a
     await act(async () => vi.advanceTimersByTimeAsync(750));
     await act(async () => root.render(null));
     await act(async () => finish(running));
-    expect(progressHost.children).toHaveLength(0);
+    expect(host.children).toHaveLength(0);
   } finally {
     vi.useRealTimers();
   }
@@ -575,14 +565,13 @@ it("offers to reconnect when polling fails during translation", async () => {
     await render("side-by-side", [], true, "babeldoc");
     await act(async () => vi.advanceTimersByTimeAsync(750));
     expect(host.textContent).toContain("暂无法获取进度");
-    expect(progressHost.textContent).toContain("暂无法获取进度");
-    expect(progressHost.textContent).not.toContain("原版翻译失败");
+    expect(host.textContent).not.toContain("原版翻译失败");
     const retry = [...host.querySelectorAll("button")].find(
       (button) => button.textContent === "重试",
     );
     await act(async () => retry!.click());
     expect(fixture.createNativePDFReading).toHaveBeenCalledTimes(2);
-    expect(progressHost.querySelector('[role="progressbar"]')).not.toBeNull();
+    expect(host.querySelector('[role="progressbar"]')).not.toBeNull();
   } finally {
     fixture.createNativePDFReading.mockReset();
     vi.useRealTimers();

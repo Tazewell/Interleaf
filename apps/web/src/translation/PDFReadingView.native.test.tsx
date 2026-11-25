@@ -223,31 +223,83 @@ it("shows the remaining work in flow comparison and reuses resume", async () => 
   await act(async () => prompt!.querySelector("button")!.click());
   expect(api.setAssistance).toHaveBeenCalledExactlyOnceWith("doc", "resume");
 });
-it("shows measured flow progress and hides flow completion in original-layout translation", async () => {
-  await render("doc", [], {
+it("shows compact progress after opting into flow translation and hides it on pause", async () => {
+  const running: Processing = {
     ...untranslated,
     enabled: true,
     status: "running",
     translationsDone: 3,
-  });
+    updatedAt: "2026-11-24T07:00:03Z",
+  };
+  const bar = () => host.querySelector('[role="progressbar"]');
+  await render("doc", [], running);
   await clickPDFContent(host, "对照");
-  expect(
-    host.querySelector('[role="progressbar"]')?.getAttribute("aria-valuenow"),
-  ).toBe("37.5");
-  expect(host.textContent).toContain("3 / 8 段");
+  expect(bar()).toBeNull();
+
+  await render("doc", [], untranslated);
+  vi.mocked(api.setAssistance).mockResolvedValueOnce({
+    ...running,
+    phase: "learning",
+    status: "queued",
+    translationsDone: 0,
+    updatedAt: "2026-11-24T07:00:01Z",
+  });
+  await act(async () =>
+    host
+      .querySelector<HTMLButtonElement>(".translation-prompt button")!
+      .click(),
+  );
+  expect(api.setAssistance).toHaveBeenLastCalledWith("doc", "start");
+  expect(bar()).not.toBeNull();
+  expect(bar()?.hasAttribute("aria-valuenow")).toBe(false);
+  expect(host.textContent).not.toContain("等待解析");
+  await render("doc", [], running);
+  expect(bar()?.getAttribute("aria-valuenow")).toBe("37.5");
+  expect(host.querySelector(".reading-translation-progress-detail")).toBeNull();
+  expect(host.textContent).not.toContain("3 / 8 段");
+  expect(host.querySelector(".reading-translation-progress-label")).toBeNull();
+  expect(host.textContent).not.toContain("暂停翻译");
+  await choosePDFFormat(host, "原版翻译排版");
+  expect(bar()).toBeNull();
+  await choosePDFFormat(host, "流式翻译排版");
+  expect(bar()?.getAttribute("aria-valuenow")).toBe("37.5");
+  const pause = host.querySelector<HTMLButtonElement>(
+    'button[aria-label="暂停翻译"]',
+  );
+  expect(pause?.title).toBe("暂停翻译");
+  vi.mocked(api.setAssistance).mockResolvedValueOnce({
+    ...running,
+    enabled: false,
+    status: "paused",
+    startedAt: running.updatedAt,
+    updatedAt: "2026-11-24T07:00:04Z",
+  });
+  await act(async () => pause!.click());
+  expect(api.setAssistance).toHaveBeenLastCalledWith("doc", "pause");
+  expect(bar()).toBeNull();
+  expect(host.textContent).toContain("继续翻译");
+});
+
+it("leaves translation status and flow controls out of the original-layout toolbar", async () => {
   await render("doc", [], {
     ...untranslated,
     enabled: true,
     status: "complete",
     translationsDone: 8,
   });
-  expect(host.textContent).toContain("翻译完成");
+  await clickPDFContent(host, "对照");
+  expect(
+    host.querySelector(".reading-translation-actions")?.textContent,
+  ).toContain("翻译完成");
   await choosePDFFormat(host, "原版翻译排版");
-  expect(host.textContent).not.toContain("翻译完成");
+  expect(
+    host.querySelector(".reading-translation-actions")?.childElementCount ?? 0,
+  ).toBe(0);
   expect(host.querySelector(".assistance-controls")).toBeNull();
-  await clickPDFContent(host, "原文");
-  expect(host.querySelector("[data-source-reader]")).not.toBeNull();
+  expect(host.querySelector('[role="progressbar"]')).toBeNull();
+  expect(host.querySelector("[data-native-reader]")).not.toBeNull();
 });
+
 it("does not prompt for a finished paper whose whole-document job is paused", async () => {
   await render("doc", [], {
     ...untranslated,

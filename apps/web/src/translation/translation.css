@@ -44,6 +44,9 @@
   grid-row: 1;
   justify-self: end;
 }
+.pdf-reading-toolbar .reading-translation-actions:empty {
+  display: none;
+}
 @container interleaf-reading (max-width: 520px) {
   .workspace .pdf-reading-toolbar .pdf-scroll-sync {
     grid-column: 1;
@@ -131,36 +134,25 @@
   font-size: 13px;
 }
 .reading-translation-progress {
-  display: grid;
-  gap: 5px;
-  width: min(100%, 320px);
-  text-align: start;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: min(100%, 240px);
   color: var(--muted-foreground);
   font-size: 13px;
   font-variant-numeric: tabular-nums;
 }
 .reading-translation-progress.is-compact {
-  width: min(100%, 138px);
-  min-width: 0;
-  gap: 3px;
-  font-size: 11px;
-  line-height: 1.2;
-}
-.native-pdf-toolbar-progress {
-  width: min(100%, 138px);
+  width: 76px;
   min-width: 0;
 }
-.is-compact
-  :is(
-    .reading-translation-progress-label > span:first-child,
-    .reading-translation-progress-detail
-  ) {
-  overflow-wrap: anywhere;
+.reading-translation-progress-bar {
+  flex: 1;
+  min-width: 0;
 }
-.reading-translation-progress-label {
-  display: flex;
-  justify-content: space-between;
-  gap: 6px;
+.reading-translation-progress-percent {
+  min-width: 4ch;
+  text-align: end;
 }
 .reading-translation-progress-bar [data-slot="progress-track"] {
   height: 5px;
@@ -192,17 +184,6 @@
     [data-slot="progress-indicator"] {
     animation: none;
   }
-}
-.reading-translation-progress-detail {
-  margin: 0;
-}
-.native-pdf-toolbar-status {
-  display: block;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: 12px;
-  color: var(--muted-foreground);
 }
 .native-pdf-state-actions,
 .native-pdf-notice {
@@ -555,7 +536,7 @@
 .pdf-reading-toolbar .assistance-controls:has(.reading-translation-progress) {
   min-width: 0;
   flex-shrink: 1;
-  flex-wrap: wrap;
+  gap: 6px;
 }
 .translation-formula-source {
   margin-top: 0.5em;
