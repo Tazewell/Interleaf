@@ -136,6 +136,13 @@
 .native-pdf-state:has(.reading-translation-progress) {
   gap: 18px;
 }
+.native-pdf-background-hint {
+  margin: 0;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  line-height: 1.5;
+  text-wrap: balance;
+}
 .reading-translation-progress {
   --track-height: 6px;
   --track-color: color-mix(in srgb, var(--ui-accent) 17%, var(--ui-panel));

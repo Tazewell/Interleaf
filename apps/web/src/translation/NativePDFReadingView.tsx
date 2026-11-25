@@ -291,6 +291,11 @@ export function NativePDFReadingView({
               使用{flowLabel}
             </Button>
           </div>
+          {engine && busy && job?.id && !cancelling && (
+            <p className="native-pdf-background-hint">
+              原版翻译会在后台继续，可以切换页面或先用流式翻译排版。
+            </p>
+          )}
         </div>
       )}
     </div>

@@ -445,6 +445,27 @@ it("shows only the measured percentage beside the reader progress bar", async ()
   expect(host.textContent).toContain("原版翻译失败");
 });
 
+it("explains background work only after original-layout translation is accepted", async () => {
+  const hint = () => host.textContent?.includes("原版翻译会在后台继续");
+  await render("side-by-side", [], true, "babeldoc");
+  expect(hint()).toBe(false);
+
+  fixture.state.job = { id: "job", status: "preparing", stage: "prepare" };
+  await render("side-by-side", [], true, "babeldoc");
+  expect(hint()).toBe(true);
+  expect(host.textContent).toContain("切换页面或先用流式翻译排版");
+  const switchToFlow = [...host.querySelectorAll("button")].find(
+    (button) => button.textContent === "使用流式对照",
+  );
+  await act(async () => switchToFlow!.click());
+  expect(onFlow).toHaveBeenCalledOnce();
+  expect(fixture.state.cancel).not.toHaveBeenCalled();
+
+  fixture.state.cancelling = true;
+  await render("side-by-side", [], true, "babeldoc");
+  expect(hint()).toBe(false);
+});
+
 it("keeps one progress subscription across translated tabs", async () => {
   fixture.useRealJob = true;
   vi.useFakeTimers();
