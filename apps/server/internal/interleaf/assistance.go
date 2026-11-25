@@ -32,7 +32,8 @@ func (s *Server) setAssistance(w http.ResponseWriter, r *http.Request) {
 		s.requestRetranslation(w, r)
 		return
 	}
-	if req.Action != "start" && req.Action != "pause" && req.Action != "resume" {
+	startFlow := req.Action == "start-flow"
+	if !startFlow && req.Action != "start" && req.Action != "pause" && req.Action != "resume" {
 		fail(w, 400, "无效的辅助阅读操作")
 		return
 	}
@@ -51,23 +52,32 @@ func (s *Server) setAssistance(w http.ResponseWriter, r *http.Request) {
 			p = initialDocumentProcessing(d, "")
 		}
 	}
-	// Initial paper parsing is mandatory. Translation controls must neither
-	// cancel its worker nor discard the import-time translation preference.
+	// Initial paper parsing is mandatory. An explicit flow translation request
+	// queues translation behind the parser. Legacy start and resume only
+	// restore parsing during this phase.
 	if d.Type == "pdf" && d.Library == "papers" && p.Phase == "learning" && !p.Retranslating {
 		defer s.processingMu.Unlock()
 		if req.Action == "pause" {
 			fail(w, 409, "论文解析不能暂停；解析完成后可暂停翻译")
 			return
 		}
-		if !p.Enabled || (p.Status != "queued" && p.Status != "running") {
+		requeue := !p.Enabled || (p.Status != "queued" && p.Status != "running")
+		if requeue {
 			if !p.Enabled {
 				limit := 0
 				p.AutoTranslateMaxPages = &limit
 			}
 			p.Enabled, p.Status, p.Detail = true, "queued", "等待解析 PDF"
 			p.CompletedAt = ""
+		}
+		if startFlow {
+			p.AutoTranslateMaxPages = nil
+			p.ManualTranslation = false
+			p.TranslationOrigin = translationOriginManual
+		}
+		if requeue || startFlow {
 			if e = s.Store.saveProcessing(p); e != nil {
-				fail(w, 500, "无法恢复解析任务")
+				fail(w, 500, "无法保存辅助阅读设置")
 				return
 			}
 			if p, e = s.Store.processing(d.ID); e != nil {

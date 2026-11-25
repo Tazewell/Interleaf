@@ -38,6 +38,47 @@ func assistanceRequest(t *testing.T, s *Server, action string) Processing {
 	}
 	return p
 }
+
+func TestAssistanceStartsPaperTranslationAfterActiveParsing(t *testing.T) {
+	s, _, _ := translationFixture(t)
+	parser := importedProcessing("doc", "papers", `{"autoTranslatePDF":false}`)
+	parser.Status, parser.Detail = "running", "正在解析"
+	if err := s.Store.saveProcessing(parser); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	task := &documentTask{cancel: cancel, done: make(chan struct{})}
+	s.activeProcessing = map[string]*documentTask{"doc": task}
+	go func() {
+		<-ctx.Done()
+		s.finishProcessingTask("doc", task)
+	}()
+	t.Cleanup(func() { cancel(); <-task.done })
+
+	started := assistanceRequest(t, s, "start-flow")
+	if ctx.Err() != nil || started.Phase != "learning" || started.Status != "running" ||
+		started.TranslationOrigin != translationOriginManual || started.AutoTranslateMaxPages != nil {
+		t.Fatalf("manual translation must keep the accepted parser and override the import policy: %+v", started)
+	}
+	// The parser keeps reporting from the snapshot it claimed before the request.
+	parser.PagesDone = 1
+	if err := s.Store.saveProcessing(parser); err != nil {
+		t.Fatal(err)
+	}
+	saved, err := s.Store.processing("doc")
+	if err != nil || saved.PagesDone != 1 || saved.AutoTranslateMaxPages != nil || saved.TranslationOrigin != translationOriginManual {
+		t.Fatalf("stale progress overwrote the manual request: %+v %v", saved, err)
+	}
+	if err := s.learnPDF(ctx, &parser); err != nil {
+		t.Fatal(err)
+	}
+	saved, err = s.Store.processing("doc")
+	if err != nil || !saved.Enabled || saved.Phase != "translating" || saved.Status != "queued" ||
+		saved.Translating == nil || saved.Translating.Status != "queued" || saved.TranslationOrigin != translationOriginManual {
+		t.Fatalf("accepted translation was not queued after parsing: %+v %v", saved, err)
+	}
+}
+
 func TestAssistancePauseSurvivesRestart(t *testing.T) {
 	s, p := processingFixture(t)
 	ctx, cancel := context.WithCancel(context.Background())

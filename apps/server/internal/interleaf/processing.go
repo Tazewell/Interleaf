@@ -165,11 +165,15 @@ func (s *Store) saveProcessing(p Processing) error {
 	if e != nil {
 		return e
 	}
-	// Initial PDF layout also saves full snapshots. A stale layout save must
-	// preserve a newer manual request, and originless writes preserve known origin.
+	// Initial PDF layout also saves full snapshots. Preserve a newer manual
+	// request and its cleared import limit when a stale parser reports progress.
 	_, e = s.DB.Exec(`INSERT INTO document_processing(document_id,phase,status,body) VALUES(?,?,?,?)
 ON CONFLICT(document_id) DO UPDATE SET phase=excluded.phase,status=excluded.status,body=
  CASE
+  WHEN document_processing.phase='learning' AND excluded.phase='learning'
+   AND json_extract(document_processing.body,'$.translationOrigin')='manual'
+   AND json_type(document_processing.body,'$.autoTranslateMaxPages') IS NULL
+   THEN json_remove(json_set(excluded.body,'$.translationOrigin','manual'),'$.autoTranslateMaxPages')
   WHEN json_extract(document_processing.body,'$.translationOrigin') = 'manual'
    THEN json_set(excluded.body,'$.translationOrigin','manual')
   WHEN json_extract(document_processing.body,'$.translationOrigin') = 'automatic'
@@ -634,6 +638,20 @@ func (s *Server) learnPDF(ctx context.Context, p *Processing) error {
 		return e
 	}
 	p.TranslationsDone, p.TranslationsTotal = translationCounts(items)
+	if d.Library == "papers" {
+		// Publish the parser result with any whole-paper translation request
+		// accepted after this worker claimed its initial policy.
+		s.processingMu.Lock()
+		defer s.processingMu.Unlock()
+		current, err := s.Store.processing(d.ID)
+		if err != nil {
+			return err
+		}
+		if current.Phase == "learning" && current.TranslationOrigin == translationOriginManual && current.AutoTranslateMaxPages == nil {
+			p.AutoTranslateMaxPages = nil
+			p.TranslationOrigin = translationOriginManual
+		}
+	}
 	if limit := p.AutoTranslateMaxPages; limit != nil && (*limit == 0 || m.Pages > *limit) {
 		p.Enabled = false
 		p.ManualTranslation = true
