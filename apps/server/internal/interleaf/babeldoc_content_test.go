@@ -32,6 +32,13 @@ func TestBabelDOCContentRejectsMostlyUntranslatedProse(t *testing.T) {
 	}
 }
 
+func TestBabelDOCContentRejectsUnchangedSinglePagePaper(t *testing.T) {
+	paper := babeldocTestExtracted(t, babeldocTestLatinProse)
+	if !babeldocMostlyUntranslated(paper, paper) {
+		t.Fatal("a single-page paper retaining all prose should be rejected")
+	}
+}
+
 func TestBabelDOCContentKeepsMixedOrInconclusivePDFs(t *testing.T) {
 	tests := []struct {
 		name                 string
@@ -41,6 +48,11 @@ func TestBabelDOCContentKeepsMixedOrInconclusivePDFs(t *testing.T) {
 			name:       "translated prose with retained references",
 			original:   []string{babeldocTestLatinProse, babeldocTestLatinProse, babeldocTestLatinProse},
 			translated: []string{strings.Repeat(babeldocTestChineseProse, 5), babeldocTestLatinProse, babeldocTestLatinProse},
+		},
+		{
+			name:       "short translated caption with only the references qualifying",
+			original:   []string{"Behavior on two experimental tasks.", "", babeldocTestLatinProse},
+			translated: []string{"两项实验任务的表现。", "", babeldocTestLatinProse},
 		},
 		{
 			name:       "source is already Chinese",

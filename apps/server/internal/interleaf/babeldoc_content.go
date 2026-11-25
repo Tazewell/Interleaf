@@ -107,9 +107,10 @@ func babeldocMostlyUntranslated(original, translated extractedPDF) bool {
 			unchanged++
 		}
 	}
-	// Retained terms and references are expected. Reject only when almost all
-	// source words survive on most sampled pages with very little new Chinese.
-	return eligible > 0 && unchanged*3 >= eligible*2 && addedHan < 30*eligible
+	// A single eligible page in a longer PDF can be a retained bibliography.
+	// Reject only when there is enough eligible text and most of it survived.
+	return eligible >= min(2, len(original.Pages)) &&
+		unchanged*3 >= eligible*2 && addedHan < 30*eligible
 }
 
 type babeldocContentPage struct {
