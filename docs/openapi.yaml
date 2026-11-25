@@ -6978,6 +6978,11 @@
                                     {
                                       "$ref": "#/components/schemas/NativePDFReadingLayout",
                                     },
+                                  "retry":
+                                    {
+                                      "type": "boolean",
+                                      "description": "For an explicit BabelDOC retry, skip reuse of the unchecked legacy cache.",
+                                    },
                                 },
                             },
                         },

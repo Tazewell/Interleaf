@@ -8,6 +8,9 @@ import (
 
 // The remaining subprocess fixture is the non-AI document processor.
 func TestMain(m *testing.M) {
+	if len(os.Args) > 1 && os.Args[1] == "babeldoc-text-fixture" {
+		os.Exit(runBabelDOCTextFixture())
+	}
 	if output := os.Getenv("BABELDOC_READING_FIXTURE_OUTPUT"); output != "" && slices.Contains(os.Args, "--openai") {
 		os.Exit(runBabelDOCReadingFixture(output))
 	}

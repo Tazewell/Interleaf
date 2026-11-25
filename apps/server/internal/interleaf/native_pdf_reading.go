@@ -357,6 +357,7 @@ func (s *Server) createNativeReading(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		Layout json.RawMessage `json:"layout"`
 		Engine json.RawMessage `json:"engine"`
+		Retry  json.RawMessage `json:"retry"`
 	}
 	if !decode(w, r, &body) {
 		return
@@ -374,6 +375,11 @@ func (s *Server) createNativeReading(w http.ResponseWriter, r *http.Request) {
 			fail(w, 400, "无效的原版式翻译引擎或布局")
 			return
 		}
+	}
+	var retry bool
+	if len(body.Retry) > 0 && (engine != nativeReadingBabelDOC || string(body.Retry) == "null" || json.Unmarshal(body.Retry, &retry) != nil) {
+		fail(w, 400, "无效的原版式翻译重试请求")
+		return
 	}
 	ctx, finish, e := s.beginDocumentTask(context.Background(), r.PathValue("id"))
 	if e != nil {
@@ -430,6 +436,7 @@ func (s *Server) createNativeReading(w http.ResponseWriter, r *http.Request) {
 	source := &bilingualJob{documentID: v.documentID, paperID: v.paperID, work: work, originalHash: v.originalHash, layoutHash: v.layoutHash, reading: v.reading, ctx: child, targets: map[string]string{}}
 	j := &nativeReadingJob{state: nativeReadingStatus{ID: id(), CacheKey: v.key, Status: "preparing", Stage: "prepare"}, documentID: v.documentID, layout: v.layoutMode, engine: engine, source: source, cancel: cancel, done: make(chan struct{})}
 	if v.babeldoc != nil {
+		v.babeldoc.retry = retry
 		j.progress.start(time.Now())
 	}
 	if s.nativeReadingJobs == nil {

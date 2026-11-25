@@ -3,6 +3,7 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import type {
+  NativePDFReadingEngine,
   NativePDFReadingJob,
   NativePDFReadingLayout,
 } from "@interleaf/core";
@@ -21,12 +22,14 @@ function Probe({
   id = "doc",
   revision = "r1",
   layout = "side-by-side",
+  engine,
 }: {
   id?: string;
   revision?: string;
   layout?: NativePDFReadingLayout;
+  engine?: NativePDFReadingEngine;
 }) {
-  current = useNativePDFReading(id, revision, layout);
+  current = useNativePDFReading(id, revision, layout, engine);
   return <span>{current.job?.cacheKey ?? current.error}</span>;
 }
 const job = (key: string, status: NativePDFReadingJob["status"] = "ready") =>
@@ -145,4 +148,39 @@ it("retries a failed request and refreshes when visible translations change", as
   expect(current.job?.cacheKey).toBe("retry");
   await act(async () => root.render(<Probe revision="r2" />));
   expect(current.job?.cacheKey).toBe("translated");
+});
+
+it("only sends BabelDOC retry intent for the explicit retry action", async () => {
+  const rejected = job("untranslated", "failed");
+  apiMock.createNativePDFReading
+    .mockResolvedValueOnce(rejected)
+    .mockResolvedValueOnce(rejected)
+    .mockResolvedValueOnce(rejected)
+    .mockResolvedValueOnce(job("other"));
+  await act(async () =>
+    root.render(<Probe engine="babeldoc" layout="translation-only" />),
+  );
+  await act(async () => current.retry());
+  await act(async () =>
+    root.render(
+      <Probe revision="r2" engine="babeldoc" layout="translation-only" />,
+    ),
+  );
+  await act(async () => {
+    current.retry();
+    root.render(
+      <Probe
+        id="other"
+        revision="r2"
+        engine="babeldoc"
+        layout="translation-only"
+      />,
+    );
+  });
+  expect(apiMock.createNativePDFReading.mock.calls).toEqual([
+    ["doc", expect.any(AbortSignal), "translation-only", "babeldoc"],
+    ["doc", expect.any(AbortSignal), "translation-only", "babeldoc", true],
+    ["doc", expect.any(AbortSignal), "translation-only", "babeldoc"],
+    ["other", expect.any(AbortSignal), "translation-only", "babeldoc"],
+  ]);
 });

@@ -367,6 +367,7 @@ export const api = {
     signal?: AbortSignal,
     layout?: import("@interleaf/core").NativePDFReadingLayout,
     engine?: import("@interleaf/core").NativePDFReadingEngine,
+    retry?: boolean,
   ) =>
     request<import("@interleaf/core").NativePDFReadingJob>(
       `/api/documents/${encodeURIComponent(id)}/native-pdf-reading`,
@@ -375,6 +376,7 @@ export const api = {
         body: JSON.stringify({
           layout: layout === "translation-only" ? layout : undefined,
           engine,
+          retry: engine === "babeldoc" && retry ? true : undefined,
         }),
         signal,
       },

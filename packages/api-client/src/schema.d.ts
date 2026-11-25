@@ -6743,6 +6743,8 @@ export interface paths {
                          */
                         engine?: "babeldoc";
                         layout?: components["schemas"]["NativePDFReadingLayout"];
+                        /** @description For an explicit BabelDOC retry, skip reuse of the unchecked legacy cache. */
+                        retry?: boolean;
                     };
                 };
             };

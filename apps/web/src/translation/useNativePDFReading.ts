@@ -23,7 +23,11 @@ export function useNativePDFReading(
   layout: NativePDFReadingLayout = "side-by-side",
   engine?: NativePDFReadingEngine,
 ) {
-  const [attempt, retry] = useReducer((value: number) => value + 1, 0);
+  const [attempt, nextAttempt] = useReducer((value: number) => value + 1, 0);
+  const retryFor = useRef<
+    | { documentId: string; revision: string; layout: NativePDFReadingLayout }
+    | undefined
+  >(undefined);
   const [job, setJob] = useState<NativePDFReadingJob>();
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(true);
@@ -73,9 +77,27 @@ export function useNativePDFReading(
       }
     };
     const signal = current.controller.signal;
-    const creation = engine
-      ? api.createNativePDFReading(documentId, signal, layout, engine)
-      : api.createNativePDFReading(documentId, signal, layout);
+    const pendingRetry = retryFor.current;
+    retryFor.current = undefined;
+    const retryBabelDOC =
+      engine === "babeldoc" &&
+      pendingRetry?.documentId === documentId &&
+      pendingRetry.revision === revision &&
+      pendingRetry.layout === layout;
+    let creation;
+    if (retryBabelDOC) {
+      creation = api.createNativePDFReading(
+        documentId,
+        signal,
+        layout,
+        engine,
+        true,
+      );
+    } else if (engine) {
+      creation = api.createNativePDFReading(documentId, signal, layout, engine);
+    } else {
+      creation = api.createNativePDFReading(documentId, signal, layout);
+    }
     void creation.then(accept, failed);
     return () => {
       current.active = false;
@@ -83,6 +105,11 @@ export function useNativePDFReading(
       clearTimeout(current.timer);
     };
   }, [documentId, revision, layout, engine, attempt]);
+  const retry = () => {
+    if (engine === "babeldoc")
+      retryFor.current = { documentId, revision, layout };
+    nextAttempt();
+  };
   const cancel = async () => {
     const current = session.current;
     if (!current?.active || !current.job || cancelling) return;
