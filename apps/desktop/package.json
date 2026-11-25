@@ -1,7 +1,7 @@
 {
   "name": "@interleaf/desktop",
   "productName": "Interleaf",
-  "version": "0.8.17",
+  "version": "0.8.18",
   "private": true,
   "type": "module",
   "main": "dist/main.cjs",
